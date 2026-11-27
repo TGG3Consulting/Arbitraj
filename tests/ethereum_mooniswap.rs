@@ -88,3 +88,49 @@ fn virtual_tariffs_and_wallet_payments_follow_originals_in_both_directions() {
         assert_eq!(count, expected);
     }
 }
+
+#[test]
+fn first_funded_input_matches_exhaustive_small_reserves_at_both_sides_of_price_peak() {
+    let x = Address::ZERO;
+    let y = Address::repeat_byte(1);
+    for fee in [0, 3_000_000_000_000_000u64] {
+        for slip in [
+            0,
+            75_000_000_000_000_000,
+            828_830_973_208_080_598,
+            1_000_000_000_000_000_000,
+        ] {
+            let state = MooniswapState {
+                physical: [x, y],
+                tokens: [x, y],
+                balances: [U256::from(39), U256::from(83)],
+                addition: [(U256::ZERO, 0); 2],
+                removal: [(U256::ZERO, 0); 2],
+                timestamp: 1000,
+                decay: 80,
+                fee: U256::from(fee),
+                slippage_fee: U256::from(slip),
+                successor: true,
+            };
+            let outs: Vec<_> = (1u64..=512)
+                .map(|q| {
+                    state
+                        .swap(x, true, U256::from(q))
+                        .map_or(U256::ZERO, |f| f.amount_out)
+                })
+                .collect();
+            for desired in 1u64..83 {
+                let target = U256::from(desired);
+                let first = outs
+                    .iter()
+                    .position(|out| *out >= target)
+                    .map(|n| U256::from(n + 1));
+                let actual = state
+                    .swap(x, false, target)
+                    .map(|f| f.amount_in)
+                    .filter(|q| *q <= U256::from(512));
+                assert_eq!(actual, first);
+            }
+        }
+    }
+}

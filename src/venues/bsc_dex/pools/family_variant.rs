@@ -256,6 +256,7 @@ impl Variant {
     /// Площадка торгует целыми акциями эмитента с отдельными правилами оплаты и выдачи.
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
     pub(crate) fn solidly_clone(self)->bool { self==Self::SolidlyClone }
+    pub(crate) fn mooniswap(self)->bool {self==Self::Mooniswap}
     pub(crate) fn classic_wallet(self)->bool { matches!(self,Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyClone | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_quoter(self) -> bool { self.external_algebra_swap() || self.caller_algebra() }

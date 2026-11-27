@@ -49,7 +49,8 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
-    if e.family.variant==super::super::pools::family_variant::Variant::Mooniswap {
+    if e.family.variant.defiplaza(){let at=super::super::pools::nami::block(ctx,block).await?;return Box::pin(super::super::pools::defiplaza::out_at(ctx,e,token_in,amount,&at)).await;}
+    if e.family.variant.mooniswap() {
         let at=super::super::pools::nami::block(ctx,block).await?;
         return Box::pin(super::super::pools::mooniswap::out_at(ctx,e,token_in,amount,&at)).await;
     }

@@ -7,6 +7,56 @@ fn scale() -> U256 {
     U256::from(1_000_000_000_000_000_000u64)
 }
 
+// У обеих библиотек VirtualBalance.Data поле balance — uint216.
+const VIRTUAL_BALANCE_BITS: usize = 216;
+type Wide = alloy_primitives::Uint<768, 12>;
+
+/// Огибающая по целому gross. При g=floor(t*y/(x+t)) доля t/(x+t) >= g/y,
+/// поэтому g*(y*D-slippage*g) >= target*y*D необходимо для любой выплаты.
+fn interval(y: U256, want: U256, slippage: U256) -> Option<(U256, U256)> {
+    let last = y.checked_sub(U256::ONE)?;
+    if want > last || slippage > scale() {
+        return None;
+    }
+    if slippage.is_zero() {
+        return Some((want, last));
+    }
+    let yd = Wide::from(y) * Wide::from(scale());
+    let threshold = Wide::from(want) * yd;
+    let value = |g: U256| Wide::from(g) * (yd - Wide::from(slippage) * Wide::from(g));
+    let mut peak = if slippage <= scale() / U256::from(2) {
+        last
+    } else {
+        super::full_math::mul_div(y, scale(), slippage * U256::from(2))?.min(last)
+    };
+    if peak < last && value(peak + U256::ONE) > value(peak) {
+        peak += U256::ONE
+    }
+    if value(peak) < threshold {
+        return None;
+    }
+    let (mut lo, mut hi) = (U256::ZERO, peak);
+    while lo < hi {
+        let m = lo + ((hi - lo) >> 1);
+        if value(m) >= threshold {
+            hi = m
+        } else {
+            lo = m + U256::ONE
+        }
+    }
+    let start = lo;
+    (lo, hi) = (peak, last);
+    while lo < hi {
+        let m = hi - ((hi - lo) >> 1);
+        if value(m) >= threshold {
+            lo = m
+        } else {
+            hi = m - U256::ONE
+        }
+    }
+    Some((start, hi))
+}
+
 impl MooniswapState {
     fn current(&self, (value, updated): (U256, u64), real: U256) -> Option<U256> {
         let passed = self.timestamp.checked_sub(updated)?.min(self.decay);
@@ -52,16 +102,15 @@ impl MooniswapState {
                 complete: true,
             });
         }
-        let mut gross = amount;
-        for _ in 0..128 {
-            let taxed = gross
-                .checked_mul(x)?
-                .div_ceil(y.checked_sub(gross).filter(|n| !n.is_zero())?);
-            let dx = taxed
-                .checked_sub(U256::ONE)?
-                .checked_mul(scale())?
-                .checked_div(scale() - self.fee)?
-                .checked_add(U256::ONE)?;
+        let (mut gross, last) = interval(y, amount, self.slippage_fee)?;
+        while gross <= last {
+            let taxed = super::full_math::mul_div_up(gross, x, y - gross)?;
+            let dx = super::full_math::mul_div(
+                taxed.checked_sub(U256::ONE)?,
+                scale(),
+                scale() - self.fee,
+            )?
+            .checked_add(U256::ONE)?;
             let (out, num, den) = self.forward(x, y, dx)?;
             if out >= amount {
                 return Some(Swapped {
@@ -73,7 +122,7 @@ impl MooniswapState {
             if num.is_zero() {
                 return None;
             }
-            let next = amount.checked_mul(den)?.div_ceil(num);
+            let next = super::full_math::mul_div_up(amount, den, num)?;
             if next <= gross {
                 return None;
             }
@@ -91,10 +140,13 @@ impl MooniswapState {
         }
         let mut next = self.clone();
         let saved = |v: U256| {
-            if self.successor && v.bit_len() > 216 {
+            if self.successor && v.bit_len() > VIRTUAL_BALANCE_BITS {
                 return None;
             }
-            Some((v & ((U256::ONE << 216) - U256::ONE), self.timestamp))
+            Some((
+                v & ((U256::ONE << VIRTUAL_BALANCE_BITS) - U256::ONE),
+                self.timestamp,
+            ))
         };
         if x != self.balances[i] {
             next.addition[i] = saved(x.checked_add(paid)?)?

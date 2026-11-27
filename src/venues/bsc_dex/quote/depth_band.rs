@@ -179,8 +179,9 @@ fn side(
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
         (PoolState::Mooniswap(s), PoolKind::V2) => {
-            let (x,y)=s.reserves(token_in).ok_or("Mooniswap: виртуальные резервы недоступны")?;
-            let (input,_)=xy_band(x,y,b,true)?;
+            let (x,_)=s.reserves(token_in).ok_or("Mooniswap: виртуальный резерв недоступен")?;
+            let growth=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
+            let input=super::super::math::full_math::mul_div(x,U256::from((growth*SCALE) as u128),U256::from(SCALE as u128)).ok_or("Mooniswap: глубина превышает резерв")?;
             let value=s.swap(token_in,true,input).map_or(U256::ZERO,|f|pick(f.amount_in,f.amount_out));
             Ok((value,false))
         }

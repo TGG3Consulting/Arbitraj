@@ -1872,6 +1872,27 @@ def tables(network, snapshots, profiles):
                 task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
             elif kind == "absent":
                 task = "В сетевой записи этого адаптера нет данной сети. Отдельные развёртывания проверяются по своему реестру."
+        if not base and str(row["id"]) == "1053":
+            generations=[]
+            for era,slug in (("original","mooniswap"),("successor","oneinch-liquidity-protocol")):
+                directory=json.loads(gzip.decompress((data_dir/f"mooniswap_{era}_ethereum.json.gz").read_bytes()))
+                wallet=json.loads(gzip.decompress((data_dir/f"mooniswap_{era}_wallets.json.gz").read_bytes()))
+                assert directory["selector"]==wallet["selector"] and directory["factory"]==wallet["factory"]
+                counts={m:sum(r["mode"]==m for r in wallet["cases"]) for m in ("wallet","wallet_wrapped","v5")}
+                present=[t for market in directory["markets"] for t in market["trials"] if "exact" in t]
+                gas=[r["gas"] for r in wallet["cases"]]
+                generations.append(f"`{slug}` — фабрика `{directory['factory']}`, {len(directory['registry'])} пар, {len(present)} прямых выплат пары; "
+                                   f"собственный модуль {counts['wallet']} выплат, с WETH вместо ETH ещё {counts['wallet_wrapped']}, V5 {counts['v5']}. "
+                                   f"Вызовы через модуль/V5 использовали {min(gas)}–{max(gas)} газа без разрешений. "
+                                   f"[Реестр и виртуальные остатки](../{(data_dir/f'mooniswap_{era}_ethereum.json.gz').as_posix()}) · "
+                                   f"[Платежи и границы minOut](../{(data_dir/f'mooniswap_{era}_wallets.json.gz').as_posix()})")
+            candidates=[json.loads(gzip.decompress((data_dir/"mooniswap_original_ethereum.json.gz").read_bytes()))["factory"]]
+            task="Источник #1053 считает Swapped исходной фабрики. "+ " ".join(generations)+(
+                " Объём источника относится к первой фабрике. У обеих поколений четыре виртуальных остатка и фактические балансы, "
+                "тариф и временная метка считываются на каноническом блоке. У successor отдельный slippageFee, возможная остановка через isActive и обновление вознаграждений LP; "
+                "при повторе этого пула одному исходному снимку доверять нельзя. Пара ETH/WETH с decayPeriod=0 отклонила четыре обмена. "
+                "Для защищённого платежа владелец указывает адрес собственного MooniswapWallet в dex.router и сверяет dex.module_runtime_hashes. "
+                "Синтетический адрес из архивной симуляции к размещённым контрактам не относится.")
         if not base and str(row["id"]) == "2782":
             index = json.loads(gzip.decompress((data_dir/"aktionariat_ethereum_directory.json.gz").read_bytes()))
             fills = json.loads(gzip.decompress((data_dir/"aktionariat_ethereum_protected.json.gz").read_bytes()))

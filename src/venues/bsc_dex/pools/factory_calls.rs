@@ -92,7 +92,7 @@ pub fn plan(
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
             Proto::V2 if matches!(f.variant, super::family_variant::Variant::BancorLegacy | super::family_variant::Variant::BancorV3) => continue, // Dedicated Bancor registries enumerate these markets.
-            Proto::V2 if f.variant==super::family_variant::Variant::Mooniswap => vec![Q::Mooniswap],
+            Proto::V2 if f.variant.mooniswap() => vec![Q::Mooniswap],
             Proto::V2 if f.variant==super::family_variant::Variant::RubiconClassic => ctx.dex_addr("dex.factory",f.id)
                 .map(|market|vec![Q::Rubicon(market,false),Q::Rubicon(market,true)]).unwrap_or_default(),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => vec![Q::UmbraeBins],
@@ -264,7 +264,7 @@ pub fn plan(
                 let alt = stable_u
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
-                let native = if f.variant==super::family_variant::Variant::Mooniswap && (wrapped==Some(coin) || wrapped==Some(quote)) {
+                let native = if f.variant.mooniswap() && (wrapped==Some(coin) || wrapped==Some(quote)) {
                     let unwrap=|a| if wrapped==Some(a){Address::ZERO}else{a};
                     Some((unwrap(coin),unwrap(quote)))
                 } else {None};

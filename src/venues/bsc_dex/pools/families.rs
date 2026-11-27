@@ -883,7 +883,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
-        Proto::V2 if f.variant==Variant::Mooniswap => list.extend(["dex.factory","dex.factory_runtime_hash"]),
+        Proto::V2 if f.variant.mooniswap() => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::Brokerbot => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.broker_markets"]),
         Proto::V2 if f.variant==Variant::YieldBasis => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::BalancerV1 => list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash"]),

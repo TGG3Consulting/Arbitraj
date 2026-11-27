@@ -459,13 +459,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install --quiet requests==2.32.5 eth-abi==5.2.0 eth-utils==5.3.1 pycryptodome==3.23.0 beautifulsoup4==4.13.5 PyYAML==6.0.3
+      - if: startsWith(matrix.market, 'umbrae-')
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - if: startsWith(matrix.market, 'umbrae-')
+        working-directory: contracts
+        run: npm ci --no-audit --no-fund
+      - if: startsWith(matrix.market, 'umbrae-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/umbrae" UmbraeAdapter
+          python scripts/record_umbrae_wallets.py "${MARKET#umbrae-}" "$RUNNER_TEMP/umbrae/UmbraeAdapter.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'hello-')
         env:
           MARKET: ${{ matrix.market }}

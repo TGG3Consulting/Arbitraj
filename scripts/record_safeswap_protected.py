@@ -107,8 +107,20 @@ def capture(endpoint, artifact, degen=False):
                 ev=[x for x in win["logs"] if x["address"].lower()==MODULE and x["topics"][0].lower()==FILLED]
                 if len(ev)!=1:raise ValueError("missing settlement event")
                 output,spent,credit,actual_fee,separate_flag=decode(["address","uint256","uint256","uint256","bool"],bytes.fromhex(ev[0]["data"][2:]))
-                if (output,spent,credit,separate_flag)!=(b,n,got,separate) or (separate and actual_fee!=fee):raise ValueError("wrong settlement")
-                return (dict(spent=str(n),received=str(got),fee=str(actual_fee),external_fee=str(fee),before=list(map(str,before)),after=list(map(str,after)),
+                sender="0x"+ev[0]["topics"][1][-40:]
+                recipient="0x"+ev[0]["topics"][2][-40:]
+                paid_asset="0x"+ev[0]["topics"][3][-40:]
+                wanted_sender=EXEC if mode=="v5" else OWNER
+                if (sender,recipient,paid_asset)!=(wanted_sender,OWNER,a):raise ValueError(("wrong settlement roles",mode,sender,recipient,paid_asset))
+                # A transfer-tax token can debit the owner by n and fund V5 by less than n.
+                # V5 gives only its actual input to the module, and enforces the final owner's minimum.
+                funded=degen and mode=="v5" and 0<spent<=n
+                if (output,credit,separate_flag)!=(b,got,separate) or (not funded and spent!=n) or (separate and actual_fee!=fee):
+                    raise ValueError(("wrong settlement",mode,a,n,b,got,spent,credit,output,separate_flag))
+                input_events=[l for l in win["logs"] if l["address"].lower()==a and l["topics"][0]=="0x"+keccak(text="Transfer(address,address,uint256)").hex()]
+                if funded and not any(l["topics"][1][-40:]==OWNER[2:] and l["topics"][2][-40:]==EXEC[2:] for l in input_events):
+                    raise ValueError("no own payment to V5")
+                return (dict(spent=str(n),module_spent=str(spent),received=str(got),fee=str(actual_fee),external_fee=str(fee),before=list(map(str,before)),after=list(map(str,after)),
                              transaction=payload,gas=int(win["gasUsed"],16),approval_gas=int(rows[start-1]["gasUsed"],16),logs=win["logs"]),None)
             loose,why=trial(1,deadline)
             if loose is None:raise ValueError(("protected loose",mode,a,n,str(why)[:145]))

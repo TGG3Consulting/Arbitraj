@@ -157,7 +157,11 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
 
 #[test]
 fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
-    let mut fills=0;
+    let token_source:Value=serde_json::from_str(include_str!("../../../../tests/data/first_run_dex_2026-11-26/ethereum_exact_transfers.json")).unwrap();
+    let mut exact_tokens:Vec<Address>=token_source["tokens"].as_object().unwrap().values().map(|r|r["address"].as_str().unwrap().parse().unwrap()).collect();
+    let core:Value=serde_json::from_reader(GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz").as_slice())).unwrap();
+    exact_tokens.extend(core["exact_assets"].as_object().unwrap().values().map(|r|r["address"].as_str().unwrap().parse::<Address>().unwrap()));
+    let mut admitted=0;let mut fills=0;
     for raw in [include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_0.json.gz").as_slice(),
         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_1.json.gz").as_slice(),
         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_2.json.gz").as_slice(),
@@ -181,11 +185,13 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
                     assert!(logs.iter().any(|l|l.address==p.market.pool && l.topics.first()==Some(&pair_topic)));
                     // Прямая выплата admitted только у ETH-активов с проверенной чистой передачей.
                     // У иных ERC20 архивное сравнение использует физические балансы, в боте работает V5.
-                    if let Some((spent,received))=p.measured(&logs){assert_eq!((spent,received),(p.budget,p.minimum));}
+                    if exact_tokens.contains(&p.input) && exact_tokens.contains(&p.output){
+                        assert_eq!(p.measured(&logs),Some((p.budget,p.minimum)));admitted+=1;
+                    }
                     fills+=1;
                 }
             }
         }
     }
-    assert_eq!(fills,292);
+    assert_eq!(fills,292);assert!(admitted>0);
 }

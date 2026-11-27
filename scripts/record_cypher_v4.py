@@ -31,6 +31,20 @@ def plugin_template(code,pool):
         i+=1+size
     return digest(out),references
 
+def exact_assets(c):
+    assets={}
+    for symbol,a,snippets in (
+            ("LINK","0x514910771af9ca656af840dff83e8264ecf986ca",
+             ("balances[msg.sender] = balances[msg.sender].sub(_value)","balances[_from] = balances[_from].sub(_value)",
+              "balances[_to] = balances[_to].add(_value)","return super.transferFrom(_from, _to, _value)")),
+            ("wstETH","0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0",
+             ('_balances[sender] = _balances[sender].sub(amount, "ERC20: transfer amount exceeds balance")',
+              "_balances[recipient] = _balances[recipient].add(amount)","emit Transfer(sender, recipient, amount)"))):
+        proof,code,bodies=source(c,a)
+        if not all(needle in bodies for needle in snippets):raise ValueError("changed ERC20 transfer: "+symbol)
+        assets[symbol]=dict(proof,bytes=len(code),transfer_source=list(snippets))
+    return assets
+
 def capture(ep):
     snap=json.loads((DATA/"ethereum.json").read_bytes()); c=Capture(dict(snap,endpoint=ep))
     tag=c.selector;head=rpc(ep,"eth_getBlockByHash",[tag["blockHash"],False]);height=int(head["number"],16)
@@ -81,7 +95,7 @@ def capture(ep):
         template,offsets=plugin_template(b,pools[0]) if len(pools)==1 else (digest(b),[])
         codes[a]=dict(runtime=digest(b),bytes=len(b),template=template,pool_operands=offsets)
     return dict(height=height,selector=tag,state_root=ROOT_HASH,source="https://docs.cyphereth.com/docs/contracts/mainnet/",
-                factory=f,router=r,quoter=q,physical=codelink,init="0x"+init.hex(),plugins=codes,markets=markets)
+                factory=f,router=r,quoter=q,physical=codelink,exact_assets=exact_assets(c),init="0x"+init.hex(),plugins=codes,markets=markets)
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("output",type=Path);args=parser.parse_args()

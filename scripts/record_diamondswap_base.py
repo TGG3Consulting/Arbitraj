@@ -96,11 +96,12 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
     for size in sizes:
         for mode in modes:
             if fund_sale is not None:
-                sell,_=leg([fund_sale(size)],token,cash,size,mode)
+                fund=fund_sale(size)
+                sell,_=leg(fund if isinstance(fund,list) else [fund],token,cash,size,mode)
                 trials.append(dict(mode=mode,size=str(size),sell=sell))
                 continue
             fund=funding(size) if funding else tx(wrapped,"deposit()",value=size)
-            buy,next_prefix=leg([fund],cash,token,size,mode)
+            buy,next_prefix=leg(fund if isinstance(fund,list) else [fund],cash,token,size,mode)
             try:
                 sell,_=leg(next_prefix,token,cash,int(buy["exact"]["received"]),mode)
             except ValueError as error:

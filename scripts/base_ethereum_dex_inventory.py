@@ -318,12 +318,29 @@ def tables(network, snapshots, profiles):
         for mode in ("module","v5"):
             rows=[r for r in combos if r["mode"]==mode]
             out.append(f"DegenSwap, {mode} · {sum('buy' in r for r in rows)} оплат покупок на {len(rows)} размеров, {sum('sell' in r for r in rows)} продаж купленного. В {sum('funding' in r.get('sell_refused','') for r in rows)} случаях ERC20 зачислил модулю меньше полного входа. [Квитанции, фактические суммы и газ](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_protected.json.gz).")
+        bounded=[r for case in degen["outcomes"] if case["mode"]=="bounded-router" for r in case.get("rounds",[])]
+        if bounded:
+            out.append(f"Штатный Router с увеличенным подписанным минимумом подтвердил {len(bounded)} покупок и {sum('sell' in r for r in bounded)} обратных продаж из купленного. Фактическая выплата и максимально гарантируемый минимум записаны отдельно. Для прямого исполнения требуются проверенные свойства дебета входного ERC20. Для reflection-токенов модуль вычисляет дебет через balanceOf.")
+        with gzip.open(ds/"degenswap_ethereum_funded.json.gz","rt",encoding="utf8") as f:funded=json.load(f)
+        direct=[r for r in funded["cases"] if r["mode"]=="module"]
+        out.append(f"Модуль с измерением обоих переводов оплатил {sum('buy' in r for r in direct)} покупок и {sum('sell' in r for r in direct)} продаж. Вознаграждения держателей меняют соответствие между ERC20 Transfer и фактическим списанием. [Проверка чистого списания и поступления](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_funded.json.gz).")
         cypher=observed("cypher_v2")
         native=[r for case in cypher["outcomes"] if case["mode"]=="router" for r in case.get("rounds",[])]
         executor=[r for case in cypher["outcomes"] if case["mode"]=="v5" for r in case.get("rounds",[])]
         out.extend(["",f"Cypher V2 Ethereum · {len(cypher['markets'])} зарегистрированных пар. Из {len(native)} объёмов Router подтвердил {sum('sell' in r for r in native)} полных оборотов, V5 подтвердил {sum('sell' in r for r in executor)} из {len(executor)}. В остальных случаях обе формы вернули INSUFFICIENT_OUTPUT_AMOUNT на продаже. У каждой пары собственная изменяемая комиссия fee()/100000. [Реестр, квитанции и расходы](../tests/data/first_run_dex_2026-11-26/cypher_v2_ethereum_wallets.json.gz)."])
         with gzip.open(ds/"cypher_v4_ethereum_directory.json.gz","rt",encoding="utf8") as f:cl=json.load(f)
         out.extend(["",f"Cypher V4 Ethereum · Фабрика Algebra зарегистрировала {len(cl['markets'])} пулов. Обычные и пользовательские развёртывания используют разные ключи реестра и комиссии плагинов. [Адреса и конфигурации на каноническом блоке](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz)."])
+        cyp_cases=[]
+        for part in range(4):
+            with gzip.open(ds/f"cypher_v4_ethereum_wallets_{part}.json.gz","rt",encoding="utf8") as f:cyp_cases.extend(json.load(f)["markets"])
+        levels={}
+        for m in cyp_cases:
+            for case in m["cases"]:
+                for side in ("buy","sell"):
+                    if side not in case:continue
+                    x=case[side]["exact"]; levels.setdefault((m["pool"],case["size"],side),{})[case["mode"]]=int(x["gas"],16)
+        diffs=[v["v5"]-v["router"] for v in levels.values() if "v5" in v and "router" in v]
+        out.append(f"У Cypher V4 обе формы провели по {len(diffs)} отдельных обменов, Router экономил {min(diffs):,}–{max(diffs):,} единиц газа. При выборе учитываются разрешения владельца. Оплата V5 остаётся доступна для проверенной пары с нестандартным ERC20. [Архив, часть 1](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_0.json.gz) · [2](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_1.json.gz) · [3](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_2.json.gz) · [4](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_3.json.gz).")
         baseline=observed("baseline")
         rows=[case for pool in baseline["markets"] for case in pool["cases"]]
         deals=sum(isinstance(case.get(side),dict) and case[side].get("stage")=="accepted" for case in rows for side in ("buy","sell"))

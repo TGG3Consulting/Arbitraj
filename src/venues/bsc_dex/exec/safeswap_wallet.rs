@@ -141,7 +141,7 @@ impl Proof {
         if swaps.next().is_some()
             || incoming.is_zero()
             || outgoing.is_zero()
-            || !other_in.is_zero()
+            || (!self.degen_module && !other_in.is_zero())
             || !other_out.is_zero()
         {
             return None;
@@ -194,9 +194,17 @@ impl Proof {
                 {
                     return None;
                 }
+                if swap.to != wallet {
+                    return None;
+                }
+                // На зарегистрированном Degen-пуле отражение может увеличить balanceOf выходного токена.
+                // Пара регистрирует этот прирост как дополнительный вход, а Funded и Filled измеряют кошелёк.
                 // Reflection-токен может записать в Transfer только чистую часть. Контракт сравнил четыре balanceOf и связал обе суммы с одним payer.
                 return Some((f.spent, f.received));
             }
+        }
+        if !other_in.is_zero() {
+            return None;
         }
         let paid =
             moved(input, Some(wallet), None).checked_sub(moved(input, None, Some(wallet)))?;

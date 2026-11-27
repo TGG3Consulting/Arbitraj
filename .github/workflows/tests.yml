@@ -455,7 +455,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, templedao-ethereum, bitswap-ethereum, carbon-ethereum, mint-club-base, mint-club-ethereum, omni-v2-base, marswap-base, marswap-ethereum, deliswap-base, deliswap-cl-base, sectorone-20-base, sectorone-22-base, sectorone-20-ethereum, sectorone-22-ethereum]
+        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, templedao-ethereum, bitswap-ethereum, antfarm-ethereum, carbon-ethereum, mint-club-base, mint-club-ethereum, omni-v2-base, marswap-base, marswap-ethereum, deliswap-base, deliswap-cl-base, sectorone-20-base, sectorone-22-base, sectorone-20-ethereum, sectorone-22-ethereum]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -510,6 +510,10 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'antfarm-ethereum'
+        run: |
+          python scripts/record_antfarm_ethereum.py "$RUNNER_TEMP/directory.json"
+          python scripts/record_antfarm_wallets.py "$RUNNER_TEMP/directory.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bitswap-ethereum'
         run: python scripts/record_bitswap_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'templedao-ethereum'

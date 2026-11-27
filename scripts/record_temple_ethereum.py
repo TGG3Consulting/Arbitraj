@@ -97,15 +97,17 @@ def capture(c,artifact=None):
             raise ValueError(("нет ожидаемой выплаты",loose.get("error"),d))
         target=d[assets.index(dest)]
         ok,same,action,approval=trial(target,deadline)
-        above,unchanged,_,_=trial(target+1,deadline)
-        expired,untouched,_,_=trial(1,int(head["timestamp"],16)-1)
+        above,unchanged,strict_action,_=trial(target+1,deadline)
+        expired,untouched,stale_action,_=trial(1,int(head["timestamp"],16)-1)
         if ok["status"]!="0x1" or same!=d or above["status"]!="0x0" or expired["status"]!="0x0" or any(unchanged+untouched):
             raise ValueError("предел/срок не откатил операцию")
         if mode!="router":
             wrong,other,_,_=trial(1,deadline,DAI)
             if wrong["status"]!="0x0" or any(other):raise ValueError("wrong payout currency")
         return dict(input=source,output=dest,amount=str(amount),minimum=str(target),delta=list(map(str,d)),gas=ok["gasUsed"],
-                    approve_gas=approval["gasUsed"],return_data=ok["returnData"],logs=ok["logs"],too_high=above["error"],expired=expired["error"]),[*prefix,approve,action]
+                    approve_gas=approval["gasUsed"],return_data=ok["returnData"],logs=ok["logs"],too_high=above["error"],expired=expired["error"],
+                    transaction=action,status=ok["status"],strict=dict(transaction=strict_action,status=above["status"],delta=list(map(str,unchanged))),
+                    stale=dict(transaction=stale_action,status=expired["status"],delta=list(map(str,untouched)))),[*prefix,approve,action]
     cases=[]
     for mode in (("router","protected","v5") if artifact else ("router",)):
         for amount in (10**18,10**19):

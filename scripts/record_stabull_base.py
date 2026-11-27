@@ -137,8 +137,17 @@ def capture(network="base"):
     first=high
     logs=[]
     log_span=80000 if network=="base" else 1000
+    activity_status="complete"
     for h in range(first,height+1,log_span):
-        logs.extend(read("eth_getLogs",[{"address":addresses,"topics":[TRADE],"fromBlock":hex(h),"toBlock":hex(min(h+log_span-1,height))}]))
+        try:
+            logs.extend(read("eth_getLogs",[{"address":addresses,"topics":[TRADE],"fromBlock":hex(h),"toBlock":hex(min(h+log_span-1,height))}]))
+        except ValueError as error:
+            if network!="ethereum" or "Archive requests require a personal token" not in str(error):
+                raise
+            # Без подтверждённого окна нельзя представить пустую выборку как отсутствие сделок.
+            activity_status="historical event access requires an authorized account"
+            logs.clear()
+            break
     samples={}
     for log in logs:
         pool=log["address"].lower()
@@ -161,7 +170,7 @@ def capture(network="base"):
                          "receipt":receipt})
     assert block(height)["hash"]==anchor["hash"]
     return {"chain":chain,"anchor":at,"height":height,"start":first,"start_utc":cutoff,"end_utc":int(anchor["timestamp"],16),
-            "source":SOURCE,"factory":factory,"pools":list(pairs.values()),"events":len(logs),"receipts":receipts}
+            "source":SOURCE,"factory":factory,"pools":list(pairs.values()),"events":len(logs) if activity_status=="complete" else None,"event_coverage":activity_status,"receipts":receipts}
 
 
 if __name__=="__main__":

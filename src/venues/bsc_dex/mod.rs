@@ -28,6 +28,7 @@ mod airswap;
 mod dexalot;
 mod keyed_price;
 mod fermi;
+pub(crate) use fermi::bopamm_profile::configured as bopamm_configured;
 mod clipper;
 mod fynd;
 pub mod connection_events;

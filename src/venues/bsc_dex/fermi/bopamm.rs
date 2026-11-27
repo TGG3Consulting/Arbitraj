@@ -1,20 +1,17 @@
 //! Котировка конкретного строителя и симуляция оплаченного обмена bopAMM в целевом слоте.
 //! https://buildernet.org/docs/api#state-stream и https://github.com/gattaca-com/propamm
+use super::bopamm_profile::{Profile, Role};
 use super::{
     Builder, Ctx, Deployment, Frame, Head, Preview, Request, builder_snapshot, canonical,
     decimalsCall, rpc, slot,
 };
-use crate::{
-    gateway::errors::{ErrorCode, GatewayResult},
-    settings::scope::Scope,
-};
+use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::{
     primitives::{Address, B256, Bytes, U64, keccak256},
     sol_types::{SolCall, SolValue},
 };
 use chrono::Utc;
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
 
 alloy::sol! {
     function market() external view returns(address);
@@ -26,43 +23,7 @@ alloy::sol! {
     function execute(Order order) external returns(uint256 spent,uint256 received);
 }
 
-#[derive(Clone, Copy)]
-struct Role {
-    address: Address,
-    hash: B256,
-}
-struct Profile {
-    market: Role,
-    pricing: Role,
-    registry: Role,
-    module: Option<Role>,
-}
 impl Profile {
-    fn parse(rows: &Value) -> Option<Self> {
-        let mut roles = BTreeMap::new();
-        let mut accounts = BTreeSet::new();
-        for row in rows.as_array()? {
-            let mut fields = row.as_str()?.split_whitespace();
-            let role = fields.next()?;
-            let address: Address = fields.next()?.parse().ok()?;
-            let hash: B256 = fields.next()?.parse().ok()?;
-            if !matches!(role, "market" | "pricing" | "registry" | "module")
-                || fields.next().is_some()
-                || address.is_zero()
-                || hash.is_zero()
-                || !accounts.insert(address)
-                || roles.insert(role, Role { address, hash }).is_some()
-            {
-                return None;
-            }
-        }
-        Some(Self {
-            market: roles.remove("market")?,
-            pricing: roles.remove("pricing")?,
-            registry: roles.remove("registry")?,
-            module: roles.remove("module"),
-        })
-    }
     async fn verify(&self, ctx: &Ctx, h: B256, firm: Option<Role>) -> GatewayResult<()> {
         let verify = async |r: Role| {
             let code: Bytes = rpc::call(
@@ -165,16 +126,12 @@ fn frame(builder: Builder, result: &Value, p: &Profile) -> Option<Frame> {
 
 pub(in crate::venues::bsc_dex) async fn preview(ctx: &Ctx, r: Request) -> GatewayResult<Preview> {
     let bad = |reason| ctx.err(ErrorCode::NotApplicable, reason);
-    if ctx.chain_id() != Some(1) || r.input.is_zero() || r.output.is_zero() || r.input == r.output {
-        return Err(bad("bopAMM: нужны Ethereum и два разных ERC20"));
+    if r.input.is_zero() || r.output.is_zero() || r.input == r.output {
+        return Err(bad("bopAMM: нужны два разных ERC20"));
     }
     let rev = ctx.settings.generation();
-    let p = ctx
-        .settings
-        .get_exact("bopamm.roles", &Scope::Venue(ctx.place.id.to_string()))
-        .as_ref()
-        .and_then(Profile::parse)
-        .ok_or_else(|| bad("bopAMM: укажите адреса и хеши рынка, оракула и реестра"))?;
+    let (network, p) = Profile::read(&ctx.settings, ctx.place.id)
+        .ok_or_else(|| bad("bopAMM: проверьте сеть и роли рынка, оракула и реестра площадки"))?;
     let builder = r
         .builder
         .as_deref()
@@ -223,7 +180,7 @@ pub(in crate::venues::bsc_dex) async fn preview(ctx: &Ctx, r: Request) -> Gatewa
             Utc::now().timestamp().max(0) as u64,
         )
     };
-    if chain != U64::from(1) || !current() {
+    if chain != U64::from(network) || !current() {
         return Err(stale());
     }
     let (_, precision) = tokio::try_join!(

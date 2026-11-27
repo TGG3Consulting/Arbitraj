@@ -18,6 +18,7 @@
 use serde_json::{Value, json};
 
 use crate::gateway::contract::VenueKind;
+use crate::venues::bsc_dex::bopamm_configured;
 use crate::settings::accounts::{ROW_DEX_DEX, ROW_PROBE};
 
 use super::state::AppState;
@@ -72,7 +73,7 @@ pub async fn view(st: &AppState) -> Value {
         }
     }
     let single_source=|key:&str|dex.as_deref().is_some_and(|v| st.settings.text(key,crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty()));
-    let bopamm = dex.as_deref().is_some_and(|id| bopamm_configured(st, id));
+    let bopamm = dex.as_deref().is_some_and(|id| bopamm_configured(&st.settings, id));
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -173,7 +174,7 @@ async fn by_chain(
             "chain": chain,
             "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
             "clipper": clipper_configured(st, &v.0),
-            "bopamm": bopamm_configured(st, &v.0),
+            "bopamm": bopamm_configured(&st.settings, &v.0),
             "prop_sources": builders.keys().collect::<Vec<_>>(),
             "prop_builders": builders,
             "textile": st.settings.text("textile.base_url",at).is_ok_and(|s|!s.is_empty()),
@@ -196,12 +197,5 @@ fn clipper_configured(st: &AppState, venue: &str) -> bool {
     st.settings.integer("dex.evm_chain_id",at).is_ok_and(|chain| chain > 0)
         && st.settings.text("clipper.base_url",at).is_ok_and(|url| !url.is_empty())
         && st.settings.get_exact("clipper.pools", &crate::settings::scope::Scope::Venue(venue.into()))
-            .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
-}
-
-fn bopamm_configured(st: &AppState, venue: &str) -> bool {
-    let at = crate::settings::read::At { venue: Some(venue), coin: None };
-    st.settings.integer("dex.evm_chain_id", at).ok() == Some(1)
-        && st.settings.get_exact("bopamm.roles", &crate::settings::scope::Scope::Venue(venue.into()))
             .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
 }

@@ -4,6 +4,7 @@ use crate::{
     settings::{
         evm_profiles,
         scope::{Scope, check_dex_id},
+        store::Store,
     },
     venues::bsc_dex::{
         ctx_place::key_of,
@@ -14,8 +15,11 @@ use std::collections::BTreeMap;
 
 /// Titan и BuilderNet публикуют кадры по часам слотов Ethereum mainnet.
 pub(super) fn network(ctx: &Ctx) -> Option<u64> {
-    let settings = &ctx.settings;
-    let venue = ctx.place.id;
+    network_at(&ctx.settings, ctx.place.id)
+}
+
+/// Доступ строителей определяется физической сетью из точной области выбранной площадки.
+pub(super) fn network_at(settings: &Store, venue: &str) -> Option<u64> {
     let profile = evm_profiles::configured(settings, venue)?;
     let scope = Scope::Venue(venue.to_owned());
     let number = settings.get_exact("dex.evm_chain_id", &scope)?.as_u64()?;

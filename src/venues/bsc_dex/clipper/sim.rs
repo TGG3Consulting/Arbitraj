@@ -66,7 +66,14 @@ impl Physical {
             Vec::new()
         };
         let base = simulate::Base::for_chain(Some(o.chain), head.number.to(), head.timestamp.to());
-        let rows = simulate::run_anchored(ctx, &calls, &values, &[], base, Some(head.hash)).await?;
+        let rows = simulate::run_anchored(ctx, &calls, &values, &[], base, Some(head.hash))
+            .await
+            .map_err(|e| {
+                ctx.err(
+                    e.code,
+                    "Clipper: узел не выполнил симуляцию на указанном каноническом блоке",
+                )
+            })?;
         let [a, b, step, c, d] = rows.as_slice() else {
             return Err(bad());
         };

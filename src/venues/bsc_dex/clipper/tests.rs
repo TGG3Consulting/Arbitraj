@@ -74,3 +74,26 @@ fn api_symbols_belong_to_one_exchange_on_the_requested_chain() {
     book["pools"][0]["assets"][1]["name"] = json!("ETH");
     assert!(instruments(&book, 8453, pool, [a, b]).is_none());
 }
+
+/// Истёкший опубликованный пример GET /rfq/v2/quote-sign из https://docs.sushi.com/api/blade/swagger.
+#[test]
+fn published_sushi_offer_recovers_the_canonical_designated_signer() {
+    let q:Quote=serde_json::from_str(r#"{"chain_id":1,"clipper_exchange_address":"0x655eDCE464CC797526600a462A8154650EEe4B77","input_asset_address":"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2","output_asset_address":"0x6B175474E89094C44Da98b954EedeAC495271d0F","input_amount":"780000000000000","output_amount":"3504443835292476928","good_until":"451117153933605942738249439739673213871765011081718076541610938493960","destination_address":"0x960376b3F62f41E7e66809a05D1C5afdFD60A0E9","signature":{"v":28,"r":"0xb996d67a0f80da5322e0fba14afd82e63e51cfc9ed09cc3377e84c7dfd05f9a1","s":"0x378c0baaa171606042171fd8886ac007017854f98aa0a85b5ae0c9ce892f1aae"}}"#).unwrap();
+    let mut o = Offer {
+        chain: q.chain_id,
+        pool: q.clipper_exchange_address,
+        owner: q.destination_address,
+        input: q.input_asset_address,
+        output: q.output_asset_address,
+        amount: q.input_amount.parse().unwrap(),
+        received: q.output_amount.parse().unwrap(),
+        until: q.good_until.parse().unwrap(),
+    };
+    let signer = "0x08938a61ba9523298dbcacee0cda5b371fb7f1f8"
+        .parse()
+        .unwrap();
+    assert_eq!(o.expires(), 1_755_212_808);
+    assert!(o.valid(&q, signer));
+    o.amount += U256::ONE;
+    assert!(!o.valid(&q, signer));
+}

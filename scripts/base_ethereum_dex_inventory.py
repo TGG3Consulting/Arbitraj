@@ -2154,6 +2154,25 @@ def tables(network, snapshots, profiles):
         "а Homelander повторно учитывает пулы сторонних AMM."
         if base else
         "В Ethereum двадцатке подтверждена отдельная касса Kipseli. Из 1452 событий за сутки "
+        if str(row["id"]) == "622":
+            fixture = data_dir / f"clipper_{network}_directory.json.gz"
+            with gzip.open(fixture, "rt", encoding="utf8") as stream:
+                blade = json.load(stream)
+            pools = [p["pool"] for p in blade["pools"]]
+            registry = blade["registry"]
+            assert registry["complete"] and registry["storage_root"] == registry["reconstructed"]
+            candidates = list(dict.fromkeys([*candidates, *pools, registry["address"]]))
+            task = (f"Clipper / Sushi Blade · на блоке {blade['height']} подтверждены все адреса реестра "
+                    f"по корню хранилища. Подписываемых пулов в исходном перечне сети и реестре: {len(pools)}. "
+                    "0x663f…c7f — пул на Base и разрешающий роутер на Ethereum. ")
+            if not base:
+                legacy = blade["unsigned_legacy"]
+                assert not legacy["enabled"] and not legacy["payer_blocked"] and not legacy["payer_allowed"]
+                task += ("Старый on-chain пул показывал 0,998237 и 9,980753 USDT за 1 и 10 USDC. "
+                         "Обе профинансированные покупки отклонил контракт: swapsAllowed=false; кошелёк сохранил USDC. "
+                         "В исходном Cove не найдено ни одного события депозита или обмена от создания по этот блок. ")
+            task += (f"[Адреса, роли, остатки и квитанции](../{fixture.as_posix()}) · "
+                     "[Официальный список Sushi](https://github.com/sushi-labs/clipper-rfq-subgraph/tree/453c83478f2553270f4fcf52797695fc52553240/scripts/deploy-codegen/networks).")
         classic_ids = {"119": "sushiswap-v2-base" if base else "sushiswap",
                        "194": "pancakeswap-v2-base" if base else "pancakeswap_ethereum"}
         if classic_id := classic_ids.get(str(row["id"])):

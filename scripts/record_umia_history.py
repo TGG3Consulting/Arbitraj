@@ -53,7 +53,8 @@ def capture():
         k,=many([call(v,"getPoolKey()",KEY)])
         p=keccak(encode([KEY],[k]))
         liq,slot=many([call(d["state_view"],"getLiquidity(bytes32)","uint128",p),call(d["state_view"],"getSlot0(bytes32)","(uint160,int24,uint24,uint24)",p)])
-        old.append(dict(vault=v,key=k,id="0x"+p.hex(),liquidity=str(liq),slot0=[str(slot[0]),*slot[1:]]))
+        runtime=bytes.fromhex(read("eth_getCode",[v,AT])[2:])
+        old.append(dict(vault=v,key=k,code={"bytes":len(runtime),"keccak256":"0x"+keccak(runtime).hex()},id="0x"+p.hex(),liquidity=str(liq),slot0=[str(slot[0]),*slot[1:]]))
     return dict(selector=AT,endpoint=ENDPOINT,first=hi,last=BLOCK,pages=len(starts),page_size=100000,logs=raw,retired=old)
 
 

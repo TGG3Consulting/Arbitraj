@@ -39,7 +39,7 @@ pub struct Market {
 }
 pub type Proof = super::registered_v3_wallet::Proof<Market>;
 impl RouterMarket for Market {
-    fn pool(self) -> Address {
+    fn emitter(self) -> Address {
         self.vault
     }
     fn event(self) -> (&'static str, usize) {
@@ -237,3 +237,7 @@ pub(in crate::venues::bsc_dex) async fn permissions(
 ) -> GatewayResult<Vec<approve::Approval>> {
     approve::at_block(ctx, o.input, o.payer, m.permit, o.target, o.amount, h).await
 }
+
+#[cfg(test)]
+#[path="ranges_wallet_tests.rs"]
+mod tests;

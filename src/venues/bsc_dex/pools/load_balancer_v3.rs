@@ -130,7 +130,12 @@ pub fn decode(
         .ok_or("нет ответов буферов")?;
     let buffers = buffer::decode(fx, &got[tail..])?;
     let last = &info.lastBalancesLiveScaled18;
-    let (curve, rule, hook) = kinds::decode(fx, rest, &live, last, cfg.isPoolInitialized)?;
+    let (curve, mut rule, hook) = kinds::decode(fx, rest, &live, last, cfg.isPoolInitialized)?;
+    if let crate::core::types::pool_vault::VaultV3Rule::PuzzleRanges {sequence_fee,..} = &mut rule
+        && info.tokenInfo.len()==info.tokens.len() && info.tokenInfo.iter().all(|t|t.tokenType==0 && !t.paysYieldFees)
+    {
+        *sequence_fee=Some(cfg.aggregateSwapFeePercentage);
+    }
     let v3 = VaultV3 {
         live,
         rates: rates.tokenRates,

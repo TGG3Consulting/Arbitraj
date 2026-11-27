@@ -173,7 +173,12 @@ fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>, bundles:&Sequence
             let mut l = l.clone();
             if let PoolState::Bundles(b)=&l.entry.pool.state {l.entry.pool.state=PoolState::Bundles(Box::new(bundles.current(b)));}
             else if let Some(s) = after.get(&l.entry.liquidity_site()) {
-                l.entry.pool.state = s.clone();
+                let mut state=s.clone();
+                // Разные ребра графа одного многомонетного Vault имеют собственные индексы пары.
+                if let (PoolState::VaultPool(prior),PoolState::VaultPool(next))=(&l.entry.pool.state,&mut state) {
+                    next.i0=prior.i0;next.i1=prior.i1;
+                }
+                l.entry.pool.state = state;
             }
             l
         })

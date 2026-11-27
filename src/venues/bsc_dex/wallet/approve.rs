@@ -101,7 +101,7 @@ pub(in crate::venues::bsc_dex) async fn at_block(ctx:&Ctx, token:Address, owner:
             permit,
             IPermit2::allowanceCall {
                 user: owner,
-                token: token,
+                token,
                 spender: router
             }
         )

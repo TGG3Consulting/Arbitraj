@@ -96,7 +96,12 @@ pub struct VaultV3 {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum VaultV3Rule {
     /// Puzzle Ranges prices a swap on virtual balances and caps output at the spendable real balance.
-    PuzzleRanges { virtual_balances: Vec<U256>, enabled: bool },
+    PuzzleRanges {
+        virtual_balances: Vec<U256>, enabled: bool,
+        /// Verified aggregate swap fee for standard assets, used only across successive trades.
+        #[serde(default, skip_serializing_if="Option::is_none")]
+        sequence_fee: Option<U256>,
+    },
     /// Весовой пул 20241205-v3-weighted-pool: баланс входа как есть, нижних балансов нет.
     Weighted,
     /// Весовой пул 20260115-v3-weighted-pool-v2: баланс входа + 1 и нижние балансы токенов (getMinTokenBalances, 18

@@ -59,6 +59,7 @@ def record(endpoint):
         bindings = posts(c, [(a, k, ["address"], [pool]) for pool in group for a, k in (
             (factory, "isPoolFromFactory(address)"), (vault, "isPoolRegistered(address)"),
             (vault, "getPoolTokens(address)"), (vault, "getHooksConfig(address)"))])
+        configs = posts(c, [(vault, "getPoolConfig(address)", ["address"], [p]) for p in group])
         for i, pool in enumerate(group):
             imm, dyn, hook, own_vault = states[4*i:4*i+4]
             member, registered, assets, hook_config = bindings[4*i:4*i+4]
@@ -70,7 +71,9 @@ def record(endpoint):
                     or decode(["address"], hook)[0] != flags[-1] or flags[-1] != roles["hook"]
                     or not all(len(a) == len(tokens) for a in (scales, weights, *(state[k] for k in DYNAMIC_KEYS[:5])))):
                 raise ValueError(f"mismatched pool bindings or dimensions: {pool}")
-            records.append(dict(pool=pool, tokens=tokens, scales=scales, weights=weights, hooks=flags[:-1], **state))
+            cfg, = decode(["((bool,bool,bool,bool),uint256,uint256,uint256,uint40,uint32,bool,bool,bool,bool)"], configs[i])
+            if cfg[1] != state["fee"]: raise ValueError(("inconsistent fee",pool))
+            records.append(dict(aggregate_swap_fee=cfg[2],pool=pool, tokens=tokens, scales=scales, weights=weights, hooks=flags[:-1], **state))
     return dict(chain_id=1, height=int(header["number"], 16), selector=AT, state_root=ROOT_HASH,
                 manifests={k: f"{MANIFEST}/{k}.json" for k in ("range", "balancer-core")},
                 roles=roles, runtime={k:"0x"+keccak(hexstr=v).hex() for k,v in zip(roles,codes,strict=True)},

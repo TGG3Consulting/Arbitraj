@@ -447,7 +447,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "omni_flux_native_cl" => (PoolKind::Cl, Proto::InfinityCl, true, false, true),
         "omni_flux_native_bin" => (PoolKind::Bin, Proto::InfinityBin, true, false, true),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
-        "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
@@ -960,7 +960,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::UniswapV4 if f.variant.launch() => {
             list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);
-            if f.variant == Variant::LaunchBaseline { list.push("dex.factory"); }
+            if matches!(f.variant, Variant::LaunchBaseline | Variant::LaunchUmia) { list.push("dex.factory"); }
             if f.variant == Variant::LaunchO1Wrapped { list.extend(["dex.router", "dex.module_runtime_hashes"]); }
         }
         Proto::UniswapV4 if f.variant == Variant::DeliCl => list.extend([

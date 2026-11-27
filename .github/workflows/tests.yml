@@ -506,6 +506,7 @@ jobs:
           python scripts/record_umia_source.py prepare "$RUNNER_TEMP/umia-input.json"
           npm install --prefix "$RUNNER_TEMP/umia-solc" --no-audit --no-fund --ignore-scripts solc@0.8.26
           "$RUNNER_TEMP/umia-solc/node_modules/.bin/solcjs" --standard-json < "$RUNNER_TEMP/umia-input.json" > "$RUNNER_TEMP/umia-compiled.json"
+          "$RUNNER_TEMP/umia-solc/node_modules/.bin/solcjs" --standard-json < "$RUNNER_TEMP/umia-input.reference.json" > "$RUNNER_TEMP/umia-compiled.reference.json"
           python scripts/record_umia_source.py verify "$RUNNER_TEMP/umia-compiled.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'umia-base'
         run: python scripts/record_umia_base.py wallets "$RUNNER_TEMP/market.json"
@@ -606,6 +607,10 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/pendle" PendleMarketAdapter
           python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/pendle/PendleMarketAdapter.json"
+      - if: startsWith(matrix.market, 'ranges-stress-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: python scripts/record_ranges_wallets.py "$RUNNER_TEMP/market.json" "${MARKET##*-}" --stress
       - if: startsWith(matrix.market, 'ranges-ethereum-')
         env:
           MARKET: ${{ matrix.market }}

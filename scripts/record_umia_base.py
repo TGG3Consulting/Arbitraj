@@ -72,6 +72,12 @@ if __name__=="__main__":
         result=directory()
     else:
         with gzip.open(DATA/"umia_base_directory.json.gz") as f:snapshot=json.load(f)
+        with gzip.open(DATA/"umia_base_history.json.gz") as f:history=json.load(f)
+        if history["selector"]!=snapshot["selector"]:raise ValueError("история из другого блока")
+        for old in history["retired"]:
+            venture,=many([call(old["vault"],"venture()","address")])
+            r=next(r for r in snapshot["rows"] if r["venture"]==venture)
+            snapshot["rows"].append(dict(old,group="umia",terms={"quote":r["money"]},sizes=r["sizes"]))
         for endpoint in ENDPOINTS:
             try:result=replay("umia",endpoint,snapshot)
             except (ValueError,requests.RequestException):

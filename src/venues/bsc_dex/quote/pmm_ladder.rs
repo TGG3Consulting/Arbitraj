@@ -88,3 +88,73 @@ pub fn depth(points: &[LadderPoint], factor_e18: U256) -> Option<(U256, U256, bo
     }
     Some((last.amount_in, last.amount_out, false))
 }
+
+/// Индикативная сумма по отрезкам между фактическими raw ответами. Оба направления используют
+/// одну кривую. При выборе точного выхода берём минимальный целый вход, затем финальный swap
+/// подтверждает запрошенный минимум на реальном кошельке.
+pub(super) fn wallet_amounts(
+    points: &[LadderPoint],
+    exact_in: bool,
+    amount: U256,
+) -> Option<(U256, U256)> {
+    use super::super::math::full_math::mul_div_up;
+    let (mut x, mut y) = (U256::ZERO, U256::ZERO);
+    if amount.is_zero() {
+        return None;
+    }
+    for p in points {
+        let dx = p.amount_in.checked_sub(x)?;
+        if dx.is_zero() {
+            return None;
+        }
+        if exact_in && amount <= p.amount_in {
+            let received = if p.amount_out >= y {
+                y.checked_add(mul_div(amount - x, p.amount_out - y, dx)?)?
+            } else {
+                y.checked_sub(mul_div_up(amount - x, y - p.amount_out, dx)?)?
+            };
+            return (!received.is_zero()).then_some((amount, received));
+        }
+        if !exact_in && amount > y && amount <= p.amount_out {
+            let dy = p.amount_out - y;
+            let paid = x.checked_add(mul_div_up(amount - y, dx, dy)?)?;
+            let actual = y.checked_add(mul_div(paid - x, dy, dx)?)?;
+            return Some((paid, actual));
+        }
+        (x, y) = (p.amount_in, p.amount_out)
+    }
+    None
+}
+
+#[cfg(test)]
+mod wallet_amount_tests {
+    use super::*;
+    #[test]
+    fn minimum_debit_and_full_output_across_flat_steps() {
+        let u = U256::from;
+        let points = [(4u64, 9u64), (8, 9), (20, 16)].map(|(x, y)| LadderPoint {
+            amount_in: u(x),
+            amount_out: u(y),
+        });
+        for requested in 1..=16 {
+            let (input, actual) = wallet_amounts(&points, false, u(requested)).unwrap();
+            assert!(actual >= u(requested));
+            assert_eq!(wallet_amounts(&points, true, input), Some((input, actual)));
+            assert!(
+                wallet_amounts(&points, true, input - U256::ONE)
+                    .is_none_or(|(_, v)| v < u(requested))
+            );
+        }
+        assert!(wallet_amounts(&points, false, u(17)).is_none());
+        assert!(wallet_amounts(&points, true, u(21)).is_none());
+        let declining = [(4u64, 9u64), (8, 6), (20, 18)].map(|(x, y)| LadderPoint {
+            amount_in: u(x),
+            amount_out: u(y),
+        });
+        assert_eq!(wallet_amounts(&declining, true, u(7)), Some((u(7), u(6))));
+        assert_eq!(
+            wallet_amounts(&declining, false, u(10)),
+            Some((u(12), u(10)))
+        );
+    }
+}

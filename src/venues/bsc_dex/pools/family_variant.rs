@@ -71,6 +71,7 @@ pub enum Variant {
     OmniV2,
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
+    LaunchUmia,
     LaunchBaseline,
     LaunchDoppler,
     LaunchIndex,
@@ -198,7 +199,7 @@ pub enum Variant {
 }
 
 impl Variant {
-    pub fn launch(self)->bool {matches!(self,Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
+    pub fn launch(self)->bool {matches!(self,Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
@@ -227,6 +228,9 @@ impl Variant {
         matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
+    pub fn wallet_ladder(self) -> bool {
+        matches!(self, Self::SafeSwapTrade | Self::Pendle)
+    }
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(
@@ -288,6 +292,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
         "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
+        "launch_umia" => Variant::LaunchUmia,
         "launch_baseline" => Variant::LaunchBaseline,
         "launch_doppler" => Variant::LaunchDoppler,
         "launch_index" => Variant::LaunchIndex,

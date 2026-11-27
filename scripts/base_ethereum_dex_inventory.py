@@ -77,6 +77,7 @@ def tables(network, snapshots, profiles):
     if base:
         out.extend(base_launch_inventory.section())
         out.extend(base_launch_inventory.spectra())
+        out.extend(base_launch_inventory.umia())
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
         out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
@@ -133,6 +134,17 @@ def tables(network, snapshots, profiles):
             public = sum(paid(r, side) for m in markets for r in m.get("paid_public", []) for side in ("buy","sell"))
             count = f"{legs['v5']} / {legs['router']} / {public}"
             out.append(f"| {venue['id']} · `{venue['roles']['factory']['address']}` | {len(markets)} | {settled} | {count} |")
+        with gzip.open(market_path / "safeswap_ethereum_protected_wallets.json.gz", "rt") as stream:
+            protected_safe = json.load(stream)
+        cases = [r for r in protected_safe["cases"] if r["profile"]=="proxy-2"]
+        out.extend(["", "Оплата SafeSwap Trade из WETH и отдельным платежом ETH на одном и том же объёме покупки.",
+                    "", "| Путь | Списано WETH, raw | Плата покупки, wei ETH сверх WETH | Получено LINK, raw | Получено обратно WETH, raw | Плата продажи, wei ETH сверх WETH | Газ покупки / продажи |",
+                    "|---|---:|---:|---:|---:|---:|---:|"])
+        safe_modes = {"module":"Модуль, плата из WETH", "v5":"V5 через модуль, плата из WETH", "separate":"Модуль, плата в ETH"}
+        for row in cases:
+            b, s = (row[side]["exact"] for side in ("buy", "sell"))
+            out.append(f"| {safe_modes[row['mode']]} | {b['spent']} | {b['external_fee']} | {b['received']} | {s['received']} | {s['external_fee']} | {b['gas']} / {s['gas']} |")
+        out.extend(["", "Для автоматического пути кошельку требуется собственный модуль с совпадающими ролями. При продаже за WETH резерв платы модуля возвращается из выручки в том же обмене. [Вызовы, балансы и газ](../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_protected_wallets.json.gz)."])
         for market in safeswap["deployments"][3]["markets"]:
             for row in market.get("paid_public", []):
                 if paid(row,"buy") and paid(row,"sell"):
@@ -1472,7 +1484,7 @@ def tables(network, snapshots, profiles):
             factory=dep["roles"]["factory"]["address"]
             pool=next(m["pool"] for m in dep["markets"] if m.get("rounds"))
             roundtrip="CREATE2 и getPair в обоих порядках"
-            status="Четыре фабрики с архивными выплатами. В первом запуске две фабрики с Router02 и V5, а также proxy-1 с исполнением V5 непосредственно в неизменяемой паре. Для proxy-2 подтверждён архивный путь SafeSwapTradeRouter"
+            status="Четыре фабрики с архивными выплатами. В первом запуске две фабрики с Router02 и V5, а также proxy-1 с исполнением V5 непосредственно в неизменяемой паре. Для proxy-2 подтверждены выплаты через SafeSwapTradeRouter и модуль кошелька с оплатой из WETH"
         if not base and id=="surge-protocol-eth":
             pool=surge["address"]
             roundtrip="проверенный код SURGE и собственные события Bought и Sold"
@@ -1522,6 +1534,10 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "9435":
+            directory = read(Path("tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"))
+            candidates = [directory["venue"]]
+            task = "ETH-GOLIATH · две связки с WETH, активность зависит от блока"
         if not base and str(row["id"]) == "9157":
             directory = read(Path("tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json"))
             candidates = [directory["factory"]]
@@ -1566,6 +1582,8 @@ def tables(network, snapshots, profiles):
                     + ("8/8 обменов изменили собственный пул." if base else
                        "4/4 обмена дополнительно изменили пул Uniswap V3 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640.")
                     + " Исполнитель сравнивает одиночный Nami с обычным сплитом на тот же объём и направляет сюда только отдельный обмен")
+        if base and str(row["id"])=="8513":
+            task="DEX-44 · UmiaHub, четыре текущих и один прежний спотовый vault. Общий объём включает решения UmiaMarketCore, по которым нужны исход и погашение. См. фактические выплаты в разделе Umia."
         if base and str(row["id"])=="4725":
             task="DEX-43 · адрес в адаптере исключён из подсчёта объёма. Три физических реестра и 88 рынков приведены в разделе Spectra; торговые монеты — IBT/PT."
         if base and str(row["id"]) == "7260" and elfomo.exists():

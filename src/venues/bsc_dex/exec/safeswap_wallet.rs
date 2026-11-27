@@ -16,16 +16,19 @@ use super::{
 use crate::gateway::errors::GatewayResult;
 use alloy::{
     rpc::types::Log,
-    sol,
     sol_types::{SolCall, SolEvent},
 };
 use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 
-sol! { interface ISettlement {
-    event Filled(address indexed sender,address indexed recipient,address indexed input,address output,
-                 uint256 spent,uint256 received,uint256 nativeFee,bool separateFee);
-}}
+#[allow(clippy::too_many_arguments)]
+mod abi {
+    alloy::sol! { interface ISettlement {
+        event Filled(address indexed sender,address indexed recipient,address indexed input,address output,
+                     uint256 spent,uint256 received,uint256 nativeFee,bool separateFee);
+    }}
+}
+use abi::ISettlement;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proof {
     pub pool: Address,

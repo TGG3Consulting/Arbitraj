@@ -59,6 +59,7 @@ def capture(endpoint, artifact):
         code=runtime(c,artifact,[OWNER,EXEC,factory,router,public,WETH])
         env={OWNER:{"balance":hex(10**20)},MODULE:{"code":code},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
              "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+        public_ether = c.one(MULTICALL,"getEthBalance(address)",["address"],[public],["uint256"])[0] if public!=ZERO else 0
         def run(seq):
             return simulate_block(endpoint,c.selector,env,seq)
         def fees(pre,a,b,n):
@@ -134,7 +135,7 @@ def capture(endpoint, artifact):
                     if public!=ZERO:
                         # Perturb only the canonical balance by one wei in this isolated frame.
                         # Code, proxy slots, pool liquidity and ERC20 allowances remain untouched.
-                        original=int(rpc(endpoint,"eth_getBalance",[public,c.selector]),16)
+                        original=public_ether
                         env[public]={"balance":hex(original+1)}
                         try:
                             dirtied,dirty_prefix=leg(pre,mode,WETH,token,budget)

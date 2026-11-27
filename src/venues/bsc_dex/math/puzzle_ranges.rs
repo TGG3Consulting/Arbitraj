@@ -119,6 +119,7 @@ pub(super) fn first_debit(
     let VaultV3Rule::PuzzleRanges {
         virtual_balances,
         enabled: true,
+        ..
     } = &v.rule
     else {
         return None;

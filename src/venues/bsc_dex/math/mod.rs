@@ -29,6 +29,7 @@ pub mod balancer_stable;
 pub mod balancer_v2_more;
 pub mod balancer_v3;
 pub(crate) mod puzzle_ranges;
+pub mod ranges_sequence;
 pub mod balancer_v3_buffer;
 pub mod balancer_v3_hook;
 pub mod balancer_v3_lbp;

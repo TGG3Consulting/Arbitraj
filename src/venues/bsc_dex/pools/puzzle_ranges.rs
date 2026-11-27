@@ -67,6 +67,7 @@ pub(super) fn state(raw: &[u8], live: &[U256], weights: &[U256]) -> Result<Vault
     }
     Ok(VaultV3Rule::PuzzleRanges {
         virtual_balances: s.virtualBalances,
+        sequence_fee: None,
         enabled: s.isPoolRegistered
             && s.isPoolInitialized
             && !s.isPoolPaused

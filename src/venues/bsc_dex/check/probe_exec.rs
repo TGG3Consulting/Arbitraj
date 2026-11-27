@@ -139,10 +139,12 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
-    if e.family.variant==super::super::pools::family_variant::Variant::Pendle{
-        let event=super::super::exec::pendle_wallet::IAdapter::Swap::SIGNATURE_HASH;
+    if e.family.variant.wallet_ladder(){
+        let event=if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
+            super::super::exec::pendle_wallet::IAdapter::Swap::SIGNATURE_HASH
+        } else { super::super::pools::abi_v2v3::IV2Pair::Swap::SIGNATURE_HASH };
         let count=logs.iter().filter(|l|l.address==e.pool.reference.address() && l.topics.first()==Some(&event)).count();
-        return (count==1).then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Pendle: не подтверждено единственное исполнение на рынке данной серии"));
+        return (count==1).then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Проба не подтвердила единственный обмен выбранной пары"));
     }
     if e.family.variant.umbrae(){
         let topic=super::super::pools::umbrae::swap_topic(e.family.variant);

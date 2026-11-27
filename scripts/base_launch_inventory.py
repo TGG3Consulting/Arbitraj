@@ -128,3 +128,26 @@ def spectra():
             + (f"Через штатный Spectra Router исполнено {modes['router']} ног. " if modes["router"] else "")
             + "Штатный Router ограничивает абсолютный баланс получателя после выплаты. V5 проверяет прирост баланса за саму транзакцию и её срок. Для исполнения профиля нужны средства в физической монете и заданный владельцем проверенный V5. "
             f"[Входы, выходы, газ и контрольные отказы](../{DATA/'spectra_base_wallets.json.gz'}).",""]
+
+def umia():
+    d=evidence("umia_base_directory.json.gz")
+    h=evidence("umia_base_history.json.gz")
+    w=evidence("umia_base_wallets.json.gz")
+    counts={mode:sum(1 for m in w["markets"] for c in m["cases"] if c["mode"]==mode
+                     for side in ("buy","sell") if (c.get(side) or {}).get("stage")=="accepted")
+            for mode in ("router","v5")}
+    return ["#### Umia · спотовые vault и миграция","",
+        f"Hub на высоте {d['height']} вернул семь venture, четыре текущих спотовых vault и три venture без vault. "
+        f"События Hub от {h['first']} до {h['last']} включают ещё один пул UMIA/USDC с комиссией 1%, "
+        f"чей предыдущий vault сохранил ликвидность {h['retired'][0]['liquidity']}. У нового пула ставка 0,3%. "
+        "Из трёх отдельных Koi3 TEST/USDC (1%) два имели нулевую ликвидность в текущем ценовом диапазоне. "
+        "[Реестр venture и ключи](../tests/data/first_run_dex_2026-11-26/umia_base_directory.json.gz). "
+        "[Каноническая история выдачи и миграции](../tests/data/first_run_dex_2026-11-26/umia_base_history.json.gz).","",
+        f"В архивной симуляции обычный Universal Router провёл {counts['router']} обменов, V5 — {counts['v5']}. "
+        "Списания входа и чистые выплаты измерены по балансу кошелька, проверены минимальная выплата +1 и истекший срок. "
+        "Профиль берёт из настроек проверенные хеши хуков и фабрик, канонический ключ, роль зарегистрированного LBP либо мигратора. "
+        "Предыдущий vault проверяется по истории, принятому runtime и обратным связям. Варианты с неизвестным runtime ожидают проверки исходника. "
+        "[Суммы и газ](../tests/data/first_run_dex_2026-11-26/umia_base_wallets.json.gz).","",
+        "Статистика DefiLlama объединяет спотовые и условные рынки. Обмен внутри UmiaMarketCore ведёт права на исход предложения "
+        "в собственном реестре. Выдача обеспечения зависит от погашения прав и результата settlement. "
+        "[Первичные контракты](https://github.com/umiafinance/protocol/tree/3165f5a5bdaa23a83fbfd4894523e7ca84d53a14).",""]

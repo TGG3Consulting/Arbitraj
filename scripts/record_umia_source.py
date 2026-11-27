@@ -30,6 +30,10 @@ def prepare(output):
         for prefix,target in sorted(mapping,key=lambda x:len(x[0]),reverse=True):
             if source.startswith(prefix):return target+source[len(prefix):]
         return source
+    name=PREFIX+"UmiaHook.sol"
+    ref_settings=dict(settings,outputSelection={name:{"UmiaHook":["evm.deployedBytecode.object","evm.deployedBytecode.immutableReferences"]}})
+    reference={k:{"content":x["content"]} for k,x in v["sources"].items()}
+    output.with_suffix(".reference.json").write_text(json.dumps(dict(language="Solidity",sources=reference,settings=ref_settings)),encoding="utf8")
     names=[PREFIX+t+".sol" for t in TARGETS]
     todo=list(names);sources={}
     while todo:
@@ -57,21 +61,24 @@ def verify(compiled,output):
     product=json.loads(raw[raw.index("{"):])
     errors=[e["formattedMessage"][:500] for e in product.get("errors",[]) if e["severity"]=="error"]
     if errors:raise ValueError(errors[:3])
+    raw=compiled.with_suffix(".reference.json").read_text(encoding="utf8")
+    reference=json.loads(raw[raw.index("{"):])
+    products=[(name,product) for name in TARGETS]+[("UmiaHook",reference)]
     with gzip.open(DATA/"umia_base_directory.json.gz") as f:directory=json.load(f)
     evidence=[]
     for hook in sorted({r["key"][-1] for r in directory["rows"] if "key" in r}):
         actual=bytes.fromhex(read("eth_getCode",[hook,AT])[2:])
         owner,=many([call(hook,"INITIAL_OWNER()","address")])
         matches=[]
-        for name in TARGETS:
-            deployed=product["contracts"][PREFIX+name+".sol"][name]["evm"]["deployedBytecode"]
+        for name,build in products:
+            deployed=build["contracts"][PREFIX+name+".sol"][name]["evm"]["deployedBytecode"]
             sample=bytearray.fromhex(deployed["object"]);refs=list(deployed["immutableReferences"].values())
             if len(refs)!=1:raise ValueError("исходник имеет иной состав immutable")
             for item in refs[0]:
                 if item["length"]!=32:raise ValueError("immutable не address")
                 start=item["start"];sample[start:start+32]=int(owner,16).to_bytes(32,"big")
             if body(actual)==body(sample):
-                matches.append(dict(name=name,metadata_equal=actual==sample,immutable=refs[0],logic_bytes=len(body(actual))))
+                matches.append(dict(name=name,source="sourcify" if build is reference else PIN,metadata_equal=actual==sample,immutable=refs[0],logic_bytes=len(body(actual))))
         evidence.append(dict(hook=hook,initial_owner=owner,runtime_hash="0x"+keccak(actual).hex(),matches=matches))
     if not any(r["hook"]==VERIFIED and r["matches"] for r in evidence):raise ValueError("не воспроизвёлся эталон Sourcify")
     output.write_text(json.dumps(dict(selector=AT,pin=PIN,solc="0.8.26",hooks=evidence),indent=2),encoding="utf8")

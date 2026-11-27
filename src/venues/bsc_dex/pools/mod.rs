@@ -239,6 +239,7 @@ mod baseline_components;
 mod launch_keys;
 mod launch_abi;
 mod launch_terms;
+mod umia;
 mod launch_ladder;
 pub(super) mod deli_cl;
 mod deli_keys;

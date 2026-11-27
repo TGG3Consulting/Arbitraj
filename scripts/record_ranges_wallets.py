@@ -41,14 +41,14 @@ def allow(mode, roles, token, qty, end):
     return calls
 
 
-def buy_cash(cash, qty, end):
+def buy_cash(cash, qty, end, eth_budget=10**17):
     if cash == WETH:
         return tx(WETH, "deposit()", value=qty)
     return tx(FUNDING, "swapETHForExactTokens(uint256,address[],address,uint256)",
-              ["uint256","address[]","address","uint256"], [qty,[WETH,cash],OWNER,end], 10**17)
+              ["uint256","address[]","address","uint256"], [qty,[WETH,cash],OWNER,end], eth_budget)
 
 
-def run(endpoint, number):
+def run(endpoint, number, stress=False):
     directory = json.loads(gzip.decompress(DATA.read_bytes()))
     roles = directory["roles"]
     chain, head, *codes = read_batch(endpoint,[("eth_chainId",[]),("eth_getBlockByHash",[AT["blockHash"],False]),
@@ -58,7 +58,7 @@ def run(endpoint, number):
         raise ValueError("unexpected wallet, role code or canonical state")
     deadline = int(head["timestamp"],16) + 900
     word = lambda n: "0x"+format(n,"064x")
-    env = {OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
+    env = {OWNER:{"balance":hex((32 if stress else 1)*10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
            "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     def simulate(calls):
         return simulate_block(endpoint,AT,env,calls)
@@ -128,9 +128,15 @@ def run(endpoint, number):
     def one(plan):
         pool,cash,token=plan
         records=[]
-        for qty in SIZES[cash]:
+        sizes=SIZES[cash]
+        if stress:
+            market=next(p for p in directory["pools"] if p["pool"]==pool)
+            raw=market["raw"][market["tokens"].index(cash)]
+            budget=2*10**18 if cash==WETH else 2500*10**6
+            sizes=sorted({min(budget,max(sizes[-1],raw*n)) for n in (1,5)})
+        for qty in sizes:
             for mode in ("router","v5"):
-                prefix,buy=verify(mode,pool,cash,token,qty,[buy_cash(cash,qty,deadline)])
+                prefix,buy=verify(mode,pool,cash,token,qty,[buy_cash(cash,qty,deadline,8*10**18 if stress else 10**17)])
                 row=dict(pool=pool,cash=cash,token=token,mode=mode,size=qty,buy=buy)
                 if prefix:
                     _,row["sell"]=verify(mode,pool,token,cash,buy["credit"],prefix)
@@ -147,10 +153,11 @@ if __name__ == "__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("out",type=Path)
     p.add_argument("shard",type=int,choices=range(4))
+    p.add_argument("--stress",action="store_true")
     args=p.parse_args()
     for endpoint in [ENDPOINT,"https://ethereum-rpc.publicnode.com","https://mainnet.gateway.tenderly.co"]:
         try:
-            evidence=run(endpoint,args.shard)
+            evidence=run(endpoint,args.shard,args.stress)
             break
         except (OSError, RuntimeError, KeyError, ValueError) as exc:
             if isinstance(exc, ValueError) and isinstance(exc.args[0],tuple): raise

@@ -67,6 +67,8 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
     k.currency0 < k.currency1
         && !k.hooks.is_zero()
         && match f.variant {
+            Variant::LaunchUmia => !k.currency0.is_zero() && (1..1_000_000).contains(&k.fee)
+                && k.tick_spacing.as_i32() > 0 && (u16::from_be_bytes([k.hooks[18],k.hooks[19]]) & 0x3fff) == 0x3a80,
             Variant::LaunchDoppler => k.fee == 0x800000 && k.tick_spacing.as_i32() == 200,
             Variant::LaunchIndex | Variant::LaunchBaseline => k.fee == 0 && k.tick_spacing.as_i32() == 1,
             Variant::LaunchO1Wrapped => k.currency0.is_zero() && k.fee == 0 && k.tick_spacing.as_i32() == 200,

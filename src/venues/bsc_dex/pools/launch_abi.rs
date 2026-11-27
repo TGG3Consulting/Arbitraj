@@ -14,6 +14,7 @@ alloy::sol! {
         function manager() external view returns(address);
         function wrapped() external view returns(address);
         function market(bytes32 id,address token) external view returns(Key);
+        function getPoolKey() external view returns(Key);
         function poolKey(address token) external view returns(Key);
         function poolManager() external view returns(address);
         function factory() external view returns(address);

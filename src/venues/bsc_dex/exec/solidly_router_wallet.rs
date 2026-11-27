@@ -34,7 +34,7 @@ pub struct Market {
     pub supporting_fee: bool,
 }
 impl RouterMarket for Market {
-    fn pool(self) -> Address {
+    fn emitter(self) -> Address {
         self.pool
     }
     fn event(self) -> (&'static str, usize) {

@@ -42,7 +42,7 @@ impl Market {
     }
 }
 pub trait RouterMarket: Copy {
-    fn pool(self) -> Address;
+    fn emitter(self) -> Address;
     fn topics(self, actual: &[B256], signature: B256, target:Address, payer:Address, _input:Address, _output:Address) -> bool {
         actual == [signature, target.into_word(), payer.into_word()]
     }
@@ -59,7 +59,7 @@ pub trait RouterMarket: Copy {
     ) -> Bytes;
 }
 impl RouterMarket for Market {
-    fn pool(self) -> Address {
+    fn emitter(self) -> Address {
         self.pool
     }
     fn event(self) -> (&'static str, usize) {
@@ -168,7 +168,7 @@ impl<M: RouterMarket> Proof<M> {
         let swap = keccak256(signature);
         let mut hits = logs
             .iter()
-            .filter(|l| l.address() == self.market.pool() && l.topics().first() == Some(&swap));
+            .filter(|l| l.address() == self.market.emitter() && l.topics().first() == Some(&swap));
         let event = hits.next()?;
         if hits.next().is_some()
             || !self.market.topics(event.topics(),swap,self.target,wallet,input,output)

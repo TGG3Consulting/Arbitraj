@@ -33,6 +33,7 @@ use super::pool_quote;
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::VaultPool(d),PoolKind::VaultPool)=>super::super::math::ranges_sequence::supported(d),
         (PoolState::UmbraeDamm(_) | PoolState::ToonSwap(_), PoolKind::V2) => true,
         (PoolState::Antfarm(_) | PoolState::Temple(_), PoolKind::V2) => true,
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
@@ -60,6 +61,12 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::VaultPool(d),PoolKind::VaultPool) if super::super::math::ranges_sequence::supported(d)=>{
+            let (i,j)=if zero_for_one{(d.i0,d.i1)}else{(d.i1,d.i0)};
+            let (credit,next)=super::super::math::ranges_sequence::advance(d,i.into(),j.into(),amount)
+                .ok_or_else(||no("Ranges: выход или последующие остатки не покрываются пулом"))?;
+            Ok((Swapped{amount_in:amount,amount_out:credit,complete:true},PoolState::VaultPool(Box::new(next))))
+        }
         (PoolState::ToonSwap(s), PoolKind::V2) => s.trade(zero_for_one,true,amount)
             .map(|(fill,next)| (fill,PoolState::ToonSwap(Box::new(next))))
             .ok_or_else(||no("ToonSwap: сумма, переводы комиссий или состояние после обмена не исполнимы")),

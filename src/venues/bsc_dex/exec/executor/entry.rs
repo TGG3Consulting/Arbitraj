@@ -59,7 +59,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
+    if f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -76,6 +76,10 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
     let k = f
         .executor_kind
         .ok_or_else(|| format!("{}: у вида пула нет шага исполнителя", f.id))?;
+    if f.variant.defiplaza(){
+        if k==ExecKind::Basin && let PoolRef::Multi{contract,token0,token1}=pool && !contract.is_zero() && token0<token1{return Ok((k,*contract));}
+        return Err("DefiPlaza: нужен зарегистрированный рынок кассы".into());
+    }
     if f.variant.mooniswap(){
         if k==ExecKind::Balancer && let PoolRef::Contract(pool)=pool && !pool.is_zero(){return Ok((k,*pool));}
         return Err("Mooniswap: неверный вид шага или адрес пула".into());
@@ -122,6 +126,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
+    if e.family.variant.defiplaza(){return super::super::defiplaza_plan::graph_target(ctx,e).map(|target|(k,target)).ok_or_else(||"DefiPlaza: касса и пара изменились".into());}
     if e.family.variant.issuer_shares() {
         return super::super::aktionariat_plan::terms(ctx,e).map(|m|(k,m.module)).map_err(|e|e.message);
     }
@@ -151,6 +156,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
 /// pool_gate::admitted (снимки кошельков и итогов пробы). Равенство с fits — тест tests/bsc_dex_pool_pass_401.rs.
 /// Принимает: окружение (кошелёк), запись реестра. Ошибок нет.
 pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
+    if e.family.variant.defiplaza(){return e.family.executor_kind==Some(ExecKind::Basin) && super::super::defiplaza_plan::graph_target(ctx,e).is_some();}
     let Some(k) = e.family.executor_kind else {
         return false;
     };

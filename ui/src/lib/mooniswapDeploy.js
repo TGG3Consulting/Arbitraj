@@ -32,7 +32,7 @@ export async function loadMooniswap(settings, plan, sha) {
   return plan;
 }
 
-export async function checkMooniswap(provider, plan, at) {
+export async function checkCashRoles(provider, plan, at) {
   if (at?.requireCanonical !== true || !digest.test(at.blockHash)) throw Error('Нужен канонический блок Ethereum.');
   await Promise.all(['factory','wrapped'].map(async name=>{
     const role = plan.roles[name];
@@ -40,3 +40,5 @@ export async function checkMooniswap(provider, plan, at) {
     if (runtimeKeccak(code)!==role.keccak256) throw Error('Изменился код контракта '+name+'.');
   }));
 }
+
+export const checkMooniswap = checkCashRoles;

@@ -157,6 +157,7 @@ pub enum RouterFeeMode {
     NativeGrossMinimum,
     /// Settlement through the configured Mooniswap wallet, preserving native ETH or wrapped ERC20.
     Mooniswap {target:alloy_primitives::Address,native:bool,native_cash:bool},
+    DefiPlaza {target:alloy_primitives::Address,native:bool,native_cash:bool},
     /// Original YieldBasis market paid through a module bound to its Ethereum factory.
     YieldBasis {
         target:alloy_primitives::Address,native:bool,native_cash:bool,

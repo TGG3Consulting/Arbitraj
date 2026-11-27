@@ -6729,7 +6729,8 @@
       "dex.factory": "0xe68c1d72340aeefe5be76eda63ae2f4bc7514110",
       "dex.factory_runtime_hash": "0x326fdd232797589c98f3c79b927d9b6375680e16f970c0536494cb2f45454787",
       "dex.module_runtime_hashes": [
-        "0xd4104b0c2c57e6246384f5a218f1ea43d8d237fca51cadb2fe38da08b05893d3"
+        "0xd4104b0c2c57e6246384f5a218f1ea43d8d237fca51cadb2fe38da08b05893d3",
+        "0x2e492b6dfaeff644fda1b29cfa7b7367bf4ec13ad39dc25da228f6b76b7976b7"
       ]
     }
   },
@@ -6743,7 +6744,8 @@
       "dex.factory": "0x3a2b8cc91af8bf45f3ec61e779ee1c2ba6b7e694",
       "dex.factory_runtime_hash": "0x0ae93461bd36cbd88745720e67c65f566cf1b239c169697e7e8a52b9040fed20",
       "dex.module_runtime_hashes": [
-        "0x1f1d8b681c902f0a57a5c9d1b6d6073403033fd8e1e6e9bdc4c81969358076bb"
+        "0x1f1d8b681c902f0a57a5c9d1b6d6073403033fd8e1e6e9bdc4c81969358076bb",
+        "0x1a1307f1dffd6a8240f9c8e4ac90a7e64e71b6c7396e010180926786c64073fc"
       ]
     }
   }

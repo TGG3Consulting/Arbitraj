@@ -20,9 +20,9 @@ pub(super) fn by_volume(
         return Some(Ok(Decimal::from(100u8-multiplier)));
     }
     if let PoolState::DefiPlaza(s)=&e.pool.state {
-        use crate::core::types::defiplaza::DefiPlazaCurve;
+        use crate::core::types::defiplaza::{DefiPlazaCurve,MULTI_FEE_SCALE};
         let pct=match s.curve{DefiPlazaCurve::Stable{fee_bps,..}=>Decimal::new(i64::from(fee_bps),2),
-            DefiPlazaCurve::Multi{one_minus_fee}=>Decimal::from((1u128<<64)-u128::from(one_minus_fee))/Decimal::from(1u128<<64)*Decimal::from(100)};
+            DefiPlazaCurve::Multi{one_minus_fee}=>Decimal::from(MULTI_FEE_SCALE-u128::from(one_minus_fee))/Decimal::from(MULTI_FEE_SCALE)*Decimal::from(100)};
         return Some(Ok(pct));
     }
     if let PoolState::Dagrow(s)=&e.pool.state {

@@ -74,6 +74,8 @@ pub struct SwapCtx {
     pub(in crate::venues::bsc_dex) bancor_legacy:Option<Box<super::bancor_legacy_wallet::Proof>>,
     #[serde(default, skip_serializing_if="Option::is_none")]
     pub mooniswap:Option<Box<super::mooniswap_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub defiplaza:Option<Box<super::defiplaza_wallet::Proof>>,
     #[serde(default, skip_serializing_if="Option::is_none")]
     pub yield_basis:Option<Box<super::yield_basis_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]

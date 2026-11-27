@@ -10,6 +10,8 @@
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
     algebra_integral_theorem:{file:'theorem-ethereum',key:'algebra-router-wallet:theorem:1',name:'AlgebraRouterWallet в Ethereum',load:()=>import('../assets/theorem-ethereum.json')},
+    defiplaza_multi:{file:'defiplaza-multi',key:'defiplaza-multi:1',name:'DefiPlazaWallet для MultiPlaza',load:()=>import('../assets/defiplaza-multi-create.json')},
+    defiplaza_stable:{file:'defiplaza-stable',key:'defiplaza-stable:1',name:'DefiPlazaWallet для StablePlaza',load:()=>import('../assets/defiplaza-stable-create.json')},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
     mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
@@ -210,7 +212,9 @@
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}
         <div>{label} <code>{manifest.arguments[i]}</code></div>
       {/each}
-    {:else if kind === 'uniswap_v1'}
+    {:else if kind==='defiplaza_multi' || kind==='defiplaza_stable'}
+      <p>Касса <code>{manifest.roles.factory.address}</code>, WETH <code>{manifest.roles.wrapped.address}</code>. Сумма CREATE составляет 0 ETH.</p>
+      {:else if kind === 'uniswap_v1'}
       <p>Фабрика <code>{manifest.roles.factory.address}</code>, WETH <code>{manifest.roles.wrapped.address}</code>. Конструктор принимает оба адреса. Перевод ETH контракту — 0.</p>
     {:else}
       <p>Рынок <code>{manifest.market}</code>. Конструктор принимает этот адрес. Перевод ETH контракту — 0.</p>

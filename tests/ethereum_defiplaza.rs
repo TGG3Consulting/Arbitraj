@@ -68,6 +68,7 @@ fn funded_paths_keep_raw_amounts_and_cannot_spend_another_pairs_reserves() {
             };
             let state = DefiPlazaState {
                 pool: book["pool"].as_str().unwrap().parse().unwrap(),
+                module_hash: guarded["runtime"].as_str().unwrap().parse().unwrap(),
                 module: guarded["module"].as_str().unwrap().parse().unwrap(),
                 tokens,
                 physical,

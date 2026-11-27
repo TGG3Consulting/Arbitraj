@@ -15,11 +15,11 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Brokerbot|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    e.family.variant.defiplaza() || (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Brokerbot|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) fn native_module(v:Variant)->bool {
-    v.flux_native() || matches!(v,Variant::UniswapV1|Variant::BancorV3|Variant::BalancerV1|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
+    v==Variant::DefiPlazaMulti || v.flux_native() || matches!(v,Variant::UniswapV1|Variant::BancorV3|Variant::BalancerV1|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -38,6 +38,10 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         }
         if e.family.variant.mooniswap() {
             quotes.extend(Box::pin(super::mooniswap_pricing::options(q,i,e,payer,native,graph,head)).await);
+            continue;
+        }
+        if e.family.variant.defiplaza() {
+            quotes.extend(Box::pin(super::defiplaza_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;
         }
         if e.family.variant==Variant::YieldBasis {

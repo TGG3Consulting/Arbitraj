@@ -6,9 +6,11 @@ use alloy_primitives::{Address, U256};
 impl DefiPlazaState {
     fn params(&self) -> (U256, U256, U256) {
         match self.curve {
-            DefiPlazaCurve::Multi { one_minus_fee } => {
-                (U256::from(one_minus_fee), U256::ONE << 64, U256::ZERO)
-            }
+            DefiPlazaCurve::Multi { one_minus_fee } => (
+                U256::from(one_minus_fee),
+                U256::from(crate::core::types::defiplaza::MULTI_FEE_SCALE),
+                U256::ZERO,
+            ),
             DefiPlazaCurve::Stable { fee_bps, delta } => (
                 U256::from(10_000u64 - u64::from(fee_bps)),
                 U256::from(10_000),

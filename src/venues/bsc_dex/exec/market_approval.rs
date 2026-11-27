@@ -24,6 +24,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
             | NativeFlat {target,..}
             | BancorLegacy {target,..}
             | Mooniswap {target,..}
+            | DefiPlaza {target,..}
             | YieldBasis {target,..}
             | BalancerV1 {target,..}
             | BancorV3 {target,..}
@@ -51,7 +52,7 @@ impl Market {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Factory,
             },
-            Market::BancorLegacy | Market::Mooniswap | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
+            Market::BancorLegacy | Market::Mooniswap | Market::DefiPlaza | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
             Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),

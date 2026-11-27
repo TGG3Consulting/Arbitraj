@@ -1,7 +1,6 @@
 //! Публичная пара DefiPlaza. Регистрация, обе реальные кассы и условия обмена читаются на одном H.
 use super::{
     families::{self, Family},
-    family_variant::Variant,
     nami_batch as batch,
     stable_list::Extra,
     verify::{Candidate, Verdict},
@@ -20,6 +19,9 @@ use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 
 const STABLE_ASSETS: u8 = 4;
+const LISTED: u8 = 3;
+// Число независимых регистрационных чтений в одном запросе, без ограничения размера каталога.
+const REGISTRY_BATCH: usize = 48;
 
 #[allow(clippy::too_many_arguments)]
 mod abi {
@@ -77,7 +79,7 @@ async fn token(
                 && read(ctx, pool, at, IPlaza::listedTokensCall { token: src })
                     .await?
                     .status
-                    != 3
+                    != LISTED
             {
                 return Err(bad(ctx));
             }
@@ -108,7 +110,7 @@ pub(crate) async fn state(
     at: &Value,
 ) -> GatewayResult<DefiPlazaState> {
     let generation = ctx.settings.generation();
-    let stable = f.variant == Variant::DefiPlazaStable;
+    let stable = f.variant.defiplaza_stable();
     let hash = ctx
         .dex_text("dex.factory_runtime_hash", f.id)?
         .parse::<B256>()
@@ -137,14 +139,15 @@ pub(crate) async fn state(
             ],
         )
         .await?;
-        if super::direct_module::matching_hash(&accepted, &code).is_none()
-            || batch::decode(&p, IPlaza::exchangeCall {})? != pool
+        let passed =
+            super::direct_module::matching_hash(&accepted, &code).ok_or_else(|| bad(ctx))?;
+        if batch::decode(&p, IPlaza::exchangeCall {})? != pool
             || batch::decode(&w, IPlaza::wrappedCall {})? != wrapped
             || batch::decode(&s, IPlaza::stableCall {})? != stable
         {
             return Err(bad(ctx));
         }
-        Ok(())
+        Ok(passed)
     };
     let settings = async {
         if stable {
@@ -167,7 +170,7 @@ pub(crate) async fn state(
         }
     };
     let tokens = [pair.0.min(pair.1), pair.0.max(pair.1)];
-    let ((), (), curve, left, right) = tokio::try_join!(
+    let ((), module_hash, curve, left, right) = tokio::try_join!(
         super::solidly_classic_factory::bind(ctx, pool, hash, None, at),
         check,
         settings,
@@ -180,6 +183,7 @@ pub(crate) async fn state(
     Ok(DefiPlazaState {
         pool,
         module,
+        module_hash,
         tokens,
         physical: [left.0, right.0],
         balances: [left.1, right.1],
@@ -226,7 +230,7 @@ pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[
             let pool = ctx.dex_addr("dex.factory", f.id)?;
             let at = super::nami::block(ctx, "latest").await?;
             let mut listed = HashSet::new();
-            if f.variant == Variant::DefiPlazaStable {
+            if f.variant.defiplaza_stable() {
                 for i in 0..STABLE_ASSETS {
                     listed.insert(
                         read(ctx, pool, &at, IPlaza::tokensCall { i: U256::from(i) })
@@ -242,7 +246,7 @@ pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[
                     .copied()
                     .filter(|a| !a.is_zero() && *a != weth)
                     .collect();
-                for group in assets.chunks(48) {
+                for group in assets.chunks(REGISTRY_BATCH) {
                     let calls: Vec<_> = group
                         .iter()
                         .map(|&a| batch::view(&at, pool, IPlaza::listedTokensCall { token: a }))
@@ -251,7 +255,8 @@ pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[
                     for (&a, value) in group.iter().zip(results) {
                         let data: alloy_primitives::Bytes =
                             serde_json::from_str(value?.get()).map_err(|_| bad(ctx))?;
-                        if batch::decode(&data, IPlaza::listedTokensCall { token: a })?.status == 3
+                        if batch::decode(&data, IPlaza::listedTokensCall { token: a })?.status
+                            == LISTED
                         {
                             listed.insert(a);
                         }

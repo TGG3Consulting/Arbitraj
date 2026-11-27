@@ -26,6 +26,8 @@ pub struct Proof {
     pub minimum: U256,
     pub deadline: U256,
     pub module_hash: B256,
+    #[serde(default)]
+    pub(super) v5: Option<super::shiba_executor::Source>,
     pub exact_codes: Option<(B256, B256)>,
     #[serde(skip)]
     pub verified: Option<U256>,
@@ -43,6 +45,14 @@ impl Proof {
         )
     }
     pub(in crate::venues::bsc_dex) fn signed(&self) -> Erc20Call {
+        if let Some(v) = &self.v5 {
+            return Erc20Call {
+                chain: 1,
+                payer: self.payer,
+                module: v.executor,
+                calldata: v.calldata,
+            };
+        }
         Erc20Call {
             chain: 1,
             payer: self.payer,
@@ -83,7 +93,9 @@ impl Proof {
         if swaps.next().is_some()
             || (s.sender, s.recipient) != (self.module, self.payer)
             || paid.is_negative()
-            || paid.into_raw() != self.amount
+            || paid.is_zero()
+            || paid.into_raw() > self.amount
+            || (self.v5.is_none() && paid.into_raw() != self.amount)
             || !credit.is_negative()
         {
             return None;
@@ -94,7 +106,13 @@ impl Proof {
     fn exact(&self, logs: &[Log]) -> Option<U256> {
         let (_, gross) = self.movement(logs)?;
         let cash = |t, f, to| fill::moved_logs(logs, t, f, to);
-        (cash(self.input, Some(self.payer), Some(self.pool)) == self.amount
+        let funded = if let Some(v) = &self.v5 {
+            cash(self.input, Some(self.payer), Some(v.executor)) == self.amount
+                && cash(self.input, Some(v.executor), Some(self.pool)) == self.amount
+        } else {
+            cash(self.input, Some(self.payer), Some(self.pool)) == self.amount
+        };
+        (funded
             && cash(self.input, Some(self.payer), None) == self.amount
             && cash(self.input, None, Some(self.payer)).is_zero()
             && cash(self.output, Some(self.pool), Some(self.payer)) == gross
@@ -125,6 +143,11 @@ impl Proof {
         solidly_classic_factory::plain(ctx, self.module, self.module_hash, &at)
             .await
             .map_err(|_| bad())?;
+        if let Some(v) = &self.v5 {
+            solidly_classic_factory::plain(ctx, v.executor, v.hash, &at)
+                .await
+                .map_err(|_| bad())?;
+        }
         self.movement(&r.logs).ok_or_else(bad)?;
         if let (Some((ih, oh)), Some(net)) = (self.exact_codes, self.exact(&r.logs))
             && tokio::try_join!(
@@ -142,6 +165,11 @@ impl Proof {
         if net.is_zero() || net < self.minimum {
             return Err(bad());
         }
+        if self.v5.is_some() {
+            super::shiba_executor::independent(ctx, self, r, net)
+                .await
+                .ok_or_else(bad)?;
+        }
         canonical_receipt::verify(ctx, hash, r)
             .await
             .map_err(|_| bad())?;
@@ -158,7 +186,10 @@ impl Proof {
         if (wallet, input, output) != (self.payer, self.input, self.output) {
             return None;
         }
-        Some((self.movement(logs)?.0, self.verified?))
+        let net = self
+            .verified
+            .filter(|n| !n.is_zero() && *n >= self.minimum)?;
+        Some((self.movement(logs)?.0, net))
     }
 }
 

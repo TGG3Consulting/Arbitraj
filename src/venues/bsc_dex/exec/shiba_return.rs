@@ -50,6 +50,28 @@ fn net(call: &Call, output: &Bytes, order: Erc20Call) -> Option<U256> {
         && output.len() == 32)
         .then(|| U256::from_be_slice(output))
 }
+pub(super) fn balance(
+    v: &serde_json::Value,
+    payer: Address,
+    token: Address,
+    data: Bytes,
+) -> Option<U256> {
+    let frame: Root = serde_json::from_value(v.clone()).ok()?;
+    if frame.kind != "CALL" {
+        return None;
+    }
+    net(
+        &frame.call,
+        &frame.output,
+        Erc20Call {
+            chain: 1,
+            payer,
+            module: token,
+            calldata: keccak256(data),
+        },
+    )
+}
+
 pub(super) async fn read(ctx: &Ctx, r: &Receipt, hash: B256, order: Erc20Call) -> Option<U256> {
     if let Ok(Some(t)) = rpc::call::<Option<Located>>(ctx, "trace_get", json!([hash, []])).await
         && t.trace_address.is_empty()
@@ -101,5 +123,44 @@ mod tests {
         c.error = None;
         c.to = c.from;
         assert_eq!(net(&c, &out, s), None);
+    }
+}
+
+#[cfg(test)]
+mod historical {
+    use super::*;
+    #[test]
+    fn canonical_root_matches_the_wallet_at_its_transaction_index() {
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/shibaswap_historical_returns.json"
+        ))
+        .unwrap();
+        for r in rows {
+            let a = |k: &str| r[k].as_str().unwrap().parse::<Address>().unwrap();
+            let l: Located = serde_json::from_value(r["root"].clone()).unwrap();
+            let g: Root = serde_json::from_value(r["geth"].clone()).unwrap();
+            assert_eq!(
+                l.transaction_hash,
+                r["hash"].as_str().unwrap().parse::<B256>().unwrap()
+            );
+            assert!(l.trace_address.is_empty());
+            assert_eq!(l.transaction_position, r["index"].as_u64().unwrap());
+            assert_eq!(l.result.output, g.output);
+            for (name, token) in [("source", a("input")), ("target", a("output"))] {
+                let pair = r["balances"][name].as_array().unwrap();
+                let get = |n: usize| {
+                    let data = pair[n]["input"].as_str().unwrap().parse().unwrap();
+                    balance(&pair[n], a("payer"), token, data).unwrap()
+                };
+                if name == "source" {
+                    assert_eq!(
+                        get(0) - get(1),
+                        r["debit"].as_str().unwrap().parse::<U256>().unwrap()
+                    );
+                } else {
+                    assert_eq!(get(1) - get(0), U256::from_be_slice(&g.output));
+                }
+            }
+        }
     }
 }

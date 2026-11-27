@@ -42,6 +42,7 @@ use super::super::super::quote::via::Via;
 use super::super::super::quote::{Quoting, direct, pool_tax};
 use super::super::super::wallet::nonce::Nonces;
 use super::super::chain::{self, Step};
+use super::super::{market_receipt, result, settlement_swap, shiba_executor};
 use super::super::dry_paths::live_paths;
 use super::super::leg_min;
 use super::super::native;
@@ -187,6 +188,7 @@ pub async fn trade(
     let mut sc = SwapCtx::swap(wallet, tokens, decs, &[], Some(executor), note.clone());
     // Ревью 272 (Б4): вызов executeNative — признаком в контексте (позднее выяснение не гадает по событию).
     sc.executor_native = c.native.is_some();
+    sc.shiba = Box::pin(shiba_executor::capture(ctx, &legs, &c, wallet)).await?;
     // Решение 272: продажа нативного BNB — value = вход, только сверх резерва на газ (как прямой путь, swap_send.rs).
     let value = c.value();
     if !value.is_zero() {
@@ -199,17 +201,25 @@ pub async fn trade(
     if let Some(generation)=vista_generation {
         Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)).collect(),generation)).await?;
     }
-    let d = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap)
-        .await
-        .map_err(|e| sc.attach(e))?;
+    let submit = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap);
+    let d = if sc.shiba.is_some() {
+        settlement_swap::with_parse(&sc, submit).await
+    } else {
+        submit.await
+    }.map_err(|e| sc.attach(e))?;
     drop(slot);
-    let sc = SwapCtx {
-        tip_bnb: d.tip_bnb,
-        ..sc
-    };
-    let mut r =
+    let mut sc = SwapCtx { tip_bnb: d.tip_bnb, ..sc };
+    let mut r = if sc.shiba.is_some() {
+        market_receipt::check_module_cancel(ctx, &sc, &d)
+            .await.map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
+        if let Some(receipt) = &d.receipt {
+            Box::pin(market_receipt::included(&mut sc, ctx, d.chain.hash, Some(d.chain.nonce), receipt))
+                .await.map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
+        }
+        result::with_native_fact(ctx, req, d, wallet, tokens, decs, &[], Some(&sc))
+    } else {
         fact::result(ctx, req, d, (wallet, executor), tokens, decs, c.native.is_some())
-            .map_err(|e| sc.attach(e))?;
+    }.map_err(|e| sc.attach(e))?;
     // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
     if note.is_some() {
         r.executor = note;

@@ -84,6 +84,7 @@ pub(super) async fn plan(
             minimum: order.min_out,
             deadline,
             module_hash: B256::ZERO,
+            v5: None,
             exact_codes: None,
             verified: None,
         };

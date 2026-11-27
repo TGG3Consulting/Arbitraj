@@ -162,13 +162,8 @@ pub async fn trade(
             tip_bnb: d.tip_bnb,
             ..sc
         };
-        if let (Some(cancel),Some(call))=(d.chain.cancel_hash,sc.module_order()) {
-            let inspect=async {
-                let receipt=super::super::send::receipt::read(ctx,cancel).await?.ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет квитанции отмены исходного поручения модуля"))?;
-                call.cancelled(ctx,d.chain.hash,cancel,d.chain.nonce,&receipt).await
-            }.await;
-            inspect.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
-        }
+        super::market_receipt::check_module_cancel(ctx, &sc, &d)
+            .await.map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
         if let Some(cancel)=d.chain.cancel_hash
             && let Some(proof)=sc.registered_v3.as_deref().filter(|p|p.market.maverick) {
             let inspect=async {

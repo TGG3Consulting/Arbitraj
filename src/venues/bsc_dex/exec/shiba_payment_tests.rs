@@ -1,4 +1,5 @@
 use super::*;
+use alloy::sol_types::SolCall;
 use flate2::read::GzDecoder;
 use serde_json::Value;
 
@@ -15,7 +16,7 @@ fn included_module_keeps_the_actual_payout_separate_from_the_pool_swap_gross() {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|r| r["wire"] == "module")
+        .filter(|r| r["wire"] == "module" || r["wire"] == "v5")
     {
         let parsed = |p: &Value| p.as_str().unwrap().parse::<Address>().unwrap();
         let signed = &row["signed"];
@@ -36,10 +37,26 @@ fn included_module_keeps_the_actual_payout_separate_from_the_pool_swap_gross() {
             minimum: U256::from_be_slice(&data[4 + 4 * 32..4 + 5 * 32]),
             deadline: U256::from_be_slice(&data[data.len() - 32..]),
             module_hash: f["module_hash"].as_str().unwrap().parse().unwrap(),
+            v5: None,
             exact_codes: None,
             verified: None,
         };
-        assert_eq!(p.data(), data);
+        if row["wire"] == "v5" {
+            let args =
+                super::super::executor::abi::ArbExecutor::executeCall::abi_decode_validate(&data)
+                    .unwrap();
+            p.v5 = Some(super::super::shiba_executor::Source {
+                executor: p.module,
+                calldata: keccak256(&data),
+                hash: B256::ZERO,
+            });
+            p.module = args.steps[0].pool;
+            p.deadline = args.deadline;
+            p.minimum = args.minOut;
+            assert_eq!(p.signed().calldata, keccak256(&data));
+        } else {
+            assert_eq!(p.data(), data);
+        }
         assert_eq!(p.exact(&logs), Some(net));
         assert_eq!(p.amounts(&logs, payer, input, output), None);
         p.verified = Some(net);
@@ -55,5 +72,5 @@ fn included_module_keeps_the_actual_payout_separate_from_the_pool_swap_gross() {
         assert_eq!(restored.verified, None);
         count += 1;
     }
-    assert_eq!(count, 24);
+    assert_eq!(count, 48);
 }

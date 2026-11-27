@@ -1862,7 +1862,11 @@ def tables(network, snapshots, profiles):
                     f"На {len(book['sampled_markets'])} пулах получено {len(book['cases'])} выплат тремя путями. "
                     f"Штатный роутер принимает активы из dex.router_exact_tokens. Для остальных есть проверка чистого прихода "
                     f"через модуль кошелька или шаг 17 V5. Кнопка размещения сохраняет модуль в dex.router, "
-                    f"штатный роутер остаётся в dex.v3_native_router. [Суммы, расходы и квитанции](../{wallets.as_posix()})")
+                    f"штатный роутер остаётся в dex.v3_native_router. Для одиночной ERC20-сделки восстановление сверяет канонический "
+                    f"вызов и выплату. При удержании нужен корневой результат трассировки, для V5 также balanceOf владельца "
+                    f"до и после транзакции и исходные остатки обоих токенов исполнителя. Недоступность этих данных оставляет "
+                    f"операцию на сверке. [Суммы, расходы и квитанции](../{wallets.as_posix()}) · "
+                    f"[Канонические балансы по индексу транзакции](../{(data_dir / 'shibaswap_historical_returns.json').as_posix()})")
         if str(row["id"]) == "1447":
             assert hashflow["factory"] in {a.lower() for a in candidates}
             candidates = [hashflow["factory"], hashflow["router"]]

@@ -53,6 +53,16 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         _ => {}
     }
 }
+pub(super) async fn check_module_cancel(ctx: &Ctx, c: &SwapCtx, d: &super::txs::Done) -> GatewayResult<()> {
+    let (Some(cancel), Some(order)) = (d.chain.cancel_hash, c.module_order()) else {
+        return Ok(());
+    };
+    let receipt = super::super::send::receipt::read(ctx, cancel).await?.ok_or_else(|| {
+        ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown, "Нет квитанции отмены исходного поручения модуля")
+    })?;
+    order.cancelled(ctx, d.chain.hash, cancel, d.chain.nonce, &receipt).await
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
     Gladius(&'a super::super::gladius::settlement::Saved),

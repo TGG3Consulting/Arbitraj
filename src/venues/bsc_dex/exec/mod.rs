@@ -72,6 +72,7 @@ pub(super) mod stabull_wallet;
 pub(super) mod empire_wallet;
 pub(super) mod shiba_payment;
 mod shiba_return;
+mod shiba_executor;
 pub(super) mod angstrom_wallet;
 pub(super) mod angstrom_plan;
 pub(super) mod stabull_plan;

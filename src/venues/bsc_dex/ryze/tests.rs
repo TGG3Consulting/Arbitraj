@@ -87,3 +87,62 @@ fn ephemeral_signature_is_bound_to_gross_input_minimum_expiry_and_own_account() 
     assert!(!changed.matches(order.user, &markets, 0));
     assert!(changed.submission(router, &sig).is_none());
 }
+
+#[test]
+fn real_two_hop_and_reverse_cbbtc_trades_bind_each_hop_and_charge_per_hop() {
+    use serde_json::Value;
+    let bytes = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/ryze_base_path_history.json.gz"
+    );
+    let history: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();
+    let rows = history["cases"].as_array().unwrap();
+    assert_eq!(rows.len(), 6);
+    let raw =
+        |row: &Value, key: &str| U256::from_str_radix(row[key].as_str().unwrap(), 10).unwrap();
+    let mut two_hop = 0;
+    for row in rows {
+        let case: Sample = serde_json::from_value(row.clone()).unwrap();
+        let tx = &case.transaction;
+        let batch = executeSwapIntentsCall::abi_decode_validate(&tx.input).unwrap();
+        let order = &batch.signedIntents[0].intent;
+        assert!(order.present_in(tx.to, &tx.input));
+        let fill = fill::confirmed(order, tx.to, &case.receipt).unwrap();
+        assert_eq!(fill.input_to_router, raw(row, "amount"));
+        assert_eq!(fill.output_from_router, raw(row, "net"));
+        assert_eq!(fill.fee_in_input, raw(row, "fee"));
+        assert_eq!(
+            (
+                fill.input_from_path,
+                fill.other_input_credit,
+                fill.other_output_credit
+            ),
+            (U256::ZERO, U256::ZERO, U256::ZERO)
+        );
+        let price = batch
+            .cexPriceData
+            .iter()
+            .find(|p| p.token == order.tokenIn)
+            .unwrap()
+            .priceInWad;
+        assert_eq!(price, raw(row, "signed_price"));
+        let usd = raw(row, "usd_fee");
+        let decimals = u8::try_from(row["decimals"].as_u64().unwrap()).unwrap();
+        let count = order.path.len();
+        assert_eq!(
+            super::price::input_fee(usd, price, decimals, count),
+            Some(fill.fee_in_input)
+        );
+        if count == 2 {
+            two_hop += 1;
+            assert_eq!(order.path[0].tokenOut, order.path[1].tokenIn);
+            let mut wrong = order.clone();
+            wrong.path.reverse();
+            assert!(!wrong.present_in(tx.to, &tx.input));
+            let late = super::price::input_fee(usd * U256::from(2), price, decimals, 1).unwrap();
+            assert_eq!(late + U256::ONE, fill.fee_in_input);
+        } else {
+            assert_eq!(count, 1);
+        }
+    }
+    assert_eq!(two_hop, 4);
+}

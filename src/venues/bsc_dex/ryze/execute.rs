@@ -142,16 +142,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     if !new.valid(Utc::now()) || Config::read(ctx).as_ref() != Some(c) {
         return Err(bad());
     }
-    let h = white_state::head(ctx, "latest").await?;
-    let at = h.selector();
-    let nonce = super::super::node::call::canonical(
-        ctx,
-        &at,
-        c.router,
-        super::wire::swapNoncesCall { user: who },
-    )
-    .await?;
-    if nonce != m.order.nonce || !super::tokens::physical(ctx, c, &at, &m.order.path, who).await {
+    if !super::preflight::eligible(ctx, &new, &m.order).await? {
         return Err(bad());
     }
     let sig = signer.sign_hash_sync(&digest).map_err(|_| bad())?;

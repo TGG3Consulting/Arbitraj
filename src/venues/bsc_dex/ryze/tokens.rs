@@ -80,12 +80,16 @@ impl Token {
             {
                 return Err(bad());
             }
-            for &account in participants {
-                if account == admin
-                    || canonical(ctx, at, self.address, isBlacklistedCall { account }).await?
-                {
-                    return Err(bad());
-                }
+            if participants.contains(&admin) {
+                return Err(bad());
+            }
+            let blocked =
+                futures_util::future::try_join_all(participants.iter().map(|&account| {
+                    canonical(ctx, at, self.address, isBlacklistedCall { account })
+                }))
+                .await?;
+            if blocked.contains(&true) {
+                return Err(bad());
             }
         }
         Ok(())
@@ -109,13 +113,18 @@ pub(super) async fn physical(
     participants.dedup();
     let tokens: std::collections::BTreeSet<_> =
         path.iter().flat_map(|h| [h.tokenIn, h.tokenOut]).collect();
-    for a in tokens {
-        let Some(t) = c.tokens.iter().find(|t| t.address == a) else {
-            return false;
-        };
-        if t.verify(ctx, at, &participants).await.is_err() {
-            return false;
-        }
-    }
-    true
+    let Some(bindings) = tokens
+        .into_iter()
+        .map(|a| c.tokens.iter().find(|t| t.address == a))
+        .collect::<Option<Vec<_>>>()
+    else {
+        return false;
+    };
+    futures_util::future::try_join_all(
+        bindings
+            .into_iter()
+            .map(|t| t.verify(ctx, at, &participants)),
+    )
+    .await
+    .is_ok()
 }

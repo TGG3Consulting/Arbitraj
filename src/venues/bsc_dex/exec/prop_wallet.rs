@@ -111,6 +111,8 @@ impl Proof {
             .code
             .at_transaction(ctx, self.terms.router, hash, r, None)
             .await?;
+        let source=self.outcome(&r.logs).map(|(who,_,_)|who).ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Источник выплаты LambdaClass не подтверждён"))?;
+        if source==self.terms.fallback{return Ok(())}
         for (code, role) in [
             (self.terms.venue_code, self.terms.venue),
             (self.terms.vault_code, self.terms.vault),

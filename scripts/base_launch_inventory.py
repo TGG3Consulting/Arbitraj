@@ -50,6 +50,7 @@ def recovered(network):
         f"MultiHopRouter `{ry['router']['address']}` проверяет подписанный ордер; штатное исполнение использует nonce EIP‑712 и данные оракула. "
         "[ABI и назначение контрактов](https://documentation.ryze.pro/guide/abis).",
         "Три включённых в цепь заявки Ryze сверены по подписи EIP-712, смене пользовательского nonce и событиям ERC-20. В двух обменах USDC/WETH списание равно объёму заявки. В третьем обмене кошелёк перевёл 3476 атомов cbBTC, получил отдельно 1 атом cbBTC от подписанного пула и 2053827 атомов USDC от роутера. Фактический расход cbBTC составил 3475 атомов. [Хеши, комиссии и платежи в трёх квитанциях](../tests/data/first_run_dex_2026-11-26/ryze_base_verified_intents.json.gz).",
+        "На Base с блока 51 000 000 по 60 966 755 зафиксированы 2 обмена WETH→cbBTC, 2 cbBTC→WETH и 26 USDC→cbBTC. Для четырёх двухшаговых и двух одношаговых обменов квитанции подтвердили расход и выплату кошелька. Во всех четырёх двухшаговых комиссия равнялась удвоенной округлённой вверх плате за шаг. Округление после умножения занизило бы каждую комиссию на один атом входного токена. [Исходные заявки, квитанции и комиссия родительского блока](../tests/data/first_run_dex_2026-11-26/ryze_base_path_history.json.gz).",
         *ryze_settings(),"",f"Фабрика Thirdfy Algebra Integral `{third['factory']['address']}` подтвердила каждый из шести рынков. "
         "На каноническом чтении все шесть имели ненулевую активную ликвидность и pluginConfig 193. Комиссия на высоте варьировалась от 3000 до 7386 миллионных. ArbExecutor V5 исполнил 24 ноги на шести рынках, в обоих направлениях и на двух объёмах. "
         f"[Архив кошельковых выплат и повышенных минимумов](../{DATA/'thirdfy_base_wallets.json.gz' }).",
@@ -102,7 +103,7 @@ def registry_row(network,id):
             return m["markets"][0]["pool"]["address"],m["factory"]["address"],"poolByPair для 6/6 рынков","DEX-41 · 24 ноги V5 на шести рынках, динамическая комиссия BasePluginV1"
         if id=="ryze":
             m=r["ryze"]
-            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","RYZE-RECON · две спотовые пары; персональная заявка EIP-712, собственный nonce роутера и сверка чистых выплат, 3 архивные сделки"
+            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","RYZE-RECON · две спотовые пары; персональная заявка EIP-712, собственный nonce роутера и сверка чистых выплат, 9 архивных сделок"
         b=r["baseline"]
         return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; профиль Mercury сверяет действующие компоненты и их селекторы"
     if id=="omni-exchange-v4-base":

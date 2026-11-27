@@ -1,4 +1,4 @@
-//! Измеряет Ryze на конкретном кошельке. Физические активы, разрешение списания, договóр, nonce и комиссия проверяются на общем head.
+//! Измеряет Ryze на конкретном кошельке. Физические активы, разрешение списания, состояние роутера, nonce и комиссия проверяются на общем head.
 use super::super::{
     math::full_math,
     node::{abi::IERC20, call::canonical},
@@ -21,6 +21,7 @@ use rust_decimal::Decimal;
 #[derive(Clone)]
 pub struct Ticket {
     pub config: Config,
+    pub usd_fee: U256,
     pub order: SwapIntent,
     pub at: DateTime<Utc>,
     pub decimals: (u8, u8),
@@ -182,6 +183,7 @@ impl Snapshot {
         let total = num::to_decimal(if buy { gross } else { expected }, decs.1)?;
         let ticket = Ticket {
             config: c.clone(),
+            usd_fee: self.fee,
             order,
             at: quoted_at,
             decimals: decs,

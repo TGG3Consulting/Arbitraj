@@ -20,7 +20,7 @@ LAB = "0x" + keccak(text="arb docswap empty factory laboratory wrapper")[-20:].h
 # Read EXTCODEHASH for a nested CREATE2 while the isolated block is still in scope.
 CODEHASH = "0x"+keccak(text="arb simulation code hash reader")[-20:].hex()
 
-def capture(url, network, mars=False):
+def capture(url, network, mars=False, zero_flat=False):
     if mars:
         from types import SimpleNamespace
         from record_omni_v2_base import role
@@ -69,6 +69,13 @@ def capture(url, network, mars=False):
         if list(terms)!=directory["terms"] or "0x"+init.hex()!=directory["init_hash"]:
             raise ValueError("historical fee terms or CREATE2 hash changed")
         fee,den,flat=terms[1]+terms[2],10000,terms[3]
+        if zero_flat:
+            original,=read_batch(url,[("eth_getStorageAt",[factory,"0x2",at])])
+            if int(original,16)!=flat or flat==0:raise ValueError("unexpected raw flat fee")
+            overrides[factory]={"stateDiff":{word(2):word(0)}}
+            check=decode(["address","uint256","uint256","uint256"],values([tx(factory,"lpInfo()")])[0])
+            if check!=(*terms[:3],0) or integer(values([tx(factory,"flatFee()")])[0])!=0:raise ValueError("override changed other terms")
+            flat=0
     else:
         fee,den=map(integer,values([tx(factory,"totalFee()"),tx(factory,"MAX_TOTAL_FEE_PERCENT()")]))
     if count!=0 or not 0<=fee<den: raise ValueError("unexpected original supply")
@@ -101,17 +108,28 @@ def capture(url, network, mars=False):
             model=amount*(den-fee)*reserve//(reserve*den+amount*(den-fee))
             quoted=decode(["uint256[]"],values(prefix+[tx(router,"getAmountsOut(uint256,address[])",["uint256","address[]"],[amount,[source,target]])])[-1])[0][-1]
             if quoted!=model:raise ValueError(("quote",quoted,model))
-            for mode in (("router","v5","flat") if mars else ("router","v5")):
+            modes=("router","v5","v5_no_percent") if zero_flat else (("router","v5","flat") if mars else ("router","v5"))
+            for mode in modes:
                 model=quoted if mode!="flat" else amount*reserve//(reserve+amount)
-                dest=EXEC if mode=="v5" else router
+                via_executor=mode.startswith("v5")
+                dest=EXEC if via_executor else router
                 def trade(minimum,deadline):
-                    if mode!="v5":
+                    if not via_executor:
                         return tx(router,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
                                   ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[source,target],OWNER,deadline],value=flat if mode=="flat" else 0)
-                    step=(0,pair,source,target,10000,encode(["uint32"],[fee*10**6//den]))
+                    step=(0,pair,source,target,10000,encode(["uint32"],[0 if mode=="v5_no_percent" else fee*10**6//den]))
                     return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                               ["address","uint256","address","uint256","uint256",STEP+"[]"],[source,amount,target,minimum,deadline,[step]])
                 probes=[balance(source,OWNER),balance(target,OWNER),balance(source,EXEC),balance(target,EXEC)]
+                if zero_flat:
+                    trial=run([*prefix,approval(source,dest,amount),*probes,trade(1,end),*probes])
+                    b,a=([int(x["returnData"],16) for x in side] for side in (trial[-9:-5],trial[-4:]))
+                    if trial[-5]["status"]!="0x1":
+                        if b!=a:raise ValueError("wallet changed on revert")
+                        rows.append(dict(mode=mode,source=source,target=target,input=amount,revert=trial[-5].get("error"),minimum=1))
+                        continue
+                    model=a[1]-b[1]
+                    if model not in (quoted,amount*reserve//(reserve+amount)) or b[0]-a[0]!=amount:raise ValueError("unexpected zero-flat wallet output")
                 for label,minimum,deadline in [("paid",model,end),("above",model+1,end),("expired",1,0)]:
                     result=run([*prefix,approval(source,dest,amount),*probes,trade(minimum,deadline),*probes])
                     if any(x["status"]!="0x1" for x in result[:-5]+result[-4:]): raise ValueError("funding/balances")
@@ -133,6 +151,7 @@ if __name__=="__main__":
     for url in BASE_ENDPOINTS if args.network=="base" else (ENDPOINT,"https://ethereum-rpc.publicnode.com"):
         try:
             record=capture(url,args.network,args.mars)
+            if args.mars:record["synthetic_zero_flat"]=capture(url,args.network,True,True)
             break
         except (RuntimeError,OSError) as err: print(str(err)[:180])
     else: raise RuntimeError("archive unavailable")

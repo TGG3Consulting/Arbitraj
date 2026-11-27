@@ -11,18 +11,29 @@ fn number(v: &Value) -> U256 {
 }
 #[test]
 fn accepted_wallet_orders_bind_all_assets_sender_and_deadline() {
-    let raw = &include_bytes!(
-        "../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_protected_wallets.json.gz"
-    )[..];
+    for (raw, expected) in [
+        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_protected_wallets.json.gz").as_slice(), [10,9,10,10,0]),
+        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_chain_bound_wallets.json.gz").as_slice(), [10,9,10,10,0]),
+        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_base_protected_wallets.json.gz").as_slice(), [4,0,4,4,4]),
+    ] {
+        check_receipts(raw, expected);
+    }
+}
+
+fn check_receipts(raw: &[u8], expected: [usize; 5]) {
     let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(raw)).unwrap();
     let data = &archive["module"];
-    let mut counts = [0; 4];
+    let mut counts = [0; 5];
     for c in data["cases"].as_array().unwrap() {
-        for (i, k) in ["buy", "sell", "sell_to_sy", "buy_with_sy"]
-            .iter()
-            .enumerate()
-        {
-            let row = &c[*k];
+        for (k, row) in c.as_object().unwrap() {
+            let i = match k.as_str() {
+                "buy" => 0,
+                "sell" => 1,
+                "sell_to_sy" => 2,
+                "buy_with_sy" => 3,
+                name if name.starts_with("redeem_") => 4,
+                _ => continue,
+            };
             if row["stage"] != "accepted" {
                 continue;
             }
@@ -49,9 +60,9 @@ fn accepted_wallet_orders_bind_all_assets_sender_and_deadline() {
             saved.market = saved.module;
             assert_eq!(saved.measured(&logs), None);
             counts[i] += 1;
-            let inventory = c["router_inventory"][*k].as_array().unwrap();
+            let inventory = c["router_inventory"][k.as_str()].as_array().unwrap();
             assert_eq!(inventory[0], inventory[1]);
         }
     }
-    assert_eq!(counts, [10, 9, 10, 10]);
+    assert_eq!(counts, expected);
 }

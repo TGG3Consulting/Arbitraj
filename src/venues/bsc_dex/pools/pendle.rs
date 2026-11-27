@@ -327,17 +327,23 @@ mod tests {
     }
     #[test]
     fn recommended_series_match_the_registered_contracts_and_terminal_assets() {
+        for (id, expected, raw) in [
+            ("pendle", 85, include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz").as_slice()),
+            ("pendle-base", 22, include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_base_registry.json.gz").as_slice()),
+        ] {
+            check_registry(id, expected, archive(raw));
+        }
+    }
+
+    fn check_registry(id: &str, expected: usize, registry: Value) {
         let rows: Value =
             serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
         let settings = &rows
             .as_array()
             .unwrap()
             .iter()
-            .find(|r| r["id"] == "pendle")
+            .find(|r| r["id"] == id)
             .unwrap()["settings"];
-        let registry = archive(include_bytes!(
-            "../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz"
-        ));
         let markets = registry["registrations"].as_array().unwrap();
         let mut pools = HashSet::new();
         for seed in settings["dex.pendle_markets"].as_array().unwrap() {
@@ -364,7 +370,7 @@ mod tests {
                 }))
             }
         }
-        assert_eq!(pools.len(), 85);
+        assert_eq!(pools.len(), expected);
         for row in settings["dex.pendle_roles"].as_array().unwrap() {
             let fields: Vec<_> = row.as_str().unwrap().split_whitespace().collect();
             let r = Role::parse(&fields[1..]).unwrap();

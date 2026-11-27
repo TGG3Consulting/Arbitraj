@@ -2001,6 +2001,14 @@ def tables(network, snapshots, profiles):
                     "Две записи одного обмена относятся к одной транзакции. Игрок получает доли по ID через назначенный пул "
                     "с подписью котировки. Условия ограничивают передачу долей и автоматизированный доступ. "
                     f"[Правила Sport.fun, §§ 2 и 11]({snapshot['rules']})")
+        if base and str(row["id"]) == "382":
+            directory = json.loads(gzip.decompress((data_dir / "pendle_base_registry.json.gz").read_bytes()))
+            candidates = [r["address"] for name, r in directory["roles"].items() if name.startswith("marketFactory")]
+            task = ("Две официальные фабрики дали 90 регистраций PT/SY, из них 22 профиля серии на блоке 62 262 756. "
+                    "На двух рынках 1 и 10 USDC оплатили PT. Обратный выход доступен в собственный токен доходности или SY. "
+                    "Модуль и V5 провели по 16 обменов. На рынке с доступом к USDT четыре проверенных размера отклонились. "
+                    "Для исполнения владелец выбирает размещение модуля, вносит адрес в dex.router и выбирает "
+                    "dex.kind=pendle_market_v5. [Реестр и версии](https://docs.pendle.finance/pendle-v2-dev/Deployments)")
         if not base and str(row["id"]) == "382":
             directory = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz").read_bytes()))
             candidates = [r["address"] for name, r in directory["roles"].items() if name.startswith("marketFactory")]

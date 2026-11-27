@@ -113,9 +113,16 @@ mod tests {
     use serde_json::Value;
     #[test]
     fn four_official_selectors_have_the_observed_facet_and_runtime() {
-        let data = &include_bytes!(
-            "../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_protected_wallets.json.gz"
-        )[..];
+        for (id, data) in [
+            ("pendle", include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_protected_wallets.json.gz").as_slice()),
+            ("pendle", include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_ethereum_chain_bound_wallets.json.gz").as_slice()),
+            ("pendle-base", include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/pendle_base_protected_wallets.json.gz").as_slice()),
+        ] {
+            check_bindings(id, data);
+        }
+    }
+
+    fn check_bindings(id: &str, data: &[u8]) {
         let wallet: Value = serde_json::from_reader(flate2::read::GzDecoder::new(data)).unwrap();
         let config: Value =
             serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
@@ -123,12 +130,9 @@ mod tests {
             .as_array()
             .unwrap()
             .iter()
-            .find(|r| r["id"] == "pendle")
+            .find(|r| r["id"] == id)
             .unwrap()["settings"];
-        assert_eq!(
-            settings["dex.module_runtime_hashes"][0],
-            wallet["module"]["runtime"]
-        );
+        assert!(settings["dex.module_runtime_hashes"].as_array().unwrap().contains(&wallet["module"]["runtime"]));
         let mut remaining = wallet["module"]["bindings"].as_object().unwrap().clone();
         for buy in [true, false] {
             for raw in [true, false] {

@@ -92,3 +92,33 @@ fn historical_simple_and_partial_guarded_fills_recover_only_the_credited_net() {
     }
     assert_eq!(modes, [false, true]);
 }
+
+#[test]
+fn recorded_order_uses_low_expiry_word_and_high_payee_bits() {
+    let registry: Value = serde_json::from_reader(GzDecoder::new(
+        &include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/dexalot_base_registry.json.gz"
+        )[..],
+    ))
+    .unwrap();
+    let w = &registry["witness"];
+    let mut order = super::wire::Order::parse(&serde_json::json!({
+        "nonceAndMeta": w["nonce"], "expiry": w["expiry"],
+        "makerAsset": w["output"], "takerAsset": w["input"],
+        "maker": w["maker"]["address"], "taker": w["taker"],
+        "makerAmount": w["nominal"], "takerAmount": w["spent"]
+    }))
+    .unwrap();
+    let payee = addr(&w["taker"]);
+    let deadline = w["expiry"].as_u64().unwrap();
+    assert_eq!(order.payee(), payee);
+    assert_eq!(order.deadline(), deadline);
+    assert_eq!(deadline - w["timestamp"].as_u64().unwrap(), 11);
+    // Граница формата проверяется локально на полях записи, без подписи и отправки заявки.
+    order.expiry |= 1u128 << 127;
+    assert_eq!(order.deadline(), deadline);
+    order.nonceAndMeta ^= U256::ONE << 95;
+    assert_eq!(order.payee(), payee);
+    order.nonceAndMeta ^= U256::ONE << 96;
+    assert_ne!(order.payee(), payee);
+}

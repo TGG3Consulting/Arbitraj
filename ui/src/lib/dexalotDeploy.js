@@ -1,7 +1,6 @@
 import {DEXALOT_CHAIN_ID} from './dexalotNetwork.js';
 import sha3 from 'js-sha3';
 import {runtimeKeccak} from './uniswapV1Deploy.js';
-import {findWalletModule} from './registeredWalletModule.js';
 
 const addr=/^0x[0-9a-f]{40}$/, digest=/^0x[0-9a-f]{64}$/;
 const slot='0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
@@ -47,10 +46,6 @@ export async function checkDexalot(provider,p,at) {
   const available=new Set(words.slice(2));
   const results=await Promise.allSettled(p.makers.filter(a=>available.has(word(a))).map(a=>verify(p.roles[a])));
   if(!results.some(r=>r.status==='fulfilled' && r.value)) throw Error('Для выбранных касс не удалось подтвердить запись реестра и код на одном блоке.');
-}
-
-export function registeredDexalot(provider,p,rows){
-  return findWalletModule(provider,p,rows.map(fields).filter(r=>r.length===3 && r[0]==='module' && addr.test(r[1]) && r[2]===p.runtimeKeccak).map(r=>r[1]));
 }
 
 export function addDexalot(rows,p,target) {

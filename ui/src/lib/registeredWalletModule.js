@@ -1,7 +1,7 @@
 import {runtimeKeccak} from './uniswapV1Deploy.js';
 const digest=/^0x[0-9a-f]{64}$/;
 
-export async function findWalletModule(provider,p,candidates){
+export async function findWalletModule(provider,p,candidates,matches=(code,plan)=>runtimeKeccak(code)===plan.runtimeKeccak){
   if (!candidates.length) return null;
   const chain = await provider.request({method:'eth_chainId',params:[]});
   if (BigInt(chain)!==BigInt(p.chainId)) throw Error('Выберите сеть размещения в кошельке.');
@@ -10,7 +10,7 @@ export async function findWalletModule(provider,p,candidates){
   const at={blockHash:head.hash,requireCanonical:true};
   for (const target of new Set(candidates)) {
     const code=await provider.request({method:'eth_getCode',params:[target,at]});
-    if (code==='0x' || runtimeKeccak(code)!==p.runtimeKeccak) continue;
+    if (code==='0x' || !await matches(code,p)) continue;
     const owner=await readWalletOwner(provider,target,at);
     if (owner===p.wallet) return target;
   }

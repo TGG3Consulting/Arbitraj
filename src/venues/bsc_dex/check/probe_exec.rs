@@ -139,6 +139,19 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
+    if e.family.variant==super::super::pools::family_variant::Variant::PropVenue{
+        use super::super::exec::prop_abi::IProp::Swapped;
+        let r=super::super::pools::prop_venue::Roles::read(ctx,e.family.id)?;
+        let owner=super::super::wallet::signer::address(ctx)?;
+        let mut swaps=logs.iter().filter(|v|v.address==r.router()&&v.topics.first()==Some(&Swapped::SIGNATURE_HASH));
+        let observed=swaps.next().and_then(|v|Swapped::decode_raw_log(v.topics.iter().copied(),&v.data).ok());
+        let confirmed=swaps.next().is_none()&&observed.is_some_and(|v|{
+            let t=super::super::exec::prop_plan::probe_target(ctx,e,v.tokenIn).ok();
+            let sender=if t==Some(r.router()){Some(owner)}else{t};
+            (v.tokenIn.min(v.tokenOut),v.tokenIn.max(v.tokenOut))==(e.pool.token0,e.pool.token1)&&v.recipient==owner&&Some(v.sender)==sender&&!v.amountIn.is_zero()&&!v.amountOut.is_zero()&&[r.quoted_venue(),r.fallback()].contains(&v.marketMaker)
+        });
+        return confirmed.then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"LambdaClass: публичная заявка кошелька не подтвердила источник выплаты"));
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::IntegralSize{
         use super::super::exec::integral_wallet::IRelay::Sell;
         let r=super::super::pools::integral_size::Roles::read(ctx,e.family.id)?;

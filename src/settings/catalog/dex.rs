@@ -68,6 +68,7 @@ pub const DEX_KINDS: &[&str] = &[
     "bunnyswap_module",
     "surge_native", "surge_v5", "dagrow",
     "dagrow_v5",
+    "lambda_propamm",
     "integral_size",
     "integral_size_v5",
     "pendle_market",
@@ -223,10 +224,10 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
-    d("Hanji", "hanji.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Hanji на Base с отдельно проверенным контрактом исполнителя.").optional().dex_venue(),
     d("Fynd", "fynd.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу.").optional().dex_venue(),
     d("Fynd", "fynd.network", K::Text, L::None, "имя", V, "Имя сети в пути API. Бот сверяет chain_id этого сервера с настройкой площадки.").optional().dex_venue(),
     d("Fynd", "fynd.pools", K::TextList, L::None, "пулы", V, "Список PoolId=token0=token1 данной сети для атрибуции собственных пулов Fynd AMM.").optional().dex_venue(),
+    d("Hanji", "hanji.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Hanji на Base с отдельно проверенным контрактом исполнителя.").optional().dex_venue(),
     d("Hanji", "hanji.executor", K::Address, L::None, "адрес", V, "Адрес размещённого shared HanjiExecutor. Проверяются точный код и Base WETH.").optional().dex_venue(),
     d("Hanji", "hanji.markets", K::TextList, L::None, "адреса", V, "Разрешённые оператором прокси Hanji из активного реестра Base.").optional().dex_venue(),
     d("Hanji", "hanji.registry_refresh_s", K::Integer, L::Positive, "с", V, "Срок до повторной загрузки реестра рынков Hanji. Стаканы загружаются на новых блоках.").optional().dex_venue(),
@@ -388,6 +389,8 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.cl_fee_module_hash", K::Text, L::None, "keccak256", DX, "Topaz CL: хеш runtime swapFeeModule, зарегистрированного фабрикой. Ставка учитывает tx.origin.").optional(),
     d("Контракты DEX", "dex.umbrae_roles", K::TextList, L::None, "1 или 3 строки", DX, "Beacon пары, затем для DLMM роутер и квотер. В строке адрес, хеш runtime, адрес и хеш реализации.").optional(),
     d("Контракты DEX", "dex.v3_wallet_module", K::Address, L::None, "0x…", DX, "Дополнительный модуль для registered_uni_v3. Владелец размещает сборку, связанную со своей фабрикой. Обычный кошелёк оплачивает точный вход через стандартный callback пула. Модуль проверяет чистый приход получателю и срок. Хеш задаётся в dex.module_runtime_hashes.").optional(),
+    d("Контракты DEX","dex.propamm_roles",K::TextList,L::None,"роль адрес хеш",DX,"LambdaClass V1: четыре записи router, venue, vault, fallback с адресом и keccak256 runtime; для прокси дополнительно адрес и хеш реализации EIP-1967.").optional(),
+    d("Контракты DEX","dex.propamm_pairs",K::TextList,L::None,"два адреса",DX,"Одна пара ERC20 в строке для конкретной площадки LambdaClass. Перед отправкой проверяются реальные условия и остатки этого кошелька.").optional(),
     d("Контракты DEX", "dex.integral_delay", K::TextList, L::None, "адрес хеш", DX, "Одна строка с проверенным адресом и хешем runtime TwapDelay. Relayer оплачивает отложенную заявку из своего ETH после мгновенной выплаты кошельку.").optional(),
     d("Контракты DEX", "dex.pendle_roles", K::TextList, L::None, "роль адрес хеш", DX, "Роли Pendle. В строке имя, адрес, хеш runtime, для EIP-1967 также адрес и хеш реализации. marketFactory и версии V3/V4/V5/V6 идентифицируют реестр. router и routerStatic задают официальный RouterV4 и отдельный контракт котировок. Строка с четырёхбайтовым селектором задаёт адрес и хеш исполняющей его логики RouterV4.").optional(),
     d("Контракты DEX", "dex.pendle_markets", K::TextList, L::None, "рынок фабрика SY PT YT активы", DX, "Рынки Pendle. В строке адрес рынка, его фабрика, SY, PT, YT и дополнительные встречные ERC-20 этой серии для поиска. Ядро сверяет роли и допустимую сторону на каноническом блоке.").optional(),

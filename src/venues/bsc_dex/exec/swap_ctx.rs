@@ -51,6 +51,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub integral:Option<Box<super::integral_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub prop:Option<Box<super::prop_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub dagrow:Option<Box<super::dagrow_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub temple:Option<Box<super::temple_wallet::Proof>>,

@@ -27,6 +27,7 @@ pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
             request:super::super::pools::maverick_one_quotes::request,
             payout:super::super::pools::maverick_one_quotes::payout,
         }),
+        Variant::PropVenue=>Some(WalletQuoter{request:super::super::pools::prop_quotes::request,payout:super::super::pools::prop_quotes::payout}),
         Variant::IntegralSize=>Some(WalletQuoter{request:super::super::pools::integral_quotes::request,payout:super::super::pools::integral_quotes::payout}),
         Variant::DegenSwap => Some(WalletQuoter{
             request: super::super::pools::degenswap_quotes::request,

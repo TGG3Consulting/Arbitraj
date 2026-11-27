@@ -122,6 +122,11 @@ pub async fn state(
         let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
         return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
     }
+    if f.variant==Variant::PropVenue {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::prop_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
+        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::IntegralSize {
         let at=super::nami::block(ctx,&tag).await?;
         let state=Box::pin(super::integral_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;

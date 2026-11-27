@@ -54,6 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
+    Prop(Box<super::super::exec::prop_wallet::Terms>),
     Integral(super::super::exec::integral_wallet::Terms),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
@@ -152,7 +153,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -202,6 +203,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::Prop(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Integral(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Dagrow(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::SolidlyRouter(market)=&o.wire {
@@ -258,14 +260,22 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let strict_result = frame(ctx, h, &calls, stricter.as_slice()).await?;
         let alt = &strict_result[offset..strict_result.len() - offset];
         let (strict_before,strict_after)=funding.balances(&strict_result).ok_or_else(fail)?;
-        if strict_before!=before || strict_after!=before
+        // При более строгом минимуме LambdaClass может исполнить публичную заявку через второй рынок.
+        let improved=if let Wire::Prop(t)=&o.wire && t.fallback_allowed && alt[n+2].ok() {
+            let p=t.proof(&o,strict,deadline);
+            let paid=word(&alt[0]).and_then(|a|a.checked_sub(word(&alt[n+3])?));
+            let net=word(&alt[n+4]).and_then(|a|a.checked_sub(word(&alt[1])?));
+            alt.iter().all(|v|v.ok()) && paid==Some(o.amount) && net.is_some_and(|v|v>=strict)
+                && paid.zip(net)==p.measured(&alt[n+2].logs) && strict_before==before && strict_after==before
+        }else{false};
+        if !improved && (strict_before!=before || strict_after!=before
             || alt[n + 2].ok()
             || alt[n + 2].error.is_none()
             || alt.iter().enumerate().any(|(j, v)| j != n + 2 && !v.ok())
             || word(&alt[0]) != word(&r[0])
             || word(&alt[1]) != word(&r[1])
             || word(&alt[n + 3]) != word(&r[0])
-            || word(&alt[n + 4]) != word(&r[1])
+            || word(&alt[n + 4]) != word(&r[1]))
         {
             return Err(fail());
         }
@@ -285,6 +295,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::Prop(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Integral(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
         Wire::SafeSwap(m)|Wire::DegenRouter(m)|Wire::DegenModule(m)=>super::super::exec::safeswap_wallet::Proof::order(*m,o,minimum,deadline).data(),

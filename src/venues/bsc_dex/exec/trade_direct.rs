@@ -178,7 +178,7 @@ pub async fn trade(
         )
         .map_err(|e| sc.attach(e))?;
         // Решение 177: «продажа по квотеру» — в хронологию сделки (exec/result.rs by допишет её к исполнителю).
-        if prep.note.is_some() {
+        if prep.note.is_some() && sc.prop.is_none() {
             r.executor = prep.note;
         }
         Ok(r)

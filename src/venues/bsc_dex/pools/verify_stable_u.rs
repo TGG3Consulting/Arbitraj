@@ -68,6 +68,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         if c.family.variant==super::family_variant::Variant::Bundles {out.push(Box::pin(super::bundles::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Antfarm {out.push(Box::pin(super::antfarm::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Surge {out.push(Box::pin(super::surge::verify(ctx,c)).await);continue;}
+        if c.family.variant==super::family_variant::Variant::PropVenue {out.push(Box::pin(super::prop_venue::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::IntegralSize {out.push(Box::pin(super::integral_size::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Pendle {out.push(Box::pin(super::pendle::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Dagrow {out.push(Box::pin(super::dagrow::verify(ctx,c)).await);continue;}

@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -60,6 +60,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 if let Ok(v)=v2_execution::option(q,i,e.clone(),payer,via,head).await{quotes.push(v)}
             }continue
         }
+        if e.family.variant==Variant::PropVenue{quotes.extend(Box::pin(super::prop_pricing::options(q,i,e,payer,head)).await);continue}
         if e.family.variant==Variant::IntegralSize{quotes.extend(Box::pin(super::integral_pricing::options(q,i,e,payer,graph,head)).await);continue}
         if e.family.variant==Variant::Bundles{
             quotes.extend(Box::pin(super::bundles_pricing::options(q,i,e,payer,graph,head)).await);

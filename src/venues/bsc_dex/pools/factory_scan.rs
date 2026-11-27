@@ -136,6 +136,8 @@ async fn pass(
     let ranges=Box::pin(super::puzzle_ranges::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in ranges.found {found.entry(coin).or_default().extend(rows);}
     notes.extend(ranges.notes); no_answer+=ranges.no_answer;
+    let prop=super::prop_venue::directory(ctx,coins,&quote_list);
+    for (coin,rows) in prop.found{found.entry(coin).or_default().extend(rows);}
     let integral=Box::pin(super::integral_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in integral.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(integral.notes);no_answer+=integral.no_answer;

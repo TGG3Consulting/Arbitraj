@@ -452,7 +452,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
         "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
-        "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
+        "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
         "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
@@ -863,6 +863,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.safeswap_spender", "dex.router_runtime_hash", "dex.pool_code_hashes", "dex.pair_runtime_hash",
             "dex.proxy_implementations", "dex.proxy_runtime_hashes", "dex.router", "dex.module_runtime_hashes", "dex.pmm_ladder_usd",
         ]),
+        Proto::V2 if f.variant==Variant::PropVenue=>{list.extend(["dex.factory","dex.quoter","dex.propamm_roles","dex.propamm_pairs","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::IntegralSize=>{list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.integral_delay","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::Pendle=>{list.extend(["dex.pendle_roles","dex.pendle_markets","dex.quoter"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
         Proto::V2 if f.variant==Variant::Dagrow=>{

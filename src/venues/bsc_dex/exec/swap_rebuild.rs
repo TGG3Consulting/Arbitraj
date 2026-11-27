@@ -106,7 +106,7 @@ pub fn rebuild(
     };
     // Решение 177: пометка «по квотеру» — как в пути (trade_direct.rs, executor/trade.rs: r.executor = note).
     let out = out.map(|mut t| {
-        if c.note.is_some() {
+        if c.note.is_some() && c.prop.is_none() {
             t.executor = c.note.clone();
         }
         t

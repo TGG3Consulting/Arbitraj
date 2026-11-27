@@ -100,6 +100,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::Antfarm
             | Variant::MaverickOne
             | Variant::Surge
+            | Variant::PropVenue
             | Variant::IntegralSize
             | Variant::Pendle
             | Variant::SafeSwapTrade | Variant::DegenSwap

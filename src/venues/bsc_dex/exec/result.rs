@@ -194,7 +194,9 @@ pub(super) fn with_native_fact(
         venue_ref: d.chain.hash.to_string(),
         chain: Some(d.chain),
         finished_at: Utc::now(),
-        executor: None,
+        executor: proofs.and_then(|p|p.prop.as_ref()).and_then(|p|p.outcome(&r.logs).map(|(source,_,_)| {
+            if source==p.terms.fallback {format!("LambdaClass / Uniswap V3 ({source:#x})")} else {format!("LambdaClass / {source:#x}")}
+        })),
         request: req,
     })
 }

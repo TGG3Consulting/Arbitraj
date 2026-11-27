@@ -434,6 +434,7 @@ mod tests {
             "antfarm", // Signed router and separate ATF budget.
             "surge_native",
             "maverick_v1",
+            "lambda_propamm",
             "integral_size",
             "pendle_market", // котировки до задания защищённого модуля
             "dagrow", // SSP с кошелька

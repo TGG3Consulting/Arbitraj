@@ -1857,6 +1857,10 @@ def tables(network, snapshots, profiles):
         if not base and str(row["id"]) == "405":
             fixture = Path("tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json")
             tokenlon = read(fixture)
+            measure_file = fixture.with_name("tokenlon_ethereum_wallets.json.gz")
+            tokenlon_wallet = json.loads(gzip.decompress(measure_file.read_bytes()))
+            assert tokenlon_wallet["selector"] == tokenlon["selector"]
+            paid = [x for x in tokenlon_wallet["controls"] if x["replay"] == "paid"]
             window = tokenlon["window"]
             sources = window["fills_by_source"]
             external = sum(sources[name] for name in ("uniswap_v2", "uniswap_v3", "curve", "sushiswap"))
@@ -1866,7 +1870,10 @@ def tables(network, snapshots, profiles):
                     "Curve и SushiSwap). Публичная цена PMM доступна через SDK. При запросе окончательной заявки "
                     "три пустых кошелька получили USER_BALANCE_INSUFFICIENT. Для допуска требуется действующая "
                     "подпись маркет-мейкера и симуляция выплаты своему кошельку. "
-                    f"[Исходные платежи и ответы сервиса](../{fixture.as_posix()})")
+                    f"При воспроизведении {len(paid)} из {len(tokenlon_wallet['controls'])} исторических сделок "
+                    f"показали точный дебет и чистое поступление ({min(x['gas'] for x in paid)}–{max(x['gas'] for x in paid)} gas). "
+                    f"[Ответы сервиса](../{fixture.as_posix()}) · [Оплата и повтор](../{measure_file.as_posix()}) · "
+                    "[Официальный порядок получения котировки](https://docs.token.im/tokenlon-jssdk/en/#getquote)")
         if not base and str(row["id"])=="162":
             fixture = Path("tests/data/first_run_dex_2026-11-26/bancor_v21_ethereum.json.gz")
             original = json.loads(gzip.decompress(fixture.read_bytes()))

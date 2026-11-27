@@ -630,6 +630,10 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'tokenlon-quote-ethereum'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7 websocket-client==1.8.0
+          python scripts/record_tokenlon_quote.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'tokenlon-ethereum'
         run: python scripts/record_tokenlon_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'native-rfq-ethereum'

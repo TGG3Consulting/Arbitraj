@@ -6606,6 +6606,8 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 
 ### `dex.module_runtime_hashes`
 
+Для Ethereum WAGMI режим `registered_uni_v3` проверяет CREATE2 фабрики, уровень комиссии, шаг тика, регистрацию в обоих порядках и код её QuoterV2. Для шага V5 выбирают `dex.v3_swap_callback=uniswapV3SwapCallback(int256,int256,bytes)`. В `dex.pool_code_hashes` указывают хеш создания из PoolAddress именно этой фабрики; `dex.tick_lens` читает её карту тиков. Возможность обмена зависит от доступной ликвидности на текущей цене и развёрнутого исполнителя кошелька.
+
 В режимах `registered_v3` и `registered_v3_module` у Yum Yum Swap и BlueDex V3 `dex.factory` и `dex.factory_runtime_hash` связывают рыночный реестр с сетью. `dex.pool_code_hashes` задаёт проверенный CREATE2 init, `dex.quoter` и `dex.quoter_runtime_hash` — отдельный официальный QuoterV2. Выбор `registered_v3_module` требует развёрнутого владельцем модуля с этой immutable фабрикой, его адреса в `dex.router` и разрешённого хеша в `dex.module_runtime_hashes`. Модуль сверяет изменение балансов входа и выхода. Режим наблюдения читает активные уровни без разрешений.
 
 У Memebox профиль `memebox` читает рынки без исполнителя. Владелец может выбрать `memebox_v5` и задать адрес собственной установки в `dex.router` и хеш её кода в `dex.module_runtime_hashes`. Поле `dex.pool_code_hashes` связывает пару CREATE2 с фабрикой, а независимый `dex.factory_runtime_hash` закрепляет код фабрики. Ставки `poolFee()` и `protocolRatio()` читаются с каждого рынка на одном каноническом блоке.
@@ -6836,3 +6838,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### Concave Ethereum и семейство `gemswap_v2`
 
 В `dex.factory` указывается GemswapFactory. Пара — клон EIP-1167, зарегистрированный по сортированным адресам и типу `1`. В `dex.proxy_implementations` и `dex.proxy_runtime_hashes` задайте реализацию GemswapPair и хеш её кода из профиля. Конфигурация проверяет точный код клона, две записи реестра, CREATE2 с типом пула в salt и фактическую `swapFee()`. Код фабрики устанавливает 25 базисных пунктов при создании. Для прямых обменов на официальный GemswapRouter требуются `dex.router` и `dex.router_runtime_hash`. Для V5 используются разрешение самого кошелька и фактический входной токен. У выбранного размера учитываются выход на кошелёк, разрешение, газ и возможный дефицит ликвидности. [Матрица выплат и газ](../tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz).
+
+### `dex.antfarm_output_wallet`
+
+- **Кейс:** Комиссия обычной пары Antfarm в Ethereum оплачивается из конечной выплаты. Используется оборотный ATF владельца или заём валюты выплаты в Balancer Vault.
+- **Что ставить:** Адрес развёрнутого владельцем AntfarmOutputWallet в области этой DEX. Код проверяется по принятому хешу в `dex.module_runtime_hashes`. Перед подписью сверяются средства, разрешения, ставка кредита и минимум кошелька.
+- **Если не задана:** Маршруты с покупкой комиссии из выплаты пропускаются. Для оплаты отдельного ATF из бюджета входа служит прежнее размещение в `dex.router`.

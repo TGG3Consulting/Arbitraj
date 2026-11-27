@@ -154,7 +154,7 @@ pub(in crate::venues::bsc_dex) async fn read(
             );
         }
     }
-    Ok(AntfarmBook { market, funding })
+    Ok(AntfarmBook { market, funding, proceeds:None, limits:None })
 }
 
 pub(in crate::venues::bsc_dex) async fn module(

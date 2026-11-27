@@ -72,6 +72,21 @@ def tables(network, snapshots, profiles):
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
     out.extend(omni_mars_deli(network))
+    if base and "umbrae-dlmm" in configured:
+        ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
+        out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
+        for family in ("dlmm","damm"):
+            fixture=f"tests/data/first_run_dex_2026-11-26/umbrae_{family}_base_wallets.json.gz"
+            with gzip.open(fixture,"rt",encoding="utf8") as stream: settled=json.load(stream)
+            cases=[c for m in settled["examples"] for c in m.get("cases",[])+m.get("additional",[])]
+            rounds=sum(any(c.get("sell") and "net" in c["sell"] for c in m.get("cases",[])+m.get("additional",[])) for m in settled["examples"])
+            outcomes=[]
+            for mode in ("native","module","v5"):
+                legs=[l for c in cases if c["mode"]==mode for l in (c["buy"],c["sell"]) if l and "net" in l]
+                outcomes.append(f"{mode} — {len(legs)} выполненных ног, {min(l['gas'] for l in legs)}–{max(l['gas'] for l in legs)} газа")
+            out.append(f"**{family.upper()}.** Круговой обмен подтверждён на {rounds}/{len(settled['examples'])} рынках для проверенных объёмов. "+"; ".join(outcomes)+f". [Вызовы, отказы и балансы](../{fixture}).")
+        out.append("В DLMM штатный роутер проверяет поступление получателю и deadline. Положительный ответ viewer принимается только при полном расходе входа и завершённом проходе по бинам. На рынке `0x39460a75…` из заявки на 100000000000000 wei WETH viewer учёл 468754580167 wei и вернул 997 минимальных единиц USDC. Обмен исходной суммы откатился. Для лестницы оператор задаёт `dex.pmm_ladder_usd` по собственному лимиту. Независимая ступень на стороне встречной валюты требует курса и `dex.pmm_ladder_counter`.")
+        out.append(f"DAMM учитывает удержанную плату в активе feeToken, начисления протоколу и LP и смену ставки при следующем обмене. У обычного вызова пары нет срока и сравнения с выплатой после перевода. Для защищённого обмена в обоих семействах доступен один модуль со свёркой полного расхода кошелька и чистого выхода. Архивный runtime `{settled['module_hash']}`, оценка размещения {settled['deployment_gas']} газа. Адрес задаёт владелец после размещения через `dex.router`, выбрав `umbrae_damm_module` либо `umbrae_dlmm_module`. Модуль допускает прямой вызов и шаг 17 V5.")
     if base and "hello-dex-base" in configured:
         file="tests/data/first_run_dex_2026-11-26/hello_base_wallets.json.gz"
         with gzip.open(file,"rt",encoding="utf8") as stream: hello=json.load(stream)
@@ -1192,6 +1207,13 @@ def tables(network, snapshots, profiles):
         pool = probe.get("pool") or next((a["address"] for a in sample.get("samples", []) if a.get("address")), None)
         factory = probe.get("reported_factory")
         roundtrip = probe.get("factory_roundtrip")
+        if base and id in ("umbrae-damm","umbrae-dlmm"):
+            version=id.split("-")[1]
+            markets=ud["markets"][version]
+            if not pool: pool=markets[0]["pool"]
+            if any(m["pool"]==pool.lower() for m in markets):
+                factory=ud["roles"][version+"Factory"]["address"]
+                roundtrip="getPair(tokenX,tokenY,binStep,baseFactor) и beacon" if version=="dlmm" else "getPair(tokenX,tokenY) и beacon"
         if id in open_pages and sample.get("samples"):
             selected=sample["samples"][0]
             pool,factory=selected["address"],selected["reported_factory"]

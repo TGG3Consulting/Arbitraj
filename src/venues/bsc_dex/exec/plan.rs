@@ -34,6 +34,7 @@ pub(super) enum DirectCall {
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
     Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
+    AntfarmOutput(std::sync::Arc<super::antfarm_output_wallet::Proof>),
     MintClub(super::mint_club_wire::Call),
     EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
     Module {
@@ -204,6 +205,7 @@ impl Plan {
                 DirectCall::Carbon(c)=>c.data(),
                 DirectCall::Temple(t)=>t.data(),
                 DirectCall::Antfarm(a)=>a.data(),
+                DirectCall::AntfarmOutput(a)=>a.data(),
                 DirectCall::MintClub(order)=>order.data(self.wallet),
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(

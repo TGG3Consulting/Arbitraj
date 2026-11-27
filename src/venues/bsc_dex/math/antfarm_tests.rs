@@ -70,6 +70,8 @@ fn fully_funded_fill_prices_refilling_the_fee_token_in_the_input_asset() {
             use crate::venues::bsc_dex::pools::abi_v2v3::IV2Pair;
             use alloy::sol_types::SolEvent;
             let b = AntfarmBook {
+                limits: None,
+                proceeds: None,
                 market: pool.clone(),
                 funding: vec![(fee_market.clone(), None)],
             };
@@ -229,6 +231,8 @@ fn paying_fees_from_proceeds_matches_eight_atomic_wallet_fills() {
                 .unwrap(),
         );
         let book = AntfarmBook {
+            limits: None,
+            proceeds: None,
             market: primary,
             funding: vec![(fund, None)],
         };

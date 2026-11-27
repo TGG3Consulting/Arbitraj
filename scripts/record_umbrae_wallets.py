@@ -106,7 +106,24 @@ def record(d,family,artifact,endpoint):
                 prefix,buy=leg(m,owner,[],mode,cash,y,qty)
                 sell=leg(m,owner,prefix,mode,y,cash,int(buy["net"]))[1] if prefix else None
                 cases.append(dict(mode=mode,amount=str(qty),buy=buy,sell=sell))
-        examples.append(dict(pool=m["pool"],cash=cash,owner=owner,cases=cases))
+        extra=[]
+        if bins and not any(c.get("sell") and "net" in c["sell"] for c in cases):
+            # Прежние крупные запросы сохраняются как граница неполной котировки.
+            limit=min((int(c["buy"]["consumed"]) for c in cases if c["buy"].get("consumed") and int(c["buy"]["consumed"])>0),default=0)
+            seeds=[(cash,sorted({a for a in (limit//4,limit//2) if a>0}))]
+            if y in HOLDERS:
+                decimals=int(raw("eth_call",[{"to":y,"data":calldata("decimals()",[],[])},tag]),16)
+                seeds.append((y,sorted({max(1,10**decimals//100000),max(2,10**decimals//1000)})))
+            for initial,amounts in seeds:
+                holder=HOLDERS[initial]
+                if rpc(endpoint,"eth_getCode",[holder,tag])!="0x":raise ValueError("дополнительный держатель не EOA")
+                other=next(t for t in m["tokens"] if t!=initial)
+                for qty in amounts:
+                    for mode in ("native","module","v5"):
+                        prefix,buy=leg(m,holder,[],mode,initial,other,qty)
+                        sell=leg(m,holder,prefix,mode,other,initial,int(buy["net"]))[1] if prefix else None
+                        extra.append(dict(mode=mode,cash=initial,owner=holder,amount=str(qty),buy=buy,sell=sell))
+        examples.append(dict(pool=m["pool"],cash=cash,owner=owner,cases=cases,additional=extra))
     if not any(c["sell"] and "net" in c["sell"] for m in examples for c in m.get("cases",[]) if c["mode"]=="v5"):raise ValueError("нет защищённого кругового обмена")
     return dict(family=family,selector=tag,height=d["height"],constructor=roles4,module_hash=module_hash,deployment_gas=int(gas,16),examples=examples)
 

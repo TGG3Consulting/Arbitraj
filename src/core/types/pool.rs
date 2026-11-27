@@ -199,11 +199,29 @@ pub struct AntfarmMarket {
     pub oracle_address: Option<Address>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AntfarmFunds {
+    Wallet { atf: U256 },
+    Vault { output_balance: U256, fee_per_1e18: U256 },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AntfarmLimits {
+    pub payer: Address,
+    pub module: Address,
+    pub stock: Option<AntfarmFunds>,
+    pub loans: [Option<AntfarmFunds>;2],
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AntfarmBook {
     pub market: AntfarmMarket,
     /// ATF can be acquired with either token. A linked hourly oracle can reprice the primary fee in the same transaction.
     pub funding: Vec<(AntfarmMarket, Option<U256>)>,
+    /// One candidate for one payer at one block. Shared market snapshots never persist a wallet's funding limit.
+    #[serde(skip)]
+    pub proceeds: Option<(u16, AntfarmFunds)>,
+    #[serde(skip)]
+    pub limits: Option<AntfarmLimits>,
 }
 
 /// TempleStableAMMRouter. Порядок резервов — TEMPLE, зарегистрированный стейбл.

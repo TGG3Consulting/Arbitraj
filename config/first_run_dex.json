@@ -3966,7 +3966,8 @@
       "dex.factory": "0xe48aee124f9933661d4dd3eb265fa9e153e32cbe",
       "dex.quoter": "0x6d9f0eb21d77c6d24be49a579508471e937d5418",
       "dex.module_runtime_hashes": [
-        "0xc0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f"
+        "0xc0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f",
+        "0xadd73a0cfd328651975402b29fec7941b65397b9d414919e87c8199956ea3edb"
       ]
     }
   },
@@ -4032,6 +4033,31 @@
         "0xa2be3bb0b8b7b341eeaf301a7f815f5ec86057e95951b841b8525d98fdfbba45"
       ],
       "dex.quoter": "0xeabc5b163bf79cdce31027e722361802fabbe8fd"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "wagmi-ethereum",
+    "source": "https://docs.popsicle.finance/wagmi-1/our-tech/contracts.md · tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json",
+    "settings": {
+      "dex.kind": "registered_uni_v3",
+      "dex.factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
+      "dex.factory_runtime_hash": "0x287405c05352828361cda2962f637b8e80b4b20a6c63507e9fefbe33782796e5",
+      "dex.quoter": "0x66034b71a749e655fee0005c5496d5c0949590f0",
+      "dex.quoter_runtime_hash": "0xedacf5e2a6cbe9b1a7e8c81ddc408920ed8d10bb11f342e39629ae837cd00cbc",
+      "dex.tick_lens": "0xb1f795776cb9ddac6e7e162f31c7419dd3d48297",
+      "dex.pool_code_hashes": [
+        "0x30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb"
+      ],
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000",
+        "10000"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false,
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)"
     }
   }
 ]

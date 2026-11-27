@@ -155,8 +155,8 @@ pub(in crate::venues::bsc_dex) fn expected(
     source: Address,
     amount: U256,
 ) -> Option<U256> {
-    let r = snapshot(book, raw)?.route(source, true, amount)?;
-    (r.debit()? == amount).then_some(r.primary.output)
+    let fill=snapshot(book,raw)?.swap(source,true,amount)?;
+    fill.complete.then_some(fill.amount_out)
 }
 pub(in crate::venues::bsc_dex) fn after(
     ctx: &Ctx,

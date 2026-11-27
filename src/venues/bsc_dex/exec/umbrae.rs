@@ -47,6 +47,7 @@ pub(in crate::venues::bsc_dex) async fn plan(
     wallet: Address,
     height: u64,
     selected: Option<Address>,
+    all_approvals: bool,
 ) -> GatewayResult<Plan> {
     let fail = || {
         ctx.err(
@@ -88,7 +89,7 @@ pub(in crate::venues::bsc_dex) async fn plan(
         wallet,
         target,
         head.timestamp.to::<u64>(),
-        false,
+        all_approvals,
         generation,
     )
     .await?;

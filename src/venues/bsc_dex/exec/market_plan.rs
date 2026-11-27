@@ -23,6 +23,31 @@ pub(in crate::venues::bsc_dex) enum Market {
     MintClub,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Selection {
+    target: Option<Address>,
+    carbon: Option<B256>,
+    proceeds: Option<(u16, bool)>,
+}
+impl Selection {
+    pub(super) fn for_leg(leg: &crate::core::types::RouteLeg) -> Self {
+        if let [hop] = leg.hops.as_slice()
+            && let Some(crate::core::types::RouterFeeMode::AntfarmProceeds { target, tier, loan }) =
+                hop.fee_mode
+        {
+            return Self {
+                target: Some(target),
+                carbon: None,
+                proceeds: Some((tier, loan)),
+            };
+        }
+        Self {
+            target: super::mint_club_direct::selected(leg),
+            carbon: super::carbon_direct::selected(leg).1,
+            proceeds: None,
+        }
+    }
+}
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
@@ -59,31 +84,73 @@ impl Market {
         h: &Hop,
         (wallet, height): (Address, u64),
         buy: bool,
-        selected: (Option<Address>, Option<B256>),
+        selected: Selection,
     ) -> GatewayResult<Plan> {
         match self {
-            Self::Umbrae => Box::pin(super::umbrae::plan(ctx,s,wallet,height,selected.0)).await,
+            Self::Umbrae => {
+                Box::pin(super::umbrae::plan(
+                    ctx,
+                    s,
+                    wallet,
+                    height,
+                    selected.target,
+                    false,
+                ))
+                .await
+            }
+            Self::Antfarm if selected.proceeds.is_some() => {
+                let (tier, loan) = selected.proceeds.unwrap();
+                Box::pin(super::antfarm_output_wallet::plan(
+                    ctx,
+                    s,
+                    wallet,
+                    height,
+                    selected.target,
+                    tier,
+                    loan,
+                ))
+                .await
+            }
             Self::Antfarm => {
                 Box::pin(super::antfarm_wallet::plan(
-                    ctx, s, wallet, height, selected.0,
+                    ctx,
+                    s,
+                    wallet,
+                    height,
+                    selected.target,
                 ))
                 .await
             }
             Self::Temple => {
                 Box::pin(super::temple_wallet::plan(
-                    ctx, s, wallet, height, selected.0,
+                    ctx,
+                    s,
+                    wallet,
+                    height,
+                    selected.target,
                 ))
                 .await
             }
             Self::Carbon => {
                 Box::pin(super::carbon_direct::path_plan(
-                    ctx, s, h, wallet, height, buy, selected,
+                    ctx,
+                    s,
+                    h,
+                    wallet,
+                    height,
+                    buy,
+                    (selected.target, selected.carbon),
                 ))
                 .await
             }
             Self::MintClub => {
                 Box::pin(super::mint_club_direct::path_plan(
-                    ctx, s, h, wallet, height, selected.0,
+                    ctx,
+                    s,
+                    h,
+                    wallet,
+                    height,
+                    selected.target,
                 ))
                 .await
             }

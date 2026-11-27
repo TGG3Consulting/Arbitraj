@@ -101,7 +101,7 @@ pub async fn trade(
     let mut prep = prepare(&v, &req, leg, graph_mins.as_deref(), decs, is_native).await?;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
-    let selected=(super::mint_club_direct::selected(leg),super::carbon_direct::selected(leg).1);
+    let selected=super::market_plan::Selection::for_leg(leg);
     let (mut p, mut at) = build(q, &prep, wallet,selected).await?;
     let approved = send_approvals(env, &slot, &p.approvals).await?;
     // Решение 236, дополнение (техлид 09.11): газ разрешений — в итог обмена и в любую ошибку после них (swap_send.rs).
@@ -197,7 +197,7 @@ async fn build(
     q: &Quoting,
     prep: &Prep,
     wallet: alloy_primitives::Address,
-    selected:(Option<alloy_primitives::Address>,Option<alloy_primitives::B256>),
+    selected:super::market_plan::Selection,
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
     if let ([s],[h])=(prep.steps.as_slice(),prep.path.hops.as_slice())

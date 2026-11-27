@@ -132,14 +132,25 @@ fn all_registered_markets_derive_from_deployer_and_threshold_payments_are_distin
 }
 
 #[test]
-fn both_cash_assets_fill_across_two_sizes_and_all_three_exchanges_with_atomic_limits() {
-    let archive: &[u8] =
-        include_bytes!("data/first_run_dex_2026-11-26/hello_ethereum_wallets.json.gz");
+fn both_networks_fill_across_two_sizes_and_all_three_exchanges_with_atomic_limits() {
+    let cases: [(&[u8], &str); 2] = [
+        (
+            include_bytes!("data/first_run_dex_2026-11-26/hello_ethereum_wallets.json.gz"),
+            include_str!("data/first_run_dex_2026-11-26/hello_ethereum_directory.json"),
+        ),
+        (
+            include_bytes!("data/first_run_dex_2026-11-26/hello_base_wallets.json.gz"),
+            include_str!("data/first_run_dex_2026-11-26/hello_base_directory.json"),
+        ),
+    ];
+    for (archive, directory) in cases {
+        check_paid_legs(archive, directory);
+    }
+}
+
+fn check_paid_legs(archive: &[u8], directory: &str) {
     let d: Value = serde_json::from_reader(flate2::read::GzDecoder::new(archive)).unwrap();
-    let dirs: Value = serde_json::from_str(include_str!(
-        "data/first_run_dex_2026-11-26/hello_ethereum_directory.json"
-    ))
-    .unwrap();
+    let dirs: Value = serde_json::from_str(directory).unwrap();
     assert_eq!(dirs["selector"], d["selector"]);
     assert_eq!(dirs["state_root"], d["state_root"]);
     let mut all = 0;

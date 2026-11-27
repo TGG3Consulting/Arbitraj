@@ -23,7 +23,17 @@ def registry(url,d,tag):
     if any("0x"+keccak(hexstr=v).hex()!=r["runtime"] for r,v in zip(roles.values(),raw,strict=True)):
         raise ValueError("код одной из официальных ролей изменился")
     def views(calls):
-        return [bytes.fromhex(w[2:]) for w in read_batch(url,[("eth_call",[c,tag]) for c in calls])]
+        values=[]
+        for start in range(0,len(calls),48):
+            group=calls[start:start+48]
+            packed=[(c["to"],False,bytes.fromhex(c["data"][2:])) for c in group]
+            read=tx("0xca11bde05977b3631167028862be2a173976ca11","aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[packed])
+            read["gas"]=hex(12_000_000)
+            raw=rpc(url,"eth_call",[read,tag])
+            results,=decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))
+            if len(results)!=len(group) or any(not ok for ok,_ in results):raise ValueError("неполные данные рынка")
+            values.extend(v for _,v in results)
+        return values
     def address(data):
         return decode(["address"],data)[0]
     for role in ("router","router02","quoter"):

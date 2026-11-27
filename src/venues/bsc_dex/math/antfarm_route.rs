@@ -35,7 +35,7 @@ impl Route {
 
 impl Market {
     /// Smallest input budget that the standard exact-input router maps to at least 'want'.
-    fn minimum_for(&self, i: usize, want: U256) -> Option<U256> {
+    pub(super) fn minimum_for(&self, i: usize, want: U256) -> Option<U256> {
         let den = U256::from(1000);
         let t = U256::from(self.tier);
         let embedded = self.tokens[0] == self.atf;
@@ -82,6 +82,23 @@ impl Market {
 impl AntfarmBook {
     /// Carry both consumed curves into the next leg in the same block.
     pub fn after(&self, source: Address, amount: U256) -> Option<(Swapped, Self)> {
+        let (selected, _) = self.choose_payment(source, true, amount)?;
+        if let Some((tier, funds)) = selected {
+            let f = self.output_at(source, true, amount, tier, funds)?;
+            let mut next = self.clone();
+            let swapped = Swapped {
+                amount_in: f.primary.debit,
+                amount_out: f.credit,
+                complete: f.primary.debit == amount,
+            };
+            next.market = f.primary.next;
+            let (src, _) = next
+                .funding
+                .iter_mut()
+                .find(|(m, _)| m.tokens == f.refill.next.tokens && m.tier == tier)?;
+            *src = f.refill.next;
+            return Some((swapped, next));
+        }
         let flow = self.route(source, true, amount)?;
         let fill = flow.swapped(true, amount)?;
         let mut next = self.clone();
@@ -94,6 +111,64 @@ impl AntfarmBook {
             *market = acquired.next;
         }
         Some((fill, next))
+    }
+    fn choose_payment(
+        &self,
+        input: Address,
+        exact_in: bool,
+        size: U256,
+    ) -> Option<(Option<(u16, crate::core::types::AntfarmFunds)>, Swapped)> {
+        let output_fill = |tier, funds| {
+            let f = self.output_at(input, exact_in, size, tier, funds)?;
+            Some(Swapped {
+                amount_in: f.primary.debit,
+                amount_out: f.credit,
+                complete: if exact_in {
+                    f.primary.debit == size
+                } else {
+                    f.credit >= size
+                },
+            })
+        };
+        if let Some((tier, funds)) = self.proceeds {
+            return Some((self.proceeds, output_fill(tier, funds)?));
+        }
+        let mut best = self
+            .route(input, exact_in, size)
+            .and_then(|r| r.swapped(exact_in, size))
+            .map(|s| (None, s));
+        let Some(limits) = self.limits else {
+            return best;
+        };
+        let target = self.market.tokens.iter().position(|t| *t != input)?;
+        let output = self.market.tokens[target];
+        for (fund, _) in &self.funding {
+            if fund.tokens != [self.market.atf, output] {
+                continue;
+            }
+            for budget in [limits.stock, limits.loans[target]].into_iter().flatten() {
+                let Some(s) = output_fill(fund.tier, budget) else {
+                    continue;
+                };
+                let improves = best.as_ref().is_none_or(|(_, b)| {
+                    if exact_in {
+                        (s.amount_out, s.complete, std::cmp::Reverse(s.amount_in))
+                            > (b.amount_out, b.complete, std::cmp::Reverse(b.amount_in))
+                    } else {
+                        (s.amount_in, std::cmp::Reverse(s.amount_out))
+                            < (b.amount_in, std::cmp::Reverse(b.amount_out))
+                    }
+                });
+                if improves {
+                    best = Some((Some((fund.tier, budget)), s));
+                }
+            }
+        }
+        best
+    }
+    pub fn swap(&self, input: Address, exact_in: bool, size: U256) -> Option<Swapped> {
+        self.choose_payment(input, exact_in, size)
+            .map(|(_, fill)| fill)
     }
     /// The smaller of two equal-output trades leaves more funds for another opportunity.
     pub fn route(&self, source: Address, exact_in: bool, size: U256) -> Option<Route> {

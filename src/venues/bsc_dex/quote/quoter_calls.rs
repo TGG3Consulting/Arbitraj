@@ -589,6 +589,7 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
+    if e.family.variant.umbrae(){return None;}
     if e.family.variant==super::super::pools::family_variant::Variant::BunnySwap {
         return super::super::pools::bunnyswap::decode(e,out);
     }

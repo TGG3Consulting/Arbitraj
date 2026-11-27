@@ -48,6 +48,8 @@ pub struct SwapCtx {
     pub temple:Option<Box<super::temple_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub antfarm:Option<Box<super::antfarm_wallet::Proof>>,
+    #[serde(default)]
+    pub antfarm_output:Option<Box<super::antfarm_output_wallet::Proof>>,
     /// Кошелёк сделки. None — контекста свопа нет.
     #[serde(default)]
     pub wallet: Option<Address>,

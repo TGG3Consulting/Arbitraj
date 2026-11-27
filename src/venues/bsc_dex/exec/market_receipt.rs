@@ -12,6 +12,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
     c.vista = super::vista_direct::proof(p);
     c.ekubo = p.ekubo_proof();
     match p.direct_market() {
+        Some(DirectCall::AntfarmOutput(a)) => c.antfarm_output = Some(Box::new((*a).clone())),
         Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
         Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
         Some(DirectCall::Carbon(a)) => {
@@ -32,6 +33,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
 }
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
+    AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
     Antfarm(&'a super::antfarm_wallet::Proof),
     Temple(&'a super::temple_wallet::Proof),
     Carbon(&'a super::carbon_fact::Proof),
@@ -41,6 +43,7 @@ pub(super) enum Saved<'a> {
 }
 fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
+        c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
         c.temple.as_deref().map(Saved::Temple),
         c.carbon.as_ref().map(Saved::Carbon),
@@ -65,6 +68,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     }
     for saved in entries(c) {
         match saved {
+            Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
             Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
@@ -84,6 +88,9 @@ impl Saved<'_> {
         output: Address,
     ) -> Result<(U256, U256), &'static str> {
         match self {
+            Self::AntfarmOutput(p) => p
+                .amounts(&r.logs, wallet, input, output)
+                .ok_or("Antfarm: комиссия из выплаты, выплата или списание по исходному поручению не подтверждены"),
             Self::Antfarm(p) => p
                 .amounts(&r.logs, wallet, input, output)
                 .ok_or("Antfarm: выплата или списание по исходному поручению не подтверждены"),

@@ -33,6 +33,8 @@ pub mod cycle_trade;
 pub(super) mod delta_direct;
 pub(super) mod sectorone;
 pub(super) mod umbrae;
+#[cfg(test)]
+mod umbrae_tests;
 pub(super) mod vault_direct;
 pub(super) mod ekubo_v2_direct;
 pub(super) mod ekubo_v2_fact;
@@ -43,6 +45,7 @@ pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
 pub(super) mod temple_wallet;
 pub(super) mod antfarm_wallet;
+pub(super) mod antfarm_output_wallet;
 #[cfg(test)]
 mod temple_wallet_tests;
 pub(super) mod mint_club_wire;

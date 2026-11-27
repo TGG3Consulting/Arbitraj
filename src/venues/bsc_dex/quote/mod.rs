@@ -71,6 +71,7 @@ pub(super) mod carbon_pricing;
 mod temple_budget;
 pub(super) mod mint_club_pricing;
 mod module_pricing;
+mod antfarm_pricing;
 pub mod gas;
 pub mod gas_base;
 pub mod graph_exec;

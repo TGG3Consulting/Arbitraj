@@ -27,14 +27,16 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut quotes = Vec::new();
     for e in i.entries.iter().filter(|e| enabled(e)) {
+        if super::super::exec::antfarm_wallet::enabled(e){
+            quotes.extend(Box::pin(super::antfarm_pricing::options(q,i,e,head)).await);
+            continue;
+        }
         let Ok(module) = ctx.dex_addr("dex.router", e.family.id) else {
             continue;
         };
         let mut e = e.clone();
         if let Some(h) = head {
-            let check = if super::super::exec::antfarm_wallet::enabled(&e) {
-                Box::pin(super::super::exec::antfarm_wallet::fresh(ctx,&mut e,h)).await
-            }else if e.family.variant==Variant::Temple {
+            let check = if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
             } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
@@ -59,7 +61,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, direct, head).await {
             quotes.push(option);
         }
-        if graph && !super::super::exec::antfarm_wallet::enabled(&e) && let Ok(Some(target)) = executor::address(ctx) {
+        if graph && let Ok(Some(target)) = executor::address(ctx) {
             let (kind, data) = if e.family.variant == Variant::RegisteredV3 {
                 (
                     17,

@@ -3,16 +3,7 @@ use super::{antfarm::Fill, full_math::mul_div_up};
 use crate::core::types::AntfarmBook;
 use alloy_primitives::{Address, U256};
 
-#[derive(Debug, Clone, Copy)]
-pub enum Funds {
-    Wallet {
-        atf: U256,
-    },
-    Vault {
-        output_balance: U256,
-        fee_per_1e18: U256,
-    },
-}
+pub use crate::core::types::AntfarmFunds as Funds;
 #[derive(Debug, Clone)]
 pub struct OutputFill {
     pub primary: Fill,
@@ -21,8 +12,51 @@ pub struct OutputFill {
     pub credit: U256,
 }
 impl AntfarmBook {
-    /// Calculate one real pair of curves. The caller compares all viable tiers after gas.
     pub fn paid_from_output(
+        &self,
+        input: Address,
+        amount: U256,
+        tier: u16,
+        funds: Funds,
+    ) -> Option<OutputFill> {
+        self.terms_from_output(input, amount, tier, funds)
+            .filter(|v| !v.credit.is_zero())
+    }
+    /// Invert the *net* amount due to the payer. Every iterate is a lower bound:
+    /// any larger primary swap must buy at least this much ATF from the same funding curve.
+    pub fn output_order(&self, input: Address, exact_in: bool, size: U256) -> Option<OutputFill> {
+        let (tier, funds) = self.proceeds?;
+        self.output_at(input, exact_in, size, tier, funds)
+    }
+    pub(super) fn output_at(
+        &self,
+        input: Address,
+        exact_in: bool,
+        size: U256,
+        tier: u16,
+        funds: Funds,
+    ) -> Option<OutputFill> {
+        if exact_in {
+            return self.paid_from_output(input, size, tier, funds);
+        }
+        let i = self.market.tokens.iter().position(|v| *v == input)?;
+        let mut gross = size;
+        for _ in 0..128 {
+            let amount = self.market.minimum_for(i, gross)?;
+            let f = self.terms_from_output(input, amount, tier, funds)?;
+            if f.credit >= size {
+                return Some(f);
+            }
+            let required = size.checked_add(f.refill.debit)?.checked_add(f.loan_fee)?;
+            if required <= gross {
+                return None;
+            }
+            gross = required;
+        }
+        None
+    }
+    /// Calculate one real pair of curves. The caller compares all viable tiers after gas.
+    fn terms_from_output(
         &self,
         input: Address,
         amount: U256,
@@ -67,9 +101,9 @@ impl AntfarmBook {
         };
         let credit = paid
             .output
-            .checked_sub(replenished.debit)?
-            .checked_sub(premium)?;
-        (!credit.is_zero()).then_some(OutputFill {
+            .saturating_sub(replenished.debit)
+            .saturating_sub(premium);
+        Some(OutputFill {
             primary: paid,
             refill: replenished,
             loan_fee: premium,

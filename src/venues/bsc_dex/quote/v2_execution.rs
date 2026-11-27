@@ -79,12 +79,20 @@ pub(super) async fn option(
     let (mut c, _) = direct::best(q, &i.asset, i.side, i.qty, vec![e], decimals.0, decimals.1)?;
     if let crate::core::types::PoolState::Antfarm(book)=&c.entry.pool.state{
         let (input,output)=if i.side==Side::Buy{(i.usdt,i.coin)}else{(i.coin,i.usdt)};
+        if let Some((tier,funds))=book.proceeds {
+            let fill=book.output_order(input,true,c.swapped.amount_in).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Antfarm: комиссия не покрыта выплатой"))?;
+            let loan=matches!(funds,crate::core::types::AntfarmFunds::Vault{..});
+            let terms=super::super::exec::antfarm_output_wallet::Terms::new(execution.target,input,output,book.market.tier,tier,loan,&fill);
+            execution.wire=super::v2_wallet_sim::Wire::AntfarmOutput(std::sync::Arc::new(terms));
+        } else {
         let terms=super::super::exec::antfarm_wallet::Terms::from_budget(book,execution.target,input,output,c.swapped.amount_in)
             .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Antfarm: объём и комиссия не помещаются в указанный бюджет"))?;
         execution.wire=super::v2_wallet_sim::Wire::Antfarm(std::sync::Arc::new(terms));
+        }
     }
     let fee_mode = match &execution.wire {
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae()=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Temple(k)=>Some(RouterFeeMode::ProtectedWallet{target:k.module}),
         super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,allocation:Some(c.allocation()),native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),

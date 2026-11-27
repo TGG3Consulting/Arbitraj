@@ -324,6 +324,10 @@ mod tests {
                         let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json")).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);
                         assert_eq!(evidence["markets"][p.id.as_str()]["init"].as_str(),Some(text.as_str()));
+                    } else if k == "dex.pool_code_hashes" && p.id == "wagmi-ethereum" {
+                        let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json")).unwrap();
+                        assert_eq!(evidence["selector"],snapshot["selector"]);
+                        assert_eq!(evidence["init"].as_str(),Some(text.as_str()));
                     } else if k=="dex.pool_code_hashes" && p.id=="synthswap-v3" {
                         let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/synth_oracle_base.json.gz");
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();

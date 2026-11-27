@@ -42,6 +42,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
+    AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
     Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
     Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
@@ -120,33 +121,19 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let approvals = if wrapped == Some(o.input) {
-        Vec::new()
-    } else {
-        let encoded = Bytes::from(
-            IMoney::allowanceCall {
-                owner: o.payer,
-                spender: o.target,
-            }
-            .abi_encode(),
-        );
-        let current: Bytes = rpc::call(
-            ctx,
-            "eth_call",
-            json!([{"to":o.input,"data":encoded},h.selector()]),
-        )
-        .await?;
-        if current.len() != 32 {
-            return Err(fail());
-        }
-        approve::fork_known(
-            ctx,
-            o.input,
-            o.target,
-            U256::from_be_slice(&current),
-            match &o.wire { Wire::Carbon(c)=>c.cap(), Wire::MintClub(c) if c.mint=>c.limit, _=>o.amount },
-        )?
+    let allowed=|token:Address,amount:U256| async move {
+        let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
+        let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
+        if current.len()!=32{return Err(fail());}
+        approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)
     };
+    let mut approvals=if wrapped==Some(o.input){Vec::new()}else{
+        let cap=match &o.wire {Wire::Carbon(c)=>c.cap(),Wire::MintClub(c) if c.mint=>c.limit,_=>o.amount};
+        allowed(o.input,cap).await?
+    };
+    if let Wire::AntfarmOutput(t)=&o.wire && let Some((token,amount))=t.stock_approval(){
+        approvals.extend(allowed(token,amount).await?);
+    }
     let mut calls = vec![balance(o.input), balance(o.output)];
     calls.extend(approvals.iter().map(|(a, d)| tx(*a, d.clone())));
     let deadline = U256::from(
@@ -202,6 +189,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::AntfarmOutput(t)=&o.wire {
+        let proof=super::super::exec::antfarm_output_wallet::Proof{terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::Antfarm(t)=&o.wire {
         let proof=super::super::exec::antfarm_wallet::Proof{terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -253,6 +244,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
         Wire::Carbon(c)=>c.data(),
         Wire::MintClub(c) => c.data(o.payer),
+        Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),

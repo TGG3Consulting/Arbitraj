@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `527f9824` (27.11.2026).
+Последний просмотренный коммит: `a21a96c1` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2966,7 +2966,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-18~~ ✅ 882fcf5c | ❓ сборка | После О-14 изменилась шапка `contracts/BaseNativeV3.sol`. Это исходник `BasePmmExecutor`, а `build-hanji.mjs` не отключает метаданные Solidity, поэтому хеш кода сборки обычно меняется. В советах `elfomofi`, `lunarbase`, `virtuals-base`, `horizondex-base` закреплён `0xdc2280df…`. Подтверди сборкой в CI, что хеш `BasePmmExecutor` не изменился, либо добавь новый хеш в советы. |
 | ~~О-19~~ ✅ 1f137911 | документация | `contracts/MooniswapWallet.sol` — в шапке указать, что `receive()` открыт для `WETH.withdraw`, а случайно присланный ETH вывести нельзя. |
 | О-20 | контракт | `contracts/DefiPlazaWallet.sol`: (1) `i>=4` — число токенов StablePlaza записано голым числом, назвать константу со ссылкой на исходник; (2) единственная точка входа `swapFrom` принимает `minimum = 0`. В отличие от Empire и Ammalgam, нет `execute` с обязательным минимумом. Добавь `execute` с `minimum > 0` для прямого вызова из кошелька или подтверди, что бот при прямом вызове всегда передаёт минимум больше нуля, и покрой это тестом. |
-| О-21 | хардкод, R-42 | Mooniswap (9fe6234e): (1) `math/mooniswap.rs:56` — `0..128` итераций поиска без имени; (2) `math/mooniswap.rs:94, 97` — `216` бит упаковки `VirtualBalance` наследника без имени и ссылки на исходник; (3) прямые `== Variant::Mooniswap` в общих `pools/factory_calls.rs`, `pools/load.rs`, `quote/quoter.rs` — нужен предикат. |
+| О-21 | хардкод, R-42 | Mooniswap (9fe6234e): (1) `math/mooniswap.rs:56` — `0..128` итераций поиска без имени; (2) `math/mooniswap.rs:94, 97` — `216` бит упаковки `VirtualBalance` наследника без имени и ссылки на исходник; (3) прямые `== Variant::Mooniswap` в общих `pools/factory_calls.rs`, `pools/load.rs`, `quote/quoter.rs`, а после a21a96c1 ещё `exec/executor/entry.rs` (3 места) и `quote/module_pricing.rs` — нужен предикат. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3192,3 +3192,12 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 ### 527f9824 — проверено (касается Hashflow на BSC)
 
 - `hashflow/execute.rs`: сохранённый `SwapCtx` читается один раз вместо пяти; отправка вынесена в `send_selected`, тяжёлые будущие (futures) упакованы в `Box::pin`, чтобы путь восстановления их не строил. Порядок проверок и ветки RFQ, Textile, Epsilon, Raindex прежние. Поведение Hashflow на BSC эквивалентно. ✅ Открыто: 2 (О-20, О-21).
+
+### a21a96c1 — проверено
+
+- Mooniswap подключён к исполнению через `MooniswapWallet` и V5 (шаг kind Balancer):
+  - новый `RouterFeeMode::Mooniswap` в ядре;
+  - план, вызов и квитанция разведены по диспетчерам `market_plan`, `market_call`, `market_receipt`;
+  - для прямого пути проверяется, что валюта кошелька не изменилась.
+- Пути BSC: все ветки закрыты `Variant::Mooniswap` / `Wire::Mooniswap` / `RouterFeeMode::Mooniswap`, BSC не затронут. ✅
+- О-21 дополнен новыми прямыми сравнениями. Открыто: 2 (О-20, О-21).

@@ -81,6 +81,18 @@ def tables(network, snapshots, profiles):
         out.extend(base_launch_inventory.vecta())
     out.extend(base_launch_inventory.fynd(network))
     out.extend(["", "#### Ручные цены источников", "", "На этой площадке `zeroex.base_url = https://api.0x.org` включает ручную оценку маршрута. Ключ `zeroex.api_key` выдаётся в [кабинете 0x](https://dashboard.0x.org/). Доли RFQ и остальных поставщиков отображаются по шагам цены. Для согласованного обмена требуется отдельная действующая фирменная котировка для своего плательщика."])
+    well_id = "pinto-exchange-base" if base else "basin-wells-ethereum"
+    if well_id in configured:
+        out.extend(["", "#### "+("Pinto Exchange" if base else "Basin Wells"), "",
+                    "Штатный исполнитель V5 использует шаг 29. Два размера в обоих направлениях проверены "
+                    "по окончательному расходу и приходу ERC20 кошелька. Проверка с выходным минимумом на одну "
+                    "единицу выше выплаты и проверка с истёкшим сроком дали откат во всех оплаченных случаях.", "",
+                    "| Настройка DEX | Значение |","|---|---|"])
+        for field,value in configured[well_id]["settings"].items():
+            values=value if isinstance(value,list) else [value]
+            out.append("| "+field+" | "+" · ".join(str(v) for v in values)+" |")
+        if not base:
+            out.append("Пул BEAN/wstETH 0xbea0000113b0d182f4064c86b71c315389e4715d на блоке 26494988 имел нулевые резервы, остатки обоих ERC20 и выпуск LP.")
     if network=="base":
         out.extend(["", "Для книги Kipseli задайте `kipseli.base_url = https://propamm.kipseli.win` и ключ владельца `kipseli.api_key`. Для индивидуальной on-chain цены нужен зарегистрированный signer. Коммерческий доступ к подписи обмена предоставляет Kipseli. [Условия доступа](https://docs.kipseli.capital/) · [Касса и использованная подпись](../tests/data/first_run_dex_2026-11-26/kipseli_base_settled.json.gz)."])
     cfg=read(Path("tests/data/first_run_dex_2026-11-26/keyed_quote_endpoints.json"))[network]["roles"]

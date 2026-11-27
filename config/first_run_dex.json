@@ -7395,5 +7395,60 @@
         "0x25224db8613fa6fea356fd5bab0452d076be46caa1530c57363673fcf1621a59"
       ]
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "pinto-exchange-base",
+    "source": "https://docs.pinto.money/resources/contracts · https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/pinto/index.ts · tests/data/first_run_dex_2026-11-26/pinto_base_payments.json.gz",
+    "settings": {
+      "dex.kind": "basin_well",
+      "dex.factory": "0xba51aa60b3b8d9a36cc748a62aa56801060183f8",
+      "dex.stable_pools": [
+        "0x3e11001cfbb6de5737327c59e10afab47b82b5d3",
+        "0x3e111115a82df6190e36adf0d552880663a4dbf1",
+        "0x3e11226fe3d85142b734abce6e58918d5828d1b4",
+        "0x3e1133ac082716ddc3114bbefeed8b1731ea9cb1",
+        "0x3e11444c7650234c748d743d8d374fce2ee5e6c9"
+      ],
+      "dex.basin_well_impls": [
+        "0xba510990a720725ab1f9a0d231f045fc906909f4"
+      ],
+      "dex.basin_cp2": [
+        "0xba510c289fd067ebba41335afa11f0591940d6fe"
+      ],
+      "dex.basin_stable2": [
+        "0xba51055a97b40d7f41f3f64b57469b5d45b67c87"
+      ],
+      "dex.basin_stable2_lut": [
+        "0xba510a1eb7262853cdf910db2f6e4d1ee9457196"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "basin-wells-ethereum",
+    "source": "https://docs.basin.exchange/resources/contracts · https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/basin/index.ts · tests/data/first_run_dex_2026-11-26/basin_ethereum_payments.json.gz",
+    "settings": {
+      "dex.kind": "basin_well",
+      "dex.factory": "0xba51aaaa95aeefc1292515b36d86c51dc7877773",
+      "dex.stable_pools": [
+        "0xbea0e11282e2bb5893bece110cf199501e872bad",
+        "0xbea0000113b0d182f4064c86b71c315389e4715d",
+        "0x1125eac5f713503e2b7cb2299027960ce1aa5d42",
+        "0x54c04c9bf5af0bc3096cb0af24c4fa8379a2915e",
+        "0x905eafe9434fabacaf10d1490fcd0d1eb9b85fc8",
+        "0x8d97775623368f833f8fa82209e220f1c60508ea",
+        "0xdf9c4a067279857b463817ef773fe189c77e1686"
+      ],
+      "dex.basin_well_impls": [
+        "0xba510e11eeb387fad877812108a3406ca3f43a4b"
+      ],
+      "dex.basin_cp2": [
+        "0xba510c20fd2c52e4cb0d23cfc3ccd092f9165a6e",
+        "0xba150c2ae0f8450d4b832beefa3338d4b5982d26"
+      ]
+    }
   }
 ]

@@ -35,6 +35,7 @@ pub(super) enum DirectCall {
     RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     O1(std::sync::Arc<super::o1_wallet::Proof>),
+    Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
     Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
     Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
@@ -139,6 +140,7 @@ impl Plan {
                 "минимум выхода 0 — обмен без минимума не отправляется",
             ));
         }
+        if let Some(DirectCall::Bundles(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::Dagrow(proof))=self.direct_market.as_deref_mut(){
             std::sync::Arc::make_mut(proof).minimum=m;
         }
@@ -214,6 +216,7 @@ impl Plan {
                 ),
                 DirectCall::Carbon(c)=>c.data(),
                 DirectCall::O1(t)=>t.data(),
+                DirectCall::Bundles(t)=>t.data(),
                 DirectCall::Dagrow(t)=>t.data(),
                 DirectCall::Temple(t)=>t.data(),
                 DirectCall::Antfarm(a)=>a.data(),

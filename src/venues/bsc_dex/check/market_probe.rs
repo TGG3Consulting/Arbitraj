@@ -28,6 +28,7 @@ enum Venue {
     WalletRouter(Address),
     FundedExecutor,
     Dagrow,
+    Bundles,
     Temple,
     Antfarm(Option<Address>),
     Carbon,
@@ -95,6 +96,20 @@ impl Market {
         } else if antfarm_wallet::enabled(e) {
             anchor = Some(Box::pin(antfarm_probe::anchor(ctx, e, number)).await?);
             Venue::Antfarm(ctx.dex_addr("dex.vault",e.family.id).ok().filter(|v|!v.is_zero()))
+        } else if let PoolState::Bundles(s)=&e.pool.state{
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let at=head.selector();
+            let book=super::super::pools::bundles::book(ctx,e.family,s.market.pool,(e.coin,e.usdt),&at).await?;
+            if super::super::pools::dagrow::balance(ctx,e.usdt,wallet,&at).await?<amount{
+                return Err(ctx.err(ErrorCode::NoRoute,"Bundles Swap: недостаточно средств кошелька для пробы"))
+            }
+            if super::super::pools::exact_wallet_tokens::eligible(ctx,e.family.id,e.usdt,e.coin){
+                super::super::pools::exact_wallet_tokens::check(ctx,e.family.id,e.usdt,e.coin,&at).await?;
+            }else{
+                super::super::pools::bundles::module(ctx,e,ctx.dex_addr("dex.router",e.family.id)?,&at).await?;
+            }
+            let mut market=Box::new(e.clone());market.pool.state=PoolState::Bundles(Box::new(book));market.pool.block=number;
+            anchor=Some((head,market)); Venue::Bundles
         } else if let PoolState::Dagrow(s)=&e.pool.state {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             let at=head.selector();
@@ -154,7 +169,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::Bundles | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -275,7 +290,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::Bundles | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

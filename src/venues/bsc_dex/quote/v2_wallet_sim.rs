@@ -49,6 +49,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
+    Bundles(super::super::exec::bundles_wallet::Terms),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
     AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
@@ -143,7 +144,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target);
+    let exact_approval=matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -192,6 +193,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if charged.is_zero() || charged>o.amount || (!exact_target && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Dagrow(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::SolidlyRouter(market)=&o.wire {
         let proof=super::super::exec::solidly_router_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
@@ -268,6 +270,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::MintClub(c) => c.data(o.payer),
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
+        Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),

@@ -202,7 +202,7 @@ impl Proof {
     }
 }
 impl Terms {
-    pub fn proof(self, o: &sim::Order, minimum: U256, deadline: U256) -> Proof {
+    pub(in crate::venues::bsc_dex) fn proof(self, o: &sim::Order, minimum: U256, deadline: U256) -> Proof {
         Proof {
             terms: self,
             payer: o.payer,

@@ -14,6 +14,7 @@ sol! { interface IBundle {
     function getAmountsOut(uint256 amount,address[] path,uint16[] fees) external view returns(uint256[]);
     function estimateExactETHForTokens(address output,uint16 fee,uint256 amount) external view returns(uint256);
     function estimateExactTokensForETH(address input,uint16 fee,uint256 amount) external view returns(uint256);
+    function router() external view returns(address);
     function protocolToken() external view returns(address);
     function protocolTokenReserve() external view returns(uint256);
     function oraclePair() external view returns(address);

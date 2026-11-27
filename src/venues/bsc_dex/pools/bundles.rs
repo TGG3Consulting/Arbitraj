@@ -14,6 +14,49 @@ use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, U256};
 use serde_json::Value;
 
+pub(crate) async fn module(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    target: Address,
+    at: &Value,
+) -> GatewayResult<()> {
+    let bound = batch::read(ctx, [batch::view(at, target, IBundle::routerCall {})]);
+    let ((), [encoded]) = tokio::try_join!(
+        super::direct_module::verify_code(ctx, e.family.id, target, at),
+        bound
+    )?;
+    if batch::decode(&encoded, IBundle::routerCall {})?
+        != ctx.dex_addr("dex.quoter", e.family.id)?
+    {
+        return Err(ctx.err(
+            ErrorCode::InvalidAddress,
+            "Bundles Swap: модуль связан с другим роутером",
+        ));
+    }
+    Ok(())
+}
+pub(crate) async fn official(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    book: &Book,
+    input: Address,
+    n: U256,
+    at: &Value,
+) -> GatewayResult<U256> {
+    let (to, data) = quote_request(ctx, e, book, input, n)?;
+    let raw: alloy_primitives::Bytes = super::super::node::rpc::call(
+        ctx,
+        "eth_call",
+        serde_json::json!([{"to":to,"data":data},at]),
+    )
+    .await?;
+    quote_result(book, &raw, n).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "Bundles Swap: официальный роутер не вернул выход обмена",
+        )
+    })
+}
 pub(super) async fn market(
     ctx: &Ctx,
     p: Profile,
@@ -141,6 +184,12 @@ pub(crate) async fn book(
     edge: (Address, Address),
     at: &Value,
 ) -> GatewayResult<Book> {
+    if ctx.chain_id() != Some(1) {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            "Bundles Swap: ожидается Ethereum mainnet",
+        ));
+    }
     let revision = ctx.settings.generation();
     let p = Profile::read(ctx, f)?;
     let shared = bundles_profile::common(ctx, p, at).await?;

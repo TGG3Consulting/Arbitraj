@@ -46,6 +46,10 @@ pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
 pub(super) mod dagrow_wallet;
+pub(super) mod bundles_wallet;
+#[cfg(test)]
+mod bundles_wallet_tests;
+pub(super) mod bundles_plan;
 #[cfg(test)]
 mod dagrow_wallet_tests;
 pub(super) mod temple_wallet;

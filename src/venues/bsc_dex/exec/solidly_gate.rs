@@ -76,6 +76,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::synth_farming::check(ctx,f,e.pool.reference.address(),at)).await?;
             continue;
         }
+        if f.variant.flux_native() {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::o1_wallet::at(ctx,e,at)).await?;
+            continue;
+        }
         if f.variant.launch() && let PoolRef::Singleton{manager,id}=e.pool.reference {
             let at=match &role_block{Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::launch_market::check(ctx,f,manager,id,(e.pool.token0,e.pool.token1),at)).await?;continue;
@@ -111,6 +116,19 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             };
             let gate = super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
             cap = merged_cap(ctx, f.id, gate, cap)?;
+            continue;
+        }
+        if f.variant==Variant::Bundles {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::bundles::book(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            if f.executor_kind.is_some() && let Ok(target)=ctx.dex_addr("dex.router",f.id) {
+                Box::pin(super::super::pools::bundles::module(ctx,e,target,at)).await?;
+            }
+            continue;
+        }
+        if f.variant==Variant::Surge {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::surge::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
         if f.variant==Variant::Dagrow {

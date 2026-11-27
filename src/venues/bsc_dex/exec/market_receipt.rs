@@ -17,6 +17,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::AntfarmOutput(a)) => c.antfarm_output = Some(Box::new((*a).clone())),
         Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
         Some(DirectCall::O1(t)) => c.o1 = Some(Box::new((*t).clone())),
+        Some(DirectCall::Bundles(t))=>c.bundles=Some(Box::new((*t).clone())),
         Some(DirectCall::Dagrow(t)) => c.dagrow=Some(Box::new((*t).clone())),
         Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
         Some(DirectCall::Carbon(a)) => {
@@ -42,6 +43,7 @@ pub(super) enum Saved<'a> {
     AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
     Antfarm(&'a super::antfarm_wallet::Proof),
     O1(&'a super::o1_wallet::Proof),
+    Bundles(&'a super::bundles_wallet::Proof),
     Dagrow(&'a super::dagrow_wallet::Proof),
     Temple(&'a super::temple_wallet::Proof),
     Carbon(&'a super::carbon_fact::Proof),
@@ -56,6 +58,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
         c.o1.as_deref().map(Saved::O1),
+        c.bundles.as_deref().map(Saved::Bundles),
         c.dagrow.as_deref().map(Saved::Dagrow),
         c.temple.as_deref().map(Saved::Temple),
         c.carbon.as_ref().map(Saved::Carbon),
@@ -85,6 +88,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
             Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
             Saved::O1(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Bundles(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Dagrow(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
@@ -113,6 +117,7 @@ impl Saved<'_> {
                 .amounts(&r.logs, wallet, input, output)
                 .ok_or("Antfarm: выплата или списание по исходному поручению не подтверждены"),
             Self::O1(p) => p.amounts(&r.logs, wallet, input, output).ok_or("o1: ключ, списание или выплата расходятся с подписанным поручением"),
+            Self::Bundles(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Bundles Swap: подписанное поручение и движения денег расходятся"),
             Self::Dagrow(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("DAGrow: исходные границы, получатель или движения кошелька не подтверждены"),
             Self::Temple(p) => p.amounts(&r.logs, wallet, input, output).ok_or(
                 "TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты",

@@ -175,6 +175,14 @@ impl ReceiptProof {
     }
 }
 
+pub(super) fn same_fill(tx: &crate::core::types::ChainTx, r: &Receipt) -> bool {
+    tx.outcome == crate::core::types::TxOutcome::Included
+        && r.status == U64::from(1)
+        && tx.block == Some(r.block_number.to())
+        && tx.gas_used == Some(r.gas_used.to())
+        && tx.gas_bnb == r.gas_bnb()
+}
+
 #[cfg(test)]
 #[path = "proof_chain_tests.rs"]
 mod tests;

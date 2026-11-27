@@ -150,13 +150,10 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
         if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.rfq{
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Hashflow: требуется исходная сеть и первоначальный кошелёк завершённого поручения").pending(entry.lookup.clone());
             if wallet::signer::address(&p.ctx).ok()!=Some(proof.trader){return Err(unknown());}
-            if let Some(terms)=proof.original{
-                if p.ctx.chain_id()!=Some(terms.chain){return Err(unknown());}
-            }else{
-                let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
-                let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
-                proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
-            }
+            let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
+            let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
+            if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
+            proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
         }
         if x.trade.request.qty == r.qty {
             return Ok(Some(x.trade));
@@ -238,7 +235,7 @@ pub(in crate::venues::bsc_dex) async fn record(
         let proof=parse.rfq.ok_or_else(||err(String::new()))?;
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
         let r=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
-        if r.status.to::<u64>()!=1{return Err(err(String::new()));}
+        if !proof_chain::same_fill(tx,&r){return Err(err(String::new()));}
         proof.included(&p.ctx,tx.hash,tx.nonce,&r).await.map_err(|_|err(String::new()))?;
         if t.request.side==Side::Buy{proof.amount}else{proof.proceeds}
     };

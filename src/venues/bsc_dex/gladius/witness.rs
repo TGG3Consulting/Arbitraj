@@ -140,7 +140,10 @@ impl Domain {
     pub(super) async fn authentic(&self, ctx: &Ctx, o: &Offer, h: white_state::Head) -> bool {
         let d = digest(o, self.separator);
         let maker = o.order.info.swapper;
-        let Ok(code)=rpc::call::<Bytes>(ctx,"eth_getCode",json!([maker,h.selector()])).await else{return false;};
+        let Ok(code) = rpc::call::<Bytes>(ctx, "eth_getCode", json!([maker, h.selector()])).await
+        else {
+            return false;
+        };
         if code.is_empty() {
             return eoa(d, &o.api.signature) == Some(maker);
         }

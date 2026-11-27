@@ -14,6 +14,28 @@ fn stored_digest_and_old_public_terms_pin_original_but_cancellation_must_be_a_se
         let mut data = json!({"hash":hash,"chainId":format!("0x{chain:x}"),"from":row["from"],"to":row["to"],"input":row["input"],
             "nonce":format!("0x{nonce:x}"),"value":row["value"],"blockHash":row["block_hash"],"transactionIndex":row["receipt"]["transactionIndex"]});
         let tx: Transaction = from_value(data.clone()).unwrap();
+        use crate::core::types::{SendMethod, TxOutcome};
+        use crate::venues::bsc_dex::{exec::chain_tx::chain_tx, send::track::Tracked};
+        let mut receipt: Receipt = from_value(row["receipt"].clone()).unwrap();
+        let fact = chain_tx(
+            hash,
+            nonce,
+            vec![],
+            SendMethod::Single,
+            &Tracked {
+                outcome: TxOutcome::Included,
+                receipt: Some(receipt.clone()),
+                cancel: None,
+                unresolved: None,
+            },
+            None,
+        );
+        assert!(same_fill(&fact, &receipt));
+        receipt.status = U64::ZERO;
+        assert!(!same_fill(&fact, &receipt));
+        receipt.status = U64::from(1);
+        receipt.gas_used += U64::from(1);
+        assert!(!same_fill(&fact, &receipt));
         let q = wire::tradeRFQTCall::abi_decode_validate(&tx.input)
             .unwrap()
             .quote;

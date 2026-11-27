@@ -50,18 +50,7 @@ impl Offer {
         {
             return None;
         }
-        let now = U256::from(stamp);
-        let quantity = if now >= order.end {
-            order.input.endAmount
-        } else if now <= order.start {
-            order.input.startAmount
-        } else {
-            order.input.startAmount.checked_add(
-                (order.input.endAmount - order.input.startAmount)
-                    .checked_mul(now - order.start)?
-                    .checked_div(order.end - order.start)?,
-            )?
-        };
+        let quantity = super::quantity::Curve::at(&order, stamp)?.quantity;
         if quantity.is_zero() || order.threshold > quantity {
             return None;
         }
@@ -72,6 +61,31 @@ impl Offer {
             debit: U256::ZERO,
             expiry,
         })
+    }
+    pub(super) async fn funded(
+        &self,
+        ctx: &Ctx,
+        permit: Address,
+        h: white_state::Head,
+    ) -> Option<U256> {
+        use crate::venues::bsc_dex::node::{abi::IERC20, call::canonical};
+        let tag = h.selector();
+        let owner = self.order.info.swapper;
+        let token = self.order.input.token;
+        let (balance, allowance) = tokio::try_join!(
+            canonical(ctx, &tag, token, IERC20::balanceOfCall { owner }),
+            canonical(
+                ctx,
+                &tag,
+                token,
+                IERC20::allowanceCall {
+                    owner,
+                    spender: permit
+                }
+            )
+        )
+        .ok()?;
+        Some(balance.min(allowance))
     }
     pub(super) fn pair(&self) -> (Address, Address) {
         (self.order.outputs[0].token, self.order.input.token)

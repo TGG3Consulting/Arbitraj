@@ -49,7 +49,6 @@ pub(super) async fn start(
                     let mut r = receipt.clone();
                     r["transactionHash"] = hash;
                     r["blockHash"] = block;
-                    r["l1Fee"] = json!("0x0");
                     r
                 }
                 "eth_getBlockByNumber" => {
@@ -70,6 +69,11 @@ pub(super) async fn start(
         axum::serve(socket, srv).await.unwrap();
     });
     for (key, scope, value) in [
+        (
+            "dex.chain",
+            Scope::Venue(p.ctx.place.id.into()),
+            json!(super::name(chain).1),
+        ),
         ("http.timeout_ms", Scope::Global, json!(5000)),
         ("http.body_idle_ms", Scope::Global, json!(5000)),
         ("http.total_ms", Scope::Global, json!(8000)),

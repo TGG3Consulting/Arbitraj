@@ -182,6 +182,10 @@ async fn four_networks_recover_a_prepared_transaction_before_accepting_another()
         )
         .unwrap();
         let (canonical,server)=recovery_fixture::start(&restored,&r).await;
+        let replay=send::receipt::read(&restored.ctx,r.transaction_hash).await.unwrap().unwrap();
+        let proof=parse.rfq.as_ref().unwrap();
+        assert!(proof.matches(&replay),"{:?} payment",r.chain_id);
+        proof.included(&restored.ctx,r.transaction_hash,r.nonce,&replay).await.unwrap();
         canonical.store(false,std::sync::atomic::Ordering::SeqCst);
         assert_eq!(execute::record(&restored,result.clone()).await.unwrap_err().code,ErrorCode::OutcomeUnknown);
         assert!(intent::load(restored.ctx.journal.db(),&key).await.unwrap().unwrap().result.is_none());

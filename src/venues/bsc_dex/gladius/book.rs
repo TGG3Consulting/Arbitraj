@@ -123,6 +123,12 @@ async fn read(p: &Parts, profile: &Profile, quote: Address) -> Option<Orders> {
             if !domain.authentic(ctx, &offer, h).await {
                 return None;
             }
+            offer.quantity = offer
+                .quantity
+                .min(offer.funded(ctx, domain.permit, h).await?);
+            if offer.quantity < offer.order.threshold.max(U256::ONE) {
+                return None;
+            }
             offer.debit = offer.quote(ctx, profile, offer.quantity, h).await.ok()?;
             Some(Arc::new(offer))
         })

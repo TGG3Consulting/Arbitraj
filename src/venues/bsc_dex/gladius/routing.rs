@@ -187,56 +187,40 @@ async fn candidate(
     {
         return None;
     }
-    let mut quantity = if buy {
-        wanted
-    } else {
-        wanted
-            .checked_mul(offer.quantity)?
-            .checked_div(offer.debit)?
-    };
-    if quantity.is_zero() || quantity > offer.quantity || quantity < offer.order.threshold {
+    if !buy && wanted > funds.spend {
         return None;
     }
-    let predicted = quantity.checked_mul(offer.debit)?.div_ceil(offer.quantity);
-    if predicted > funds.spend || (!buy && wanted > funds.spend) {
-        return None;
-    }
-    let mut cash = num::to_decimal(if buy { predicted } else { quantity }, decs.1)?;
     let mut gas = gas_cap;
     let mut units = 0;
     let mut block = p.heads.fresh(ctx).ok()?.number;
     let mut ticket = None;
+    let cash;
     if quote_stage::is_final() {
         let h = white_state::head(ctx, "latest").await.ok()?;
         profile.verify(ctx, h).await.ok()?;
         block = h.number.to();
-        let mut debit = offer.quote(ctx, &profile, quantity, h).await.ok()?;
-        if !buy && debit != wanted {
-            let adjusted = quantity.checked_mul(wanted)?.div_ceil(debit);
-            let mut found = None;
-            for next in [
-                Some(adjusted),
-                adjusted.checked_sub(U256::ONE),
-                adjusted.checked_add(U256::ONE),
-            ]
-            .into_iter()
-            .flatten()
-            {
-                if next == quantity
-                    || next.is_zero()
-                    || next > offer.quantity
-                    || next < offer.order.threshold
-                {
-                    continue;
-                }
-                if offer.quote(ctx, &profile, next, h).await.ok() == Some(wanted) {
-                    found = Some(next);
-                    break;
-                }
-            }
-            quantity = found?;
-            debit = wanted;
+        let curve = super::quantity::Curve::at(&offer.order, h.timestamp.to())?;
+        let domain = super::witness::Domain::read(ctx, &profile, h).await?;
+        let cap = curve
+            .quantity
+            .min(offer.funded(ctx, domain.permit, h).await?);
+        let min = offer.order.threshold.max(U256::ONE);
+        if cap < min {
+            return None;
         }
+        let (quantity, debit) = if buy {
+            if wanted < min || wanted > cap {
+                return None;
+            }
+            (wanted, offer.quote(ctx, &profile, wanted, h).await.ok()?)
+        } else {
+            let q = curve
+                .sell(wanted, min, cap, async |q| {
+                    offer.quote(ctx, &profile, q, h).await.ok()
+                })
+                .await?;
+            (q, wanted)
+        };
         if debit > funds.spend {
             return None;
         }
@@ -276,6 +260,21 @@ async fn candidate(
             generation,
             fallback_fee: None,
         });
+    } else {
+        use crate::venues::bsc_dex::math::full_math::{mul_div, mul_div_up};
+        let q = if buy {
+            wanted
+        } else {
+            mul_div(wanted, offer.quantity, offer.debit)?
+        };
+        if q < offer.order.threshold.max(U256::ONE) || q > offer.quantity {
+            return None;
+        }
+        let debit = mul_div_up(q, offer.debit, offer.quantity)?;
+        if debit > funds.spend {
+            return None;
+        }
+        cash = num::to_decimal(if buy { debit } else { q }, decs.1)?;
     }
     let q = Quote {
         venue: ctx.venue(),

@@ -33,7 +33,8 @@ use super::pool_quote;
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::Temple(_), PoolKind::V2) => true,
+        (PoolState::UmbraeDamm(_), PoolKind::V2) => true,
+        (PoolState::Antfarm(_) | PoolState::Temple(_), PoolKind::V2) => true,
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
         (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::Memebox(_) | PoolState::CandySwap(_) | PoolState::EtherVista(_), PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
@@ -59,6 +60,12 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::fill(s, token_in, true, amount)
+            .map(|f| (f.swapped, PoolState::UmbraeDamm(Box::new(f.after))))
+            .ok_or_else(|| no("Umbrae DAMM: сумма или состояние после обмена не исполнимы")),
+        (PoolState::Antfarm(book),PoolKind::V2) => book.after(token_in,amount)
+            .map(|(fill,next)|(fill,PoolState::Antfarm(Box::new(next))))
+            .ok_or_else(||no("Antfarm: сумма или комиссия не покрыты после предыдущего обмена")),
         (PoolState::Temple(s), PoolKind::V2) => {
             let output=if zero_for_one {e.pool.token1} else {e.pool.token0};
             super::super::math::temple::paid(s,token_in,output,amount)

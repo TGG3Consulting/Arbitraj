@@ -80,6 +80,21 @@ impl Market {
 }
 
 impl AntfarmBook {
+    /// Carry both consumed curves into the next leg in the same block.
+    pub fn after(&self, source: Address, amount: U256) -> Option<(Swapped, Self)> {
+        let flow = self.route(source, true, amount)?;
+        let fill = flow.swapped(true, amount)?;
+        let mut next = self.clone();
+        next.market = flow.primary.next;
+        if let Some(acquired) = flow.acquisition {
+            let (market, _) = next
+                .funding
+                .iter_mut()
+                .find(|(m, _)| m.tokens == acquired.next.tokens && m.tier == flow.funding_tier)?;
+            *market = acquired.next;
+        }
+        Some((fill, next))
+    }
     /// The smaller of two equal-output trades leaves more funds for another opportunity.
     pub fn route(&self, source: Address, exact_in: bool, size: U256) -> Option<Route> {
         let market = &self.market;

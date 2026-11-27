@@ -107,6 +107,12 @@ pub fn path_costs(
                 .and_then(|p|num::to_decimal(U256::from(p.fee),decimals))
                 .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Carbon: не подтверждена общая комиссия по заявкам"))?;
             add(&mut out,CostKind::PoolFee,fee,symbol,true);
+        } else if let PoolState::UmbraeDamm(state) = &h.entry.pool.state {
+            let f = super::super::math::umbrae_damm::fill(state, h.token_in, true, h.swapped.amount_in)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Umbrae DAMM: не подтверждена комиссия обмена"))?;
+            let (decimals,symbol) = if h.token_in == state.tokens[state.fee_side] {(h.dec_in,&from)} else {(h.dec_out,&to)};
+            let fee = num::to_decimal(f.fee,decimals).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Umbrae DAMM: комиссия не представима"))?;
+            add(&mut out,CostKind::PoolFee,fee,symbol,true);
         } else if let PoolState::MintClub(state)=&h.entry.pool.state {
             let mint=h.token_in==state.reserve;
             let n=if mint {h.swapped.amount_out} else {h.swapped.amount_in};
@@ -234,6 +240,9 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
     let pips = |p: u32| Decimal::from(p) / Decimal::from(10_000u32);
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::rate(s)
+            .map(|bps| Decimal::new(i64::from(bps), 2))
+            .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Umbrae DAMM: неверная ставка комиссии")),
         (PoolState::Antfarm(_)|PoolState::Temple(_)|PoolState::Carbon(_) | PoolState::MintClub(_) | PoolState::Virtuals(_) | PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
         (_, PoolKind::V2) => super::pool_quote::v2_fee_pct(ctx, e),
         (_, PoolKind::V3) => e

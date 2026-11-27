@@ -49,6 +49,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::UmbraeDamm(s), PoolKind::V2) => {
+            let i = s.tokens.iter().position(|&t| t == token_in).ok_or("Umbrae DAMM: неизвестный токен входа")?;
+            pair(s.reserves[1-i], U256::ONE, s.reserves[i], U256::ONE)
+        }
         (PoolState::Antfarm(book),PoolKind::V2) => {
             let s=&book.market; let i=usize::from(token_in==s.tokens[1]);
             if s.balances[i]>s.reserves[i] {return Err("Antfarm: баланс требует отдельной оценки лучшего курса".into());}

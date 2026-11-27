@@ -164,6 +164,14 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::UmbraeDamm(s), PoolKind::V2) => {
+            let i = s.tokens.iter().position(|&t| t == token_in).ok_or("Umbrae DAMM: неизвестный токен")?;
+            let (budget, _) = xy_band(s.reserves[i], s.reserves[1-i], b, buy)?;
+            if budget.is_zero() {return Ok((budget,true));}
+            let (amount, full) = super::super::math::umbrae_damm::band(s, i, budget, buy)
+                .ok_or("Umbrae DAMM: неверные границы резервов")?;
+            Ok((amount,full))
+        }
         (PoolState::Antfarm(book),PoolKind::V2) => {
             let i=usize::from(book.market.tokens[1]==token_in);
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};

@@ -20,7 +20,7 @@ fn from_row(d: &Value, row: &Value) -> Market {
         balances: std::array::from_fn(|i| integer(&row["balances"][i])),
         dividends: integer(&row["escrow"]),
         lp_supply: integer(&row["supply"]),
-        oracle_address: (!oracle.is_null()).then(||addr(&row["oracle"])),
+        oracle_address: (!oracle.is_null()).then(|| addr(&row["oracle"])),
         oracle: (!oracle.is_null()).then(|| {
             (
                 tokens
@@ -65,6 +65,52 @@ fn fully_funded_fill_prices_refilling_the_fee_token_in_the_input_asset() {
             .settle(weth, integer(&trial["primary_input"]), false)
             .unwrap();
         let restored = fee_market.acquire_fee(weth, f.separate_atf).unwrap();
+        if trial["mode"] == "buy_fee" {
+            use crate::core::types::AntfarmBook;
+            use crate::venues::bsc_dex::pools::abi_v2v3::IV2Pair;
+            use alloy::sol_types::SolEvent;
+            let b = AntfarmBook {
+                market: pool.clone(),
+                funding: vec![(fee_market.clone(), None)],
+            };
+            let budget = integer(&trial["net"][0]);
+            let (fill, post) = b.after(weth, budget).expect("funded protected buy");
+            assert_eq!(
+                (fill.amount_in, fill.amount_out),
+                (budget, integer(&trial["net"][1]))
+            );
+            let logs: Vec<alloy::rpc::types::Log> =
+                serde_json::from_value(trial["logs"].clone()).unwrap();
+            for (addr, m) in [
+                (addr(&trial["pool"]), &post.market),
+                (
+                    addr(
+                        &rows
+                            .iter()
+                            .find(|r| {
+                                r["fee"] == 100
+                                    && addr(&r["tokens"][0]) == pool.atf
+                                    && addr(&r["tokens"][1]) == weth
+                            })
+                            .unwrap()["pair"],
+                    ),
+                    &post.funding[0].0,
+                ),
+            ] {
+                let l = logs
+                    .iter()
+                    .find(|l| {
+                        l.address() == addr
+                            && l.topics().first() == Some(&IV2Pair::Sync::SIGNATURE_HASH)
+                    })
+                    .unwrap();
+                let sync = IV2Pair::Sync::decode_log_data(l.data()).unwrap();
+                assert_eq!(
+                    m.reserves,
+                    [U256::from(sync.reserve0), U256::from(sync.reserve1)]
+                );
+            }
+        }
         assert_eq!(restored.output, f.separate_atf);
         assert_eq!(restored.debit, integer(&trial["funding_cost"]));
         assert_eq!(f.output, integer(&trial["net"][1]));

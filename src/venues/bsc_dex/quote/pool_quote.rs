@@ -65,6 +65,8 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::fill(s, token_in, exact_in, amount)
+            .map(|f| f.swapped).ok_or_else(none),
         (PoolState::Antfarm(book),PoolKind::V2) => book.route(token_in,exact_in,amount).and_then(|r|r.swapped(exact_in,amount))
             .ok_or_else(||why("Antfarm: объём или комиссия ATF не обеспечены по прочитанным рынкам")),
         (PoolState::Temple(s),PoolKind::V2) => {

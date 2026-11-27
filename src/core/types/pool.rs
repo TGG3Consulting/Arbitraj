@@ -221,6 +221,25 @@ pub struct TempleState {
     pub amm_authorized: bool,
 }
 
+/// Umbrae DAMM, снимок в порядке tokenX/tokenY самой пары.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UmbraeDammState {
+    pub tokens: [Address; 2],
+    pub reserves: [U256; 2],
+    /// Физические остатки до вычета накопленных комиссий.
+    pub balances: [U256; 2],
+    pub fee_side: usize,
+    pub base_fee: u16,
+    pub max_fee: u16,
+    pub protocol_share: u16,
+    pub volatility: u16,
+    pub last_price: U256,
+    pub protocol_fees: U256,
+    pub lp_fees: U256,
+    pub lp_supply: U256,
+    pub lp_index: U256,
+}
+
 /// Один ERC20 Mint Club V2 и его собственное обеспечение в общем контракте Bond.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MintClubState {
@@ -445,6 +464,7 @@ pub enum PoolState {
     EtherVista(Box<EtherVistaState>),
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),
+    UmbraeDamm(Box<UmbraeDammState>),
     Carbon(Box<CarbonState>),
     Temple(Box<TempleState>),
     Antfarm(Box<AntfarmBook>),

@@ -84,6 +84,13 @@ def record(d,family,artifact,endpoint):
             return None,dict(**data,reason="обмен отклонился")
         spent=before_vals[0]-after_vals[0];got=after_vals[1]-before_vals[1]
         if used!=amount or spent!=amount or got!=net or after_vals[2:]!=before_vals[2:] or after_vals[-1]:raise ValueError("расхождение дельт "+pool)
+        if not bins and mode=="native":
+            names=["getReserves","volatilityAccumulator","lastPrice","protocolFeesAccumulated","lpFeesAccumulated","totalSupply","lpFeeIndex","baseFeeBps","maxFeeBps","protocolFeePct","feeToken","currentFeeBps"]
+            state_reads=[tx(owner,pool,k+"()") for k in names]+[tx(owner,t,"balanceOf(address)",["address"],[pool]) for t in m["tokens"]]
+            observation=prefix+[approval,*state_reads,exact,*state_reads]
+            rr=run(owner,observation,mode)
+            if any(r["status"]!="0x1" for r in rr):raise ValueError("ошибка чтения перехода DAMM")
+            data["transition"]=dict(names=names+["balanceX","balanceY"],calls=observation,results=rr,first=len(prefix)+1)
         return prefix+[approval,exact],dict(**data,paid=str(spent),net=str(got),gas=int(fill["gasUsed"],16))
     examples=[]
     for m in all_markets[family]:

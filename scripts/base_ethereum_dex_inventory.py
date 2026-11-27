@@ -107,7 +107,9 @@ def tables(network, snapshots, profiles):
                     f"{2*len(cv['markets'])} направлений. При одинаковой фактической выплате разница газа V5 минус Router "
                     f"составила от {min(both):,} до {max(both):,}, стоимость разрешения и текущий газ учитываются при выборе. "
                     f"У DAI/USDC резерв USDC всего одна минимальная единица. DegenSwap в каталоге Ethereum представлен "
-                    f"отдельной страницей с пустым списком пулов, адрес фабрики и связь с Gemswap остаются неподтверждёнными. "
+                    f"отдельной страницей с пустым списком пулов. Одноимённый SDK указывает на Fantom (chainId 250), адаптер "
+                    f"DefiLlama — на Degen. По обоим адресам фабрик в Ethereum на контрольном блоке код пуст. "
+                    f"[Проверенные альтернативные адреса](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_identity.json) · "
                     f"[Кошелёк, исходный блок и квитанции](../{cv_path.as_posix()}) · "
                     f"[Официальные адреса]({cv['sources'][0]})."])
     if not base and "bitswap" in configured:
@@ -1056,6 +1058,24 @@ def tables(network, snapshots, profiles):
                    "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
                    "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
                    "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
+        integral_path=Path("tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz")
+        integral=json.loads(gzip.decompress(integral_path.read_bytes()))
+        ih=integral["historical"]
+        out.append(f"**Integral SIZE.** На блоке {integral['height']} официальная фабрика вернула {len(integral['markets'])} пар. "
+                   f"Из них релеер допускал к обмену {sum(m['atomic_enabled'] for m in integral['markets'])}. Официальные quoteSell и quoteBuy в обоих направлениях "
+                   f"вернули TR5A во всех {len(integral['atomic_checks'])} вызовах. Токены оставались на обоих балансах {sum(all(int(n)>0 for n in m['pool_balances']) for m in integral['markets'])} пар. "
+                   f"На блоке {ih['block']} релеер выплатил получателю 39 186,890298 USDT за 16,168011965784978830 WETH в исходной транзакции. "
+                   f"Связанную заявку релеера №{ih['order']} контракт Delay исполнил через {ih['lag_seconds']} с. Собственная заявка через Delay блокирует входные средства до отдельного исполнения. "
+                   "Для возврата мгновенного пути нужно включение пары, достаточный запас выходной валюты и ETH у релеера, "
+                   "исполнение для суммы и подтверждение чистой выплаты получателю. [Реестр, балансы и квитанции](../tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz).")
+        integral_wallet_path=integral_path.with_name("integral_size_ethereum_wallets.json.gz")
+        iw=json.loads(gzip.decompress(integral_wallet_path.read_bytes()))
+        ic=iw["historical"]["cases"]
+        queue=iw["current"]["queued"]
+        out.append(f"На более раннем блоке {iw['historical']['height']} восемь архивных обменов WETH/USDT подтвердили списания и выплаты кошелька при точном входе и точном выходе. "
+                   f"Они потребовали {min(c['gas'] for c in ic):,}–{max(c['gas'] for c in ic):,} единиц газа. Для каждого обмена неверный предел на одну минимальную единицу и истёкшая заявка дали откат. "
+                   f"На блоке {integral['height']} публичная заявка Delay №{queue['order']} в симуляции перевела в контракт 1 000 USDT и аванс 0,0001539332645 ETH. Кошелёк получил 0 WETH в этой транзакции. "
+                   "[Параметры транзакций, квитанции и остатки](../tests/data/first_run_dex_2026-11-26/integral_size_ethereum_wallets.json.gz).")
         hello_dir_path=Path("tests/data/first_run_dex_2026-11-26/hello_ethereum_directory.json")
         hello=read(hello_dir_path)
         hello_logs_path=hello_dir_path.with_name("hello_ethereum_swaps.json")
@@ -1225,6 +1245,10 @@ def tables(network, snapshots, profiles):
             status = f"`{task}` · {need}"
         if id == ("solidly-v3-base" if base else "solidly-v3") and solidly.exists():
             status = "DEX-19 · проверены исходники, комиссия и прямые обмены. Для торговли требуется проверенное размещение модуля"
+        if not base and id == "integral_size":
+            market=next(m for m in integral["markets"] if set(m["tokens"])=={ih["input"],ih["output"]})
+            pool,factory,roundtrip=market["pair"],integral["roles"]["factory"]["address"],"allPairs + getPair в обоих направлениях"
+            status="Integral SIZE · релеер отключил все 15 пар. Для публичной заявки Delay нужна отдельная транзакция исполнения"
         if not base and id == "ring-exchange-ethereum" and ring_path.exists():
             status = "Ring Few · адресная проверка всех пар; котировки, обеспечение и контрольные обмены выше"
         if sample.get("state") != "enumerated":

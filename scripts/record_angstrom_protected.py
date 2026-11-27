@@ -63,7 +63,7 @@ def payments(c, env, module, creation, market, key, block, data, stamp, weth, fu
                 for field in ("received","spent"):
                     if trial[leg]["exact"][field]!=a[leg]["exact"][field]:
                         raise ValueError("Protected/original cashflow differs")
-        checked.append(dict(pool=a["pool"],input=a["input"],size=a["size"],**trial))
+        checked.append(dict(trial,pool=a["pool"],input=a["input"]))
     budget=10**12
     allowance=tx(weth,"allowance(address,address)",["address","address"],[module,ADAPTER])
     residue=tx(weth,"balanceOf(address)",["address"],[module])

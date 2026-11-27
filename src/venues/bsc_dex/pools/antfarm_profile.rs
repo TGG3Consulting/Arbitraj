@@ -90,6 +90,73 @@ pub(in crate::venues::bsc_dex) fn vault(ctx: &Ctx, id: &str) -> GatewayResult<(A
     }
     Ok((address, hash(ctx, id, "dex.antfarm_vault_runtime_hash")?))
 }
+#[derive(Clone, Copy)]
+struct ObservedModule {
+    runtime: B256,
+    router: Address,
+    fee_token: Address,
+    vault: Option<Address>,
+}
+type ModuleKey = (B256, Address, bool);
+type ModuleSlot = (
+    ModuleKey,
+    std::sync::Arc<tokio::sync::OnceCell<ObservedModule>>,
+);
+static MODULES: std::sync::LazyLock<std::sync::Mutex<std::collections::VecDeque<ModuleSlot>>> =
+    std::sync::LazyLock::new(Default::default);
+
+fn module_slot(key: ModuleKey) -> std::sync::Arc<tokio::sync::OnceCell<ObservedModule>> {
+    let mut cache = MODULES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, cell)) = cache.iter().find(|(k, _)| *k == key) {
+        return cell.clone();
+    }
+    let cell = std::sync::Arc::new(tokio::sync::OnceCell::new());
+    if cache.len() >= 64 {
+        cache.pop_front();
+    }
+    cache.push_back((key, cell.clone()));
+    cell
+}
+async fn observe(
+    ctx: &Ctx,
+    target: Address,
+    tag: &Value,
+    output: bool,
+) -> GatewayResult<ObservedModule> {
+    let roles = batch::read(
+        ctx,
+        [
+            ("eth_getCode", json!([target, tag])),
+            batch::view(tag, target, IModule::routerCall {}),
+            batch::view(tag, target, IModule::feeTokenCall {}),
+        ],
+    );
+    let lender = async {
+        if !output {
+            return Ok(None);
+        }
+        let [raw] = batch::read(ctx, [batch::view(tag, target, IModule::vaultCall {})]).await?;
+        batch::decode(&raw, IModule::vaultCall {}).map(Some)
+    };
+    let ([code, r, t], vault) = tokio::try_join!(roles, lender)?;
+    let selector = if output {
+        super::super::exec::antfarm_output_wallet::selector()
+    } else {
+        super::super::exec::antfarm_wallet::selector()
+    };
+    if !code
+        .windows(5)
+        .any(|op| op[0] == 0x63 && op[1..] == selector)
+    {
+        return Err(invalid(ctx));
+    }
+    Ok(ObservedModule {
+        runtime: keccak256(&code),
+        router: batch::decode(&r, IModule::routerCall {})?,
+        fee_token: batch::decode(&t, IModule::feeTokenCall {})?,
+        vault,
+    })
+}
 pub(in crate::venues::bsc_dex) async fn module(
     ctx: &Ctx,
     id: &str,
@@ -97,6 +164,10 @@ pub(in crate::venues::bsc_dex) async fn module(
     output: bool,
 ) -> GatewayResult<(Address, B256)> {
     let generation = ctx.settings.generation();
+    let block = tag["blockHash"]
+        .as_str()
+        .and_then(|s| s.parse::<B256>().ok())
+        .ok_or_else(|| invalid(ctx))?;
     let p = Profile::read(ctx, id)?;
     let key = if output {
         "dex.antfarm_output_wallet"
@@ -106,51 +177,33 @@ pub(in crate::venues::bsc_dex) async fn module(
     let target = ctx.dex_addr(key, id)?;
     if ctx.chain_id() != Some(1)
         || tag["requireCanonical"] != true
-        || tag["blockHash"]
-            .as_str()
-            .and_then(|s| s.parse::<B256>().ok())
-            .is_none()
         || [Address::ZERO, p.factory, p.router, p.atf].contains(&target)
     {
         return Err(invalid(ctx));
     }
     let accepted = super::direct_module::configured(ctx, id)?;
-    let [code, r, t] = batch::read(
-        ctx,
-        [
-            ("eth_getCode", json!([target, tag])),
-            batch::view(tag, target, IModule::routerCall {}),
-            batch::view(tag, target, IModule::feeTokenCall {}),
-        ],
-    )
-    .await?;
-    let expected =
-        super::direct_module::matching_hash(&accepted, &code).ok_or_else(|| invalid(ctx))?;
-    let selector = if output {
-        super::super::exec::antfarm_output_wallet::selector()
+    let loan_vault = if output {
+        Some(ctx.dex_addr("dex.vault", id)?)
     } else {
-        super::super::exec::antfarm_wallet::selector()
+        None
     };
-    if !code
-        .windows(5)
-        .any(|op| op[0] == 0x63 && op[1..] == selector)
-        || batch::decode(&r, IModule::routerCall {})? != p.router
-        || batch::decode(&t, IModule::feeTokenCall {})? != p.atf
+    let slot = module_slot((block, target, output));
+    let fact = slot
+        .get_or_try_init(|| observe(ctx, target, tag, output))
+        .await?;
+    if !accepted.contains(&fact.runtime)
+        || fact.router != p.router
+        || fact.fee_token != p.atf
+        || fact.vault != loan_vault
+        || fact.vault == Some(Address::ZERO)
     {
         return Err(invalid(ctx));
-    }
-    if output {
-        let [v] = batch::read(ctx, [batch::view(tag, target, IModule::vaultCall {})]).await?;
-        if batch::decode(&v, IModule::vaultCall {})? != ctx.dex_addr("dex.vault", id)? {
-            return Err(invalid(ctx));
-        }
     }
     if generation != ctx.settings.generation() {
         return Err(ctx.err(ErrorCode::StaleData, "Antfarm: изменились настройки модуля"));
     }
-    Ok((target, expected))
+    Ok((target, fact.runtime))
 }
-
 pub(in crate::venues::bsc_dex) fn receipt_runtime(
     output: bool,
     atf: Option<Address>,

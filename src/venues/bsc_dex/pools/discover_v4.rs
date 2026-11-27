@@ -77,7 +77,8 @@ pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Opti
             && let Some(key) = &found.key
         {
             if f.variant.launch() {
-                return Ok(super::launch_keys::observed(ctx,f,log.inner.address,key)?.then_some(found));
+                if !super::launch_keys::observed(ctx, f, log.inner.address, key)? { return Ok(None); }
+                return Ok(Some(super::launch_market::currencies(ctx, found)?));
             }
             if f.variant.deli() {
                 return Ok(

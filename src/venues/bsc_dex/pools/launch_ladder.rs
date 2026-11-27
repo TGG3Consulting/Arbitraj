@@ -105,7 +105,12 @@ pub(super) async fn load(
         ladder_counter::amounts(ctx, tokens, reg, f.id, asset)
     )?;
     let bought = if buys {
-        pass(ctx, quoter, &key, cash, &sizes, &at).await?
+        let input = if f.variant == super::family_variant::Variant::LaunchO1Wrapped {
+            Address::ZERO
+        } else {
+            cash
+        };
+        pass(ctx, quoter, &key, input, &sizes, &at).await?
     } else {
         Vec::new()
     };

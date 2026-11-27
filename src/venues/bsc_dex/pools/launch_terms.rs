@@ -106,7 +106,7 @@ pub(super) async fn read(
                 !batch::decode(&s, sell)?,
             )
         }
-        Variant::LaunchO1 => {
+        Variant::LaunchO1 | Variant::LaunchO1Wrapped => {
             let config = ILaunch::poolConfigCall { id };
             let factory = ILaunch::factoryCall {};
             let escrow = ILaunch::feeEscrowCall {};

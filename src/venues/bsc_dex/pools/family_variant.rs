@@ -71,6 +71,7 @@ pub enum Variant {
     LaunchDoppler,
     LaunchIndex,
     LaunchO1,
+    LaunchO1Wrapped,
     /// Размещение LB с обычным роутером и зарегистрированным клоном пула.
     SectorLb,
     /// Концентрированная ликвидность Deli с комиссией в wBLT.
@@ -180,7 +181,7 @@ pub enum Variant {
 }
 
 impl Variant {
-    pub fn launch(self)->bool {matches!(self,Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1)}
+    pub fn launch(self)->bool {matches!(self,Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
@@ -263,6 +264,7 @@ pub fn of(kind: &str) -> Variant {
         "launch_doppler" => Variant::LaunchDoppler,
         "launch_index" => Variant::LaunchIndex,
         "launch_o1" => Variant::LaunchO1,
+        "launch_o1_wrapped" => Variant::LaunchO1Wrapped,
         "deli_v4_cl" => Variant::DeliCl,
         "deli_v4_constant" => Variant::DeliConstant,
         "v2_omni_universal" => Variant::OmniV2,

@@ -444,6 +444,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
+        "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
         "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
@@ -926,7 +927,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::InfinityCl | Proto::InfinityBin => {
             list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"])
         }
-        Proto::UniswapV4 if f.variant.launch() => list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]),
+        Proto::UniswapV4 if f.variant.launch() => {
+            list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);
+            if f.variant == Variant::LaunchO1Wrapped { list.extend(["dex.router", "dex.module_runtime_hashes"]); }
+        }
         Proto::UniswapV4 if f.variant == Variant::DeliCl => list.extend([
             "dex.pool_manager","dex.state_view","dex.position_manager","dex.quoter","dex.deli_role_bindings","dex.deli_fee_currency",
         ]),

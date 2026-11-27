@@ -37,7 +37,7 @@ pub const DEX_KINDS: &[&str] = &[
     "uniswap_v4",
     "launch_doppler",
     "launch_index",
-    "launch_o1",
+    "launch_o1", "launch_o1_wrapped",
     "deli_v4_constant",
     "deli_v4_cl",
     "v2_fork",

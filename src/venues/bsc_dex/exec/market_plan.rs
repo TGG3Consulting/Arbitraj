@@ -19,6 +19,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     RegisteredV3,
     SolidlyRouter,
     Umbrae,
+    O1,
     Antfarm,
     Temple,
     Carbon,
@@ -55,6 +56,7 @@ impl Market {
         match &e.pool.state {
             _ if e.family.variant==Variant::SolidlyProxy => Some(Self::SolidlyRouter),
             _ if e.family.variant==Variant::RegisteredUniV3 => Some(Self::RegisteredV3),
+            _ if super::o1_wallet::enabled(e) => Some(Self::O1),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
@@ -76,6 +78,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => "Solidly Router01: требуется исходный адрес исполнения",
             Self::RegisteredV3 => "V3 Router: требуется исходный адрес исполнения",
+            Self::O1 => "o1: выберите проверенный модуль для расчёта WETH",
             Self::Umbrae => "Umbrae: требуется выбранный адрес исполнения",
             Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
             Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
@@ -89,6 +92,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => "Solidly Router01",
             Self::RegisteredV3 => "V3 Router",
+            Self::O1 => "o1 Standard WETH",
             Self::Umbrae => "Umbrae",
             Self::Antfarm => "Antfarm",
             Self::Temple => "TempleDAO",
@@ -108,6 +112,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::O1 => Box::pin(super::o1_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(
                     ctx,
@@ -187,7 +192,7 @@ pub(super) fn router_shape(
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
     let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && e.family.variant.exact_router()) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));

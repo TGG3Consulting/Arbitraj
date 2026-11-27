@@ -69,6 +69,7 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
         && match f.variant {
             Variant::LaunchDoppler => k.fee == 0x800000 && k.tick_spacing.as_i32() == 200,
             Variant::LaunchIndex => k.fee == 0 && k.tick_spacing.as_i32() == 1,
+            Variant::LaunchO1Wrapped => k.currency0.is_zero() && k.fee == 0 && k.tick_spacing.as_i32() == 200,
             Variant::LaunchO1 => k.fee == 0 && k.tick_spacing.as_i32() == 200,
             _ => false,
         }

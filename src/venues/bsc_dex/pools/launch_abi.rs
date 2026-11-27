@@ -11,6 +11,9 @@ use serde_json::{Value, json};
 alloy::sol! {
     interface ILaunch {
         struct Key {address currency0;address currency1;uint24 fee;int24 tickSpacing;address hooks;}
+        function manager() external view returns(address);
+        function wrapped() external view returns(address);
+        function market(bytes32 id,address token) external view returns(Key);
         function poolManager() external view returns(address);
         function factory() external view returns(address);
         function registry() external view returns(address);

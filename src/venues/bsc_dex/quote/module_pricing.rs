@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -36,7 +36,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         };
         let mut e = e.clone();
         if let Some(h) = head {
-            let check = if e.family.variant==Variant::Temple {
+            let check = if super::super::exec::o1_wallet::enabled(&e) {
+                super::super::exec::o1_wallet::at(ctx,&e,&h.selector()).await
+            } else if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
             } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
@@ -51,10 +53,14 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 continue;
             }
         }
+        let o1 = if super::super::exec::o1_wallet::enabled(&e) {
+            let Ok(id) = super::super::exec::o1_wallet::key(ctx,&e) else {continue};
+            Some(id)
+        } else {None};
         let direct = Execution {
             mode: RouteMode::Direct,
             target: module,
-            wire: if let crate::core::types::PoolState::Temple(s)=&e.pool.state{
+            wire: if let Some(id)=o1 {Wire::O1(id)} else if let crate::core::types::PoolState::Temple(s)=&e.pool.state{
                 Wire::Temple(std::sync::Arc::new(super::super::exec::temple_wallet::Key::new(s,module)))
             }else{Wire::DirectModule{pool:e.pool.reference.address()}},
         };
@@ -62,7 +68,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.push(option);
         }
         if graph && let Ok(Some(target)) = executor::address(ctx) {
-            let (kind, data) = if e.family.variant == Variant::RegisteredV3 {
+            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant == Variant::RegisteredV3 {
                 (
                     17,
                     Bytes::copy_from_slice(e.pool.reference.address().into_word().as_slice()),

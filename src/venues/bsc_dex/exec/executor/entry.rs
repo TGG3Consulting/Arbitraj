@@ -80,7 +80,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         // Решение 295: пара многомонетного пула — шаг по контракту пула (индексы/токены — из записи пары).
         PoolRef::Multi { contract, .. } => Ok((k, *contract)),
         // Решение 447: пул Ekubo — в ядре; шаг EKUBO открывает само ядро (lock), адрес шага — ядро.
-        PoolRef::Singleton { manager, .. } if k == ExecKind::Ekubo => Ok((k, *manager)),
+        PoolRef::Singleton { manager, .. } if k == ExecKind::Ekubo || f.variant == crate::venues::bsc_dex::pools::family_variant::Variant::LaunchO1Wrapped && k == ExecKind::Balancer => Ok((k, *manager)),
         PoolRef::Singleton { .. } => Err(format!(
             "{}: пул внутри менеджера исполнитель не вызывает",
             f.id
@@ -128,7 +128,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
             return false;
         }
         // Решение 447: у шага EKUBO ссылка — пул в ядре (Singleton), у остальных — не Singleton.
-        return matches!(e.pool.reference, PoolRef::Singleton { .. }) == (k == ExecKind::Ekubo);
+        return matches!(e.pool.reference, PoolRef::Singleton { .. }) == (k == ExecKind::Ekubo || (e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::LaunchO1Wrapped && k == ExecKind::Balancer));
     }
     let reference = match &e.pool.reference {
         PoolRef::Singleton { .. } => true,
@@ -211,6 +211,17 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             return Err(ctx.err(ErrorCode::NoRoute,"Прямой модуль V3: не подтверждены рынок и вход"));
         }
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
+    }
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::LaunchO1Wrapped {
+        let PoolRef::Singleton { id, .. } = e.pool.reference else {
+            return Err(ctx.err(ErrorCode::NoRoute, "o1: требуется физический PoolId"));
+        };
+        if k != ExecKind::Balancer || !matches!(&e.pool.state, PoolState::OraclePmm(_))
+            || e.key.as_ref().is_none_or(|key| key.id() != id)
+            || (token_in != e.pool.token0 && token_in != e.pool.token1) {
+            return Err(ctx.err(ErrorCode::NoRoute, "o1: не подтверждены ключ и направление WETH"));
+        }
+        return Ok((Params::Balancer { pool_id: id }, ctx.dex_addr("dex.router", e.family.id)?));
     }
     if super::super::super::quote::vista_pricing::is_vista(e) {
         if k != ExecKind::Basin || !matches!(&e.pool.state,PoolState::EtherVista(_))

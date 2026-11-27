@@ -676,6 +676,7 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/yield-basis" YieldBasisAdapter
           python scripts/record_yield_basis_wallet.py "$RUNNER_TEMP/yield-basis/YieldBasisAdapter.json" "$RUNNER_TEMP/market.json"
+          python scripts/record_yield_basis_usdt.py "$RUNNER_TEMP/yield-basis/YieldBasisAdapter.json" "$RUNNER_TEMP/yield-basis-usdt.json"
       - if: matrix.market == 'yieldbasis-ethereum'
         run: python scripts/record_yield_basis.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'balancer-v1-ethereum'
@@ -876,6 +877,7 @@ jobs:
             ${{ runner.temp }}/bancor-v3-create.json
             ${{ runner.temp }}/balancer-v1-create.json
             ${{ runner.temp }}/yield-basis-create.json
+            ${{ runner.temp }}/yield-basis-usdt.json
             ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json

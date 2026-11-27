@@ -2286,6 +2286,11 @@ def tables(network, snapshots, profiles):
             assert empire["factory"] in {a.lower() for a in candidates}
             task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
                     f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
+        if task == f"`T-SOURCE-{network}-{row['id']}`":
+            from base_ethereum_source_roles import describe
+            measured = describe(network,str(row["id"]),r,configured,candidates)
+            if measured:
+                task = measured
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
     scope_note = (

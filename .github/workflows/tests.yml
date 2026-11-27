@@ -634,6 +634,10 @@ jobs:
         run: |
           python -m pip install --quiet eth-account==0.13.7 websocket-client==1.8.0
           python scripts/record_tokenlon_quote.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-ethereum'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_bopamm_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'theorem-ethereum'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund

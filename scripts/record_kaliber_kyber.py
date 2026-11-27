@@ -41,7 +41,7 @@ def build(http,src,dst,amount,deadline):
     return out,call(ROUTER,payload,gas=7000000)
 
 
-def settle(logs,src,dst,spent,received):
+def settle(logs,src,dst,spent,received,payer):
     fills=[]; edges={}
     for l in logs:
         t=l.get("topics",[])
@@ -52,7 +52,7 @@ def settle(logs,src,dst,spent,received):
             tin,tout,used,net,age=decode(["address","address","uint256","uint256","uint256"],bytes.fromhex(l["data"][2:]))
             fills.append(dict(cash=l["address"],trader="0x"+t[2][-40:],pair=t[1],src=tin,dst=tout,paid=used,net=net,age=age))
     def wallet(token):
-        return sum(v*((b==OWNER)-(a==OWNER)) for (t,a,b),v in edges.items() if t==token)
+        return sum(v*((b==payer)-(a==payer)) for (t,a,b),v in edges.items() if t==token)
     assert -wallet(src)==spent and wallet(dst)==received
     if len(fills)!=1:return fills,False
     f=fills[0]
@@ -68,6 +68,13 @@ def capture():
     tag=dict(blockHash=h["hash"],requireCanonical=True);height=int(h["number"],16);stamp=int(h["timestamp"],16)+2
     observed={v:r.rpc("eth_getCode",[v,tag]) for v in VAULTS}
     assert all("0x"+keccak(bytes.fromhex(code[2:])).hex()==r.code_hash(v) for v,code in observed.items())
+    # Положительный контроль действительного платежа проверяется тем же разбором, что и новые заявки.
+    from record_kaliber_access import WITNESS
+    receipt=r.rpc("eth_getTransactionReceipt",[WITNESS])
+    original=r.rpc("eth_getTransactionByHash",[WITNESS])
+    assert receipt["blockHash"]==original["blockHash"] and receipt["status"]=="0x1" and original["to"]==ROUTER
+    historic,pure=settle(receipt["logs"],USDC,AAPL,500250000,148604777,original["from"])
+    assert pure
     http=requests.Session();rows=[]
     def measure(src,dst,amount,prefix):
         row,swap=build(http,src,dst,amount,stamp+180)
@@ -89,7 +96,7 @@ def capture():
             assert spent==net==0
             return None
         assert 0<spent<=amount and net>0
-        row["fills"],row["pure_kaliber"]=settle(tr["logs"],src,dst,spent,net)
+        row["fills"],row["pure_kaliber"]=settle(tr["logs"],src,dst,spent,net,OWNER)
         row["net_meets_quote_floor"]=net>=row["build_out"]*9950//10000
         return prefix+[approve,swap],net
     for amount in (10**6,500250000):
@@ -98,7 +105,7 @@ def capture():
         if bought:
             prefix,available=bought
             measure(AAPL,USDC,available,prefix)
-    return dict(source=API,chain=8453,tag=tag,height=height,timestamp=stamp,payer=OWNER,router=ROUTER,results=rows)
+    return dict(source=API,chain=8453,tag=tag,height=height,timestamp=stamp,payer=OWNER,router=ROUTER,positive_control=dict(hash=WITNESS,fills=historic),results=rows)
 
 
 if __name__=="__main__":

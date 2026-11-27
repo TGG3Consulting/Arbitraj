@@ -86,6 +86,29 @@ fn wallet_rows(day: &Value, source: &Value, chain: u64) -> usize {
                     l.address() == engine && l.topic0() == Some(&IAqua::Swapped::SIGNATURE_HASH)
                 })
                 .unwrap();
+            let pair = (input.min(output), input.max(output));
+            let id = aqua::edge(hash, pair, first);
+            let reference = crate::core::types::PoolRef::Singleton {
+                manager: engine,
+                id,
+            };
+            let mut event = crate::venues::bsc_dex::check::simulate::SimLog {
+                address: engine,
+                topics: swap.topics().to_vec(),
+                data: swap.inner.data.data.clone(),
+            };
+            assert!(aqua::emitted(&reference, pair, &event));
+            assert!(!aqua::emitted(
+                &crate::core::types::PoolRef::Singleton {
+                    manager: engine,
+                    id: B256::ZERO
+                },
+                pair,
+                &event
+            ));
+            assert!(!aqua::emitted(&reference, (Address::ZERO, output), &event));
+            event.address = Address::ZERO;
+            assert!(!aqua::emitted(&reference, pair, &event));
             let mut duplicates = logs.clone();
             duplicates.push(swap.clone());
             assert_eq!(proof.amounts(&duplicates, payer, input, output), None);

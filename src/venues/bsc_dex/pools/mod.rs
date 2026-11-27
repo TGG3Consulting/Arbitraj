@@ -274,6 +274,7 @@ mod baseline_components;
 mod launch_keys;
 mod launch_abi;
 pub(super) mod aqua;
+mod aqua_attach;
 mod aqua_book;
 pub(super) mod aqua_directory;
 mod aqua_history;

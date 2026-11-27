@@ -1,7 +1,7 @@
 //! История читается фоном. Позиция и программы записываются вместе, курсор привязан к хешу блока.
 use super::{
     aqua::{self, Roles},
-    aqua_book::{self, Book},
+    aqua_book::Book,
     families::Family,
 };
 use crate::{
@@ -14,12 +14,12 @@ use crate::{
 };
 use alloy::rpc::types::Log;
 use alloy_primitives::B256;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::time::Duration;
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default)]
 struct Snapshot {
+    namespace: String,
     last: Option<(u64, B256)>,
     book: Book,
 }
@@ -28,12 +28,14 @@ async fn sync(
     p: &super::listen::Pools,
     watches: &[super::created::Watch],
     f: &'static Family,
+    state: &mut Snapshot,
 ) -> GatewayResult<()> {
     let ctx = &p.ctx;
     let chain = ctx.chain_id().ok_or_else(|| aqua::bad(ctx))?;
     let tip = white_state::head(ctx, "latest").await?;
     let roles = Roles::checked(ctx, f, &tip.selector()).await?;
-    let namespace = format!("{chain}:{}:{:#x}:{:#x}", f.id, roles.registry, roles.engine);
+    let previous = format!("{chain}:{}:{:#x}:{:#x}", f.id, roles.registry, roles.engine);
+    let namespace = format!("aqua:{previous}");
     let store = ctx.journal.db();
     let bad = |s: String| {
         ctx.err(
@@ -41,13 +43,47 @@ async fn sync(
             format!("Aqua: журнал открытых программ: {s}"),
         )
     };
-    let saved = venue_state::load(store, ctx.place.id, "aqua_history", &namespace)
-        .await
-        .map_err(|e| bad(e.to_string()))?;
-    let mut state: Snapshot = match saved {
-        Some(v) => serde_json::from_str(&v).map_err(|e| bad(e.to_string()))?,
-        None => Snapshot::default(),
-    };
+    if state.namespace != namespace {
+        *state = Snapshot::default();
+        let mut rows = venue_state::list(store, ctx.place.id, &namespace, "")
+            .await
+            .map_err(|e| bad(e.to_string()))?;
+        if rows.is_empty()
+            && let Some(v) = venue_state::load(store, ctx.place.id, "aqua_history", &previous)
+                .await
+                .map_err(|e| bad(e.to_string()))?
+        {
+            // Переход от старой единой записи. Прообразы проверяются тем же путём, что и новые строки.
+            #[derive(serde::Deserialize)]
+            struct Legacy {
+                last: Option<(u64, B256)>,
+                book: Book,
+            }
+            let old: Legacy = serde_json::from_str(&v).map_err(|e| bad(e.to_string()))?;
+            rows = old.book.persist().map_err(|e| bad(e.to_string()))?;
+            rows.push((
+                "cursor".into(),
+                serde_json::to_string(&old.last).map_err(|e| bad(e.to_string()))?,
+            ));
+            venue_state::save_many(store, ctx.place.id, &namespace, rows.clone())
+                .await
+                .map_err(|e| bad(e.to_string()))?;
+        }
+        for (key, body) in rows {
+            if key == "cursor" {
+                state.last = serde_json::from_str(&body).map_err(|e| bad(e.to_string()))?;
+            } else if let Some(h) = key.strip_prefix("row:") {
+                let h = h.parse().map_err(|_| bad(key))?;
+                state
+                    .book
+                    .restore(h, &body)
+                    .ok_or_else(|| bad(format!("повреждённый прообраз {h:#x}")))?;
+            }
+        }
+        let hashes = state.book.hashes().collect();
+        super::aqua_attach::connect(p, watches, f, roles, &state.book, &hashes, tip).await?;
+        state.namespace = namespace.clone();
+    }
     let mut next = None;
     if let Some((n, h)) = state.last {
         let row: Option<Head> = rpc::call(
@@ -59,15 +95,7 @@ async fn sync(
         if row.is_some_and(|r| r.hash == h) {
             next = n.checked_add(1);
         } else {
-            state = Snapshot::default();
-        }
-    }
-    aqua_book::publish(chain, roles, state.book.clone());
-    for h in state.book.hashes() {
-        for w in watches {
-            super::created_log::aqua_attach(p, w, f, roles, &state.book, h)
-                .await
-                .map_err(&bad)?;
+            state.last = None;
         }
     }
     if !ctx.flag("dex.history_scan").unwrap_or(false) {
@@ -100,10 +128,19 @@ async fn sync(
             return Err(aqua::bad(ctx));
         }
         logs.sort_by_key(|l| (l.block_number, l.log_index));
-        let changed: std::collections::BTreeSet<_> = logs
-            .iter()
-            .filter_map(|l| state.book.observe(roles, l))
-            .collect();
+        let mut changed = std::collections::BTreeSet::new();
+        let mut attach = std::collections::BTreeSet::new();
+        for log in &logs {
+            if let Some((hash, dirty)) = state.book.observe(roles, log) {
+                if dirty {
+                    changed.insert(hash);
+                }
+                // Повторное ship ранее отозванной регистрации будит подписку.
+                if dirty || log.topic0() == Some(&topics[0]) {
+                    attach.insert(hash);
+                }
+            }
+        }
         if let Some((n, h)) = state.last
             && white_state::head(ctx, &format!("{n:#x}")).await?.hash != h
         {
@@ -114,19 +151,18 @@ async fn sync(
         {
             return Err(aqua::bad(ctx));
         }
-        state.last = Some((end, header.hash));
-        let body = serde_json::to_string(&state).map_err(|e| bad(e.to_string()))?;
-        venue_state::save(store, ctx.place.id, "aqua_history", &namespace, body)
+        let delta = state.book.selection(&changed);
+        let cursor = Some((end, header.hash));
+        let mut rows = delta.persist().map_err(|e| bad(e.to_string()))?;
+        rows.push((
+            "cursor".into(),
+            serde_json::to_string(&cursor).map_err(|e| bad(e.to_string()))?,
+        ));
+        venue_state::save_many(store, ctx.place.id, &namespace, rows)
             .await
             .map_err(|e| bad(e.to_string()))?;
-        aqua_book::publish(chain, roles, state.book.clone());
-        for h in changed {
-            for w in watches {
-                super::created_log::aqua_attach(p, w, f, roles, &state.book, h)
-                    .await
-                    .map_err(&bad)?;
-            }
-        }
+        state.last = cursor;
+        super::aqua_attach::connect(p, watches, f, roles, &state.book, &attach, tip).await?;
         start = end.checked_add(1).ok_or_else(|| aqua::bad(ctx))?;
     }
     Ok(())
@@ -138,11 +174,13 @@ pub(super) async fn run(
     f: &'static Family,
 ) {
     let ctx = &p.ctx;
+    let mut state = Snapshot::default();
     loop {
         if !super::discover::enabled(ctx, f).await {
             return;
         }
-        if let Err(e) = sync(&p, &watches, f).await {
+        if let Err(e) = sync(&p, &watches, f, &mut state).await {
+            state = Snapshot::default();
             ctx.log(Level::Warn, "dex.scan", e.message, None).await;
         }
         let Ok(delay) = ctx.int("dex.scan_progress_s") else {

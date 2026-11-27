@@ -10,6 +10,8 @@ use std::sync::{Arc, LazyLock, RwLock};
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(super) struct Book {
     rows: BTreeMap<B256, Record>,
+    #[serde(skip)]
+    by_token: BTreeMap<Address, BTreeSet<B256>>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct Record {
@@ -41,13 +43,57 @@ impl Book {
         );
         true
     }
-    pub(super) fn tokens(&mut self, maker: Address, h: B256, tokens: &[Address]) {
-        if let Some(r) = self.rows.get_mut(&h).filter(|r| r.maker == maker) {
-            r.assets
-                .extend(tokens.iter().copied().filter(|t| !t.is_zero()));
+    pub(super) fn tokens(&mut self, maker: Address, h: B256, tokens: &[Address]) -> bool {
+        let Some(row) = self.rows.get_mut(&h).filter(|r| r.maker == maker) else {
+            return false;
+        };
+        let mut changed = false;
+        for token in tokens.iter().copied().filter(|t| !t.is_zero()) {
+            if row.assets.insert(token) {
+                self.by_token.entry(token).or_default().insert(h);
+                changed = true;
+            }
+        }
+        changed
+    }
+    pub(super) fn maker(&self, h: B256) -> Option<Address> {
+        self.rows.get(&h).map(|r| r.maker)
+    }
+    pub(super) fn copy_assets(&self, h: B256, assets: &[Address], to: &mut Book) {
+        if let Some(row) = self.rows.get(&h)
+            && to.insert(row.maker, h, row.raw.clone())
+        {
+            to.tokens(row.maker, h, assets);
         }
     }
-    pub(super) fn observe(&mut self, roles: Roles, log: &Log) -> Option<B256> {
+    pub(super) fn selection(&self, hashes: &BTreeSet<B256>) -> Book {
+        Book {
+            rows: hashes
+                .iter()
+                .filter_map(|h| self.rows.get(h).map(|r| (*h, r.clone())))
+                .collect(),
+            ..Book::default()
+        }
+    }
+    pub(super) fn persist(&self) -> Result<Vec<(String, String)>, serde_json::Error> {
+        self.rows
+            .iter()
+            .map(|(h, r)| Ok((format!("row:{h:#x}"), serde_json::to_string(r)?)))
+            .collect()
+    }
+    pub(super) fn restore(&mut self, h: B256, body: &str) -> Option<()> {
+        let record: Record = serde_json::from_str(body).ok()?;
+        if !self.insert(record.maker, h, record.raw) {
+            return None;
+        }
+        self.tokens(
+            record.maker,
+            h,
+            &record.assets.into_iter().collect::<Vec<_>>(),
+        );
+        Some(())
+    }
+    pub(super) fn observe(&mut self, roles: Roles, log: &Log) -> Option<(B256, bool)> {
         let emitter = log.inner.address;
         if log.removed {
             return None;
@@ -57,23 +103,31 @@ impl Book {
             if topic == IAqua::Shipped::SIGNATURE_HASH
                 && let Ok(e) = IAqua::Shipped::decode_log_data(&log.inner.data)
                 && e.app == roles.engine
-                && self.insert(e.maker, e.strategyHash, e.strategy)
             {
-                return Some(e.strategyHash);
+                let new = !self.rows.contains_key(&e.strategyHash);
+                return self
+                    .insert(e.maker, e.strategyHash, e.strategy)
+                    .then_some((e.strategyHash, new));
             } else if topic == IAqua::Pushed::SIGNATURE_HASH
                 && let Ok(e) = IAqua::Pushed::decode_log_data(&log.inner.data)
                 && e.app == roles.engine
+                && self.maker(e.strategyHash) == Some(e.maker)
             {
-                self.tokens(e.maker, e.strategyHash, &[e.token]);
-                return Some(e.strategyHash);
+                return Some((
+                    e.strategyHash,
+                    self.tokens(e.maker, e.strategyHash, &[e.token]),
+                ));
             }
             // Docked не перечисляет токены. Сохранённый прообраз по этому событию не уничтожается.
         } else if emitter == roles.engine
             && topic == IAqua::Swapped::SIGNATURE_HASH
             && let Ok(e) = IAqua::Swapped::decode_log_data(&log.inner.data)
+            && self.maker(e.orderHash) == Some(e.maker)
         {
-            self.tokens(e.maker, e.orderHash, &[e.tokenIn, e.tokenOut]);
-            return Some(e.orderHash);
+            return Some((
+                e.orderHash,
+                self.tokens(e.maker, e.orderHash, &[e.tokenIn, e.tokenOut]),
+            ));
         }
         None
     }
@@ -87,10 +141,18 @@ impl Book {
         &self,
         pair: (Address, Address),
     ) -> impl Iterator<Item = (B256, bool)> + '_ {
-        self.rows
-            .iter()
-            .filter(move |(_, r)| r.assets.contains(&pair.0) && r.assets.contains(&pair.1))
-            .flat_map(|(h, _)| [(*h, false), (*h, true)])
+        let a = self.by_token.get(&pair.0);
+        let b = self.by_token.get(&pair.1);
+        let (short, long) = if a.map_or(0, BTreeSet::len) <= b.map_or(0, BTreeSet::len) {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        short
+            .into_iter()
+            .flatten()
+            .filter(move |h| long.is_some_and(|l| l.contains(*h)))
+            .flat_map(|h| [(*h, false), (*h, true)])
     }
     pub(super) fn offer(&self, id: B256, pair: (Address, Address)) -> Option<Offer> {
         let (h, first) = self
@@ -117,18 +179,12 @@ pub(super) fn current(chain: u64, r: Roles) -> Arc<Book> {
 pub(super) fn publish(chain: u64, r: Roles, b: Book) {
     let mut books = BOOKS.write().unwrap_or_else(|e| e.into_inner());
     let current = books.entry((chain, r.registry, r.engine)).or_default();
-    let entries = &mut Arc::make_mut(current).rows;
-    // Историческая пачка может прийти после живого события. Сохраняем обе
-    // подсказки. Каждый вызов checked подтверждает пару по текущим rawBalances.
-    for (hash, row) in b.rows {
-        match entries.entry(hash) {
-            std::collections::btree_map::Entry::Vacant(v) => {
-                v.insert(row);
-            }
-            std::collections::btree_map::Entry::Occupied(mut v) => {
-                v.get_mut().assets.extend(row.assets);
-            }
-        }
+    let book = Arc::make_mut(current);
+    for (h, mut row) in b.rows {
+        let assets = std::mem::take(&mut row.assets);
+        let maker = row.maker;
+        book.rows.entry(h).or_insert(row);
+        book.tokens(maker, h, &assets.into_iter().collect::<Vec<_>>());
     }
 }
 
@@ -137,5 +193,9 @@ pub(super) fn observed(chain: u64, roles: Roles, log: &Log) -> Option<B256> {
     let b = books
         .entry((chain, roles.registry, roles.engine))
         .or_default();
-    Arc::make_mut(b).observe(roles, log)
+    Arc::make_mut(b).observe(roles, log).map(|(h, _)| h)
 }
+
+#[cfg(test)]
+#[path = "aqua_book_tests.rs"]
+mod tests;

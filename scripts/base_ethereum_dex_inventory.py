@@ -1837,9 +1837,19 @@ def tables(network, snapshots, profiles):
             directory=data_dir/f"aqua_{network}_directory.json.gz"
             if directory.is_file():
                 records=json.loads(gzip.decompress(directory.read_bytes()))
-                task+=(f" От размещения на {records['first']} до {records['through']} включительно у {len(records['active'])} "
+                pairs=[p for p in records["active"] if sum(0<v["count"]<255 for v in p["assets"].values())>=2]
+                task+=(f" Из программ на снимке {len(pairs)} имели две или более действующих валют у "
+                       f"{len({p['maker'] for p in pairs})} разных мейкеров. От размещения на {records['first']} до {records['through']} включительно у {len(records['active'])} "
                        f"стратегий сохранилась хотя бы одна зарегистрированная валюта. Для котировки пары "
                        f"требуются две действующие записи rawBalances. [Реестр по событиям](../{directory.as_posix()}).")
+            volume=data_dir/f"aqua_{network}_volume.json.gz"
+            if volume.is_file():
+                flow=json.loads(gzip.decompress(volume.read_bytes()))
+                usdc="0x833589fcd6edb6e08f4c7c32d4f71b54bda02913" if base else "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+                atoms=flow["swapvm_net_raw"].get(usdc,0)
+                task+=(f" За те же сутки после исключения {flow['registration_pushes']} начальных зачислений "
+                       f"учтено {flow['fill_pushes']} оплат, включая {atoms//10**6},{atoms%10**6:06d} USDC на входе SwapVM. "
+                       f"Остальные активы сохранены в собственных единицах. [Объём по правилам DefiLlama](../{volume.as_posix()}).")
             task+=(" Профиль `1inch-aqua` принимает события Shipped, Docked, Pushed и Swapped по адресу контракта и topic0. "
                    "Для загрузки прошлых регистраций включают `dex.history_scan`. Начальные программы оплаченных рынков находятся в `dex.aqua_programs`. "
                    "Ступени для чтения цен — 0,1, 1 и 10 USDT с переводом в фактическую входную валюту. Лимит поручения задаёт владелец. "

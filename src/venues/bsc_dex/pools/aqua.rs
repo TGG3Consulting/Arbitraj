@@ -64,8 +64,33 @@ pub(in crate::venues::bsc_dex) fn program(maker: Address, h: B256, raw: &[u8]) -
 }
 
 /// Разные пары многоактивной программы и два проверяемых порядка привязаны к разным рёбрам.
-pub(super) fn edge(h: B256, pair: (Address, Address), first: bool) -> B256 {
+pub(in crate::venues::bsc_dex) fn edge(h: B256, pair: (Address, Address), first: bool) -> B256 {
     keccak256((h, pair.0, pair.1, first).abi_encode_params())
+}
+
+/// SwapVM помещает orderHash и валюты в data. Режим порядка платежа проверяют подписанные calldata.
+pub(in crate::venues::bsc_dex) fn emitted(
+    reference: &crate::core::types::PoolRef,
+    pair: (Address, Address),
+    log: &crate::venues::bsc_dex::check::simulate::SimLog,
+) -> bool {
+    use alloy::sol_types::SolEvent;
+    let crate::core::types::PoolRef::Singleton { manager, id } = reference else {
+        return false;
+    };
+    if *manager != log.address || log.topics.as_slice() != [IAqua::Swapped::SIGNATURE_HASH] {
+        return false;
+    }
+    IAqua::Swapped::decode_raw_log(log.topics.iter().copied(), &log.data).is_ok_and(|s| {
+        !s.maker.is_zero()
+            && !s.taker.is_zero()
+            && !s.amountIn.is_zero()
+            && !s.amountOut.is_zero()
+            && super::discover::sorted(s.tokenIn, s.tokenOut) == pair
+            && [false, true]
+                .into_iter()
+                .any(|first| edge(s.orderHash, pair, first) == *id)
+    })
 }
 
 #[derive(Clone, Copy)]

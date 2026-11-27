@@ -50,6 +50,7 @@ fn four_unsigned_orders_bind_both_assets_local_minimum_account_and_permit_domain
             output: field(&b["tokenOut"]),
             amount: field(&b["amount"]),
             minimum: field(&info["outputs"][0]["endAmount"]),
+            exact_output: false,
             now: 0,
         };
         let raw: Bytes = field(&q["encodedOrder"]);
@@ -154,6 +155,7 @@ fn three_mined_signatures_match_original_owners_and_cash() {
                 output: field(&o["outputs"][0]["token"]),
                 amount: field(&h["paid"]["amount"]),
                 minimum: U256::ONE,
+                exact_output: false,
                 now: u64::from_str_radix(
                     h["header"]["timestamp"]
                         .as_str()
@@ -178,6 +180,7 @@ fn three_mined_signatures_match_original_owners_and_cash() {
                 req.owner
             );
             assert!(field::<U256>(&h["received"]["amount"]) >= terms.min_output);
+            super::cash_tests::paid(&terms, h);
             assert_eq!(h["receipt"]["blockHash"], h["header"]["hash"]);
             count += 1;
         }

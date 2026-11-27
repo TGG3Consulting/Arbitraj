@@ -107,7 +107,7 @@ pub async fn probe(
     let r = sim::run(ctx, c, wallet, at).await?;
     let exit = req.side == Side::Sell && req.exit_position;
     if !(exit && is_min_out(&r)) {
-        return sim::judge(ctx, req, c, &r, decs)
+        return sim::judge(ctx, req, c, &r, wallet,decs)
             .map(|_| None)
             .map_err(|e| sim::explain(e, diag));
     }

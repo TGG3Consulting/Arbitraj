@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    e.family.variant.defiplaza() || (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Brokerbot|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    e.family.variant.llamma() || e.family.variant.defiplaza() || (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Brokerbot|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) fn native_module(v:Variant)->bool {
@@ -36,6 +36,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.extend(Box::pin(super::bancor_legacy_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;
         }
+        if e.family.variant.llamma(){quotes.extend(Box::pin(super::llamma_pricing::options(q,i,e,payer,native,graph,head)).await);continue;}
         if e.family.variant.mooniswap() {
             quotes.extend(Box::pin(super::mooniswap_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;

@@ -106,6 +106,7 @@ pub(super) async fn paid(
         return Err(fail());
     }
     let points = match &e.pool.state {
+        PoolState::Llamma(s)=>s.points(input),
         PoolState::YieldBasisPool(s) => s.points(input),
         PoolState::BancorLegacy(s) => s.points(input),
         _ => None,
@@ -125,7 +126,8 @@ pub(super) async fn paid(
                 .min(cap);
             let nominal = if matches!(e.pool.state,PoolState::BancorLegacy(_)) {
                 super::super::exec::bancor_legacy_plan::official(ctx,e,input,unit,&at).await?
-            } else {yield_basis_quotes::official(ctx, e, input, unit, &at).await?};
+            } else if e.family.variant.llamma(){super::super::pools::llamma_quotes::official(ctx,e,input,unit,false,&at).await?.amount_out}
+            else {yield_basis_quotes::official(ctx, e, input, unit, &at).await?};
             mul_div_up(unit, want, nominal).ok_or_else(fail)?.min(cap)
         }
     };

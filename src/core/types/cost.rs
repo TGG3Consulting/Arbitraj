@@ -156,6 +156,7 @@ pub enum RouterFeeMode {
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
     /// Settlement through the configured Mooniswap wallet, preserving native ETH or wrapped ERC20.
+    Llamma {target:alloy_primitives::Address,maximum:alloy_primitives::U256,desired:Option<alloy_primitives::U256>,v5:Option<alloy_primitives::Address>},
     Mooniswap {target:alloy_primitives::Address,native:bool,native_cash:bool},
     DefiPlaza {target:alloy_primitives::Address,native:bool,native_cash:bool},
     /// Original YieldBasis market paid through a module bound to its Ethereum factory.

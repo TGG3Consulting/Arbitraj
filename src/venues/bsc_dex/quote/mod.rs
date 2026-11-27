@@ -76,6 +76,7 @@ pub(super) mod mint_club_pricing;
 mod module_pricing;
 mod aktionariat_pricing;
 mod bancor_legacy_pricing;
+mod llamma_pricing;
 mod mooniswap_pricing;
 mod defiplaza_pricing;
 mod yield_basis_pricing;

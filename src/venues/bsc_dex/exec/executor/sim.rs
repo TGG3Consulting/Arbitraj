@@ -43,7 +43,7 @@ pub async fn check(
     decs: (u8, u8),
 ) -> GatewayResult<(U256, u64)> {
     let r = run(ctx, c, wallet, (at, now)).await?;
-    judge(ctx, req, c, &r, decs)
+    judge(ctx, req, c, &r, wallet, decs)
 }
 
 /// Одна симуляция execute от кошелька поверх блока сборки (симулированный блок на 1 с позже). Решение 247: итог как
@@ -80,10 +80,12 @@ pub fn judge(
     req: &TradeRequest,
     c: &ExecCall,
     r: &CallResult,
+    wallet:Address,
     decs: (u8, u8),
 ) -> GatewayResult<(U256, u64)> {
     let got = received(ctx, r)?;
-    price(ctx, req, c, got, decs)?;
+    let debit=llamma_debit(c,wallet,&r.logs).unwrap_or(c.amount_in);
+    price(ctx, req, debit, got, decs)?;
     Ok((got, r.gas_used.to::<u64>()))
 }
 
@@ -118,10 +120,28 @@ pub fn received(ctx: &Ctx, r: &CallResult) -> GatewayResult<U256> {
 
 /// Сверка с худшей ценой: покупка — USDT входа / монет получено, продажа — USDT получено / монет входа.
 /// Ошибки: QuoteMismatch (хуже req.worst_price), NoRoute (монет 0), BadResponse (числа).
+/// Only the proven source refund of an original LLAMMA first step can lower the input used for the price limit.
+fn llamma_debit(c:&ExecCall,wallet:Address,logs:&[super::super::super::check::simulate::SimLog])->Option<U256>{
+    use alloy::sol_types::{SolEvent,SolValue};
+    use crate::venues::bsc_dex::{exec::{fill,signed_call},pools::llamma::ILlama};
+    let first=c.steps.first()?;
+    if c.native.is_some()||first.kind!=9||first.tokenIn!=c.token_in||first.shareBps!=10_000||
+        c.steps.iter().skip(1).any(|s|s.tokenIn==c.token_in||s.tokenOut==c.token_in){return None}
+    let (i,j)=<(U256,U256)>::abi_decode(&first.data).ok()?;
+    if !((i==U256::ZERO&&j==U256::ONE)||(j==U256::ZERO&&i==U256::ONE)){return None}
+    let logs=signed_call::logs(logs)?;
+    let mut hits=logs.iter().filter(|l|l.address()==first.pool&&l.topic0()==Some(&ILlama::TokenExchange::SIGNATURE_HASH));
+    let event=ILlama::TokenExchange::decode_log_data(&hits.next()?.inner.data).ok()?;
+    if hits.next().is_some()||event.sold_id!=i||event.bought_id!=j||event.recipient!=c.executor||event.tokens_bought.is_zero(){return None}
+    let flow=|src,to|fill::moved_logs(&logs,c.token_in,Some(src),Some(to));
+    let paid=flow(wallet,c.executor);let refunded=flow(c.executor,wallet);let charged=paid.checked_sub(refunded)?;
+    (paid==c.amount_in&&!refunded.is_zero()&&!charged.is_zero()&&flow(c.executor,first.pool)==charged&&event.tokens_sold==charged).then_some(charged)
+}
+
 fn price(
     ctx: &Ctx,
     req: &TradeRequest,
-    c: &ExecCall,
+    amount_in:U256,
     got: U256,
     (coin_dec, usdt_dec): (u8, u8),
 ) -> GatewayResult<()> {
@@ -129,10 +149,10 @@ fn price(
     let (coins, usdt) = match req.side {
         Side::Buy => (
             num::to_decimal(got, coin_dec),
-            num::to_decimal(c.amount_in, usdt_dec),
+            num::to_decimal(amount_in, usdt_dec),
         ),
         Side::Sell => (
-            num::to_decimal(c.amount_in, coin_dec),
+            num::to_decimal(amount_in, coin_dec),
             num::to_decimal(got, usdt_dec),
         ),
     };

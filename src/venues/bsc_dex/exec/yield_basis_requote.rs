@@ -27,15 +27,17 @@ pub(in crate::venues::bsc_dex) struct OrderInput {
     native: bool,
     amount: U256,
     via_v5: Option<Address>,
-    bancor_legacy: bool,
+    family: Market,
 }
+enum Market {YieldBasis,BancorLegacy,Llamma(Option<U256>)}
 pub(in crate::venues::bsc_dex) fn selected(hops: &[RouteHop]) -> Option<OrderInput> {
     let [hop] = hops else {
         return None;
     };
-    let (target,native,amount,v5,bancor_legacy)=match hop.fee_mode? {
-        RouterFeeMode::YieldBasis { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,false),
-        RouterFeeMode::BancorLegacy { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,true),
+    let (target,native,amount,v5,family)=match hop.fee_mode? {
+        RouterFeeMode::YieldBasis { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,Market::YieldBasis),
+        RouterFeeMode::BancorLegacy { target,native,principal:Some(amount),v5,.. }=>(target,native,amount,v5,Market::BancorLegacy),
+        RouterFeeMode::Llamma{target,maximum,desired,v5}=>(target,false,maximum,v5,Market::Llamma(desired)),
         _=>return None,
     };
     Some(OrderInput {
@@ -43,7 +45,7 @@ pub(in crate::venues::bsc_dex) fn selected(hops: &[RouteHop]) -> Option<OrderInp
         native,
         amount,
         via_v5: v5,
-        bancor_legacy,
+        family,
     })
 }
 pub(in crate::venues::bsc_dex) async fn path(
@@ -56,7 +58,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         native,
         amount,
         via_v5,
-        bancor_legacy,
+        family,
     }: OrderInput,
     block: Option<u64>,
 ) -> GatewayResult<Path> {
@@ -84,7 +86,26 @@ pub(in crate::venues::bsc_dex) async fn path(
     } else {
         (v.coin, v.usdt)
     };
-    let (wire,market_key)=if bancor_legacy {
+    let wanted = direct::ceil_units(qty, v.coin_dec).ok_or_else(bad)?;
+    if wanted.is_zero()
+        || (!buy && amount != wanted && !(matches!(family,Market::Llamma(_)) && amount<wanted))
+        || input == output
+    {
+        return Err(bad());
+    }
+    let (to,wire)=if let Market::Llamma(desired)=family{
+        let spot=crate::venues::bsc_dex::pools::llamma::shape(e).ok_or_else(bad)?;
+        let side=spot.side(input).filter(|s|spot.coins[1-*s]==output).ok_or_else(bad)?;
+        if let Some(exec)=via_v5{
+            use alloy::sol_types::SolValue;
+            if desired.is_some()||executor::address(ctx)?!=Some(exec)||target!=spot.amm{return Err(bad())}
+            crate::venues::bsc_dex::pools::llamma::check(ctx,e,&at).await?;
+            (exec,Wire::LlammaV5(V5Step{native:None,kind:9,pool:target,data:(U256::from(side),U256::from(1-side)).abi_encode().into()},spot.coins[0]))
+        }else{
+            let t=super::llamma_plan::terms(ctx,e,target,desired)?;super::llamma_plan::check_module(ctx,e,t,&at).await?;(target,Wire::Llamma(t))
+        }
+    }else{
+    let (wire,market_key)=if matches!(family,Market::BancorLegacy) {
         let t=super::bancor_legacy_plan::terms(ctx,e,target,native)?;
         super::bancor_legacy_plan::verify(ctx,e,input,t,&at).await?;
         if !t.normalized.contains(&input) || !t.normalized.contains(&output){return Err(bad());}
@@ -104,14 +125,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         if !market.coins().contains(&input) || !market.coins().contains(&output){return Err(bad());}
         (Wire::YieldBasis(t),Some(t.market))
     };
-    let wanted = direct::ceil_units(qty, v.coin_dec).ok_or_else(bad)?;
-    if wanted.is_zero()
-        || (!buy && amount != wanted)
-        || input == output
-    {
-        return Err(bad());
-    }
-    let (to, wire) = if let Some(exec) = via_v5 {
+    if let Some(exec) = via_v5 {
         if native || executor::address(ctx)? != Some(exec) {
             return Err(bad());
         }
@@ -126,6 +140,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         )
     } else {
         (target, wire)
+    }
     };
     let mut usable =
         select::usable(q, e, v.side, v.usdt_dec).map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;
@@ -144,7 +159,8 @@ pub(in crate::venues::bsc_dex) async fn path(
         false,
     )
     .await?;
-    if fill.charged != amount || (buy && fill.received < wanted) {
+    let bounded=matches!(family,Market::Llamma(_));
+    if fill.charged>amount || (!bounded && fill.charged!=amount) || (buy && fill.received < wanted) {
         return Err(bad());
     }
     let usdt = num::to_decimal(if buy { fill.charged } else { fill.received }, v.usdt_dec)
@@ -160,7 +176,7 @@ pub(in crate::venues::bsc_dex) async fn path(
                 amount_out: fill.received,
                 complete: true,
             },
-            coins: qty,
+            coins: if bounded && !buy{num::to_decimal(fill.charged,v.coin_dec).ok_or_else(bad)?.min(qty)}else{qty},
             usdt,
         },
         v.side,

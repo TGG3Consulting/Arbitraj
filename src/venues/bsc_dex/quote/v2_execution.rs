@@ -76,7 +76,8 @@ pub(super) async fn option(
     use alloy_primitives::U256;
     let ctx = &q.ctx;
     let decimals = (i.coin_dec, i.usdt_dec);
-    let measured=if let Some(head)=h && matches!(&e.pool.state,crate::core::types::PoolState::YieldBasisPool(_)|crate::core::types::PoolState::BancorLegacy(_)){
+    let measured=if let Some(head)=h && e.family.variant.llamma(){Some(Box::pin(super::llamma_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
+    else if let Some(head)=h && matches!(&e.pool.state,crate::core::types::PoolState::YieldBasisPool(_)|crate::core::types::PoolState::BancorLegacy(_)){
         let fill=Box::pin(super::yield_basis_sizing::paid(q,i,&e,payer,&execution,head)).await?;
         Some(fill)
     }else{None};
@@ -136,6 +137,8 @@ pub(super) async fn option(
             target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt),desired:t.desired}),
         super::v2_wallet_sim::Wire::BancorV3(t)=>Some(RouterFeeMode::BancorV3{target:t.contract,module:t.module_hash.is_some(),exempt:t.exemption,desired:t.desired,native:t.native_wallet,native_cash:t.native_wallet && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::UniswapV1(t)=>Some(RouterFeeMode::UniswapV1{target:t.target,module:t.module_hash.is_some(),native:t.native().is_some(),native_cash:t.native().is_some() && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
+        super::v2_wallet_sim::Wire::Llamma(t)=>Some(RouterFeeMode::Llamma{target:t.target,desired:t.desired,maximum:c.swapped.amount_in,v5:None}),
+        super::v2_wallet_sim::Wire::LlammaV5(step,_)=>Some(RouterFeeMode::Llamma{target:step.pool,desired:None,maximum:c.swapped.amount_in,v5:Some(execution.target)}),
         super::v2_wallet_sim::Wire::Rubicon(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::NativeFlat(t)=>Some(RouterFeeMode::NativeFlat{target:t.router,wei:t.wei}),
         super::v2_wallet_sim::Wire::Prop(t)=>Some(RouterFeeMode::VenueFallback{target:t.target,allowed:t.fallback_allowed}),
@@ -174,7 +177,8 @@ pub(super) async fn option(
             "Не подтверждены полнота объёма или способ исполнения V2",
         )
     };
-    if c.coins != i.qty {
+    let llamma=c.entry.family.variant.llamma();
+    if c.coins != i.qty && !(llamma && i.side==Side::Sell && c.coins>Decimal::ZERO && c.coins<i.qty) {
         return Err(bad());
     }
     if let crate::core::types::PoolState::BancorV3(state)=&c.entry.pool.state && i.side==Side::Buy {
@@ -296,8 +300,8 @@ pub(super) async fn option(
         }
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;
-            if algebra_wallet {c.coins=num::to_decimal(fill.charged,i.coin_dec).ok_or_else(bad)?.min(i.qty);}
-        } else if algebra_wallet {
+            if algebra_wallet || llamma {c.coins=num::to_decimal(fill.charged,i.coin_dec).ok_or_else(bad)?.min(i.qty);}
+        } else if algebra_wallet || llamma {
             c.usdt=num::to_decimal(fill.charged,i.usdt_dec).ok_or_else(bad)?;
         }
         c.usable.gas = fill.swap_gas;

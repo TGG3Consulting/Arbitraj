@@ -58,6 +58,8 @@ mod aktionariat_graph;
 pub(super) mod aktionariat_plan;
 pub(super) mod aktionariat_wallet;
 pub(super) mod bancor_legacy_plan;
+pub(super) mod llamma_wallet;
+pub(super) mod llamma_plan;
 pub(super) mod mooniswap_wallet;
 pub(super) mod defiplaza_wallet;
 pub(super) mod yield_basis_wallet;

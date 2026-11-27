@@ -17,7 +17,7 @@ enum Spender {
 fn selected(mode: Option<RouterFeeMode>) -> Spender {
     use RouterFeeMode::*;
     match mode {
-        Some(YieldBasis{v5:Some(executor),..}|BancorLegacy{v5:Some(executor),..})=>Spender::Selected(executor),
+        Some(Llamma{v5:Some(executor),..}|YieldBasis{v5:Some(executor),..}|BancorLegacy{v5:Some(executor),..})=>Spender::Selected(executor),
         Some(
             NativeWallet { target, .. }
             | ProtectedWallet { target }
@@ -29,6 +29,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
             | BalancerV1 {target,..}
             | BancorV3 {target,..}
             | UniswapV1 {target,..}
+            | Llamma { target,v5:None,.. }
             | WalletBounds { target, .. }
             | Dagrow { target, .. }
             | AntfarmProceeds { target, .. },
@@ -66,6 +67,7 @@ impl Market {
             | Market::Angstrom
             | Market::Stabull
             | Market::Integral
+            | Market::Llamma
             | Market::Dagrow
             | Market::Bundles
             | Market::Temple => selected(mode),

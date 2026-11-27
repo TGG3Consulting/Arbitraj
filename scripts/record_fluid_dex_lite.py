@@ -102,11 +102,11 @@ def pay(c, key, forward, exact_input, end):
 def acquire(url):
     cfg = json.loads((ROOT / "tests/data/base_ethereum_networks.json").read_bytes())["ethereum"]
     tag = {"blockHash": cfg["hash"], "requireCanonical": True}
-    header = rpc(url, "eth_getBlockByNumber", [hex(cfg["block"]), False])
-    assert header["hash"] == cfg["hash"] and int(rpc(url,"eth_chainId",[]),16)==1
+    header = rpc(url, "eth_getBlockByHash", [cfg["hash"], False])
+    assert header["hash"] == cfg["hash"] and int(header["number"], 16) == cfg["block"] and int(rpc(url,"eth_chainId",[]),16)==1
     c = Capture(dict(endpoint=url,selector=tag))
     def storage(i):
-        return bytes.fromhex(rpc(url,"eth_getStorageAt",[CORE,hex(i),tag])[2:])
+        return c.one(CORE,"readFromStorage(bytes32)",["bytes32"],[i.to_bytes(32,"big")],["uint256"])[0].to_bytes(32,"big")
     count = int.from_bytes(storage(1),"big")
     start = int.from_bytes(keccak((1).to_bytes(32,"big")),"big")
     markets = []

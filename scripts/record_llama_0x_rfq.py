@@ -1,14 +1,12 @@
 """Одна RFQ нога 0x и два чужих обмена из канонической транзакции Ethereum. Только чтение."""
 import gzip
 import json
-import re
+from zeroex_rfq_format import PATTERN, REGISTRY
 
 from record_llama_top_contracts import DATA, rpc, sig
 
 TRADE='0x072567a712fd09969b916f168e72cf458cbb2697843996b220d94c2fc26a133d'
 REGISTER='0x6050acc28c4cf57fa5576be05fce3940f16a35b887cacc9c9fffefffa64f17a2'
-REGISTRY='0x00000000000004533fe15556b1e086bb1a72ceae'
-PATTERN=re.compile(r'd92aadfb[0-9a-f]{64}000000000000000000000000([0-9a-f]{40})([0-9a-f]{64})|(?:604ba49a|9714f25e)[0-9a-f]{344}([0-9a-f]{40})([0-9a-f]{64})')
 
 def receipt(txhash):
     r=rpc('ethereum','eth_getTransactionReceipt',[txhash])

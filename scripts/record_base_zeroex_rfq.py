@@ -6,7 +6,7 @@ from eth_utils import keccak
 from fork_fee_rpc import Reader
 from record_base_slipstream_executor import ROOT
 from record_llama_base_cl import CanonicalCalls
-from record_llama_0x_rfq import PATTERN, REGISTRY
+from zeroex_rfq_format import PATTERN, REGISTRY
 
 TRANSFER="0x"+keccak(text="Transfer(address,address,uint256)").hex()
 

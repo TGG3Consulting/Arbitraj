@@ -24,12 +24,7 @@ fn https(raw: &str) -> Option<Url> {
         && url.password().is_none() && url.query().is_none() && url.fragment().is_none()).then_some(url)
 }
 pub(super) fn scoped_key<'a>(raw_url: &str, raw_credential: &'a str) -> Option<(Url, &'a str)> {
-    let credential = if raw_credential.trim_start().starts_with('{') {
-        serde_json::from_str::<Credential<'a>>(raw_credential).ok()?
-    } else {
-        // Существующие ключи без origin изначально предназначались только этому поставщику.
-        Credential { origin: "https://blade-api.sushi.com", key: raw_credential }
-    };
+    let credential: Credential<'a> = serde_json::from_str(raw_credential).ok()?;
     let base = https(raw_url)?;
     let issuer = https(credential.origin)?;
     (issuer.path() == "/" && issuer.origin() == base.origin() && !credential.key.trim().is_empty())

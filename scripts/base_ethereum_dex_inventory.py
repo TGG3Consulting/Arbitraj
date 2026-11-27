@@ -2200,7 +2200,7 @@ def tables(network, snapshots, profiles):
             settings = {r["name"]: r["value"] for section in first_run["section"] for r in section.get("rec", [])
                         if r["name"].startswith("clipper.") and r.get("prefill", {}).get("id") == venue_id}
             task += (f"Для `{venue_id}` укажите `clipper.base_url = {settings['clipper.base_url']}`, "
-                     f"`clipper.pools = {settings['clipper.pools']}` и личный секрет `clipper.api_key`. Для отдельного HTTPS origin поставщика в той же зашифрованной записи сохраните поля JSON `origin` и `key`. ")
+                     f"`clipper.pools = {settings['clipper.pools']}` и личный секрет `clipper.api_key`. В этой зашифрованной записи задайте поля JSON `origin` и `key`. ")
             task += (f"[Адреса, роли, остатки и квитанции](../{fixture.as_posix()}) · "
                      "[Официальный список Sushi](https://github.com/sushi-labs/clipper-rfq-subgraph/tree/453c83478f2553270f4fcf52797695fc52553240/scripts/deploy-codegen/networks).")
         classic_ids = {"119": "sushiswap-v2-base" if base else "sushiswap",

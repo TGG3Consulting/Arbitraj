@@ -10,6 +10,7 @@ from record_balancer_markets import Capture
 from record_base_slipstream_executor import ROOT, rpc
 
 DIRECTORY = ROOT / "tests/data/first_run_dex_2026-11-26/ammalgam_ethereum_spot.json.gz"
+INPUT = "computeExpectedSwapAmountIn(uint256,uint256,uint256,uint256,uint256,uint256)"
 QUOTE = "computeExpectedSwapAmountOut(uint256,uint256,uint256,uint256,uint256,uint256)"
 
 
@@ -45,8 +46,18 @@ def capture(url):
             assert len(values)==len(amounts)
             quotes = [{"amount":str(n),"quote":str(decode(["uint256"],v)[0]) if v is not None else None}
                       for n,v in zip(amounts,values)]
+            # Capture the independent public inverse and the forward payout for its proposed input.
+            targets = sorted({int(q["quote"]) for q in quotes if q["quote"] is not None and
+                              0 < int(q["quote"]) <= int(market["cash"][ix]) and int(q["quote"]) < reserves[ix]-missing[ix]})
+            inverse = []
+            for start in range(0,len(targets),5):
+                batch = targets[start:start+5]
+                raw = c.batch([(HELPER,INPUT,["uint256"]*6,[t,*state]) for t in batch])
+                for target,value in zip(batch,raw,strict=True):
+                    result = decode(["uint256"],value)[0] if value is not None else None
+                    inverse.append({"target":str(target),"suggested_input":str(result) if result is not None else None})
             rows.append(dict(pool=pool,input=market["tokens"][i],state=list(map(str,state)),accrued=accrued,
-                             output_cash=market["cash"][ix],quotes=quotes))
+                             output_cash=market["cash"][ix],quotes=quotes,inverse=inverse))
     assert len(rows)==2*len(book["pools"])
     return dict(selector=selector,source=book["origin"],factory=FACTORY,helper=HELPER,
                 implementation=book["pools"][0]["code"]["implementation"],rows=rows)

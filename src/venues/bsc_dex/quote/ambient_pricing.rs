@@ -18,7 +18,7 @@ use crate::{
     },
 };
 use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, U256};
+use alloy_primitives::Address;
 pub(super) async fn options(
     q: &Quoting,
     i: &Input,

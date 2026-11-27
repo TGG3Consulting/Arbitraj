@@ -42,6 +42,10 @@ impl Market {
     fn approval(self, mode: Option<RouterFeeMode>) -> Spender {
         use RouterFeeMode::*;
         match self {
+            Market::Ambient => match mode {
+                Some(WalletBounds {target,..}) => Spender::Selected(target),
+                _ => Spender::Missing,
+            },
             Market::Carbon => match mode {
                 Some(CarbonWallet {
                     module: Some(target),

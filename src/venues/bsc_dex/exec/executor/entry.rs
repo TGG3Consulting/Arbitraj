@@ -59,7 +59,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if f.variant.aqua() || f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
+    if f.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient || f.variant.aqua() || f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -86,7 +86,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
     }
     if f.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient || f.variant.aqua(){
         if k==ExecKind::Balancer && let PoolRef::Singleton{manager,id}=pool && !manager.is_zero() && !id.is_zero(){return Ok((k,*manager));}
-        return Err("Aqua: нет ключа программы SwapVM".into());
+        return Err(format!("{}: отсутствует физический ключ рынка в singleton",f.title));
     }
     if f.variant.mooniswap(){
         if k==ExecKind::Balancer && let PoolRef::Contract(pool)=pool && !pool.is_zero(){return Ok((k,*pool));}
@@ -144,7 +144,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
         let target=super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).ok_or_else(||"Mooniswap: не подтверждены пул, валюты или модуль".to_string())?;
         return Ok((k,target.1));
     }
-    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
+    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::Ambient | crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
         return pinned_module_target(ctx,e).map(|t|(k,t)).ok_or_else(||format!("{}: не настроен модуль исполнения", e.family.id));
     }
 

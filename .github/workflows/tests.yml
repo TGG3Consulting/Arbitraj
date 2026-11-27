@@ -60,7 +60,7 @@ on:
       stack_check_target:
         description: BSC regression to measure in the isolated stack check
         type: choice
-        options: [startup, load]
+        options: [startup, load, pancakex]
         default: startup
       native_v3_only:
         description: Run only the read-only replay of the three Base fork routers
@@ -218,8 +218,32 @@ jobs:
         with:
           name: communityv3-ethereum-depth
           path: ${{ runner.temp }}/communityv3-depth.json
+  pancakex-recovery-check:
+    if: inputs.stack_check_only && inputs.stack_check_target == 'pancakex'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - name: Run the four PancakeSwap X hot-path and recovery checks separately
+        env:
+          ARB_PANCAKEX_FUTURE_SIZES: ${{ runner.temp }}/pancakex-futures.json
+        run: |
+          cargo test --locked --lib --no-run --message-format=json > "$RUNNER_TEMP/pancakex-build.jsonl"
+          python scripts/measure_pancakex_recovery.py "$RUNNER_TEMP"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pancakex-isolated-recovery
+          path: |
+            ${{ runner.temp }}/pancakex-futures.json
+            ${{ runner.temp }}/pancakex-recovery.json
   bsc-startup-stack:
-    if: inputs.stack_check_only
+    if: inputs.stack_check_only && inputs.stack_check_target != 'pancakex'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

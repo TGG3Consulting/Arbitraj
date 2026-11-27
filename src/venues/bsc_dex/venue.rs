@@ -66,6 +66,10 @@ impl Venue for BscDex {
         super::dexalot::check_key(&self.p.ctx).await
     }
 
+    fn slot_quote_sources(&self) -> std::collections::BTreeMap<String, Vec<String>> {
+        super::fermi::prop_profile::sources(&self.p.ctx)
+    }
+
     async fn source_quote(
         &self,
         source: &str,

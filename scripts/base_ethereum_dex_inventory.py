@@ -819,7 +819,7 @@ def tables(network, snapshots, profiles):
                     "этого строителя на точный блок, проверка остаточного времени и восстановление исходного намерения. "
                     f"[Блоки, котировки, движения токенов](../{fermi.as_posix()}) · "
                     "[Адреса и порядок исполнения Titan](https://docs.titanbuilder.xyz/propamms)."])
-        out.extend(["", "Для автоматических обменов Kaliber и Taurus владелец размещает отдельный PropSlotVenueAdapter версии 2 и записывает его адрес в `dex.router` своего профиля. "
+        out.extend(["", "На карточке кошелька Ethereum ручная проверка показывает имя DEX из его настроек и разрешённых ему строителей. Порядок в `dex.propamm_slot_builders` определяет первого строителя в форме. Для автоматических обменов Kaliber и Taurus владелец размещает отдельный PropSlotVenueAdapter версии 2 и записывает его адрес в `dex.router` своего профиля. "
                     "В `dex.propamm_slot_builders` по умолчанию нет строителей. Для Kaliber подтверждён `titan`, для Taurus подтверждены `titan` и `buildernet`, по одному разрешённому имени в строке. "
                     "Параметры площадки `fermi.books_interval_ms`, `fermi.quote_budget_ms`, `fermi.quote_sizes` и `fermi.gas_budget_native` задают интервал, предельное время сравнения, размеры в валюте расчёта и резерв ETH. "
                     "Включение `fermi.trading` применимо только к FermiSwap. Обмен требует средств и allowance выбранного кошелька, актуального кадра и минимальной чистой выплаты. "

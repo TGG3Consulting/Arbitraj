@@ -1,109 +1,14 @@
 //! Цена и выплата LambdaClass в следующем слоте конкретного строителя.
+use super::prop_profile::{self, Profile};
 use super::{
-    Builder, Ctx, Deployment, Frame, Head, Preview, Request, builder_snapshot, canonical,
-    decimalsCall, rpc, slot,
+    Builder, Ctx, Head, Preview, Request, builder_snapshot, canonical, decimalsCall, rpc, slot,
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::venues::bsc_dex::{
-    exec::prop_abi::IProp,
-    pools::{families, prop_venue},
-};
+use crate::venues::bsc_dex::{exec::prop_abi::IProp, pools::prop_venue};
 use alloy::sol_types::{SolCall, SolValue};
-use alloy_primitives::{Address, B256, Bytes, U64, keccak256};
+use alloy_primitives::{Address, Bytes, U64, keccak256};
 use chrono::Utc;
 use serde_json::{Value, json};
-use std::collections::BTreeSet;
-
-#[derive(Clone, PartialEq, Eq)]
-pub(super) struct Oracle {
-    pub(super) market: Address,
-    pub(super) address: Address,
-    pub(super) hash: B256,
-    slots: BTreeSet<B256>,
-}
-
-impl Oracle {
-    pub(super) fn parse(market: Address, rows: &[String]) -> Option<Self> {
-        let [row] = rows else { return None };
-        let mut fields = row.split_whitespace();
-        let address: Address = fields.next()?.parse().ok()?;
-        let hash: B256 = fields.next()?.parse().ok()?;
-        let mut slots = BTreeSet::new();
-        for s in fields {
-            if !slots.insert(s.parse().ok()?) {
-                return None;
-            }
-        }
-        if market.is_zero()
-            || address.is_zero()
-            || hash.is_zero()
-            || hash == keccak256([])
-            || slots.is_empty()
-            || slots.len() > 128
-        {
-            return None;
-        }
-        Some(Self {
-            market,
-            address,
-            hash,
-            slots,
-        })
-    }
-
-    pub(super) fn frame(&self, builder: Builder, snapshot: &Value) -> Option<Frame> {
-        let (row, number, slot) = match builder {
-            Builder::Titan => {
-                let mut rows = snapshot["venues"].as_array()?.iter().filter(|r| {
-                    r["quoteAddress"]
-                        .as_str()
-                        .and_then(|s| s.parse::<Address>().ok())
-                        == Some(self.market)
-                });
-                let r = rows.next()?;
-                if rows.next().is_some() {
-                    return None;
-                }
-                (r, r["blockNumber"].as_u64()?, r["slot"].as_u64()?)
-            }
-            Builder::BuilderNet => (
-                snapshot.get(format!("{:#x}", self.market))?,
-                serde_json::from_value::<U64>(snapshot["blockNumber"].clone())
-                    .ok()?
-                    .to(),
-                snapshot["slot"].as_u64()?,
-            ),
-        };
-        for (account, state) in row["stateOverride"].as_object()? {
-            if state.get("code").is_some() || state.get("state").is_some() {
-                return None;
-            }
-            if let Some(d) = state.get("stateDiff") {
-                let updates = d.as_object()?;
-                if !updates.is_empty() && account.parse::<Address>().ok() != Some(self.address) {
-                    return None;
-                }
-                if updates.keys().any(|s| {
-                    s.parse::<B256>()
-                        .map_or(true, |key| !self.slots.contains(&key))
-                }) {
-                    return None;
-                }
-            }
-        }
-        // Frame copies only stateDiff at the accepted oracle. Account nonces and balances remain canonical.
-        Frame::from_row(
-            row,
-            number,
-            slot,
-            Deployment {
-                router: self.market,
-                engine: self.address,
-                runtime: self.hash,
-            },
-        )
-    }
-}
 
 pub(in crate::venues::bsc_dex) async fn preview(
     ctx: &Ctx,
@@ -111,34 +16,30 @@ pub(in crate::venues::bsc_dex) async fn preview(
     r: Request,
 ) -> GatewayResult<Preview> {
     let bad = |msg| ctx.err(ErrorCode::NotApplicable, msg);
-    if ctx.chain_id() != Some(1)
-        || r.buy_amount_raw.is_some()
-        || r.input.is_zero()
-        || r.output.is_zero()
-        || r.input == r.output
+    if r.buy_amount_raw.is_some() || r.input.is_zero() || r.output.is_zero() || r.input == r.output
     {
         return Err(bad(
             "Строитель PropAMM: нужен точный вход Ethereum и два контракта ERC20",
         ));
     }
     let rev = ctx.settings.generation();
-    let key = match ctx.dex_suffix()? {
-        Some(chain) => format!("{id}{chain}"),
-        None => id.to_owned(),
-    };
-    let family =
-        families::classify(ctx, &key).map_err(|_| bad("Профиль рынка отсутствует в этой сети"))?;
-    let market = ctx.dex_addr("dex.factory", family.id)?;
+    let chain_id =
+        prop_profile::network(ctx).ok_or_else(|| bad("Слоты строителей недоступны в этой сети"))?;
+    let profile = Profile::lookup(ctx, id).ok_or_else(|| {
+        bad("Не настроен профиль PropAMM с ценовыми слотами и разрешёнными строителями")
+    })?;
+    let family = profile.family;
+    let oracle = profile.oracle;
+    let market = oracle.market;
     if r.market.is_some_and(|m| m != market) {
         return Err(bad("Выбран другой адрес рынка"));
     }
-    let oracle = Oracle::parse(market, &ctx.dex_list("dex.propamm_price_slots", family.id)?)
-        .ok_or_else(|| bad("Для рынка не задан проверенный адрес оракула и его ценовые слоты"))?;
     let builder = r
         .builder
         .as_deref()
         .and_then(Builder::parse)
-        .ok_or_else(|| bad("Укажите titan или buildernet"))?;
+        .filter(|b| profile.builders.contains(b))
+        .ok_or_else(|| bad("Укажите разрешённого для этого рынка строителя"))?;
     let payer = r
         .trader
         .filter(|v| !v.is_zero())
@@ -176,7 +77,7 @@ pub(in crate::venues::bsc_dex) async fn preview(
             Utc::now().timestamp().max(0) as u64,
         )
     };
-    if chain != U64::from(1) || !current() {
+    if chain != U64::from(chain_id) || !current() {
         return Err(stale());
     }
     let at = json!({"blockHash":h.hash,"requireCanonical":true});
@@ -268,60 +169,4 @@ pub(in crate::venues::bsc_dex) async fn preview(
         details: json!({"type":if floor.is_some(){"wallet_simulation"}else{"indicative_price"},"market":market,"builder":builder.name(),"target_block":f.target,
             "slot":f.slot,"trader":payer,"owner_minimum_raw":floor.map(|v|v.to_string()),"gas_used":gas}),
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    const ARCHIVE: &str = include_str!(
-        "../../../../tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json"
-    );
-
-    #[test]
-    fn public_prices_keep_only_confirmed_storage_on_the_accepted_oracle() {
-        let snapshot: Value = serde_json::from_str(ARCHIVE).unwrap();
-        for source in snapshot["frames"].as_array().unwrap() {
-            let market = source["market"].as_str().unwrap().parse().unwrap();
-            let address: Address = source["oracle"].as_str().unwrap().parse().unwrap();
-            let storage = source["storage"].as_object().unwrap();
-            let keys = storage.keys().cloned().collect::<Vec<_>>().join(" ");
-            let oracle = Oracle::parse(
-                market,
-                &[format!("{address:#x} {:#x} {keys}", B256::repeat_byte(1))],
-            )
-            .unwrap();
-            let raw = json!({"quoteAddress":market,"blockNumber":snapshot["number"],"slot":snapshot["slot"],
-                "stateOverride":{(format!("{address:#x}")):{"nonce":"0x9","balance":"0x123","stateDiff":storage}}});
-            let outer = |row: &Value| {
-                if source["builder"] == "Titan" {
-                    json!({"venues":[row]})
-                } else {
-                    json!({(format!("{market:#x}")):row, "blockNumber":format!("0x{:x}",snapshot["number"].as_u64().unwrap()), "slot":snapshot["slot"]})
-                }
-            };
-            let builder = if source["builder"] == "Titan" {
-                Builder::Titan
-            } else {
-                Builder::BuilderNet
-            };
-            let frame = oracle.frame(builder, &outer(&raw)).unwrap();
-            assert_eq!(
-                frame.overrides(),
-                json!({(format!("{address:#x}")):{"stateDiff":storage}})
-            );
-            for key in ["state", "code"] {
-                let mut changed = raw.clone();
-                changed["stateOverride"][format!("{address:#x}")][key] = json!("0xff");
-                assert!(oracle.frame(builder, &outer(&changed)).is_none());
-            }
-            let mut foreign = raw.clone();
-            foreign["stateOverride"][format!("{:#x}", Address::repeat_byte(55))] =
-                json!({"stateDiff":storage});
-            assert!(oracle.frame(builder, &outer(&foreign)).is_none());
-            let mut unknown = raw.clone();
-            unknown["stateOverride"][format!("{address:#x}")]["stateDiff"]
-                [format!("{:#x}", B256::repeat_byte(55))] = json!(B256::ZERO);
-            assert!(oracle.frame(builder, &outer(&unknown)).is_none());
-        }
-    }
 }

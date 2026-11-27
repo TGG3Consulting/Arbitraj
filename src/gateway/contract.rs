@@ -953,6 +953,11 @@ pub trait Venue: Send + Sync {
         ))
     }
 
+    /// Настроенные рынки слотов и разрешённые владельцем строители в порядке настройки.
+    fn slot_quote_sources(&self) -> std::collections::BTreeMap<String, Vec<String>> {
+        Default::default()
+    }
+
     /// Ручная котировка источника ликвидности. Дополнительные параметры проверяет адаптер.
     async fn source_quote(
         &self,

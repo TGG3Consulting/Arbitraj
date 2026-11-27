@@ -3,7 +3,7 @@ use super::super::{
     parts::Parts,
     pools::{families, family_variant::Variant, load_woo_ladder},
 };
-use super::{Builder, Deployment, prop_market::Oracle};
+use super::{Builder, Deployment, prop_oracle::Oracle, prop_profile};
 use alloy_primitives::{Address, B256};
 use rust_decimal::Decimal;
 #[derive(Clone)]
@@ -35,7 +35,7 @@ impl Config {
     }
     fn read(p: &Parts) -> Option<Vec<Self>> {
         let ctx = &p.ctx;
-        if ctx.chain_id() != Some(1) {
+        if ctx.chain_id() != Some(crate::settings::evm_profiles::ETHEREUM_MAINNET) {
             return None;
         }
         let positive = |key| ctx.int(key).ok().filter(|v| *v > 0);
@@ -79,25 +79,24 @@ impl Config {
         {
             out.push(build(builder, d, executor, Source::Fermi { runtime }));
         }
-        for f in families::all(ctx) {
-            if f.variant != Variant::PropVenue || families::classify(ctx, f.id).is_err() {
+        if prop_profile::network(ctx).is_none() {
+            return Some(out);
+        }
+        for f in families::all(ctx)
+            .into_iter()
+            .filter(|f| f.variant == Variant::PropVenue)
+        {
+            let Some(market_profile) = prop_profile::Profile::read(ctx, f.id) else {
                 continue;
-            }
-            let permitted = builders(
-                ctx.dex_list("dex.propamm_slot_builders", f.id)
-                    .unwrap_or_default(),
-            );
-            if permitted.is_empty() {
-                continue;
-            }
+            };
+            let permitted = market_profile.builders;
             let profile = || {
-                let market = ctx.dex_addr("dex.factory", f.id).ok()?;
+                let oracle = market_profile.oracle;
+                let market = oracle.market;
                 let executor = ctx
                     .dex_addr("dex.router", f.id)
                     .ok()
                     .filter(|a| !a.is_zero())?;
-                let oracle =
-                    Oracle::parse(market, &ctx.dex_list("dex.propamm_price_slots", f.id).ok()?)?;
                 let mut pairs = Vec::new();
                 for row in ctx.dex_list("dex.propamm_pairs", f.id).ok()? {
                     let (a, b) = row.split_once(' ')?;

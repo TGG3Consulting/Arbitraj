@@ -4,6 +4,8 @@
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
 pub(super) mod bopamm;
 pub(super) mod prop_market;
+pub(super) mod prop_profile;
+mod prop_oracle;
 mod deployment;
 mod frame;
 pub(super) mod markets;

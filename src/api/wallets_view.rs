@@ -56,15 +56,21 @@ pub async fn view(st: &AppState) -> Value {
     // Решение 399: причина запрета развёртывания исполнителя (шлюз dex_executor_refusal, без сети) — кнопка
     // «Развернуть исполнитель» недоступна с этой причиной, подсказки «переразверните» не показываются. null — разрешено.
     // Решение 400: классы шага исполнителя v3 и их приёмка по записи симуляции (одни на все кошельки).
-    let (deploy_refused, v3_classes) = match dex_id(st).await {
+    let (deploy_refused, v3_classes, prop_builders) = match dex_id(st).await {
         Ok(id) => match st.registry.get(&id).await {
-            Ok(v) => (v.dex_executor_refusal(), v.dex_executor_classes()),
-            Err(_) => (None, Vec::new()),
+            Ok(v) => (v.dex_executor_refusal(), v.dex_executor_classes(), v.slot_quote_sources()),
+            Err(_) => (None, Vec::new(), Default::default()),
         },
-        Err(_) => (None, Vec::new()),
+        Err(_) => (None, Vec::new(), Default::default()),
     };
     // Решение 432: площадки DEX сетей (две и больше; одна — пусто, экран прежний) — исполнитель кошелька по сети.
     let nets = super::wallets_chain::chains(st).await;
+    let mut chain_props = std::collections::BTreeMap::new();
+    for (id, _) in &nets {
+        if let Ok(venue) = st.registry.get(id).await {
+            chain_props.insert(id.0.clone(), venue.slot_quote_sources());
+        }
+    }
     let single_source=|key:&str|dex.as_deref().is_some_and(|v| st.settings.text(key,crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty()));
     let bopamm = dex.as_deref().is_some_and(|id| bopamm_configured(st, id));
     let mut wallets = Vec::new();
@@ -95,7 +101,8 @@ pub async fn view(st: &AppState) -> Value {
             "fynd": single_source("fynd.network"),
             "clipper": dex.as_deref().is_some_and(|id| clipper_configured(st, id)),
             "bopamm": bopamm,
-            "prop_sources": dex.as_deref().map(|v|prop_sources(st,v,nets.is_empty())).unwrap_or_default(),
+            "prop_sources": prop_builders.keys().collect::<Vec<_>>(),
+            "prop_builders": prop_builders,
             "textile": single_source("textile.base_url"),
             "kipseli": single_source("kipseli.base_url"),
             "zeroex": single_source("zeroex.base_url"),
@@ -114,7 +121,7 @@ pub async fn view(st: &AppState) -> Value {
             "rows": a.rows_of(&w.id),
             "open_deals": busy,
             "legacy": a.legacy().as_deref() == Some(w.id.as_str()),
-            "chains": by_chain(st, &w, &nets).await,
+            "chains": by_chain(st, &w, &nets, &chain_props).await,
         }));
     }
     let rows: Vec<Value> = rows(st)
@@ -146,9 +153,12 @@ async fn by_chain(
     st: &AppState,
     w: &crate::settings::accounts::Wallet,
     nets: &[(crate::core::types::VenueId, Option<String>)],
+    chain_props: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, Vec<String>>>,
 ) -> Vec<Value> {
     let mut out = Vec::with_capacity(nets.len());
+    let empty = Default::default();
     for (v, chain) in nets {
+        let builders = chain_props.get(&v.0).unwrap_or(&empty);
         let x = w.at(&v.0);
         let at = crate::settings::read::At {
             venue: Some(&v.0),
@@ -164,7 +174,8 @@ async fn by_chain(
             "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
             "clipper": clipper_configured(st, &v.0),
             "bopamm": bopamm_configured(st, &v.0),
-            "prop_sources": prop_sources(st,&v.0,nets.len()<=1),
+            "prop_sources": builders.keys().collect::<Vec<_>>(),
+            "prop_builders": builders,
             "textile": st.settings.text("textile.base_url",at).is_ok_and(|s|!s.is_empty()),
             "kipseli": st.settings.text("kipseli.base_url",at).is_ok_and(|s|!s.is_empty()),
             "zeroex": st.settings.text("zeroex.base_url",at).is_ok_and(|s|!s.is_empty()),
@@ -193,14 +204,4 @@ fn bopamm_configured(st: &AppState, venue: &str) -> bool {
     st.settings.integer("dex.evm_chain_id", at).ok() == Some(1)
         && st.settings.get_exact("bopamm.roles", &crate::settings::scope::Scope::Venue(venue.into()))
             .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
-}
-
-fn prop_sources(st:&AppState, venue:&str, alone:bool) -> Vec<&'static str> {
-    use crate::settings::{dex_key::venue_suffix, read::At, scope::Scope};
-    if st.settings.integer("dex.evm_chain_id",At{venue:Some(venue),coin:None}).ok()!=Some(1){return Vec::new();}
-    let Ok(suffix)=venue_suffix(&st.settings,venue,alone) else{return Vec::new()};
-    ["kaliber-lambda-ethereum","taurus-lambda-ethereum"].into_iter().filter(|id|{
-        let key=suffix.as_ref().map_or_else(||(*id).to_string(),|chain|format!("{id}{chain}"));
-        st.settings.get_exact("dex.propamm_price_slots",&Scope::Dex(key)).is_some_and(|x|x.as_array().is_some_and(|a|!a.is_empty()))
-    }).collect()
 }

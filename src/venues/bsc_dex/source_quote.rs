@@ -11,31 +11,40 @@ use crate::gateway::{
 
 pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayResult<Preview> {
     let bad = |message| ctx.err(ErrorCode::NotApplicable, message);
-    if matches!(source, "kipseli" | "zeroex") {
-        return super::keyed_price::preview(ctx, source, req).await;
-    }
-    if source == "clipper" {
-        return super::clipper::preview(ctx, req).await;
-    }
-    if matches!(source,"kaliber-lambda-ethereum"|"taurus-lambda-ethereum") {
-        return super::fermi::prop_market::preview(ctx,source,req).await;
-    }
-    if source == "bopamm" {
-        return super::fermi::bopamm::preview(ctx, req).await;
-    }
-    if req.firm.is_some() {
-        return Err(bad(
-            "У этого источника собственная форма проверки котировки",
-        ));
-    }
-    if source == "native_rfq" {
-        return super::native_rfq::preview(ctx, req).await;
-    }
-    if source == "fynd" {
-        return super::fynd::preview(ctx, req).await;
-    }
-    if source == "fermi" {
-        return super::fermi::source_preview(ctx, req).await;
+    let indicative = || {
+        if req.firm.is_some() {
+            Err(bad(
+                "У этого источника собственная форма проверки котировки",
+            ))
+        } else {
+            Ok(())
+        }
+    };
+    match source {
+        "kipseli" | "zeroex" => return super::keyed_price::preview(ctx, source, req).await,
+        "clipper" => return super::clipper::preview(ctx, req).await,
+        "bopamm" => return super::fermi::bopamm::preview(ctx, req).await,
+        "native_rfq" => {
+            indicative()?;
+            return super::native_rfq::preview(ctx, req).await;
+        }
+        "fynd" => {
+            indicative()?;
+            return super::fynd::preview(ctx, req).await;
+        }
+        "fermi" => {
+            indicative()?;
+            return super::fermi::source_preview(ctx, req).await;
+        }
+        "hanji" | "hashflow" => indicative()?,
+        _ => {
+            return super::fermi::prop_market::preview(
+                ctx,
+                source.strip_prefix("lambda:").unwrap_or(source),
+                req,
+            )
+            .await;
+        }
     }
     let Request {
         input,

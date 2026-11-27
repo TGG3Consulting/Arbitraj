@@ -1,0 +1,34 @@
+[
+  {
+    "chain_id": 56,
+    "address": "0x00312400303d02c323295f6e8b7309bc30fb6bce",
+    "runtime_hash": "0xfcb1596a03306d42cdf638ce211fc7dc467f8844f5cb547fe7b07c65475e361f",
+    "source": "https://sourcify.dev/server/v2/contract/56/0x00312400303d02c323295f6E8b7309bc30FB6BcE?fields=compilation,storageLayout,runtimeBytecode,sources",
+    "layout": {
+      "kind": "transparent_erc1967"
+    },
+    "market_token": true
+  },
+  {
+    "chain_id": 56,
+    "address": "0x55d398326f99059ff775485246999027b3197955",
+    "runtime_hash": "0x97a48aa4c129657440dafdacd4c836389734d28cc4a0ca7403e68da660a74a59",
+    "source": "https://sourcify.dev/server/v2/contract/56/0x55d398326f99059fF775485246999027B3197955?fields=compilation,storageLayout,runtimeBytecode,sources",
+    "layout": {
+      "kind": "balances",
+      "slot": 1
+    },
+    "market_token": true
+  },
+  {
+    "chain_id": 56,
+    "address": "0xc9e5921e9c99ce3543287e123bed1421b57c42dc",
+    "runtime_hash": "0x9d3af0ab1651c0e65365226791839520ee00019d379729360eb159cb5e6a1d7e",
+    "source": "https://sourcify.dev/server/v2/contract/56/0xC9e5921E9C99cE3543287E123beD1421B57C42dc?fields=compilation,storageLayout,runtimeBytecode,sources",
+    "layout": {
+      "kind": "balances",
+      "slot": 262
+    },
+    "market_token": false
+  }
+]

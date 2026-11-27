@@ -1,0 +1,46 @@
+[
+  {
+    "symbol": "PIG",
+    "address": "0x8850d2c68c632e3b258e612abaa8fada7e6958e5",
+    "source": "https://sourcify.dev/server/v2/contract/56/0x8850d2c68c632e3b258e612abaa8fada7e6958e5?fields=compilation,storageLayout,runtimeBytecode",
+    "contract": "PigToken.sol:PigToken",
+    "match": "match",
+    "runtime": "0xc1149454a2a91f4d223d6ffa41dcbe8ddc58496a3e0957400b059f0a173b8f6a",
+    "fields": [
+      {
+        "name": "_rOwned",
+        "type": "t_mapping(t_address,t_uint256)"
+      },
+      {
+        "name": "_tOwned",
+        "type": "t_mapping(t_address,t_uint256)"
+      },
+      {
+        "name": "_isExcluded",
+        "type": "t_mapping(t_address,t_bool)"
+      }
+    ]
+  },
+  {
+    "symbol": "SMARS",
+    "address": "0xc0366a104b429f0806bfa98d0008daa9555b2bed",
+    "source": "https://sourcify.dev/server/v2/contract/56/0xc0366a104b429f0806bfa98d0008daa9555b2bed?fields=compilation,storageLayout,runtimeBytecode",
+    "contract": "SafeMars.sol:SafeMars",
+    "match": "exact_match",
+    "runtime": "0x66bf77c659d845f539bb32e7101e6c33c4f54db02cfebe8644e4c0aed668ffb2",
+    "fields": [
+      {
+        "name": "_rOwned",
+        "type": "t_mapping(t_address,t_uint256)"
+      },
+      {
+        "name": "_tOwned",
+        "type": "t_mapping(t_address,t_uint256)"
+      },
+      {
+        "name": "_isExcluded",
+        "type": "t_mapping(t_address,t_bool)"
+      }
+    ]
+  }
+]

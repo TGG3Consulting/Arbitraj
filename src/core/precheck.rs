@@ -205,6 +205,12 @@ pub async fn run(
     fast: Opts,
     acc: Option<&DexAccountId>,
 ) -> Result<(Calc, Vec<String>, Option<Bal>), String> {
+    // К этому моменту направление и торговый счёт уже выбраны. Удерживаем интерес
+    // только до завершения этой предпроверки, в том числе при отмене её future.
+    let _presell_interest = if let Some(account) = acc && d.asset.contract.is_some() {
+        core.inner.deps.gw.get_as(&d.sell_on, Some(account)).await.ok()
+            .and_then(|venue| venue.warm_presell(&d.asset))
+    } else { None };
     let mut t = Timing {
         on,
         ..Timing::default()

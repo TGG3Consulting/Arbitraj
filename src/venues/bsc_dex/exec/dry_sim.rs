@@ -84,6 +84,16 @@ pub struct Sim {
 /// Симуляция. Принимает: котировку, собранную сделку, кошелёк, вход и выход. Возвращает: Sim (отказ — reason).
 /// Ошибки: узел (метод не поддерживается, сбой), BadResponse.
 pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> GatewayResult<Sim> {
+    run_anchored(q, r, wallet, io, None).await
+}
+
+pub(super) async fn run_anchored(
+    q: &Quoting,
+    r: &Ready,
+    wallet: Address,
+    io: &Io<'_>,
+    parent: Option<alloy_primitives::B256>,
+) -> GatewayResult<Sim> {
     let ctx = &q.ctx;
     let mut sim = Sim::default();
     let mut calls: Vec<Call> = Vec::new();
@@ -156,7 +166,7 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         _ => Vec::new(),
     };
     over.extend(io.credit.iter().filter(|_| credited).cloned());
-    let res = simulate::run_with(ctx, &calls, &values, &over, r.at).await?;
+    let res = simulate::run_anchored(ctx, &calls, &values, &over, r.at, parent).await?;
     // Решение 407: подмена достоверна, только если balanceOf входа после неё — ровно need.
     let seen = in_idx.and_then(|i| pc::u256(&res[i]));
     if credited && seen != Some(io.need) {

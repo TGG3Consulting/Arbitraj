@@ -34,6 +34,8 @@ struct Prep {
     note: Option<String>,
     have: Option<U256>,
     n: u64,
+    warm: bool,
+    stamp: Option<super::presell_warm::Stamp>,
 }
 
 /// Симуляция продажи до покупки (см. шапку). Принимает: котировку, сделку, кошелёк, вход (Io.credit и Io.have
@@ -47,19 +49,87 @@ pub async fn run(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         have: p.have,
         ..*io
     };
-    let mut sim = dry_sim::run(q, r, wallet, &with).await?;
+    let attempt = dry_sim::run_anchored(q, r, wallet, &with, p.stamp.map(|s| s.hash)).await;
+    let mut sim = match attempt {
+        Ok(value) => value,
+        Err(e) if p.stamp.is_some() => {
+            // Блок мог быть заменён. Сохраняем причину и повторяем без старого баланса.
+            Sim {
+                credit_bad: true,
+                reason: Some(e.message),
+                ..Default::default()
+            }
+        }
+        Err(e) => return Err(e),
+    };
     if sim.credit_bad {
         let why = sim.reason.take().unwrap_or_default();
         if let Some(t) = io.token_in {
-            find::reject(q.ctx.place.id, t, p.n, &why);
+            if let Some(stamp) = p.stamp {
+                q.ctx.evm_chain.presell().reject(wallet, t, stamp, &why);
+            } else {
+                find::reject(q.ctx.place.id, t, p.n, &why);
+            }
         }
         note = Some(format!("{why} — повтор без подмены (решение 407)"));
         let plain = Io {
             credit: None,
-            have: p.have,
+            have: if let (Some(_), Some(t)) = (p.stamp, io.token_in) {
+                Some(
+                    call::view(
+                        &q.ctx,
+                        t,
+                        &IERC20::balanceOfCall { owner: wallet },
+                        &call::block_tag(r.at.number),
+                    )
+                    .await?,
+                )
+            } else {
+                p.have
+            },
             ..*io
         };
         sim = dry_sim::run(q, r, wallet, &plain).await?;
+    }
+    // Пока dry_fund проверял источники, фон мог подготовить полный объём.
+    // Не превращаем такой исход в урезание 380 и не ждём незавершённый поиск.
+    if p.n > 0
+        && p.stamp.is_none()
+        && sim.fundable.is_some()
+        && q.ctx.chain_id() == Some(56)
+        && let Some(t) = io.token_in
+        && let Some(Ok((stamp, slot, have))) =
+            q.ctx
+                .evm_chain
+                .presell()
+                .read(wallet, t, r.at.number, q.ctx.settings.generation())
+    {
+        let retry = Io {
+            credit: (have < io.need).then(|| presell_slot::credit(t, wallet, slot, io.need)),
+            have: Some(have),
+            ..*io
+        };
+        match dry_sim::run_anchored(q, r, wallet, &retry, Some(stamp.hash)).await {
+            Ok(result) if !result.credit_bad => {
+                q.ctx.evm_chain.presell().funding_short(true);
+                sim = result;
+                note=Some("фоновая проверка завершилась во время проверки источников; проверен полный объём".into());
+            }
+            Ok(result) => q.ctx.evm_chain.presell().reject(
+                wallet,
+                t,
+                stamp,
+                &result.reason.unwrap_or_default(),
+            ),
+            Err(e) => q
+                .ctx
+                .evm_chain
+                .presell()
+                .reject(wallet, t, stamp, &e.message),
+        }
+    }
+    if p.warm && sim.fundable.is_some() {
+        q.ctx.evm_chain.presell().funding_short(false);
     }
     if let Some(n) = note {
         sim.reason = sim.reason.map(|w| format!("{w}; {n}"));
@@ -80,6 +150,8 @@ async fn prepare(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
         note: None,
         have: None,
         n: 0,
+        warm: false,
+        stamp: None,
     };
     let Some(token) = io.token_in else {
         return Ok(p);
@@ -100,6 +172,33 @@ async fn prepare(q: &Quoting, r: &Ready, wallet: Address, io: &Io<'_>) -> Gatewa
     let owner = IERC20::balanceOfCall { owner: wallet };
     let block = r.at.number;
     // Ревью М-a: слот уже в кэше — баланс и слово слота читаются параллельно (круга до узла не добавляется).
+    if q.ctx.chain_id() == Some(56)
+        && let Some(record) =
+            q.ctx
+                .evm_chain
+                .presell()
+                .read(wallet, token, block, q.ctx.settings.generation())
+    {
+        p.warm = true;
+        match record {
+            Ok((stamp, slot, have)) => {
+                p.stamp = Some(stamp);
+                p.have = Some(have);
+                if have < io.need {
+                    p.credit = Some(presell_slot::credit(token, wallet, slot, io.need));
+                    p.note = Some(q.ctx.evm_chain.presell().totals());
+                }
+            }
+            Err(reason) => {
+                p.have = Some(call::view(&q.ctx, token, &owner, &tag).await?);
+                p.note = Some(format!(
+                    "{reason} — штатное пополнение (решение 407), {}",
+                    q.ctx.evm_chain.presell().totals()
+                ));
+            }
+        }
+        return Ok(p);
+    }
     let known = find::cached(q.ctx.place.id, token);
     let (have, raw) = match known {
         Some(s) => {

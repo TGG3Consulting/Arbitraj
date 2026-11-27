@@ -36,12 +36,16 @@ pub struct ChainCell(Arc<Local>);
 #[derive(Default)]
 struct Local {
     id: OnceLock<Slot>,
+    presell: super::exec::presell_warm::Cache,
     ekubo_v2: super::pools::deployment_at_head::Cache,
     mint_club: super::pools::deployment_at_head::Cache,
     ring: super::pools::ring_acceptance::Book,
     white: super::quote::white_state::Cache,
 }
 impl ChainCell {
+    pub(super) fn presell(&self) -> &super::exec::presell_warm::Cache {
+        &self.0.presell
+    }
     pub(super) fn mint_club(&self) -> &super::pools::deployment_at_head::Cache {
         &self.0.mint_club
     }

@@ -27,7 +27,11 @@ fn bad(ctx: &Ctx) -> GatewayError {
         "BaseStonk: не подтверждены адрес, условия или выплата прямого обмена",
     )
 }
-fn terms(ctx: &Ctx, e: &Entry, module: Address) -> GatewayResult<Terms> {
+pub(in crate::venues::bsc_dex) fn terms(
+    ctx: &Ctx,
+    e: &Entry,
+    module: Address,
+) -> GatewayResult<Terms> {
     let PoolRef::Singleton { manager, id } = e.pool.reference else {
         return Err(bad(ctx));
     };

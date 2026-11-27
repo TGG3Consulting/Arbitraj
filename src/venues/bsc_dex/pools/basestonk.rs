@@ -137,11 +137,14 @@ pub(super) async fn read(
     };
     let buy = if terms.sniper {
         let q = ctx.dex_addr("dex.quoter", f.id)?;
-        let Some(executor) = crate::venues::bsc_dex::exec::executor::address(ctx)? else {
-            return Ok((token, false, true));
+        // Хук видит SimpleSwapRouter при прямой оплате, даже если внешний модуль отсутствует в V5.
+        let sender = match crate::venues::bsc_dex::exec::executor::address(ctx)? {
+            Some(executor) => executor,
+            None if ctx.dex_addr("dex.router", f.id).is_ok() => original(ctx, f)?.0,
+            None => q,
         };
         let q_ex = IStonk::sniperExemptCall { sender: q };
-        let ex = IStonk::sniperExemptCall { sender: executor };
+        let ex = IStonk::sniperExemptCall { sender };
         let rate = IStonk::taxForCall {
             key: IStonk::Key {
                 currency0: k.currency0,

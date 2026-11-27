@@ -24,6 +24,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     Antfarm,
     Dagrow,
     SafeSwap,
+    UniswapV1,
     Rubicon,
     NativeFlat,
     Prop,
@@ -41,6 +42,7 @@ pub(super) struct Selection {
     carbon: Option<B256>,
     bounds:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
+    uniswap_v1:Option<(Address,bool,bool)>,
     flux_eth:bool,
     pub(super) native_flat:Option<(Address,alloy_primitives::U256)>,
     venue_fallback:Option<(Address,bool)>,
@@ -56,6 +58,7 @@ impl Selection {
                 carbon: None,
                 bounds:None,
                 proceeds: Some((tier, loan)),
+                uniswap_v1:None,
                 flux_eth:false,
                 native_flat:None,
                 venue_fallback:None,
@@ -68,6 +71,7 @@ impl Selection {
             proceeds: None,
             native_flat:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=>Some((target,wei)),_=>None},_=>None},
             venue_fallback:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::VenueFallback{target,allowed})=>Some((target,allowed)),_=>None},_=>None},
+            uniswap_v1:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::UniswapV1{target,module,native,..})=>Some((target,module,native)),_=>None},_=>None},
             flux_eth:matches!(leg.hops.as_slice(),[hop] if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::FluxEth{..}))),
         }
     }
@@ -88,6 +92,7 @@ impl Market {
             _ if e.family.variant==Variant::IntegralSize=>Some(Self::Integral),
             PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
+            PoolState::UniswapV1(_) => Some(Self::UniswapV1),
             PoolState::Rubicon(_) => Some(Self::Rubicon),
             PoolState::Carbon(_) => Some(Self::Carbon),
             PoolState::MintClub(_) => Some(Self::MintClub),
@@ -99,6 +104,7 @@ impl Market {
     }
     pub(super) fn currency(self, e: &Entry, native: bool) -> bool {
         match (&e.pool.state, self) {
+            (PoolState::UniswapV1(s),Self::UniswapV1)=>!native || !s.dual(),
             (_,Self::O1) if e.family.variant.flux_native()=>true,
             (PoolState::Carbon(s), Self::Carbon) => s.native_side.is_some() == native,
             _ => !native,
@@ -115,6 +121,7 @@ impl Market {
             Self::Bundles=>"Bundles Swap: требуется выбранный адрес исполнения",
             Self::Dagrow => "DAGrow: требуются исходные условия поручения",
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
+            Self::UniswapV1=>"Uniswap V1: потеряна форма выбранного обмена",
             Self::Rubicon=>"Rubicon Classic: требуется подтверждённый модуль и заявки",
             Self::NativeFlat=>"MarSwap: требуется выбранная плата за одну пару",
             Self::Prop => "LambdaClass: требуется исходное поручение с выбранным адресом и разрешением перехода на Uniswap",
@@ -139,6 +146,7 @@ impl Market {
             Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
             Self::SafeSwap => "SafeSwap",
+            Self::UniswapV1=>"Uniswap V1",
             Self::Rubicon=>"Rubicon Classic",
             Self::NativeFlat=>"MarSwap: фиксированная плата ETH",
             Self::Prop => "LambdaClass PropAMMRouter",
@@ -200,6 +208,7 @@ impl Market {
             Self::Bundles=>Box::pin(super::bundles_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::SafeSwap=>Box::pin(super::safeswap_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::UniswapV1=>Box::pin(super::uniswap_v1_plan::plan(ctx,s,wallet,height,selected.uniswap_v1)).await,
             Self::Rubicon=>Box::pin(super::rubicon_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
             Self::NativeFlat=>Box::pin(super::mars_plan::plan(ctx,s,wallet,height,selected.native_flat.ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::NoRoute,self.missing_selection()))?)).await,
             Self::Prop=>Box::pin(super::prop_plan::plan(ctx,s,wallet,height,selected.venue_fallback)).await,
@@ -253,6 +262,10 @@ pub(super) fn router_shape(
         if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
     }
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::UniswapV1{native,..})=hop.fee_mode {
+        if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|matches!(e.pool.state,PoolState::UniswapV1(_))){return Ok(());}
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Uniswap V1: валюта кошелька или адрес рынка изменились"));
+    }
     let native_flat=leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..})));
     let needs_wallet=native_flat||leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
         (direct && (matches!(e.family.variant,Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
@@ -279,6 +292,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (_,Variant::Bundles)=>Some(super::bundles_plan::probe(ctx,e,order,wallet,now)),
         (_,variant) if variant.protected_router_wallet()=>Some(super::safeswap_wallet::probe(ctx,e,order,wallet,now)),
         (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
+        (PoolState::UniswapV1(s),_)=>Some(super::uniswap_v1_plan::probe(ctx,e,s,order,wallet,now)),
         (PoolState::Rubicon(book),_)=>Some(super::rubicon_plan::probe(ctx,e,book,order,wallet,now)),
         (_,Variant::PropVenue)=>Some(super::prop_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::IntegralSize)=>Some(super::integral_plan::probe(ctx,e,order,wallet,now)),

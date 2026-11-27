@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -27,7 +27,11 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut quotes = Vec::new();
     let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
-    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native())) {
+    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native() || e.family.variant==Variant::UniswapV1)) {
+        if matches!(e.pool.state,crate::core::types::PoolState::UniswapV1(_)) {
+            quotes.extend(Box::pin(super::uniswap_v1_pricing::options(q,i,e,payer,native,graph,head)).await);
+            continue;
+        }
         if matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap){
             let safe=e.family.variant.protected_router_wallet();
             if e.family.variant==Variant::DegenSwap {

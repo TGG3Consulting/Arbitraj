@@ -155,6 +155,8 @@ pub enum RouterFeeMode {
     Rebate,
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
+    /// Original V1 exchange or a wallet module, with explicit physical ETH settlement.
+    UniswapV1 {target:alloy_primitives::Address,module:bool,native:bool,native_cash:bool},
     /// Нативный ETH Omni Flux, подписанный Universal Router и направление расчёта.
     FluxEth {target:alloy_primitives::Address, native_cash:bool},
     /// Нативный расчёт через принятый модуль кошелька. Адрес и денежная сторона сохраняются в поручении.

@@ -24,6 +24,7 @@ struct Profile {
 
 /// Строковое поле, перечень адресов или сетевые ключи дочерних фабрик (dex.sub_dex).
 #[derive(Deserialize)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 #[serde(untagged)]
 enum Parameter {
     Text(String),
@@ -275,6 +276,18 @@ mod tests {
                 .into_iter()
                 .find(|s| s["chain_id"] == p.chain_id)
                 .unwrap();
+            if p.id=="uniswap-v1-ethereum"{
+                let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/uniswap_v1_ethereum.json.gz");
+                let evidence:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                assert_eq!(evidence["selector"],snapshot["selector"]);
+                for (setting,role) in [("dex.factory_runtime_hash","factory"),("dex.v1_template_runtime_hash","template")]{
+                    assert_eq!(p.settings.get(setting),Some(&Parameter::Text(evidence[role]["runtime"].as_str().unwrap().into())));
+                }
+                for m in evidence["markets"].as_object().unwrap().values(){
+                    assert_eq!(p.settings.get("dex.pair_runtime_hash"),Some(&Parameter::Text(m["runtime"].as_str().unwrap().into())));
+                }
+                assert_eq!(p.settings.get("dex.module_runtime_hashes"),Some(&Parameter::List(vec![evidence["module_hash"].as_str().unwrap().into()])));
+            }
             let scope = Scope::Dex(format!("{}@{}", p.id, p.network));
             for (k, v) in &p.settings {
                 let def = catalog::find(k).expect("настройка профиля должна быть в схеме");

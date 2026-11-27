@@ -5787,5 +5787,26 @@
         "0xb6a8542bbe67ac3b47b202654277f7ce2c39cc76f44ed51f9740f6c591b1657a"
       ]
     }
+  },
+  {
+    "network": "ethereum",
+    "id": "uniswap-v1-ethereum",
+    "chain_id": 1,
+    "source": "https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy",
+    "settings": {
+      "dex.kind": "uniswap_v1",
+      "dex.factory": "0xc0a47dfe034b400b47bdad5fecda2621de6c4d95",
+      "dex.factory_runtime_hash": "0x7e56b424b2c68a3b91749034670f2728eb01bd758b9bc4c5ba49874f4b6ffa36",
+      "dex.v1_template": "0x2157a7894439191e520825fe9399ab8655e0f708",
+      "dex.v1_template_runtime_hash": "0xb9205fc3f30b0ad30c6f03a0f464f8fd435fbf28cdbb6071054d62fb506a4b96",
+      "dex.pair_runtime_hash": "0x72e826e5ec1e970f37af4b41635535232c58bcb7795871b2738347fd8c1314ca",
+      "dex.router_exact_tokens": [
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xa49c13fbb6cd41522f11aa7f179b0f0eec086521a600ad2fa6572f97852cfd0c"
+      ]
+    }
   }
 ]

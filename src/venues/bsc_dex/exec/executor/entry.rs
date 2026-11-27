@@ -180,6 +180,15 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     }
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if let PoolState::UniswapV1(s)=&e.pool.state {
+        let valid=match &e.pool.reference{
+            PoolRef::Contract(a)=>s.markets.iter().flatten().count()==1 && s.markets.iter().flatten().any(|m|m.address==*a),
+            PoolRef::Multi{contract,token0,token1}=>s.dual() && *contract==s.factory && [*token0,*token1]==s.tokens,
+            _=>false
+        };
+        if k!=ExecKind::Balancer || !valid || s.side(token_in).is_none(){return Err(ctx.err(ErrorCode::NoRoute,"Uniswap V1: исходный рынок не подтверждён"));}
+        return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if let PoolState::Bundles(book)=&e.pool.state {
         if k!=ExecKind::Balancer || pool!=book.market.pool || !book.market.tokens.contains(&token_in){return Err(ctx.err(ErrorCode::NoRoute,"Bundles Swap: форма шага не соответствует рынку"))}
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));

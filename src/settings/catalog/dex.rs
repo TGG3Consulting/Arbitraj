@@ -423,6 +423,8 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.few_factory", K::Address, L::None, "адрес", DX, "Фабрика канонических ERC-20 обёрток Ring Few. Проверяется по коду и реестру на узле при загрузке пары.").optional(),
     d("Контракты DEX", "dex.few_init_hash", K::Text, L::None, "keccak256", DX, "Хеш кода создания канонической обёртки Ring Few для расчёта CREATE2. Источник — проверенный профиль этой фабрики.").optional(),
     d("Контракты DEX", "dex.few_runtime_hash", K::Text, L::None, "keccak256", DX, "Хеш развёрнутого кода обёртки Ring Few. Проверяются обе монеты при загрузке пары.").optional(),
+    d("Контракты DEX", "dex.v1_template", K::Address, L::None, "адрес", DX, "Uniswap V1: исходный контракт биржи, возвращаемый exchangeTemplate() фабрики выбранной сети"),
+    d("Контракты DEX", "dex.v1_template_runtime_hash", K::Text, L::None, "keccak256", DX, "Uniswap V1: хеш кода шаблона, который исполняют биржи этой фабрики"),
     d("Контракты DEX", "dex.pair_runtime_hash", K::Text, L::None, "keccak256", DX, "Хеш развёрнутого кода пары Ring или KEWL. Для Ring сверяется CREATE2, для KEWL — счётчик CREATE, фабрика и оба направления реестра.").optional(),
     d("Контракты DEX", "dex.ring_direct_assets", K::AddressList, L::None, "адреса", DX, "Входные underlying Ring с подтверждённым прямым разрешением роутера на обёртку. Остальные используют предварительный перевод и условное разрешение.").optional(),
     d("Контракты DEX", "dex.fraxswap_router_hash", K::Text, L::None, "keccak256", DX, "Хеш развёрнутого кода официального роутера Fraxswap по адресу dex.quoter. Нужен для прямого исполнения от кошелька с проверкой фактического выхода.").optional(),

@@ -1,5 +1,6 @@
 """Record original V1 exact-input/output price operands at the Ethereum deployment snapshot (read-only)."""
 import argparse
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -24,7 +25,7 @@ def capture(endpoint):
         raw = bytes.fromhex(rpc("eth_getCode",[address,c.selector])[2:])
         if not raw:
             raise ValueError(("missing code", address))
-        return dict(address=address, bytes=len(raw), keccak256="0x"+keccak(raw).hex())
+        return dict(address=address, bytes=len(raw), sha256=sha256(raw).hexdigest(), keccak256="0x"+keccak(raw).hex())
     template, = c.one(FACTORY, "exchangeTemplate()",[],[],["address"])
     roles = {"factory":code(FACTORY), "template":code(template)}
     tokens = [*STABLES, DAI, WETH]

@@ -42,6 +42,11 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
         return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
     }
+    if let crate::core::types::PoolState::UniswapV1(s)=&e.pool.state {
+        use super::super::exec::uniswap_v1_wallet::IV1Wallet;
+        return s.markets.iter().flatten().any(|m|m.address==log.address)
+            && log.topics.len()==4 && [IV1Wallet::TokenPurchase::SIGNATURE_HASH, IV1Wallet::EthPurchase::SIGNATURE_HASH].contains(&log.topics[0]);
+    }
     if let crate::core::types::PoolState::Rubicon(book)=&e.pool.state {
         use super::super::exec::rubicon_wallet::IBookWallet;
         return log.address==book.market && log.topics.first()==Some(&IBookWallet::emitTake::SIGNATURE_HASH) &&
@@ -82,7 +87,12 @@ pub fn missing(entries: &[&Entry], logs: &[SimLog]) -> Vec<(usize, String)> {
     entries
         .iter()
         .enumerate()
-        .filter(|(_, e)| !logs.iter().any(|l| by_pool(e, l)) && !super::super::pools::temple::defended(e,entries,logs))
+        .filter(|(_, e)| {
+            if let crate::core::types::PoolState::UniswapV1(s)=&e.pool.state {
+                return s.markets.iter().flatten().any(|m|!logs.iter().any(|l|l.address==m.address && by_pool(e,l)));
+            }
+            !logs.iter().any(|l| by_pool(e, l)) && !super::super::pools::temple::defended(e,entries,logs)
+        })
         .map(|(i, e)| {
             let from = if others.is_empty() {
                 "события обмена от пула нет".to_string()

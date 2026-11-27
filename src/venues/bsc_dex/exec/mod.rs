@@ -47,6 +47,8 @@ pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
 pub(super) mod mars_wallet;
 pub(super) mod mars_plan;
+pub(super) mod uniswap_v1_wallet;
+pub(super) mod uniswap_v1_plan;
 pub(super) mod rubicon_wallet;
 pub(super) mod rubicon_plan;
 pub(super) mod prop_wallet;

@@ -74,6 +74,7 @@ pub(super) mod carbon_pricing;
 mod temple_budget;
 pub(super) mod mint_club_pricing;
 mod module_pricing;
+mod uniswap_v1_pricing;
 pub(in crate::venues::bsc_dex) mod surge_pricing;
 mod prop_pricing;
 mod integral_pricing;

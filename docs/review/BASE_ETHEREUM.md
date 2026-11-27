@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `35426952` (27.11.2026).
+Последний просмотренный коммит: `ed43c12c` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1497,3 +1497,13 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - `quote/quoter_calls.rs` и `quote/v2_pair_quote.rs` получили ранние `if variant==SafeSwapTrade { return safeswap_quotes::… }` — то же через диспетчер рынка (`quote/market_selection` или `Market`), а не через if в общем V2-пути.
 
   Дописывание варианта в уже существующие списки `matches!` (`families`, `load_batch`, `verify`, `v2_wallet_sim`) не считаю за R — это сложившийся реестр. Но сами ветки с логикой должны жить в файле DEX.
+
+### ed43c12c — проверено
+
+- `quote/pool_after.rs::appliable`: новый случай `VaultPool → ranges_sequence::supported(d)`. Раньше любой `VaultPool` давал `_ => false`. `supported` истинно только для `PuzzleRanges` (enabled, `sequence_fee` задан, без крючка и без rate-провайдеров), поэтому пулы Balancer V2/V3 на BSC по-прежнему не идут второй долей. ✅
+- `quote/graph_seq.rs`: сохранение `i0/i1` при переносе состояния `VaultPool` касается только состояний из `after`. Туда попадают только пулы с `appliable == true`, то есть только Ranges. На BSC не влияет. ✅
+- `check/probe_exec.rs`, `quote/pool_quote.rs`: `Pendle` заменён на признак семейства `wallet_ladder()` (`SafeSwapTrade | Pendle`) — это шаг к R-51, хорошо. Для Pendle событие то же. ✅
+- `load_balancer_v3.rs`: `sequence_fee` выставляется только для `PuzzleRanges` и только при стандартных токенах без yield-комиссии. Новое поле в `VaultV3Rule` с `serde(default)`, старые записи читаются. ✅
+- `pools/umia.rs`: адресов нет, роли читаются на одном каноническом хэше.
+  - 💡 `launch_keys.rs`: `(flags & 0x3fff) == 0x3a80` и `1..1_000_000`. Это константы протокола: младшие 14 бит адреса крючка Uniswap v4 — разрешения, `1_000_000` — потолок комиссии v4 в pips. Допустимо, но нужен комментарий: какие именно разрешения дают `0x3a80` и ссылка на исходник крючка Umia.
+- R-51 по-прежнему открыт (`exec/plan.rs` 401, ранние `if SafeSwapTrade` в `quoter_calls` / `v2_pair_quote`).

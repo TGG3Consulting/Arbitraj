@@ -39,6 +39,11 @@ pub(super) fn band(
     rates: &[Arc<Entry>],
     bridge: &Bridge,
 ) -> Result<Band, String> {
+    // При покупке CHF выдаёт мост. На краю диапазона встречная продажа
+    // может вернуть лишь пыль даже при полностью обеспеченной покупке.
+    let (needed, covered) = buy_depth(ctx, rates, bridge, cash, units.0)?;
+    let buy = num::to_decimal(needed, dec)
+        .ok_or_else(|| "Глубина покупки не помещается в USDT".to_owned())?;
     let value = |a| {
         if a == U256::ZERO {
             return Ok((rust_decimal::Decimal::ZERO, true));
@@ -59,11 +64,54 @@ pub(super) fn band(
             .ok_or_else(|| "Глубина Aktionariat не помещается в USDT".to_owned())?;
         Ok::<_, String>((usd, full))
     };
-    let (buy, b) = value(units.0)?;
     let (sell, s) = value(units.1)?;
     Ok(Band {
         buy,
         sell,
-        full: units.2 && b && s,
+        full: units.2 && covered && s,
     })
+}
+
+fn buy_depth(
+    ctx: &Ctx,
+    direct: &[Arc<Entry>],
+    bridge: &Bridge,
+    cash: Address,
+    want: U256,
+) -> Result<(U256, bool), String> {
+    if want.is_zero() {
+        return Ok((U256::ZERO, true));
+    }
+    let mut target = want;
+    while target > U256::ZERO {
+        let price = |pools: &[Arc<Entry>], out: Address, qty: U256| {
+            pools
+                .iter()
+                .filter(|e| e.valid)
+                .filter_map(|e| {
+                    let input = if out == e.pool.token0 {
+                        e.pool.token1
+                    } else if out == e.pool.token1 {
+                        e.pool.token0
+                    } else {
+                        return None;
+                    };
+                    let s = pool_quote::swap(ctx, e, input, false, qty).ok()?;
+                    (s.complete && s.amount_out == qty && !s.amount_in.is_zero())
+                        .then_some(s.amount_in)
+                })
+                .min()
+        };
+        let straight = price(direct, cash, target);
+        let via = price(&bridge.to_wrapped, cash, target)
+            .and_then(|mid| price(&bridge.to_usdt, bridge.wrapped, mid));
+        if let Some(paid) = straight.into_iter().chain(via).min() {
+            return Ok((paid, target == want));
+        }
+        if direct.is_empty() && (bridge.to_wrapped.is_empty() || bridge.to_usdt.is_empty()) {
+            break;
+        }
+        target >>= 1;
+    }
+    Err("Aktionariat: расчётная валюта не покупает CHF по прочитанным пулам".to_owned())
 }

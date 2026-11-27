@@ -40,10 +40,10 @@ def directory(r):
         template="0x"+c[22:62]
         if template not in roles:
             impl=r.one("eth_getCode",[template,at])
-            roles[template]={"runtime":"0x"+keccak(hexstr=impl).hex(),"bytes":(len(impl)-2)//2}
+            roles[template]={"runtime":"0x"+keccak(hexstr=impl).hex(),"bytes":(len(impl)-2)//2,"suffix":impl[-64:]}
         q=[call(p,n+"()",["uint256"]) for n in VIEW]
         for i in range(2):
-            q.extend([call(p,"coins(uint256)",["address"],["uint256"],[i]),call(p,"balances(uint256)",["uint256"],[i])])
+            q.extend([call(p,"coins(uint256)",["address"],["uint256"],[i]),call(p,"balances(uint256)",["uint256"],["uint256"],[i])])
         outputs=views(q)
         if [outputs[8][0],outputs[10][0]]!=list(pair):raise ValueError("pool currencies differ from factory")
         raw={"0x"+wire.hex():{"result":"0x"+encode(abi,res).hex()} for (_,wire,abi),res in zip(q,outputs,strict=True) if res}
@@ -51,7 +51,8 @@ def directory(r):
         extra=views([call(t,"balanceOf(address)",["uint256"],["address"],[p]) for t in pair]+[call(t,"decimals()",["uint8"]) for t in pair])
         ladder=[(i,max(1,balances[i]*ppm//10**6)) for i in range(2) for ppm in [1,10,1000,10000]] if min(balances)>2 else []
         out=views([call(p,"get_dy(uint256,uint256,uint256)",["uint256"],["uint256"]*3,[i,1-i,amount]) for i,amount in ladder])
-        pools.append(dict(pool=p,template=template,coins=pair,balances=list(map(str,balances)),physical=[str(v[0]) if v else None for v in extra[:2]],
+        pools.append(dict(pool=p,template=template,coins=pair,balances=list(map(str,balances)),erc20_balances=[str(v[0]) if v else None for v in extra[:2]],
+                          native_balance=str(int(r.one("eth_getBalance",[p,at]),16)) if WETH in pair else None,
                           decimals=[v[0] if v else None for v in extra[2:]],calls=raw,code=c,
                           get_dy=[dict(i=i,j=1-i,dx=str(amount),get_dy={"result":"0x"+encode(["uint256"],result).hex()} if result else {"error":"reverted"}) for (i,amount),result in zip(ladder,out,strict=True)]))
     return {"source":SOURCE,"selector":at,"timestamp":int(r.header["timestamp"],16),"factories":FACTORIES,"registry":lists,"templates":roles,"pools":pools}

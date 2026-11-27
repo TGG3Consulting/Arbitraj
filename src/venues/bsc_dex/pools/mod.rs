@@ -240,6 +240,8 @@ pub mod nami;
 pub mod supernova;
 mod nami_batch;
 pub(crate) mod cycle_cash;
+pub(crate) mod balancer_v1;
+pub(super) mod balancer_v1_directory;
 pub(crate) mod bancor_v3;
 pub(super) mod bancor_directory;
 pub(crate) mod uniswap_v1;

@@ -4,14 +4,20 @@
   import {loadPlan, unsigned, estimate, send, deployed} from '../lib/walletDeployment.js';
   import ErrorText from './ErrorText.svelte';
   let {id, kind, venue} = $props();
-  const v1 = $derived(kind === "uniswap_v1");
-  const bancor = $derived(kind === "bancor_v3");
-  const stabull = $derived(kind === 'stabull' || kind === 'stabull_module');
-  const recoverable = $derived(v1 || bancor || stabull);
-  const file = $derived(stabull ? 'stabull-base' : bancor ? "bancor-v3-ethereum" : v1 ? "uniswap-v1-ethereum" : "rubicon-classic-base");
+  const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
+  const deployments = {
+    uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
+    bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
+    balancer_v1:{file:'balancer-v1-ethereum',key:'balancer-v1-create:1',name:'BalancerV1Adapter в Ethereum',load:()=>import('../assets/balancer-v1-ethereum.json')},
+    stabull:stabullPlan, stabull_module:stabullPlan,
+    rubicon_classic:{file:'rubicon-classic-base',key:'rubicon-classic-create:8453',name:'RubiconClassicWallet на Base'},
+  };
+  const deployment = $derived(deployments[kind]);
+  const recoverable = $derived(!!deployment.load);
+  const file = $derived(deployment.file);
   let manifest = $state(null), estimateSeen = $state(null), pending = $state(null), txHash = $state('');
   let result = $state(''), error = $state(''), busy = $state(false), readyAddress = $state('');
-  const key = $derived(stabull ? 'stabull-create:8453' : bancor ? "bancor-v3-create:1" : v1 ? 'uniswap-v1-create:1' : 'rubicon-classic-create:8453');
+  const key = $derived(deployment.key);
   const value = (name) => store.values[name+'|Dex|'+id];
   const atVenue = (name) => store.values[name+'|Venue|'+venue];
   const current = () => ({chainId:atVenue('dex.evm_chain_id'), wrapped:atVenue('dex.native_wrapped'),
@@ -40,7 +46,7 @@
   async function prepare() {
     refreshPending();
     if (recoverable) {
-      const artifact = stabull ? await import('../assets/stabull-base.json') : bancor ? await import('../assets/bancor-v3-ethereum.json') : await import('../assets/uniswap-v1-ethereum.json');
+      const artifact = await deployment.load();
       manifest = await loadPlan(current(),artifact.default);
     } else {
       const response = await fetch(import.meta.env.BASE_URL+file+'.json');
@@ -116,24 +122,26 @@
       if (value('dex.router')) throw new Error('Адрес модуля уже настроен.');
       await setValue('dex.router', {kind:'Dex', id}, readyAddress);
       save(null);
-      result=stabull && kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в dex.router.';
+      result=kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в dex.router.';
     });
   }
 
 </script>
 
 <details>
-  <summary>Разместить {stabull ? 'StabullAdapter на Base' : bancor ? 'BancorV3Adapter в Ethereum' : v1 ? 'UniswapV1Adapter в Ethereum' : 'RubiconClassicWallet на Base'}</summary>
+  <summary>Разместить {deployment.name}</summary>
   <button class="quiet" disabled={busy} onclick={() => run(prepare)}>Открыть параметры размещения</button>
   {#if manifest}
-    {#if stabull}
+    {#if kind === 'balancer_v1'}
+      <p>Фабрика BPool <code>{manifest.factory}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
+    {:else if deployment === stabullPlan}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
-    {:else if bancor}
+    {:else if kind === 'bancor_v3'}
       <p>Конструктор Bancor V3 в Ethereum. Перевод ETH при создании — 0.</p>
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}
         <div>{label} <code>{manifest.arguments[i]}</code></div>
       {/each}
-    {:else if v1}
+    {:else if kind === 'uniswap_v1'}
       <p>Фабрика <code>{manifest.roles.factory.address}</code>, WETH <code>{manifest.roles.wrapped.address}</code>. Конструктор принимает оба адреса. Перевод ETH контракту — 0.</p>
     {:else}
       <p>Рынок <code>{manifest.market}</code>. Конструктор принимает этот адрес. Перевод ETH контракту — 0.</p>
@@ -143,7 +151,7 @@
     {#if !pending && !value('dex.router')}
       <button class="quiet" disabled={busy} onclick={() => run(price)}>Оценить газ в кошельке</button>
       {#if estimateSeen}
-        <p>Плательщик <code>{estimateSeen.from}</code>. Оценка {v1 || bancor ? "Ethereum" : "L2"} — {estimateSeen.gas} ед. газа, {estimateSeen.fee} wei. Кошелёк покажет условия отправки и сетевую комиссию.</p>
+        <p>Плательщик <code>{estimateSeen.from}</code>. Оценка {manifest.chainId === 1 ? "Ethereum" : "L2"} — {estimateSeen.gas} ед. газа, {estimateSeen.fee} wei. Кошелёк покажет условия отправки и сетевую комиссию.</p>
         <button disabled={busy} onclick={() => run(submit)}>Подтвердить создание контракта в кошельке</button>
       {/if}
     {/if}

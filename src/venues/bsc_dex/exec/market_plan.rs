@@ -24,6 +24,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     Antfarm,
     Dagrow,
     SafeSwap,
+    BalancerV1,
     BancorV3,
     UniswapV1,
     Rubicon,
@@ -44,6 +45,7 @@ pub(super) struct Selection {
     carbon: Option<B256>,
     bounds:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
+    balancer_v1:Option<super::balancer_v1_plan::Selection>,
     bancor_v3:Option<(Address,super::bancor_v3_plan::Form)>,
     uniswap_v1:Option<(Address,bool,bool)>,
     flux_eth:bool,
@@ -61,6 +63,7 @@ impl Selection {
                 carbon: None,
                 bounds:None,
                 proceeds: Some((tier, loan)),
+                balancer_v1:None,
                 bancor_v3:None,
                 uniswap_v1:None,
                 flux_eth:false,
@@ -75,6 +78,9 @@ impl Selection {
             proceeds: None,
             native_flat:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=>Some((target,wei)),_=>None},_=>None},
             venue_fallback:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::VenueFallback{target,allowed})=>Some((target,allowed)),_=>None},_=>None},
+            balancer_v1:match leg.hops.as_slice(){[h]=>match h.fee_mode{
+                Some(crate::core::types::RouterFeeMode::BalancerV1{target,native,desired,..})=>
+                    Some(super::balancer_v1_plan::Selection{target,native,desired}),_=>None},_=>None},
             bancor_v3:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::BancorV3{target,module,native,exempt,desired,..})=>Some((target,super::bancor_v3_plan::Form{module,native,exempt,desired})),_=>None},_=>None},
             uniswap_v1:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::UniswapV1{target,module,native,..})=>Some((target,module,native)),_=>None},_=>None},
             flux_eth:matches!(leg.hops.as_slice(),[hop] if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::FluxEth{..}))),
@@ -98,6 +104,7 @@ impl Market {
             _ if e.family.variant==Variant::IntegralSize=>Some(Self::Integral),
             PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
+            PoolState::BalancerV1(_) => Some(Self::BalancerV1),
             PoolState::BancorV3(_) => Some(Self::BancorV3),
             PoolState::UniswapV1(_) => Some(Self::UniswapV1),
             PoolState::Rubicon(_) => Some(Self::Rubicon),
@@ -111,6 +118,7 @@ impl Market {
     }
     pub(super) fn currency(self, e: &Entry, native: bool) -> bool {
         match (&e.pool.state, self) {
+            (PoolState::BalancerV1(_),Self::BalancerV1)=>true,
             (PoolState::BancorV3(_),Self::BancorV3)=>true,
             (PoolState::UniswapV1(s),Self::UniswapV1)=>!native || !s.dual(),
             (_,Self::O1) if e.family.variant.flux_native()=>true,
@@ -129,6 +137,7 @@ impl Market {
             Self::Bundles=>"Bundles Swap: требуется выбранный адрес исполнения",
             Self::Dagrow => "DAGrow: требуются исходные условия поручения",
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
+            Self::BalancerV1=>"Balancer V1: отсутствует поручение для выбранного BPool",
             Self::BancorV3=>"Bancor V3: отсутствует поручение для выбранного рынка",
             Self::UniswapV1=>"Uniswap V1: потеряна форма выбранного обмена",
             Self::Rubicon=>"Rubicon Classic: требуется подтверждённый модуль и заявки",
@@ -156,6 +165,7 @@ impl Market {
             Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
             Self::SafeSwap => "SafeSwap",
+            Self::BalancerV1=>"Balancer V1",
             Self::BancorV3=>"Bancor V3",
             Self::UniswapV1=>"Uniswap V1",
             Self::Rubicon=>"Rubicon Classic",
@@ -220,6 +230,7 @@ impl Market {
             Self::Bundles=>Box::pin(super::bundles_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::SafeSwap=>Box::pin(super::safeswap_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::BalancerV1=>Box::pin(super::balancer_v1_plan::plan(ctx,s,wallet,height,selected.balancer_v1)).await,
             Self::BancorV3=>Box::pin(super::bancor_v3_plan::plan(ctx,s,wallet,height,selected.bancor_v3)).await,
             Self::UniswapV1=>Box::pin(super::uniswap_v1_plan::plan(ctx,s,wallet,height,selected.uniswap_v1)).await,
             Self::Rubicon=>Box::pin(super::rubicon_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
@@ -276,6 +287,11 @@ pub(super) fn router_shape(
         if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
     }
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::BalancerV1{native,..})=hop.fee_mode {
+        if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash))
+            && q.reg.entry(&hop.pool).is_some_and(|e|matches!(e.pool.state,PoolState::BalancerV1(_))){return Ok(());}
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Balancer V1: изменилась валюта кошелька"));
+    }
     if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::BancorV3{native,..})=hop.fee_mode {
         if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|matches!(e.pool.state,PoolState::BancorV3(_))){return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Bancor V3: валюта подписываемого поручения изменилась"));
@@ -310,6 +326,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (_,Variant::Bundles)=>Some(super::bundles_plan::probe(ctx,e,order,wallet,now)),
         (_,variant) if variant.protected_router_wallet()=>Some(super::safeswap_wallet::probe(ctx,e,order,wallet,now)),
         (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
+        (PoolState::BalancerV1(_),_)=>Some(super::balancer_v1_plan::probe(ctx,e,order,wallet,now)),
         (PoolState::BancorV3(s),_)=>Some(super::bancor_v3_plan::probe(ctx,e,s,order,wallet,now)),
         (PoolState::UniswapV1(s),_)=>Some(super::uniswap_v1_plan::probe(ctx,e,s,order,wallet,now)),
         (PoolState::Rubicon(book),_)=>Some(super::rubicon_plan::probe(ctx,e,book,order,wallet,now)),

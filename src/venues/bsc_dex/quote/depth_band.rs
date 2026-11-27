@@ -191,6 +191,16 @@ fn side(
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
             Ok((super::super::math::temple::band(s,token_in,out,U256::from((grow*SCALE) as u128),U256::from(SCALE as u128),buy),true))
         }
+        (PoolState::BalancerV1(s),PoolKind::V2)=>{
+            let output=if zfo{e.pool.token1}else{e.pool.token0};
+            let width=U256::from((b*SCALE) as u64);
+            let scale=U256::from(SCALE as u64);
+            let price=s.spot_price(token_in,output).ok_or("Balancer V1: цена пула недоступна")?;
+            let limit=if buy{super::super::math::full_math::mul_div(price,scale+width,scale)}
+                else{super::super::math::full_math::mul_div(price,scale,scale-width)}.ok_or("Balancer V1: переполнение полосы")?;
+            let f=s.band(token_in,output,limit);
+            Ok((f.map_or(U256::ZERO,|v|pick(v.spent,v.received)),false))
+        }
         (PoolState::BancorV3(s),PoolKind::V2)=>{
             let Some((x,y))=s.band_reserves(token_in) else{return Ok((U256::ZERO,true));};
             let (input,_)=xy_band(x,y,b,true)?;

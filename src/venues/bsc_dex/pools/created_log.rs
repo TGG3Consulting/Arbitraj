@@ -69,6 +69,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Carbon => ("dex.factory",super::carbon::ICarbon::PairCreated::SIGNATURE_HASH,false),
+            Proto::V2 if f.variant==super::family_variant::Variant::BalancerV1 => ("dex.factory",super::balancer_v1::IBPool::LOG_NEW_POOL::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BancorV3 => ("dex.factory",super::bancor_v3::IBancor::PoolAdded::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::UniswapV1 => ("dex.factory",super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::MintClub => ("dex.factory",super::mint_club::IBond::TokenCreated::SIGNATURE_HASH,false),
@@ -285,6 +286,12 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
     let t0 = log.topics().first().copied().unwrap_or_default();
     // У одного менеджера CL может быть два вида (Infinity CL и Infinity Stable — решение «122 (Infinity Stable)»):
     // событие разбирается каждым подключённым видом этого источника. Нет ни одного — DEX выключили на лету.
+    if super::balancer_v1::membership_topics().contains(&t0) {
+        for (_,_,_,f) in sources(&p.ctx).into_iter().filter(|(_,_,_,f)|f.variant==super::family_variant::Variant::BalancerV1){
+            balancer_created(p,w,f,log.inner.address).await?;
+        }
+        return Ok(());
+    }
     let all: Vec<_> = sources(&p.ctx)
         .into_iter()
         .filter(|(a, t, _, _)| *a == log.inner.address && *t == t0)
@@ -298,6 +305,10 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
 /// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
 async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
     // Решение 453: событие фабрики crypto-пулов Curve — до двух пар пула (Tricrypto) или поиск по фабрике (v1).
+    if f.variant == super::family_variant::Variant::BalancerV1 {
+        let made=super::balancer_v1::IBPool::LOG_NEW_POOL::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
+        return Box::pin(balancer_created(p,w,f,made.pool)).await;
+    }
     if f.variant == super::family_variant::Variant::BancorV3 {
         let registered=super::bancor_v3::IBancor::PoolAdded::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
         for candidate in super::bancor_directory::created(&p.ctx,f,registered.pool,w.coins.keys().copied(),w.usdt).map_err(|e|e.message)? {
@@ -384,7 +395,21 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     take(p, w, f, c).await
 }
 
-/// Кандидат из события → проверка → подписка (монета не из подписки — пропуск). Ошибка — текст (как у on_log).
+/// New BPool or a mutable pool whose token binding or public-swap flag changed.
+async fn balancer_created(p:&Pools,w:&Watch,f:&'static Family,pool:Address)->Result<(),String>{
+    let at=super::nami::block(&p.ctx,"latest").await.map_err(|e|e.message)?;
+    let s=match Box::pin(super::balancer_v1::load(&p.ctx,f,pool,&at)).await {
+        Ok(s)=>s,Err(e) if e.code==crate::gateway::errors::ErrorCode::NotApplicable=>return Ok(()),
+        Err(e)=>return Err(e.message),
+    };
+    let tokens:Vec<_>=s.assets.iter().map(|a|a.token).collect();
+    for row in super::stable_list::candidates(f.id,pool,&tokens,&w.coins,&[w.usdt]){
+        let c=Candidate{family:f,pool:row.pool,coin:row.base,quote:row.quote};
+        take(p,w,f,c).await?;
+    }
+    Ok(())
+}
+
 async fn take(p: &Pools, w: &Watch, f: &'static Family, c: Candidate) -> Result<(), String> {
     if !w.coins.contains_key(&c.coin) {
         return Ok(());

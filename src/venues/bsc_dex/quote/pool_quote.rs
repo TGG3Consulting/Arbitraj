@@ -76,6 +76,11 @@ pub fn swap(
             super::super::math::temple::quote(s,token_in,out,exact_in,amount)
                 .ok_or_else(||why("TempleDAO: объём, фактическая валюта выплаты или обеспечение не подходят для этой стороны"))
         }
+        (PoolState::BalancerV1(s),PoolKind::V2)=>{
+            let output=if zero_for_one{e.pool.token1}else{e.pool.token0};
+            let fill=if exact_in{s.swap(token_in,output,amount,true,U256::MAX)}else{s.forward_for_output(token_in,output,amount)};
+            fill.map(|f|Swapped{amount_in:f.spent,amount_out:f.received,complete:true}).ok_or_else(none)
+        }
         (PoolState::BancorV3(s),PoolKind::V2)=>(if exact_in{s.swap(token_in,true,amount,false)}else{s.input_for_forward(token_in,amount,false)})
             .map(|f|Swapped{amount_in:f.spent,amount_out:f.received,complete:true}).ok_or_else(none),
         (PoolState::UniswapV1(s),PoolKind::V2)=>s.swap(token_in,exact_in,amount)

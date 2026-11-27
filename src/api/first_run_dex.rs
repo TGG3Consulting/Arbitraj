@@ -276,6 +276,28 @@ mod tests {
                 .into_iter()
                 .find(|s| s["chain_id"] == p.chain_id)
                 .unwrap();
+            if p.id == "balancer-v1-ethereum" {
+                let original: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+                    include_bytes!("../../tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz").as_slice())).unwrap();
+                let wallet: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+                    include_bytes!("../../tests/data/first_run_dex_2026-11-26/balancer_v1_wallet.json.gz").as_slice())).unwrap();
+                let tokens: Value = serde_json::from_str(include_str!(
+                    "../../tests/data/first_run_dex_2026-11-26/ethereum_exact_transfers.json")).unwrap();
+                for source in [&original, &wallet, &tokens] { assert_eq!(source["selector"],snapshot["selector"]); }
+                for (key, value) in [("dex.factory",&original["factory"]),("dex.factory_runtime_hash",&original["factory_code"]["keccak256"])] {
+                    assert_eq!(p.settings.get(key),Some(&Parameter::Text(value.as_str().unwrap().into())));
+                }
+                let pools: Vec<_> = original["markets"].as_object().unwrap().values().filter_map(|v|v.get("code")).collect();
+                assert!(!pools.is_empty());
+                for pool in pools {
+                    assert_eq!(p.settings.get("dex.pair_runtime_hash"),Some(&Parameter::Text(pool["keccak256"].as_str().unwrap().into())));
+                }
+                assert_eq!(p.settings.get("dex.module_runtime_hashes"), Some(&Parameter::List(vec![wallet["module_hash"].as_str().unwrap().into()])));
+                let mut known: Vec<_> = tokens["tokens"].as_object().unwrap().values().map(|t|
+                    format!("{} {}",t["address"].as_str().unwrap(),t["keccak256"].as_str().unwrap())).collect();
+                let Some(Parameter::List(actual)) = p.settings.get("dex.router_exact_tokens") else { panic!("missing BPool exact-transfer bindings") };
+                let mut actual = actual.clone();actual.sort();known.sort();assert_eq!(actual,known);
+            }
             if p.id == "bancor-v3-ethereum" {
                 let markets: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
                     include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v3_ethereum.json.gz").as_slice(),

@@ -72,6 +72,8 @@ pub struct Asset {
     pub token: Address,
     pub recorded: U256,
     pub physical: U256,
+    #[serde(default)]
+    pub exact_transfer: bool,
     pub weight: U256,
 }
 
@@ -186,9 +188,111 @@ impl State {
         })
     }
 
+    /// Highest by-source quote within the price band before checking average-price
+    /// rounding. The exact swap check supplies the measured depth; the caller marks
+    /// it as a lower bound when a rounded boundary falls in an unavailable interval.
+    pub fn band(&self, input: Address, output: Address, limit: U256) -> Option<Fill> {
+        let (i, j) = self.indices(input, output)?;
+        let (x, y) = (&self.assets[i], &self.assets[j]);
+        if !self.public_swap {
+            return None;
+        }
+        let mut lo = U256::ZERO;
+        let mut hi = mul(x.recorded, U256::from(MAX_IN_RATIO))?;
+        while lo < hi {
+            let mid = lo + (hi - lo).div_ceil(U256::from(2));
+            let allowed = self.amount(input, output, mid, true).and_then(|q| {
+                let price = spot(
+                    x.recorded.checked_add(mid)?,
+                    x.weight,
+                    y.recorded.checked_sub(q)?,
+                    y.weight,
+                    self.fee,
+                )?;
+                Some(q <= y.physical && price <= limit)
+            });
+            if allowed == Some(true) {
+                lo = mid;
+            } else {
+                hi = mid - U256::ONE;
+            }
+        }
+        if let Some(fill) = self.swap(input, output, lo, true, limit) {
+            return Some(fill);
+        }
+        let output_at_limit = self.amount(input, output, lo, true)?;
+        // A rejected rounded maximum can still have a funded by-target payout.
+        // The returned forward quote always uses by-source and stays within the band.
+        let candidate =
+            self.forward_for_output(input, output, output_at_limit.saturating_sub(U256::ONE))?;
+        (candidate.spent <= lo && candidate.spot_after <= limit).then_some(candidate)
+    }
+
+    /// Least input for a by-source swap paying at least `want`. The calculator is
+    /// monotone: for base <= 1 each fractional-series term is subtracted and its
+    /// magnitude is monotone in 1-base, including the stopping threshold.
+    /// The BPool average-price check can create holes even on a nonzero plateau.
+    pub fn forward_for_output(&self, input: Address, output: Address, want: U256) -> Option<Fill> {
+        let (i, j) = self.indices(input, output)?;
+        let (x, y) = (&self.assets[i], &self.assets[j]);
+        if !self.public_swap || want.is_zero() || want > y.physical {
+            return None;
+        }
+        let cap = mul(x.recorded, U256::from(MAX_IN_RATIO))?;
+        let before = self.spot_price(input, output)?;
+        let credit = |n| self.amount(input, output, n, true);
+        let mut lo = U256::ONE;
+        let mut hi = self
+            .amount(input, output, want, false)
+            .unwrap_or(cap)
+            .clamp(lo, cap.max(lo));
+        if hi > cap {
+            return None;
+        }
+        while credit(hi)? < want {
+            if hi == cap {
+                return None;
+            }
+            lo = hi.checked_add(U256::ONE)?;
+            hi = hi.saturating_mul(U256::from(2)).min(cap);
+        }
+        while lo < hi {
+            let mid = lo + ((hi - lo) >> 1);
+            if credit(mid)? < want {
+                lo = mid + U256::ONE;
+            } else {
+                hi = mid;
+            }
+        }
+        loop {
+            let out = credit(lo)?;
+            if out > y.physical {
+                return None;
+            }
+            // BNum bdiv(lo,out)=(lo*UNIT+floor(out/2))/out. All higher
+            // quotes have at least this output, so every skipped input fails too.
+            let minimum = before
+                .checked_mul(out)?
+                .saturating_sub(out / U256::from(2))
+                .div_ceil(unit());
+            if lo >= minimum {
+                // Increasing input and decreasing recorded output can only increase
+                // the BPool spot price. Negative impact is impossible without overflow.
+                return self.swap(input, output, lo, true, U256::MAX);
+            }
+            if minimum > cap {
+                return None;
+            }
+            lo = minimum;
+        }
+    }
+
     /// Apply a swap only when standard transfers on this edge have been established.
     pub fn apply(&self, input: Address, output: Address, fill: Fill) -> Option<Self> {
         let (i, j) = self.indices(input, output)?;
+        if !self.assets[i].exact_transfer || !self.assets[j].exact_transfer {
+            return None;
+        }
         let mut next = self.clone();
         next.assets[i].recorded = next.assets[i].recorded.checked_add(fill.spent)?;
         next.assets[i].physical = next.assets[i].physical.checked_add(fill.spent)?;

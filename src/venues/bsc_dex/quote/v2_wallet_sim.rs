@@ -54,6 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
+    BalancerV1(super::super::exec::balancer_v1_wallet::Terms),
     BancorV3(Box<super::super::exec::bancor_v3_wallet::Terms>),
     UniswapV1(Box<super::super::exec::uniswap_v1_wallet::Terms>),
     Rubicon(Box<super::super::exec::rubicon_wallet::Terms>),
@@ -119,6 +120,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     };
     let (wrapped, value) = match &o.wire {
         Wire::FluxEth(m)=>(Some(m.wrapped),if o.input==m.wrapped{o.amount}else{U256::ZERO}),
+        Wire::BalancerV1(t)=>(t.native.then_some(t.wrapped),t.value(o.input,o.amount)),
         Wire::BancorV3(t)=>(t.native(),t.value(o.amount)),
         Wire::UniswapV1(t)=>(t.native(),t.value(o.amount)),
         Wire::Rubicon(_)=>(None,U256::ZERO),
@@ -163,7 +165,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Stabull(_))||matches!(&o.wire,Wire::NativeFlat(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::Stabull(_))||matches!(&o.wire,Wire::NativeFlat(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -207,12 +209,13 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
-    let exact_target=matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
+    let exact_target=matches!(&o.wire,Wire::BalancerV1(t) if t.desired.is_some())||matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
     let charged=spent.ok_or_else(fail)?;
     if charged.is_zero() || charged>o.amount || (!exact_target && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::BalancerV1(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BancorV3(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::UniswapV1(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Rubicon(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
@@ -262,6 +265,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
         let strict_carbon=match &o.wire{Wire::Carbon(c)=>Some(c.tighten(o.amount,received).ok_or_else(fail)?),_=>None};
         calls[offset + n + 2].input = match &o.wire {
+            Wire::BalancerV1(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::BancorV3(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::Stabull(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::Integral(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.amount=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
@@ -272,7 +276,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             Wire::MintClub(c)=>c.tighten(spent.ok_or_else(fail)?,received).ok_or_else(fail)?.data(o.payer),
             _=>calldata(&o, deadline, strict),
         };
-        let strict_value=match &o.wire{Wire::BancorV3(t) if exact_target=>t.value(charged.checked_sub(U256::ONE).ok_or_else(fail)?),_=>strict_carbon.as_ref().map_or(value,|c|c.value())};
+        let strict_value=match &o.wire{Wire::BalancerV1(t) if exact_target=>t.value(o.input,charged.checked_sub(U256::ONE).ok_or_else(fail)?), Wire::BancorV3(t) if exact_target=>t.value(charged.checked_sub(U256::ONE).ok_or_else(fail)?),_=>strict_carbon.as_ref().map_or(value,|c|c.value())};
         let stricter=(!strict_value.is_zero()).then_some((offset+n+2,strict_value));
         let strict_result = frame(ctx, h, &calls, stricter.as_slice()).await?;
         let alt = &strict_result[offset..strict_result.len() - offset];
@@ -313,6 +317,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::BalancerV1(t)=>t.proof(o,minimum,deadline).data(),
         Wire::BancorV3(t)=>t.proof(o,minimum,deadline).data(),
         Wire::UniswapV1(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Rubicon(t)=>t.proof(o,minimum,deadline).data(),

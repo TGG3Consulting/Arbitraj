@@ -36,6 +36,7 @@ pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
         (PoolState::VaultPool(d),PoolKind::VaultPool)=>super::super::math::ranges_sequence::supported(d),
         (PoolState::UmbraeDamm(_) | PoolState::ToonSwap(_), PoolKind::V2) => true,
+        (PoolState::BalancerV1(s),PoolKind::V2)=>[e.pool.token0,e.pool.token1].iter().all(|t|s.assets.iter().any(|a|a.token==*t && a.exact_transfer)),
         (PoolState::Antfarm(_) | PoolState::Temple(_) | PoolState::BancorV3(_), PoolKind::V2) => true,
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
         (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::Memebox(_) | PoolState::CandySwap(_) | PoolState::EtherVista(_), PoolKind::V2) => true,
@@ -71,6 +72,12 @@ pub fn apply(
         (PoolState::ToonSwap(s), PoolKind::V2) => s.trade(zero_for_one,true,amount)
             .map(|(fill,next)| (fill,PoolState::ToonSwap(Box::new(next))))
             .ok_or_else(||no("ToonSwap: сумма, переводы комиссий или состояние после обмена не исполнимы")),
+        (PoolState::BalancerV1(s),PoolKind::V2)=>{
+            let output=if zero_for_one{e.pool.token1}else{e.pool.token0};
+            let f=s.swap(token_in,output,amount,true,U256::MAX).ok_or_else(||no("Balancer V1: недоступный размер"))?;
+            let next=s.apply(token_in,output,f).ok_or_else(||no("Balancer V1: не подтверждены точные изменения обеих валют"))?;
+            Ok((Swapped{amount_in:f.spent,amount_out:f.received,complete:true},PoolState::BalancerV1(Box::new(next))))
+        }
         (PoolState::BancorV3(s),PoolKind::V2)=>s.after(token_in,amount)
             .map(|(f,next)|(Swapped{amount_in:f.spent,amount_out:f.received,complete:true},PoolState::BancorV3(Box::new(next))))
             .ok_or_else(||no("Bancor V3: нет обеспеченной выплаты Vault")),

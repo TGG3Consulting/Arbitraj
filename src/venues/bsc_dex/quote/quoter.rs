@@ -49,6 +49,11 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if let crate::core::types::PoolState::BalancerV1(s)=&e.pool.state {
+        let at=super::super::pools::nami::block(ctx,block).await?;
+        let output=if token_in==e.pool.token0{e.pool.token1}else{e.pool.token0};
+        return Box::pin(super::super::pools::balancer_v1::official(ctx,e.family,s.pool,[token_in,output],amount,true,&at)).await;
+    }
     if let crate::core::types::PoolState::BancorV3(s)=&e.pool.state{
         let at=super::super::pools::nami::block(ctx,block).await?;
         return Box::pin(super::super::pools::bancor_v3::official(ctx,s,token_in,true,amount,&at)).await;

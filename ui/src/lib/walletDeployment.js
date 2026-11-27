@@ -1,8 +1,10 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
+import {loadBPool, checkBPool} from './balancerV1Deploy.js';
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
+const bindsWallet = kind => ['uniswap_v1','bancor_v3','stabull','balancer_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -18,6 +20,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (settings.kind === "balancer_v1" || plan.kind === "balancer_v1") return loadBPool(settings,plan,hashCode);
   if (['stabull','stabull_module'].includes(settings.kind) || plan.kind === 'stabull') return loadStabull(settings, plan, hashCode);
   if (settings.kind === "bancor_v3" || plan.kind === "bancor_v3") return loadBancor(settings,plan,hashCode);
   if (settings.kind === "uniswap_v1" || plan.kind === "uniswap_v1") return loadV1(settings,plan,hashCode);
@@ -40,6 +43,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (p.kind === 'balancer_v1') return checkBPool(provider,p,at);
   if (p.kind === 'stabull') return checkStabull(provider, p, at);
   if (p.kind === "bancor_v3") return checkBancor(provider,p,at);
   if (p.kind === "uniswap_v1") return checkV1(provider,p,at,hashCode);
@@ -54,7 +58,7 @@ export async function checkMarket(provider, p, at) {
 }
 
 async function sameRuntime(code, p) {
-  return await hashCode(code) === p.runtimeSha256 && (!['uniswap_v1','bancor_v3','stabull'].includes(p.kind) || runtimeKeccak(code) === p.runtimeKeccak);
+  return await hashCode(code) === p.runtimeSha256 && (!bindsWallet(p.kind) || runtimeKeccak(code) === p.runtimeKeccak);
 }
 
 export function unsigned(p) {
@@ -104,7 +108,7 @@ export async function deployed(provider, p, hash, pending) {
     call(provider, 'eth_getTransactionByHash', [hash]), call(provider, 'eth_getTransactionReceipt', [hash]),
   ]);
   requireFact(tx && r && r.transactionHash?.toLowerCase()===hash.toLowerCase(), 'Каноническая квитанция пока не найдена.');
-  const resolveReplacement = ['uniswap_v1','bancor_v3','stabull'].includes(p.kind);
+  const resolveReplacement = bindsWallet(p.kind);
   const requested = tx.to == null && BigInt(tx.value) === 0n && tx.input?.toLowerCase() === p.data.toLowerCase();
   requireFact(tx.hash.toLowerCase() === hash.toLowerCase() && tx.blockHash === r.blockHash &&
     (requested || (resolveReplacement && pending)), 'Транзакция не создаёт этот модуль.');
@@ -137,7 +141,7 @@ export async function deployed(provider, p, hash, pending) {
   requireFact(BigInt(r.status) === 1n && address.test(r.contractAddress), 'Квитанция не подтверждает создание контракта.');
   const at = {blockHash:final.hash, requireCanonical:true};
   await checkMarket(provider, p, at);
-  if (['uniswap_v1','bancor_v3','stabull'].includes(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
+  if (bindsWallet(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
   requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
   return changed ? {address:r.contractAddress.toLowerCase(),replacementHash:hash} : {address:r.contractAddress.toLowerCase()};

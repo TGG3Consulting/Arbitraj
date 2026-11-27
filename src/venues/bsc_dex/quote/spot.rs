@@ -55,6 +55,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
                 if e.coin==s.temple {mul_div(amount,d,n)} else {mul_div(amount,n,d)}
             }
         }
+        PoolState::BalancerV1(s)=>mul_div(amount,U256::from(1_000_000_000_000_000_000u64),s.spot_price(e.usdt,e.coin)?),
         PoolState::BancorV3(s)=>s.spot(e.usdt,amount),
         PoolState::UniswapV1(s)=>s.spot(e.usdt,amount),
         PoolState::Rubicon(book) => {

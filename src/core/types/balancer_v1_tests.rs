@@ -34,6 +34,7 @@ fn market(data: &Value, row: &Value) -> State {
                 // Physical output sufficiency is established by the replay for each paid amount.
                 // Its pool snapshot contains accounting balances, not absolute token.balanceOf.
                 physical: U256::MAX,
+                exact_transfer: true,
             })
             .collect(),
     }
@@ -87,9 +88,37 @@ fn donations_do_not_change_price_and_each_projection_consumes_the_same_pool_inve
     assert_eq!(next.assets[j].physical, U256::ZERO);
     assert_eq!(next.assets[i].physical, next.assets[i].recorded + U256::ONE);
     assert!(next.swap(a, b, qty, exact, U256::MAX).is_none());
+    s.assets[j].exact_transfer = false;
+    assert!(s.apply(a, b, fill).is_none());
+    assert!(s.swap(a, b, qty, exact, U256::MAX).is_some());
     s.assets[j].physical -= U256::ONE;
     assert!(s.swap(a, b, qty, exact, U256::MAX).is_none());
     s.assets[j].physical = U256::MAX;
     s.public_swap = false;
     assert!(s.swap(a, b, qty, exact, U256::MAX).is_none());
+}
+
+#[test]
+fn exact_output_and_minimum_forward_spend_follow_their_own_paid_wire() {
+    let data=original();
+    let mut bypassed_rejected_slot=false;
+    let mut target_rejected=false;
+    for r in data["payments"].as_array().unwrap(){
+        let s=market(&data,r);
+        let (a,b)=(addr(&r["source"]),addr(&r["target"]));
+        let q=integer(&r["amount"]);
+        let exact=r["exact_input"].as_bool().unwrap();
+        let want=if exact{integer(&r["price"])}else{q};
+        let forward=s.forward_for_output(a,b,want).unwrap();
+        assert!(forward.received>=want);
+        assert_eq!(s.swap(a,b,forward.spent,true,U256::MAX),Some(forward));
+        let prior=s.swap(a,b,forward.spent-U256::ONE,true,U256::MAX);
+        assert!(prior.is_none_or(|f|f.received<want));
+        if exact && r["spent"].is_string(){assert!(forward.spent<=q);}
+        if !exact && r["pool_revert"]=="ERR_MATH_APPROX"{target_rejected=true;}
+        if exact && r["pool_revert"]=="ERR_MATH_APPROX" && forward.spent>q{
+            bypassed_rejected_slot=true;
+        }
+    }
+    assert!(target_rejected && bypassed_rejected_slot);
 }

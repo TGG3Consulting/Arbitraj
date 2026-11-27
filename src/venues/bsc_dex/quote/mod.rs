@@ -74,6 +74,7 @@ pub(super) mod carbon_pricing;
 mod temple_budget;
 pub(super) mod mint_club_pricing;
 mod module_pricing;
+mod balancer_v1_pricing;
 mod bancor_v3_pricing;
 mod bancor_sequence;
 mod uniswap_v1_pricing;

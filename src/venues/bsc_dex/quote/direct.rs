@@ -50,9 +50,13 @@ pub fn best(
 }
 
 #[derive(Clone,Copy)]
-pub(super) enum BuyWire{Forward,BancorTarget}
+pub(super) enum BuyWire{Forward,BancorTarget,BalancerTarget}
 impl BuyWire{
     fn swap(self,ctx:&Ctx,e:&Entry,amount:U256)->GatewayResult<Swapped>{
+        if let Self::BalancerTarget=self && let crate::core::types::PoolState::BalancerV1(s)=&e.pool.state {
+            let f=s.swap(e.usdt,e.coin,amount,false,U256::MAX).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Balancer V1: точный выход недоступен"))?;
+            return Ok(Swapped{amount_in:f.spent,amount_out:f.received,complete:true});
+        }
         if let Self::BancorTarget=self && let crate::core::types::PoolState::BancorV3(s)=&e.pool.state {
             let f=s.swap(e.usdt,false,amount,false).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bancor V3: заданный выход Vault недоступен"))?;
             return Ok(Swapped{amount_in:f.spent,amount_out:f.received,complete:true});

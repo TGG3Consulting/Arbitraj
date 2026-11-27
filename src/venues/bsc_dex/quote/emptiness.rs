@@ -48,6 +48,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),
+        PoolState::BalancerV1(s)=>!s.public_swap || s.assets.iter().filter(|a|!a.recorded.is_zero() && !a.physical.is_zero()).count()<2,
         PoolState::BancorV3(s)=>s.markets.iter().flatten().any(|m|!m.enabled || m.base.is_zero() || m.bnt.is_zero()) || s.vault_balances.iter().all(U256::is_zero),
         PoolState::UniswapV1(s)=>s.markets.iter().flatten().any(|e|e.erc20.is_zero()||e.eth.is_zero()),
         PoolState::Rubicon(s) => s.offers.iter().all(Vec::is_empty),

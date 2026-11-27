@@ -65,8 +65,508 @@ pub fn state<'a>(
     usdt: Address,
     pair: (Address, Address),
     block: u64,
-) -> impl std::future::Future<Output = GatewayResult<Loaded>> + 'a {
-    Box::pin(read(ctx, tokens, reg, f, reference, spacing, step, usdt, pair, block))
+) -> futures_util::future::BoxFuture<'a, GatewayResult<Loaded>> {
+    // Construct and poll only this family's fallible RPC sequence. In debug builds
+    // unused arms of one async function otherwise consume real stack in poll().
+    if f.variant.launch()
+        && let PoolRef::Singleton { manager, id } = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            Box::pin(super::launch_ladder::load(
+                ctx, tokens, reg, f, *manager, *id, pair, &tag,
+            ))
+            .await
+        });
+    }
+    if f.variant == Variant::DeliCl
+        && let PoolRef::Singleton { manager, id } = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            Box::pin(super::deli_cl::load(ctx, f, *manager, *id, pair, &tag)).await
+        });
+    }
+    if f.variant == Variant::DeliConstant
+        && let PoolRef::Singleton { manager, id } = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let (key, reserve0, reserve1) =
+                Box::pin(super::deli::market(ctx, f, *manager, *id, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::V2 { reserve0, reserve1 },
+                ticks: None,
+                bins: None,
+                fee_pips: Some(key.fee()),
+            })
+        });
+    }
+    if f.variant == Variant::Stabull {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let pool = reference.address();
+            let at = super::nami::block(ctx, &tag).await?;
+            Box::pin(super::stabull::market(ctx, f, pool, pair, &at)).await?;
+            let state = Box::pin(super::stabull_quotes::ladder(
+                ctx, tokens, reg, f, pool, pair, usdt, &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::MaverickOne {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let pool = reference.address();
+            let at = super::nami::block(ctx, &tag).await?;
+            Box::pin(super::maverick_one::market(ctx, f, pool, pair, &at)).await?;
+            let state = Box::pin(super::maverick_one_quotes::ladder(
+                ctx,
+                tokens,
+                reg,
+                f,
+                pool,
+                [pair.0, pair.1],
+                usdt,
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant.umbrae() {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let pool = reference.address();
+            let at = super::nami::block(ctx, &tag).await?;
+            let m = Box::pin(super::umbrae::market(ctx, f, pool, pair, &at)).await?;
+            let state = if f.variant == Variant::UmbraeDamm {
+                PoolState::UmbraeDamm(Box::new(
+                    Box::pin(super::umbrae_damm_state::read(ctx, pool, m.tokens, &at)).await?,
+                ))
+            } else {
+                Box::pin(super::umbrae_quotes::ladder(
+                    ctx, tokens, reg, f, pool, m.tokens, usdt, &at,
+                ))
+                .await?
+            };
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Bundles {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let book =
+                Box::pin(super::bundles::book(ctx, f, reference.address(), pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Bundles(Box::new(book)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Antfarm {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let h = super::super::quote::white_state::head(ctx, &tag).await?;
+            let mut s = Box::pin(super::antfarm_book::read(
+                ctx,
+                f,
+                reference.address(),
+                pair,
+                h,
+            ))
+            .await?;
+            s.limits = Box::pin(super::antfarm_capacity::available(ctx, f, &s, h)).await;
+            Ok(Loaded {
+                state: PoolState::Antfarm(Box::new(s)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Surge {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state =
+                Box::pin(super::surge::market(ctx, f, reference.address(), pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Surge(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::CypherIntegral {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::cypher_quotes::load(
+                ctx,
+                tokens,
+                reg,
+                f,
+                reference.address(),
+                pair,
+                usdt,
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant.protected_router_wallet() {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::safeswap_quotes::load(
+                ctx,
+                tokens,
+                reg,
+                f,
+                reference.address(),
+                pair,
+                usdt,
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::BalancerV1 {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let s = Box::pin(super::balancer_v1::load(ctx, f, reference.address(), &at)).await?;
+            if ![pair.0, pair.1]
+                .iter()
+                .all(|a| s.assets.iter().any(|v| v.token == *a))
+            {
+                return Err(super::balancer_v1::bad(ctx));
+            }
+            Ok(Loaded {
+                state: PoolState::BalancerV1(Box::new(s)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::BancorV3 {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let b = Box::pin(super::bancor_v3::load(
+                ctx,
+                f,
+                reference,
+                [pair.0, pair.1],
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state: PoolState::BancorV3(Box::new(b)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::UniswapV1 {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let b = Box::pin(super::uniswap_v1::load(
+                ctx,
+                f,
+                reference,
+                [pair.0, pair.1],
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state: PoolState::UniswapV1(Box::new(b)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::RubiconClassic {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let b = Box::pin(super::rubicon::load(ctx, f, reference.address(), pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Rubicon(Box::new(b)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::PropVenue {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::prop_quotes::load(
+                ctx,
+                tokens,
+                reg,
+                f,
+                reference.address(),
+                pair,
+                usdt,
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::IntegralSize {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::integral_quotes::load(
+                ctx,
+                tokens,
+                reg,
+                f,
+                reference.address(),
+                pair,
+                usdt,
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Pendle {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let h = super::super::quote::white_state::head(ctx, &tag).await?;
+            let state = Box::pin(super::pendle_quotes::load(
+                ctx,
+                tokens,
+                reg,
+                f,
+                reference.address(),
+                pair,
+                usdt,
+                h,
+            ))
+            .await?;
+            Ok(Loaded {
+                state,
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Dagrow {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::dagrow::state(
+                ctx,
+                f,
+                reference.address(),
+                Some(pair),
+                &at,
+            ))
+            .await?;
+            Ok(Loaded {
+                state: PoolState::Dagrow(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Temple {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let PoolRef::Multi { contract, .. } = reference else {
+                return Err(ctx.err(
+                    crate::gateway::errors::ErrorCode::NoRoute,
+                    "TempleDAO: нужна пара с указанным активом выплаты",
+                ));
+            };
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::temple::market(ctx, f, *contract, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Temple(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: Some(5000),
+            })
+        });
+    }
+    if f.variant == Variant::Carbon
+        && let PoolRef::Singleton { manager, id } = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::carbon::market(ctx, f, *manager, *id, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Carbon(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::MintClub
+        && let PoolRef::Contract(token) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::mint_club::market(ctx, f, *token, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::MintClub(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Virtuals
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let state = Box::pin(super::virtuals::market(ctx, f, *pool, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::Virtuals(Box::new(state)),
+                ticks: None,
+                bins: None,
+                fee_pips: None,
+            })
+        });
+    }
+    if f.variant == Variant::Gemswap
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let m = Box::pin(super::concave::market(ctx, f, *pool, pair, &at)).await?;
+            Ok(Loaded {
+                state: PoolState::V2 {
+                    reserve0: m.reserves.0,
+                    reserve1: m.reserves.1,
+                },
+                ticks: None,
+                bins: None,
+                fee_pips: Some(m.fee),
+            })
+        });
+    }
+    if f.variant == Variant::ToonSwap
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            Box::pin(super::toonswap::read(ctx, f, *pool, pair, &at)).await
+        });
+    }
+    if f.variant == Variant::BunnySwap
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let at = super::nami::block(ctx, &tag).await?;
+            let fee = Box::pin(super::bunnyswap::market(ctx, f, *pool, pair, &at)).await?;
+            let get = super::abi_v2v3::IV2Pair::getReservesCall {};
+            let [r] =
+                super::nami_batch::read(ctx, [super::nami_batch::view(&at, *pool, get.clone())])
+                    .await?;
+            let r = super::nami_batch::decode(&r, get)?;
+            Ok(Loaded {
+                state: PoolState::V2 {
+                    reserve0: alloy_primitives::U256::from(r.reserve0),
+                    reserve1: alloy_primitives::U256::from(r.reserve1),
+                },
+                ticks: None,
+                bins: None,
+                fee_pips: Some(fee),
+            })
+        });
+    }
+    if f.variant == Variant::Memebox
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            Box::pin(super::memebox::load(ctx, f, *pool, pair, &tag)).await
+        });
+    }
+    if f.variant == Variant::WhiteSwap
+        && let PoolRef::Contract(pool) = reference
+    {
+        return Box::pin(async move {
+            let tag = block_tag(block);
+            let hash = super::elfomo::block(ctx, &tag).await?;
+            let (reserve0, reserve1) =
+                Box::pin(super::whiteswap::check(ctx, f, *pool, pair, &hash)).await?;
+            Ok(Loaded {
+                state: PoolState::V2 { reserve0, reserve1 },
+                ticks: None,
+                bins: None,
+                fee_pips: Some(3_000),
+            })
+        });
+    }
+    Box::pin(read(
+        ctx, tokens, reg, f, reference, spacing, step, usdt, pair, block,
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -87,158 +587,9 @@ async fn read(
     if f.variant == Variant::Spectra {
         Box::pin(super::spectra::check(ctx, f, reference.address(), &tag)).await?;
     }
-    if f.variant.launch() && let PoolRef::Singleton{manager,id}=reference {
-        return Box::pin(super::launch_ladder::load(ctx,tokens,reg,f,*manager,*id,pair,&tag)).await;
-    }
-    if f.variant==Variant::DeliCl && let PoolRef::Singleton{manager,id}=reference {
-        return Box::pin(super::deli_cl::load(ctx,f,*manager,*id,pair,&tag)).await;
-    }
-    if f.variant==Variant::DeliConstant && let PoolRef::Singleton{manager,id}=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
-    }
-    if f.variant==Variant::Stabull {
-        let pool=reference.address();
-        let at=super::nami::block(ctx,&tag).await?;
-        Box::pin(super::stabull::market(ctx,f,pool,pair,&at)).await?;
-        let state=Box::pin(super::stabull_quotes::ladder(ctx,tokens,reg,f,pool,pair,usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::MaverickOne {
-        let pool=reference.address();
-        let at=super::nami::block(ctx,&tag).await?;
-        Box::pin(super::maverick_one::market(ctx,f,pool,pair,&at)).await?;
-        let state=Box::pin(super::maverick_one_quotes::ladder(ctx,tokens,reg,f,pool,[pair.0,pair.1],usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant.umbrae() {
-        let pool=reference.address();
-        let at=super::nami::block(ctx,&tag).await?;
-        let m=Box::pin(super::umbrae::market(ctx,f,pool,pair,&at)).await?;
-        let state=if f.variant==Variant::UmbraeDamm {
-            PoolState::UmbraeDamm(Box::new(Box::pin(super::umbrae_damm_state::read(ctx,pool,m.tokens,&at)).await?))
-        }else{Box::pin(super::umbrae_quotes::ladder(ctx,tokens,reg,f,pool,m.tokens,usdt,&at)).await?};
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Bundles {
-        let at=super::nami::block(ctx,&tag).await?;
-        let book=Box::pin(super::bundles::book(ctx,f,reference.address(),pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Bundles(Box::new(book)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Antfarm {
-        let h=super::super::quote::white_state::head(ctx,&tag).await?;
-        let mut s=Box::pin(super::antfarm_book::read(ctx,f,reference.address(),pair,h)).await?;
-        s.limits=Box::pin(super::antfarm_capacity::available(ctx,f,&s,h)).await;
-        return Ok(Loaded{state:PoolState::Antfarm(Box::new(s)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Surge {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::surge::market(ctx,f,reference.address(),pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Surge(Box::new(state)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::CypherIntegral {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::cypher_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant.protected_router_wallet() {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::BancorV3 {
-        let at=super::nami::block(ctx,&tag).await?;
-        let b=Box::pin(super::bancor_v3::load(ctx,f,reference,[pair.0,pair.1],&at)).await?;
-        return Ok(Loaded{state:PoolState::BancorV3(Box::new(b)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::UniswapV1 {
-        let at=super::nami::block(ctx,&tag).await?;
-        let b=Box::pin(super::uniswap_v1::load(ctx,f,reference,[pair.0,pair.1],&at)).await?;
-        return Ok(Loaded{state:PoolState::UniswapV1(Box::new(b)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::RubiconClassic {
-        let at=super::nami::block(ctx,&tag).await?;
-        let b=Box::pin(super::rubicon::load(ctx,f,reference.address(),pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Rubicon(Box::new(b)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::PropVenue {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::prop_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::IntegralSize {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::integral_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Pendle {
-        let h=super::super::quote::white_state::head(ctx,&tag).await?;
-        let state=Box::pin(super::pendle_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,h)).await?;
-        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Dagrow {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::dagrow::state(ctx,f,reference.address(),Some(pair),&at)).await?;
-        return Ok(Loaded{state:PoolState::Dagrow(Box::new(state)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant==Variant::Temple {
-        let PoolRef::Multi{contract,..}=reference else{return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: нужна пара с указанным активом выплаты"));};
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::temple::market(ctx,f,*contract,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Temple(Box::new(state)),ticks:None,bins:None,fee_pips:Some(5000)});
-    }
-    if f.variant==Variant::Carbon && let PoolRef::Singleton{manager,id}=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::carbon::market(ctx,f,*manager,*id,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Carbon(Box::new(state)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant == Variant::MintClub && let PoolRef::Contract(token)=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::mint_club::market(ctx,f,*token,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::MintClub(Box::new(state)),ticks:None,bins:None,fee_pips:None});
-    }
-    if f.variant == Variant::Virtuals && let PoolRef::Contract(pool)=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let state=Box::pin(super::virtuals::market(ctx,f,*pool,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::Virtuals(Box::new(state)),ticks:None,bins:None,fee_pips:None});
-    }
     if f.variant.registered_v3() && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
-    }
-    if f.variant==Variant::Gemswap && let PoolRef::Contract(pool)=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let m=Box::pin(super::concave::market(ctx,f,*pool,pair,&at)).await?;
-        return Ok(Loaded{state:PoolState::V2{reserve0:m.reserves.0,reserve1:m.reserves.1},ticks:None,bins:None,fee_pips:Some(m.fee)});
-    }
-    if f.variant == Variant::ToonSwap && let PoolRef::Contract(pool)=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        return Box::pin(super::toonswap::read(ctx,f,*pool,pair,&at)).await;
-    }
-    if f.variant == Variant::BunnySwap && let PoolRef::Contract(pool)=reference {
-        let at=super::nami::block(ctx,&tag).await?;
-        let fee=Box::pin(super::bunnyswap::market(ctx,f,*pool,pair,&at)).await?;
-        let get=super::abi_v2v3::IV2Pair::getReservesCall{};
-        let [r]=super::nami_batch::read(ctx,[super::nami_batch::view(&at,*pool,get.clone())]).await?;
-        let r=super::nami_batch::decode(&r,get)?;
-        return Ok(Loaded{state:PoolState::V2{reserve0:alloy_primitives::U256::from(r.reserve0),reserve1:alloy_primitives::U256::from(r.reserve1)},ticks:None,bins:None,fee_pips:Some(fee)});
-    }
-    if f.variant == Variant::Memebox && let PoolRef::Contract(pool) = reference {
-        return Box::pin(super::memebox::load(ctx,f,*pool,pair,&tag)).await;
-    }
-    if f.variant == Variant::WhiteSwap
-        && let PoolRef::Contract(pool) = reference
-    {
-        let hash = super::elfomo::block(ctx, &tag).await?;
-        let (reserve0, reserve1) =
-            Box::pin(super::whiteswap::check(ctx, f, *pool, pair, &hash)).await?;
-        return Ok(Loaded {
-            state: PoolState::V2 { reserve0, reserve1 },
-            ticks: None,
-            bins: None,
-            fee_pips: Some(3_000),
-        });
     }
     let missing = |what: &str| {
         ctx.err(

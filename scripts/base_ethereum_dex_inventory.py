@@ -1076,6 +1076,21 @@ def tables(network, snapshots, profiles):
                     "развёрнутого с dex.factory и dex.native_wrapped. "
                     f"[Баланс до и после каждой операции](../{archive.as_posix()})."])
     if not base:
+        original_path=Path("tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz")
+        paid_path=original_path.with_name("balancer_v1_wallet.json.gz")
+        if paid_path.exists():
+            with gzip.open(original_path,"rt") as stream:
+                pools=json.load(stream)
+            with gzip.open(paid_path,"rt") as stream:
+                cash=json.load(stream)
+            rows=pools["payments"]
+            out.extend(["", f"Balancer V1 · Ethereum, блок {pools['block']}. Фабрика подтвердила {len(pools['registered'])} оригинальных BPool. "
+                f"На интервале блоков {pools['interval'][0]}–{pools['interval'][1]} у {len(pools['markets'])} пулов было {pools['original_events']} событий обмена. "
+                f"Из {len(rows)} проверенных сумм на исходных контрактах получено {sum('spent' in r for r in rows)} выплат. "
+                f"В {sum(r.get('pool_revert')=='ERR_MATH_APPROX' for r in rows)} случаях формула вернула положительное число, а сам пул отклонил обмен по ERR_MATH_APPROX. "
+                f"Через модуль и V5 воспроизведено {len(cash['cases'])} выплат. Адрес модуля, проверенного по dex.module_runtime_hashes, сохраняется в dex.router. "
+                "Конструктор BalancerV1Adapter принимает адреса BFactory и WETH. "
+                f"[Реестр и исходные выплаты](../{original_path.as_posix()}) · [Лимиты и возврат остатка](../{paid_path.as_posix()})."])
         market_file=Path("tests/data/first_run_dex_2026-11-26/bancor_v3_ethereum.json.gz")
         wallet_file=Path("tests/data/first_run_dex_2026-11-26/bancor_v3_wallet.json.gz")
         with gzip.open(market_file,"rt",encoding="utf8") as stream:
@@ -1666,28 +1681,13 @@ def tables(network, snapshots, profiles):
     volumes = volume.get("by_id", {})
     top_data = read(Path("tests/data/first_run_dex_2026-11-26/llama_top_bindings.json"))
     top = {item["id"]:item for item in top_data["networks"][network]["rows"]}
+    king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
+                  if s["network"] == network}
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
-        if base and str(row["id"]) == "7077":
-            curve = base_launch_inventory.evidence("stabull_base_directory.json.gz")
-            assert curve["factory"]["address"] in [addr.lower() for addr in candidates]
-            task = "Stabull · 12 зарегистрированных Curve, кошельковые выплаты по 6; точный вход защищают модуль или V5"
-        if base and str(row["id"]) == "7945":
-            ryze = read(Path("tests/data/first_run_dex_2026-11-26/base_recovered_markets.json"))["ryze"]
-            candidates = [ryze["factory"]["address"]]
-            task = "RYZE-RECON · адаптер объёма читает Swap двух пулов этой фабрики; 9 подписанных сделок сопоставлены с движениями кошельков"
-        if str(row["id"]) in {"2644","7882"}:
-            kind,role=("maverick","Factory") if str(row["id"])=="2644" else ("topaz","CLFactory")
-    king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
-                  if s["network"] == network}
-            snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
-            candidates=[snapshot["roles"][role]["address"]]
-            task=f"DEX-46 · {len(snapshot['markets'])} зарегистрированных рынков, см. кошельковые результаты выше"
-        if not base and str(row["id"]) in {"7037","7038"} and "degenswap-ethereum" in configured:
-            snapshot=cypher if str(row["id"])=="7037" else cl
         if match := king_shark.get(str(row["id"])):
             ref = match["source"]
             candidates = [scope["factory"] for scope in match["scopes"]]
@@ -1700,8 +1700,29 @@ def tables(network, snapshots, profiles):
                 task = (f"SharkSwap Router02 и V5 · {scope['registered']} CREATE2-пары; на двух рынках {scope['paid_legs']} "
                         "платежей исходного и обратного направления, точный вход, min+1 и истечение срока. "
                         "Штатный путь сравнивает ERC20, включая WETH. Форма выплаты ETH использует весь WETH роутера и в эти измерения не входит. DefiLlama учитывает только объём, историческое распределение комиссии не установлено")
+        if base and str(row["id"]) == "7077":
+            curve = base_launch_inventory.evidence("stabull_base_directory.json.gz")
+            assert curve["factory"]["address"] in [addr.lower() for addr in candidates]
+            task = "Stabull · 12 зарегистрированных Curve, кошельковые выплаты по 6; точный вход защищают модуль или V5"
+        if base and str(row["id"]) == "7945":
+            ryze = read(Path("tests/data/first_run_dex_2026-11-26/base_recovered_markets.json"))["ryze"]
+            candidates = [ryze["factory"]["address"]]
+            task = "RYZE-RECON · адаптер объёма читает Swap двух пулов этой фабрики; 9 подписанных сделок сопоставлены с движениями кошельков"
+        if str(row["id"]) in {"2644","7882"}:
+            kind,role=("maverick","Factory") if str(row["id"])=="2644" else ("topaz","CLFactory")
+            snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
+            candidates=[snapshot["roles"][role]["address"]]
+            task=f"DEX-46 · {len(snapshot['markets'])} зарегистрированных рынков, см. кошельковые результаты выше"
+        if not base and str(row["id"]) in {"7037","7038"} and "degenswap-ethereum" in configured:
+            snapshot=cypher if str(row["id"])=="7037" else cl
             candidates=[snapshot["factory"]["address"]]
             task=f"Cypher · {len(snapshot['markets'])} действительных регистраций, испытания и границы выше"
+        if not base and str(row["id"])=="116":
+            book_file=Path("tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz")
+            with gzip.open(book_file,"rt",encoding="utf8") as stream:
+                original=json.load(stream)
+            candidates=[original["factory"]]
+            task=f"Balancer V1 · {len(original['registered'])} оригинальных BPool. Обе формы обмена и ограничения по округлению сверены с исходным пулом"
         if not base and str(row["id"])=="7520":
             task="Карточные платежи; адаптер crypto-card.ts измеряет использование карты. Отдельные спотовые реестры Cypher указаны под 7037 и 7038"
         if not base and str(row["id"]) == "9435":

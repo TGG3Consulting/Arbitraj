@@ -313,7 +313,7 @@ async fn batch_load_future_sizes() {
         std::fs::write(path, sizes.to_string()).unwrap();
     }
     if std::env::var_os("ARB_HISTORICAL_CHECK_SIZES").is_none() {
-        assert_eq!(sizes["solo"], std::mem::size_of::<usize>(), "{sizes}");
+        assert!(sizes["solo"].as_u64().unwrap() <= (2*std::mem::size_of::<usize>()) as u64, "{sizes}");
     }
 }
 

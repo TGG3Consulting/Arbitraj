@@ -180,6 +180,13 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     }
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if let PoolState::BalancerV1(state)=&e.pool.state {
+        if k!=ExecKind::Balancer || pool!=state.pool ||
+            !matches!(&e.pool.reference,PoolRef::Multi{token0,token1,..} if [*token0,*token1]==[e.pool.token0,e.pool.token1] && [*token0,*token1].contains(&token_in)) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Balancer V1: пул или валюта шага изменились"));
+        }
+        return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if let PoolState::BancorV3(state) = &e.pool.state {
         let native = ctx.dex_addr("dex.bancor_native_token", e.family.id)?;
         let form = state.v5_form(&e.pool.reference, token_in, native)

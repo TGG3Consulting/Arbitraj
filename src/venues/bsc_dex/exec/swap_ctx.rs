@@ -173,6 +173,7 @@ pub struct SwapCtx {
 impl SwapCtx {
     pub(in crate::venues::bsc_dex) fn module_order(&self)->Option<super::signed_call::Erc20Call> {
         self.shiba.as_deref().map(super::shiba_payment::Proof::signed)
+            .or_else(|| self.aqua.as_deref().map(super::aqua_wallet::Proof::signed))
             .or_else(|| self.aktionariat.as_deref().map(super::aktionariat_wallet::Proof::signed))
             .or_else(|| self.empire.as_deref().or(self.ammalgam.as_deref()).map(super::empire_wallet::Proof::signed))
     }

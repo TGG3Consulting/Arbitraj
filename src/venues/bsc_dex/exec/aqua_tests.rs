@@ -24,7 +24,7 @@ fn wallet_rows(day: &Value, source: &Value, chain: u64) -> usize {
         .as_array()
         .map(Vec::as_slice)
         .unwrap_or_else(|| std::slice::from_ref(source));
-    for book in books.iter().filter(|b| b["mode"] != "v5") {
+    for book in books {
         let payer = address(&book["wallet"]);
         let engine = address(&book["router"]);
         let target = book["protected"]["module"]
@@ -54,7 +54,14 @@ fn wallet_rows(day: &Value, source: &Value, chain: u64) -> usize {
             let net = amount(&r["net"]);
             let first = r["flags"].as_u64().unwrap() == 0x61;
             let logs: Vec<Log> = serde_json::from_value(r["logs"].clone()).unwrap();
+            // Эфемерный адрес и обычные execute-calldata архивного V5 (aqua_guard_replay.py).
+            let executor = Address::from_slice(
+                &alloy_primitives::keccak256("Arbitraj Base 8453 isolated executor 2026-11-26")
+                    [12..],
+            );
+            let v5 = (book["mode"] == "v5").then_some(executor);
             let proof = Proof {
+                v5,
                 terms: Terms {
                     chain,
                     target,
@@ -72,10 +79,36 @@ fn wallet_rows(day: &Value, source: &Value, chain: u64) -> usize {
                 deadline: U256::from(day["timestamp"].as_u64().unwrap() + 1000),
             };
             assert!(!proof.data().is_empty());
+            if v5.is_some() {
+                use alloy::sol_types::SolCall;
+                let data = proof.data();
+                let tx = super::executor::abi::ArbExecutor::executeCall::abi_decode_validate(&data)
+                    .unwrap();
+                assert_eq!(
+                    (tx.tokenIn, tx.tokenOut, tx.amountIn, tx.minOut),
+                    (input, output, paid, net)
+                );
+                assert_eq!(tx.steps.len(), 1);
+                assert_eq!(
+                    (tx.steps[0].pool, tx.steps[0].kind, tx.steps[0].shareBps),
+                    (target, 17, 10_000)
+                );
+                assert_eq!(proof.signed().module, executor);
+                assert_eq!(proof.signed().calldata, alloy_primitives::keccak256(data));
+            }
             assert_eq!(
                 proof.amounts(&logs, payer, input, output),
                 Some((paid, net))
             );
+            if v5.is_some() {
+                let mut wrong = proof.clone();
+                wrong.v5 = Some(Address::repeat_byte(1));
+                assert_eq!(wrong.amounts(&logs, payer, input, output), None);
+                let mut changed = proof.clone();
+                changed.terms.first = !first;
+                assert_ne!(changed.signed().calldata, proof.signed().calldata);
+                assert_eq!(changed.amounts(&logs, payer, input, output), None);
+            }
             let mut stricter = proof.clone();
             stricter.minimum += U256::ONE;
             assert_eq!(stricter.amounts(&logs, payer, input, output), None);
@@ -140,6 +173,6 @@ fn receipts_follow_the_actual_wallet_and_the_signed_program() {
     let eth = data!("aqua_ethereum_day");
     assert_eq!(wallet_rows(&base, &data!("aqua_base_wallets"), 8453), 4);
     assert_eq!(wallet_rows(&eth, &data!("aqua_ethereum_wallets"), 1), 32);
-    assert_eq!(wallet_rows(&base, &data!("aqua_base_protected"), 8453), 4);
-    assert_eq!(wallet_rows(&eth, &data!("aqua_ethereum_protected"), 1), 32);
+    assert_eq!(wallet_rows(&base, &data!("aqua_base_protected"), 8453), 8);
+    assert_eq!(wallet_rows(&eth, &data!("aqua_ethereum_protected"), 1), 64);
 }

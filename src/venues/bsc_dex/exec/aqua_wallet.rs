@@ -24,6 +24,8 @@ pub struct Terms {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) v5: Option<Address>,
     pub terms: Terms,
     pub payer: Address,
     pub input: Address,
@@ -40,6 +42,7 @@ impl Terms {
         deadline: U256,
     ) -> Proof {
         Proof {
+            v5: None,
             terms: self.clone(),
             payer: o.payer,
             input: o.input,
@@ -56,6 +59,9 @@ impl Proof {
         let Some(order) = aqua::program(t.maker, t.hash, &t.raw) else {
             return Bytes::new();
         };
+        if self.v5.is_some() {
+            return super::aqua_graph::data(self);
+        }
         if t.target == t.engine {
             let Some(taker) = u64::try_from(self.deadline)
                 .ok()
@@ -91,7 +97,7 @@ impl Proof {
         signed_call::Erc20Call {
             chain: self.terms.chain,
             payer: self.payer,
-            module: self.terms.target,
+            module: self.v5.unwrap_or(self.terms.target),
             calldata: keccak256(self.data()),
         }
     }
@@ -118,6 +124,13 @@ impl Proof {
             return None;
         }
         let guarded = t.target != t.engine;
+        let funder = self.v5.unwrap_or(payer);
+        if self
+            .v5
+            .is_some_and(|outer| outer.is_zero() || outer == payer || !guarded)
+        {
+            return None;
+        }
         let taker = if guarded { t.target } else { payer };
         let mut swaps = logs
             .iter()
@@ -138,7 +151,12 @@ impl Proof {
         if paid != self.amount
             || net.is_zero()
             || net < self.minimum
-            || cash(input, Some(payer), Some(t.target)) != paid
+            || cash(
+                input,
+                Some(payer),
+                Some(if self.v5.is_some() { funder } else { t.target }),
+            ) != paid
+            || (self.v5.is_some() && cash(input, Some(funder), Some(t.target)) != paid)
             || cash(output, Some(t.maker), Some(payer)) != net
         {
             return None;
@@ -150,7 +168,7 @@ impl Proof {
             let f = IGuard::Settled::decode_log_data(&transfers.next()?.inner.data).ok()?;
             if transfers.next().is_some()
                 || (f.orderHash, f.payer, f.recipient, f.input, f.output)
-                    != (t.hash, payer, payer, input, output)
+                    != (t.hash, funder, payer, input, output)
                 || (f.paid, f.received, f.inputFirst) != (paid, net, t.first)
             {
                 return None;

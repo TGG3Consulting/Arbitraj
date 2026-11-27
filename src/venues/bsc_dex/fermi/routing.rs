@@ -101,6 +101,7 @@ async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
         target: f.target,
         timestamp: f.timestamp,
         executor,
+        router: Some(f.deployment.router),
         payer: who,
         input: c.input,
         output: c.output,

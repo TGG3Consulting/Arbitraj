@@ -61,9 +61,9 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             if mode=="router":approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
         def trade(minimum,deadline):
             if mode=="wrapped":
-                return tx(wrapped_module[0],"swapFrom(address,address,uint256,uint256,address,uint256)",["address","address","uint256","uint256","address","uint256"],[x,y,qty,minimum,owner,deadline])
+                return tx(wrapped_module[0],"execute(bytes32,address,address,uint256,uint256,uint256)",["bytes32","address","address","uint256","uint256","uint256"],[keccak(encode([KEY],[k])),x,y,qty,minimum,deadline])
             if mode in ("v5","wrapped_v5"):
-                step=(29,wrapped_module[0],x,y,10000,b"") if mode=="wrapped_v5" else (19,manager,x,y,10000,encode([KEY],[k]))
+                step=(17,wrapped_module[0],x,y,10000,keccak(encode([KEY],[k]))) if mode=="wrapped_v5" else (19,manager,x,y,10000,encode([KEY],[k]))
                 return tx(EXEC,f"execute(address,uint256,address,uint256,uint256,{STEP}[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[x,qty,y,minimum,deadline,[step]])
             params=encode([f"({KEY},bool,uint128,uint128,uint256,bytes)"],[(k,forward,qty,minimum,0,b"")])
             body=encode(["bytes","bytes[]"],[bytes([6,12,15]),[params,encode(["address","uint256"],[x,qty]),encode(["address","uint256"],[y,minimum])]])

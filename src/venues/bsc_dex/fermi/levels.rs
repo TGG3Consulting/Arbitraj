@@ -1,7 +1,7 @@
 //! Загружает однонаправленные котировки выбранного строителя для перестроения рыночного снимка. Использует только канонический Ethereum RPC.
 use super::super::{num, parts::Parts};
 use super::{
-    Frame, Head, ROUTER, canonical, decimalsCall, getPairsCall,
+    Frame, Head, canonical, decimalsCall, getPairsCall,
     markets::{Books, Config, SideBook},
     quoteAmountsCall, rpc, slot,
 };
@@ -19,7 +19,7 @@ pub(super) async fn levels(p: &Parts, config: Config) -> GatewayResult<Books> {
     let (network, head, frame): (U64, Head, Frame) = tokio::try_join!(
         rpc::call(ctx, "eth_chainId", json!([])),
         rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])),
-        super::frame(ctx, config.builder)
+        super::frame(ctx, config.builder, config.deployment)
     )?;
     let stale = || {
         ctx.err(
@@ -37,9 +37,15 @@ pub(super) async fn levels(p: &Parts, config: Config) -> GatewayResult<Books> {
         return Err(stale());
     }
     let (_, _, pairs, dc) = tokio::try_join!(
-        super::verify_router(ctx, &head),
-        slot::verify_executor(ctx, &head, config.executor),
-        canonical(ctx, head.hash, ROUTER, getPairsCall {}),
+        super::verify_router(ctx, &head, config.deployment),
+        slot::verify_executor(
+            ctx,
+            &head,
+            config.executor,
+            config.deployment,
+            config.executor_runtime
+        ),
+        canonical(ctx, head.hash, config.deployment.router, getPairsCall {}),
         canonical(ctx, head.hash, config.cash, decimalsCall {})
     )?;
     let coins: BTreeSet<_> = pairs
@@ -83,7 +89,7 @@ pub(super) async fn levels(p: &Parts, config: Config) -> GatewayResult<Books> {
                     tokenOut: o,
                     amountSpecified: if buy { signed } else { -signed },
                 };
-                requests.push(json!({"from":config.executor,"to":ROUTER,"data":Bytes::from(call.abi_encode())}));
+                requests.push(json!({"from":config.executor,"to":config.deployment.router,"data":Bytes::from(call.abi_encode())}));
                 args.push((coin, dec, buy, raw, *amount));
             }
         }

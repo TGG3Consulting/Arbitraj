@@ -2,7 +2,11 @@
 use super::super::{exec, send};
 use super::slot::{Filled, Proof, Swapped};
 use alloy::{primitives::U256, sol_types::SolEvent};
-pub(super) fn fill(proof: &Proof, receipt: &send::receipt::Receipt) -> Option<(U256, U256)> {
+pub(super) fn fill(
+    proof: &Proof,
+    receipt: &send::receipt::Receipt,
+    router: alloy::primitives::Address,
+) -> Option<(U256, U256)> {
     let one = |who, topic| {
         let mut logs = receipt
             .logs
@@ -17,8 +21,7 @@ pub(super) fn fill(proof: &Proof, receipt: &send::receipt::Receipt) -> Option<(U
     };
     let f =
         Filled::decode_log_data(&one(proof.executor, Filled::SIGNATURE_HASH)?.inner.data).ok()?;
-    let s =
-        Swapped::decode_log_data(&one(super::ROUTER, Swapped::SIGNATURE_HASH)?.inner.data).ok()?;
+    let s = Swapped::decode_log_data(&one(router, Swapped::SIGNATURE_HASH)?.inner.data).ok()?;
     if (f.payer, f.leg, f.input, f.output) != (proof.payer, proof.leg, proof.input, proof.output)
         || (s.sender, s.tokenIn, s.tokenOut, s.recipient)
             != (proof.executor, proof.input, proof.output, proof.payer)
@@ -40,7 +43,7 @@ pub(super) fn fill(proof: &Proof, receipt: &send::receipt::Receipt) -> Option<(U
 }
 #[cfg(test)]
 mod tests {
-    use super::super::slot;
+    use super::super::tests::{deployment, recommendation};
     use super::*;
     use alloy::primitives::B256;
     use alloy::primitives::I256;
@@ -53,7 +56,11 @@ mod tests {
             "../../../../tests/data/first_run_dex_2026-11-26/fermi_slot_receipts.json"
         ))
         .unwrap();
-        assert_eq!(f["runtime_keccak"], slot::EXECUTOR_CODE.to_string());
+        assert_eq!(
+            f["runtime_keccak"],
+            recommendation("fermi.executor_runtime_hash")
+        );
+        let router = deployment().router;
         let cases = f["cases"].as_array().unwrap();
         assert_eq!(cases.len(), 8);
         for c in cases {
@@ -64,6 +71,7 @@ mod tests {
                 target: c["target"].as_u64().unwrap(),
                 timestamp: c["timestamp"].as_u64().unwrap(),
                 executor: f["executor"].as_str().unwrap().parse().unwrap(),
+                router: Some(router),
                 payer: strval("payer").parse().unwrap(),
                 input: strval("input").parse().unwrap(),
                 output: strval("output").parse().unwrap(),
@@ -87,7 +95,13 @@ mod tests {
             assert_eq!(r.gas_used.to::<u64>(), c["swap_gas"].as_u64().unwrap());
             let spent = U256::from_str_radix(strval("spent"), 10).unwrap();
             let received = U256::from_str_radix(strval("received"), 10).unwrap();
-            assert_eq!(fill(&proof, &r), Some((spent, received)));
+            assert_eq!(fill(&proof, &r, router), Some((spent, received)));
+            assert!(fill(&proof, &r, proof.executor).is_none());
+            let mut legacy = serde_json::to_value(&proof).unwrap();
+            legacy.as_object_mut().unwrap().remove("router");
+            let legacy: Proof = serde_json::from_value(legacy).unwrap();
+            assert!(legacy.router.is_none());
+            assert_eq!(fill(&legacy, &r, router), Some((spent, received)));
             let refund = U256::from_str_radix(strval("refunded"), 10).unwrap();
             assert_eq!(
                 exec::fill::moved(&r, proof.input, Some(proof.payer), None),
@@ -96,13 +110,13 @@ mod tests {
             assert_eq!(proof.amount.is_negative(), !refund.is_zero());
             let mut wrong = proof.clone();
             wrong.leg = B256::ZERO;
-            assert!(fill(&wrong, &r).is_none());
+            assert!(fill(&wrong, &r, router).is_none());
             wrong = proof.clone();
             wrong.payer = proof.executor;
-            assert!(fill(&wrong, &r).is_none());
+            assert!(fill(&wrong, &r, router).is_none());
             let mut duplicate = r.clone();
             duplicate.logs.extend(r.logs.clone());
-            assert!(fill(&proof, &duplicate).is_none());
+            assert!(fill(&proof, &duplicate, router).is_none());
         }
     }
 }

@@ -610,6 +610,11 @@ def tables(network, snapshots, profiles):
         if slot_receipts.exists():
             wrapped = read(slot_receipts)
             weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+            router_runtime = next(x["runtime_keccak"] for x in data_fermi["historical"] if x["router"] == data_fermi["router"])
+            out.extend(["", "| Настройка eth_dex для Fermi | Проверенное значение |", "|---|---|",
+                        *[f"| `fermi.{key}` | `{value}` |" for key,value in
+                          [("router",data_fermi["router"]),("engine",data_fermi["engine"]),
+                           ("router_runtime_hash",router_runtime),("executor_runtime_hash",wrapped["runtime_keccak"])]]])
             measured = wrapped["cases"]
             fmt = lambda n: f"{n:,}".replace(",", " ")
             prices = {int(row["receipt"]["effectiveGasPrice"], 16) for row in measured}

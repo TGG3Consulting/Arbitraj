@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 // Оплата собственного WETH на нативных рынках o1 Standard в Base.
+// Модуль размещает владелец. В обоих способах оплаты подписывается точный PoolId.
 // Ключ восстанавливается по зарегистрированному хуку. Дельты менеджера
 // включают удержание хука. Остатки ETH и токенов модуля сохраняются.
 pragma solidity 0.8.37;
 
-import {IV4PoolManager, ISingletonSettle, V4PoolKey, V4SwapParams} from "./IPools.sol";
+import {IV4PoolManager, ISingletonSettle, V4PoolKey, V4SwapParams, IBalancerVault} from "./IPools.sol";
 
 interface IO1Asset {
     function balanceOf(address owner) external view returns (uint256);
@@ -39,31 +40,42 @@ contract O1NativeAdapter {
         legacyHookB = b;
     }
 
-    function market(address token) public view returns (V4PoolKey memory selected) {
+    function market(bytes32 id, address token) public view returns (V4PoolKey memory) {
         require(token != address(wrapped) && token.code.length > 0, "asset");
         address[3] memory hooks = [currentHook, legacyHookA, legacyHookB];
         for (uint256 i; i < hooks.length; ++i) {
             V4PoolKey memory key = V4PoolKey(address(0), token, 0, 200, hooks[i]);
+            if (keccak256(abi.encode(key)) != id) continue;
             (bool ok, bytes memory config) = hooks[i].staticcall(
                 abi.encodeWithSignature("poolConfig(bytes32)", keccak256(abi.encode(key))));
             require(ok && config.length == (i == 0 ? 256 : 352), "config");
             (bool initialized, bool tokenIsCurrency0) = abi.decode(config, (bool, bool));
-            if (initialized) {
-                require(!tokenIsCurrency0 && selected.hooks == address(0), "ambiguous");
-                selected = key;
-            }
+            require(initialized && !tokenIsCurrency0, "unlisted");
+            return key;
         }
-        require(selected.hooks != address(0), "unlisted");
+        revert("unknown key");
     }
 
-    function swapFrom(address tokenIn, address tokenOut, uint256 qty, uint256 minimum,
-                      address recipient, uint256 deadline) external returns (uint256 received) {
+    function execute(bytes32 id, address tokenIn, address tokenOut, uint256 qty, uint256 minimum,
+                     uint256 deadline) external returns (uint256) {
+        return _settle(id, tokenIn, tokenOut, qty, minimum, msg.sender, deadline);
+    }
+
+    function swap(IBalancerVault.SingleSwap calldata order, IBalancerVault.FundManagement calldata funds,
+                  uint256 minimum, uint256 deadline) external payable returns (uint256) {
+        require(msg.value == 0 && order.kind == 0 && order.userData.length == 0 && funds.sender == msg.sender &&
+                !funds.fromInternalBalance && !funds.toInternalBalance, "order");
+        return _settle(order.poolId, order.assetIn, order.assetOut, order.amount, minimum, funds.recipient, deadline);
+    }
+
+    function _settle(bytes32 id, address tokenIn, address tokenOut, uint256 qty, uint256 minimum,
+                     address recipient, uint256 deadline) private returns (uint256 received) {
         require(!entered && block.timestamp <= deadline && qty > 0 && qty <= uint256(uint128(type(int128).max)), "order");
         require((tokenIn == address(wrapped)) != (tokenOut == address(wrapped)), "currencies");
         require(recipient != address(0) && recipient != address(this) && recipient != address(manager), "recipient");
         entered = true;
         bool buy = tokenIn == address(wrapped);
-        V4PoolKey memory key = market(buy ? tokenOut : tokenIn);
+        V4PoolKey memory key = market(id, buy ? tokenOut : tokenIn);
         uint256 nativeBefore = address(this).balance;
         uint256 ownIn = IO1Asset(tokenIn).balanceOf(address(this));
         uint256 ownOut = IO1Asset(tokenOut).balanceOf(address(this));

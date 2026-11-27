@@ -1,12 +1,11 @@
 //! Публичное состояние оракула Fermi для одного строителя и одного слота Ethereum.
 //! Форматы Titan https://docs.titanbuilder.xyz/propamms и BuilderNet https://buildernet.org/docs/api .
-use alloy_primitives::{Address, B256, U64, address};
+use super::Deployment;
+use alloy_primitives::{Address, B256, U64};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
-pub(super) const ROUTER: Address = address!("f6d5b2fefec7b420d9990b95790adfd3d4c4f977");
-pub(super) const ENGINE: Address = address!("10e1a2b624e14ac59426199e520320313a98b0be");
 const GENESIS: u64 = 1_606_824_023;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,6 +49,7 @@ struct Diff {
 
 #[derive(Clone)]
 pub(super) struct Frame {
+    pub deployment: Deployment,
     pub target: u64,
     pub slot: u64,
     pub timestamp: u64,
@@ -59,7 +59,7 @@ pub(super) struct Frame {
 impl Frame {
     /// Принимает только фиксированный адрес движка и 32-байтовые ключи и значения stateDiff.
     /// Прочие счета, баланс, nonce, code и полное замещение storage из кадра отбрасываются.
-    pub fn read(builder: Builder, result: &Value) -> Option<Self> {
+    pub fn read(builder: Builder, result: &Value, deployment: Deployment) -> Option<Self> {
         let (row, target, slot) = match builder {
             Builder::Titan => {
                 let mut matching = result.get("venues")?.as_array()?.iter().filter(|r| {
@@ -67,7 +67,7 @@ impl Frame {
                         && r["quoteAddress"]
                             .as_str()
                             .and_then(|v| v.parse::<Address>().ok())
-                            == Some(ROUTER)
+                            == Some(deployment.router)
                 });
                 let r = matching.next()?;
                 if matching.next().is_some() {
@@ -76,7 +76,7 @@ impl Frame {
                 (r, r["blockNumber"].as_u64()?, r["slot"].as_u64()?)
             }
             Builder::BuilderNet => (
-                result.get(ROUTER.to_string().to_lowercase())?,
+                result.get(deployment.router.to_string().to_lowercase())?,
                 serde_json::from_value::<U64>(result.get("blockNumber")?.clone())
                     .ok()?
                     .to::<u64>(),
@@ -84,7 +84,7 @@ impl Frame {
             ),
         };
         let overrides = row.get("stateOverride")?.as_object()?;
-        let engine = overrides.get(&ENGINE.to_string().to_lowercase())?;
+        let engine = overrides.get(&deployment.engine.to_string().to_lowercase())?;
         let diff = serde_json::from_value::<Diff>(engine.clone())
             .ok()?
             .state_diff;
@@ -93,6 +93,7 @@ impl Frame {
         }
         let timestamp = GENESIS.checked_add(slot.checked_mul(12)?)?;
         Some(Self {
+            deployment,
             target,
             slot,
             timestamp,
@@ -111,6 +112,6 @@ impl Frame {
     }
 
     pub fn overrides(&self) -> Value {
-        json!({(format!("{ENGINE:#x}")):{"stateDiff":self.diff}})
+        json!({(format!("{:#x}", self.deployment.engine)):{"stateDiff":self.diff}})
     }
 }

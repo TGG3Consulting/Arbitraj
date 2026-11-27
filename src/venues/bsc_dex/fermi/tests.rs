@@ -10,6 +10,28 @@ fn fixture() -> Value {
     ))
     .unwrap()
 }
+pub(super) fn recommendation(key: &str) -> String {
+    let table: toml::Value =
+        toml::from_str(include_str!("../../../../config/first_run.toml")).unwrap();
+    table["section"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|section| section.get("rec")?.as_array())
+        .flatten()
+        .find(|row| row["name"].as_str() == Some(key))
+        .unwrap()["value"]
+        .as_str()
+        .unwrap()
+        .into()
+}
+pub(super) fn deployment() -> Deployment {
+    Deployment {
+        router: recommendation("fermi.router").parse().unwrap(),
+        engine: recommendation("fermi.engine").parse().unwrap(),
+        runtime: recommendation("fermi.router_runtime_hash").parse().unwrap(),
+    }
+}
 fn hex128(v: &Value) -> u128 {
     u128::from_str_radix(v.as_str().unwrap().trim_start_matches("0x"), 16).unwrap()
 }
@@ -20,24 +42,51 @@ fn word(data: &str, index: usize) -> u128 {
 #[test]
 fn builders_drop_irrelevant_overrides_and_expire_at_target() {
     let f = fixture();
+    let binding = deployment();
+    let router = binding.router;
+    let engine = binding.engine;
+    assert_eq!(f["router"], format!("{router:#x}"));
+    assert_eq!(f["engine"], format!("{engine:#x}"));
     for (name, builder) in [
         ("Titan", Builder::Titan),
         ("BuilderNet", Builder::BuilderNet),
     ] {
         let frame = &f["frames"][name];
         let diff = &frame["stateDiff"];
-        let row = json!({"maker":"Fermi","quoteAddress":ROUTER,"blockNumber":frame["target"],
-             "slot":frame["slot"],"stateOverride":{(format!("{ENGINE:#x}")):{"stateDiff":diff,"balance":"0x100","nonce":"0x7"},
-             (format!("{ROUTER:#x}")):{"code":"0x01"}}});
+        let row = json!({"maker":"Fermi","quoteAddress":router,"blockNumber":frame["target"],
+             "slot":frame["slot"],"stateOverride":{(format!("{engine:#x}")):{"stateDiff":diff,"balance":"0x100","nonce":"0x7"},
+             (format!("{router:#x}")):{"code":"0x01"}}});
         let result = match builder {
             Builder::Titan => json!({"venues":[row]}),
-            Builder::BuilderNet => json!({(format!("{ROUTER:#x}")):row,"slot":frame["slot"],
+            Builder::BuilderNet => json!({(format!("{router:#x}")):row,"slot":frame["slot"],
                 "blockNumber":format!("0x{:x}",frame["target"].as_u64().unwrap())}),
         };
-        let parsed = Frame::read(builder, &result).unwrap();
+        let parsed = Frame::read(builder, &result, binding).unwrap();
+        assert!(
+            Frame::read(
+                builder,
+                &result,
+                Deployment {
+                    engine: router,
+                    ..binding
+                }
+            )
+            .is_none()
+        );
+        assert!(
+            Frame::read(
+                builder,
+                &result,
+                Deployment {
+                    router: engine,
+                    ..binding
+                }
+            )
+            .is_none()
+        );
         assert_eq!(
             parsed.overrides(),
-            json!({(format!("{ENGINE:#x}")):{"stateDiff":diff}})
+            json!({(format!("{engine:#x}")):{"stateDiff":diff}})
         );
         let t = parsed.timestamp;
         assert!(parsed.current(parsed.target - 1, t - 12, t - 1));
@@ -122,7 +171,7 @@ fn historical_receipts_prove_three_distinct_routers_and_vault_flows() {
         assert_eq!(ev["address"], x["router"]);
         assert!(routers.insert(x["router"].as_str().unwrap()));
         if x["router"] == f["router"] {
-            assert_eq!(x["runtime_keccak"], RUNTIME.to_string());
+            assert_eq!(x["runtime_keccak"], deployment().runtime.to_string());
             assert_eq!(x["engine"], f["engine"]);
         }
         let data = ev["data"].as_str().unwrap();

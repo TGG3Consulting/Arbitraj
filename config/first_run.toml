@@ -3565,3 +3565,43 @@ value = "64"
 source = "Решение 407; запись своего узла tests/data/executor_v3_live_2026-11-17/slots.json"
 rationale = "Перебор слотов маппинга balances 0..N−1 (Solidity и Vyper). У 15 монет BSC записи слоты allowance — 1, 2, 4, 6 и 52 (слот баланса по факту — только у USDT, 1); 64 — с запасом. Один вызов на монету за запуск. Не нашёлся (рефлексия, ребейз, ERC-7201) — источники и урезание 380, как раньше."
 prefill = { kind = "Venue", id = "bsc_dex" }
+
+[[section]]
+title = "FermiSwap на Ethereum — адреса и хеши"
+intro = "Данные размещения для сверки с узлом. Исполнитель кошелька и включение торговли задаются отдельно."
+
+[[section.rec]]
+name = "fermi.router"
+area = "площадка eth_dex"
+unit = "адрес"
+value = "0xf6d5b2fefec7b420d9990b95790adfd3d4c4f977"
+source = "Контракт с quoteAmounts и fermi() в реестре Titan."
+rationale = "Адрес роутера Fermi, опубликованный строителем для котировок и исполнения."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.engine"
+area = "площадка eth_dex"
+unit = "адрес"
+value = "0x10e1a2b624e14ac59426199e520320313a98b0be"
+source = "Ответ fermi() проверенного роутера и аккаунт stateDiff в кадре строителя."
+rationale = "Адрес движка Fermi, для которого строитель публикует состояние оракула."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.router_runtime_hash"
+area = "площадка eth_dex"
+unit = "keccak256"
+value = "0x7b309d240875f4c0767cb5834a8c580f74de2f0b509068c3e83aa65321f39a54"
+source = "Хеш eth_getCode роутера на каноническом блоке."
+rationale = "Keccak256 полного исполняемого кода роутера Fermi."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.executor_runtime_hash"
+area = "площадка eth_dex"
+unit = "keccak256"
+value = "0x961717fac9ad8ce321da9270305470a7f3bfb1f3340ee7c209c51dac7156b8b9"
+source = "Хеш runtime собственного исполнителя из артефакта GitHub Actions и с адреса размещения."
+rationale = "Keccak256 проверенной сборки FermiSlotExecutor."
+prefill = { kind = "Venue", id = "eth_dex" }

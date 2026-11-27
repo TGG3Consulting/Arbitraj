@@ -6,20 +6,20 @@ use crate::gateway::{
     http,
 };
 use alloy::{
-    primitives::{B256, Bytes, keccak256},
+    primitives::{Address, B256, Bytes, keccak256},
     signers::{SignerSync, local::PrivateKeySigner},
 };
 use serde_json::{Value, json};
 use std::{sync::OnceLock, time::Duration};
 
-fn envelope(builder: Builder, raw: &Bytes, target: u64, timestamp: u64) -> Value {
+fn envelope(builder: Builder, raw: &Bytes, target: u64, timestamp: u64, engine: Address) -> Value {
     let mut args =
         json!({"txs":[raw],"blockNumber":format!("0x{target:x}"),"minTimestamp":timestamp});
     if builder == Builder::BuilderNet {
         args["maxTimestamp"] = json!(timestamp);
         args["version"] = json!("v2");
         args["desiredState"] = json!("AnyPosition");
-        args["targetAddresses"] = json!([super::ENGINE]);
+        args["targetAddresses"] = json!([engine]);
         args["targetSlots"] = json!([[]]);
     }
     json!({"jsonrpc":"2.0","id":1,"method":"eth_sendBundle","params":[args]})
@@ -31,6 +31,7 @@ pub(super) async fn send(
     raw: &Bytes,
     target: u64,
     timestamp: u64,
+    engine: Address,
 ) -> GatewayResult<B256> {
     static CLIENT: OnceLock<Result<reqwest::Client, reqwest::Error>> = OnceLock::new();
     let client = CLIENT
@@ -47,7 +48,7 @@ pub(super) async fn send(
                 "Fermi: клиент приватной отправки недоступен",
             )
         })?;
-    let body = envelope(builder, raw, target, timestamp).to_string();
+    let body = envelope(builder, raw, target, timestamp, engine).to_string();
     let url = match builder {
         Builder::Titan => "https://rpc.titanbuilder.xyz",
         Builder::BuilderNet => "https://rpc.buildernet.org",
@@ -122,7 +123,11 @@ mod tests {
     fn both_relays_receive_one_copy_for_exact_block_with_no_reverts() {
         let raw = Bytes::from(vec![2, 1]);
         for builder in [Builder::Titan, Builder::BuilderNet] {
-            let e = envelope(builder, &raw, 421, 789);
+            let engine = Address::repeat_byte(0x42);
+            let e = envelope(builder, &raw, 421, 789, engine);
+            if builder == Builder::BuilderNet {
+                assert_eq!(e["params"][0]["targetAddresses"], json!([engine]));
+            }
             let b = &e["params"][0];
             assert_eq!(e["method"], "eth_sendBundle");
             assert_eq!(b["txs"], json!(["0x0201"]));

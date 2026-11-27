@@ -1,6 +1,6 @@
 //! Хранит уровни Fermi одного строителя в памяти, отзывает их при смене настроек и публикует доступные стороны сделки ядру.
 use super::super::{hashflow::availability, parts::Parts, pools::load_woo_ladder};
-use super::{Builder, Frame, Head, levels::levels};
+use super::{Builder, Deployment, Frame, Head, levels::levels};
 use crate::gateway::events::{MarketEvent, SourceId};
 use alloy::primitives::Address;
 use chrono::Utc;
@@ -13,6 +13,8 @@ use std::{
 use tokio::sync::mpsc;
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct Config {
+    pub deployment: Deployment,
+    pub executor_runtime: alloy::primitives::B256,
     pub executor: Address,
     pub builder: Builder,
     pub interval: u64,
@@ -41,6 +43,9 @@ impl Config {
             .ok()
             .filter(|v| !v.is_empty())?;
         Some(Self {
+            deployment: Deployment::read(ctx).ok()?,
+            executor_runtime: super::deployment::runtime(ctx, "fermi.executor_runtime_hash")
+                .ok()?,
             executor,
             builder,
             interval,

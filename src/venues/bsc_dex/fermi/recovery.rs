@@ -159,7 +159,18 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
-    let (spent, received) = fill(o, &r.receipt).ok_or_else(unknown)?;
+    // Старые поручения хранили только подписанный адрес исполнителя. Его getter читается
+    // в том же каноническом блоке, что и квитанция, независимо от текущего профиля.
+    let router = match o.router {
+        Some(address) => address,
+        None => super::deployment::executor_router(ctx, r.block_hash, o.executor)
+            .await
+            .map_err(|_| unknown())?,
+    };
+    if router.is_zero() {
+        return Err(unknown());
+    }
+    let (spent, received) = fill(o, &r.receipt, router).ok_or_else(unknown)?;
     let (coins, cash) = if req.side == Side::Buy {
         (received, spent)
     } else {

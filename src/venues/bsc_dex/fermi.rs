@@ -2,6 +2,7 @@
 //! https://docs.titanbuilder.xyz/propamms · https://buildernet.org/docs/api
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
+mod deployment;
 mod frame;
 pub(super) mod markets;
 pub(super) mod routing;
@@ -27,9 +28,10 @@ use alloy::{
     sol,
     sol_types::{SolCall, SolValue},
 };
-use alloy_primitives::{Address, B256, Bytes, I256, U64, U256, b256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, I256, U64, U256, keccak256};
 use chrono::Utc;
-use frame::{Builder, ENGINE, Frame, ROUTER};
+use deployment::Deployment;
+use frame::{Builder, Frame};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -63,8 +65,6 @@ struct SimCall {
     return_data: Bytes,
 }
 
-const RUNTIME: B256 = b256!("7b309d240875f4c0767cb5834a8c580f74de2f0b509068c3e83aa65321f39a54");
-
 async fn canonical<C: SolCall>(
     ctx: &Ctx,
     hash: B256,
@@ -86,13 +86,13 @@ async fn canonical<C: SolCall>(
     })
 }
 
-async fn verify_router(ctx: &Ctx, head: &Head) -> GatewayResult<()> {
+async fn verify_router(ctx: &Ctx, head: &Head, deployment: Deployment) -> GatewayResult<()> {
     let tag = json!({"blockHash":head.hash,"requireCanonical":true});
     let (code, engine): (Bytes, Address) = tokio::try_join!(
-        rpc::call(ctx, "eth_getCode", json!([ROUTER, tag])),
-        canonical(ctx, head.hash, ROUTER, fermiCall {})
+        rpc::call(ctx, "eth_getCode", json!([deployment.router, tag])),
+        canonical(ctx, head.hash, deployment.router, fermiCall {})
     )?;
-    if keccak256(code) != RUNTIME || engine != ENGINE {
+    if keccak256(code) != deployment.runtime || engine != deployment.engine {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
             "Fermi: изменился код роутера или оракул",
@@ -101,7 +101,7 @@ async fn verify_router(ctx: &Ctx, head: &Head) -> GatewayResult<()> {
     Ok(())
 }
 
-async fn frame(ctx: &Ctx, builder: Builder) -> GatewayResult<Frame> {
+async fn frame(ctx: &Ctx, builder: Builder, deployment: Deployment) -> GatewayResult<Frame> {
     let (url, method) = builder.data();
     let mut limits = ctx.limits()?;
     limits.max_bytes = limits.max_bytes.min(1_048_576);
@@ -121,7 +121,7 @@ async fn frame(ctx: &Ctx, builder: Builder) -> GatewayResult<Frame> {
         .filter(|r| {
             status.is_success() && r["id"] == 1 && r["jsonrpc"] == "2.0" && r.get("error").is_none()
         })
-        .and_then(|r| Frame::read(builder, &r["result"]))
+        .and_then(|r| Frame::read(builder, &r["result"], deployment))
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::BadResponse,
@@ -135,6 +135,8 @@ fn exact_amount(raw: Option<&str>, tokens: Option<&str>, precision: u8) -> Optio
 }
 
 pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Preview> {
+    let deployment = Deployment::read(ctx)?;
+    let revision = ctx.settings.generation();
     let bad = |message| ctx.err(ErrorCode::NotApplicable, message);
     if ctx.chain_id() != Some(1)
         || req.input == req.output
@@ -142,7 +144,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         || req.output.is_zero()
         || req
             .market
-            .is_some_and(|m| m != ROUTER && Some(m) != ctx.addr("fermi.executor").ok())
+            .is_some_and(|m| m != deployment.router && Some(m) != ctx.addr("fermi.executor").ok())
     {
         return Err(bad(
             "Fermi: требуется Ethereum, текущий роутер и два разных ERC-20; для ETH используйте WETH",
@@ -161,7 +163,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     let (network, head, frame): (U64, Head, Frame) = tokio::try_join!(
         rpc::call(ctx, "eth_chainId", json!([])),
         rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])),
-        frame(ctx, builder)
+        frame(ctx, builder, deployment)
     )?;
     if network.to::<u64>() != 1 {
         return Err(bad("Fermi: узел принадлежит другой сети"));
@@ -178,7 +180,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         return Err(stale());
     }
     let (_, precision) = tokio::try_join!(
-        verify_router(ctx, &head),
+        verify_router(ctx, &head, deployment),
         canonical(ctx, head.hash, req.input, decimalsCall {})
     )?;
     let amount = exact_amount(
@@ -189,9 +191,16 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     .ok_or_else(|| {
         bad("Fermi: нужна одна положительная сумма, точно представимая в единицах токена и int256")
     })?;
-    let executor = req.market.filter(|m| *m != ROUTER);
+    let executor = req.market.filter(|m| *m != deployment.router);
     if let Some(address) = executor {
-        slot::verify_executor(ctx, &head, address).await?;
+        slot::verify_executor(
+            ctx,
+            &head,
+            address,
+            deployment,
+            deployment::runtime(ctx, "fermi.executor_runtime_hash")?,
+        )
+        .await?;
     }
     let signed = I256::from_raw(amount);
     let (_, quoted) = slot::amounts(
@@ -212,6 +221,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
             target: frame.target,
             timestamp: frame.timestamp,
             executor,
+            router: Some(deployment.router),
             payer: who,
             input: req.input,
             output: req.output,
@@ -225,7 +235,11 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         (quoted, None)
     };
     let latest: Head = rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])).await?;
-    if latest.hash != head.hash || !current() {
+    if latest.hash != head.hash
+        || !current()
+        || revision != ctx.settings.generation()
+        || Deployment::read(ctx)? != deployment
+    {
         return Err(stale());
     }
     Ok(Preview {
@@ -239,7 +253,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
         block_hash: head.hash.to_string(),
         block: Some(head.number.to::<u64>()),
         expires: Some(frame.timestamp),
-        details: json!({"router":ROUTER,"engine":ENGINE,"builder":builder_id,"trader":who,
+        details: json!({"router":deployment.router,"engine":deployment.engine,"builder":builder_id,"trader":who,
             "target_block":frame.target,"slot":frame.slot,"quote_only":executor.is_none(),"simulated_executor":executor,"gas_used":gas_used}),
     })
 }

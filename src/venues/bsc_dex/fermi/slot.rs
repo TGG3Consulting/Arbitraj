@@ -1,6 +1,6 @@
 //! Ордер одного слота Ethereum. Состояние оракула, адрес вызова и предел подписываются одним намерением.
 //! Транспорт: https://docs.titanbuilder.xyz/api/eth_sendbundle и https://buildernet.org/docs/api .
-use super::{Ctx, Frame, Head, SimBlock, SimCall, frame::ROUTER, quoteAmountsCall, rpc};
+use super::{Ctx, Deployment, Frame, Head, SimBlock, SimCall, deployment, quoteAmountsCall, rpc};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, I256, U64, U256};
@@ -25,6 +25,8 @@ pub(crate) struct Proof {
     pub target: u64,
     pub timestamp: u64,
     pub executor: Address,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub router: Option<Address>,
     pub payer: Address,
     pub input: Address,
     pub output: Address,
@@ -109,7 +111,7 @@ pub(super) async fn amounts(
         ctx,
         head,
         frame,
-        json!([{"from":caller,"to":ROUTER,"data":Bytes::from(q.abi_encode())}]),
+        json!([{"from":caller,"to":frame.deployment.router,"data":Bytes::from(q.abi_encode())}]),
     )
     .await?;
     let [r] = rows.as_slice() else {
@@ -134,21 +136,26 @@ pub(super) async fn amounts(
     Ok((q.amountIn, q.amountOut))
 }
 
-/// Runtime официальной сборки нашего исполнителя (GitHub Actions, 07bd49de, 45867180736).
-pub(super) const EXECUTOR_CODE: B256 =
-    alloy_primitives::b256!("961717fac9ad8ce321da9270305470a7f3bfb1f3340ee7c209c51dac7156b8b9");
-
 pub(super) async fn verify_executor(
     ctx: &Ctx,
     head: &Head,
     executor: Address,
+    deployment: Deployment,
+    runtime: B256,
 ) -> GatewayResult<()> {
     let tag = json!({"blockHash":head.hash,"requireCanonical":true});
-    let code: Bytes = rpc::call(ctx, "eth_getCode", json!([executor, tag])).await?;
-    if alloy_primitives::keccak256(code) != EXECUTOR_CODE {
+    let (code, router, engine): (Bytes, Address, Address) = tokio::try_join!(
+        rpc::call(ctx, "eth_getCode", json!([executor, tag])),
+        deployment::executor_router(ctx, head.hash, executor),
+        deployment::executor_engine(ctx, head.hash, executor)
+    )?;
+    if code.is_empty()
+        || alloy_primitives::keccak256(code) != runtime
+        || (router, engine) != (deployment.router, deployment.engine)
+    {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
-            "Fermi: код исполнителя отличается от проверенной сборки CI",
+            "Fermi: код или привязки исполнителя расходятся с профилем",
         ));
     }
     Ok(())

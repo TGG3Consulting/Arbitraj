@@ -1,0 +1,148 @@
+"""Публичное архивное чтение и дочерние блоки со своим плательщиком, без подписей и сетевой отправки."""
+import argparse
+import gzip
+import json
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+
+import requests
+from eth_abi import encode
+from eth_utils import keccak
+from record_base_slipstream_executor import ROOT, OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc
+from record_omni_v2_base import ENDPOINTS
+
+DATA = ROOT / "tests/data/first_run_dex_2026-11-26"
+WETH = "0x4200000000000000000000000000000000000006"
+USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+MODULE = "0x" + keccak(text="Arbitraj Stabull protected wallet on isolated child")[-20:].hex()
+WORD = lambda n: "0x" + format(n, "064x")
+ASSETS = ["address","address","uint256","uint256","uint256"]
+SIG = "(" + ",".join(ASSETS) + ")"
+ORDER = ["address",*ASSETS]
+SWAP = "(" + ",".join(ORDER) + ")"
+OK = lambda op: op["status"] == "0x1"
+
+
+def request(url, method, params):
+    if method not in ("eth_call","eth_estimateGas"):
+        raise ValueError(method)
+    res = requests.post(url,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=25)
+    res.raise_for_status()
+    reply=res.json()
+    if "result" not in reply:
+        raise ValueError(reply.get("error"))
+    return reply["result"]
+
+
+def capture(url, artifact):
+    d=json.loads(gzip.decompress((DATA / "stabull_base_directory.json.gz").read_bytes()))
+    tag=d["anchor"]; factory=d["factory"]; router=factory["router"]
+    head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]); stamp=int(head["timestamp"],16)+2; expiry=stamp+240
+    if head["hash"]!=tag["blockHash"] or int(rpc(url,"eth_chainId",[]),16)!=8453:
+        raise ValueError("canonical chain")
+    if any(rpc(url,"eth_getCode",[a,tag])!="0x" for a in (OWNER,EXEC,MODULE)):
+        raise ValueError("occupied isolated address")
+    overrides={OWNER:{"balance":hex(2*10**18)}}
+    identity=None
+    if artifact:
+        creation={"from":OWNER,"data":"0x"+artifact["creation"]+encode(["address"],[factory["address"]]).hex()}
+        # Конструктор выполняет только чтения. Газ его выполнения вычисляется с публичного пополненного EOA отдельно.
+        creator=dict(creation,**{"from":"0x682718efd1bd558afa17d02b1cd328bc705b5cef"})
+        deployed=request(url,"eth_call",[creator,tag]);raw=bytes.fromhex(deployed[2:]);masked=bytearray(raw);blank=bytes.fromhex(artifact["runtime"])
+        [refs]=artifact["immutableReferences"].values()
+        for field in refs:
+            start,size=field["start"],field["length"]
+            if size!=32 or raw[start:start+size]!=encode(["address"],[factory["address"]]):raise ValueError("factory immutable")
+            masked[start:start+size]=blank[start:start+size]
+        if masked!=blank:raise ValueError("artifact body")
+        gas=int(request(url,"eth_estimateGas",[creator,tag]),16)
+        identity={"runtime":"0x"+keccak(raw).hex(),"factory":factory["address"],"deployment_gas":gas,"solc":artifact["solc"]}
+        overrides[MODULE]={"code":deployed}
+        overrides[EXEC]={"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{WORD(0):WORD(int(OWNER,16)),WORD(1):WORD(int(WETH,16))}}
+    def run(calls):
+        block={"blockOverrides":{"time":hex(stamp)},"stateOverrides":overrides,"calls":calls}
+        [child]=rpc(url,"eth_simulateV1",[{"blockStateCalls":[block]},tag])
+        if child["parentHash"]!=tag["blockHash"] or len(child["calls"])!=len(calls):raise ValueError("incomplete child")
+        return child["calls"]
+    def tx(to,fn,types,args):
+        return call(to,calldata(fn,types,args),gas=4_000_000)
+    def approve(asset,spender,v):
+        return tx(asset,"approve(address,uint256)",["address","uint256"],[spender,v])
+    def balances(a,b,where):
+        return [tx(t,"balanceOf(address)",["address"],[owner]) for t,owner in [(a,OWNER),(b,OWNER),(a,MODULE),(b,MODULE),(a,EXEC),(b,EXEC)]]+[
+                tx(a,"allowance(address,address)",["address","address"],[MODULE,where])]
+    funding=next(p["settings"]["dex.router"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["id"]=="uniswap-v2-base")
+    preparation=[call(funding,calldata("swapExactETHForTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[12_000_000,[WETH,USDC],OWNER,expiry]),10**17)]
+    if not all(map(OK,run(preparation))):raise ValueError("own independent USDC funding")
+    def probe(pool,mode,ip,op,amount,prefix,want):
+        qsig="viewTargetSwap" if want else "viewOriginSwap"
+        query=tx(pool,qsig+"(address,address,uint256)",["address","address","uint256"],[ip,op,amount])
+        qr=run(prefix+[query])[-1]
+        if not OK(qr) or not int(qr["returnData"],16):return None,{"stage":"quote unavailable","error":qr.get("error"),"raw":qr["returnData"]}
+        q=int(qr["returnData"],16)
+        cap=q+max(q//100,3) if want else amount
+        payee={"pool":pool,"router":router,"module":MODULE,"v5":EXEC}[mode]
+        auth=approve(ip,payee,cap)
+        def order(limit,deadline):
+            if mode=="pool":return tx(pool,("targetSwap" if want else "originSwap")+SIG,ASSETS,[ip,op,limit if want else amount,amount if want else limit,deadline])
+            if mode=="router":return tx(router,"originSwap"+SWAP,ORDER,[USDC,ip,op,amount,limit,deadline])
+            if mode=="module":return tx(MODULE,("executeTarget" if want else "execute")+SWAP,ORDER,[pool,ip,op,limit if want else amount,amount if want else limit,deadline])
+            return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
+                      [ip,amount,op,limit,deadline,[(17,MODULE,ip,op,10000,encode(["address"],[pool]))]])
+        reads=balances(ip,op,pool);setup=prefix+[auth]
+        def play(limit,deadline):
+            trade=order(limit,deadline)
+            r=run(setup+reads+[trade]+reads)
+            if not all(map(OK,r[:len(setup)+len(reads)])) or not all(map(OK,r[-len(reads):])):raise ValueError("unavailable setup/read")
+            before=[int(row["returnData"],16) for row in r[len(setup):len(setup)+len(reads)]]
+            after=[int(row["returnData"],16) for row in r[-len(reads):]]
+            return trade,r[-len(reads)-1],before,after
+        _,first,b,a=play(cap if want else 1,expiry)
+        base={"mode":mode,"input":ip,"output":op,"specified":str(amount),"quoted":str(q),"exact_output":want}
+        if not OK(first):
+            if a!=b:raise ValueError("failed payment moved funds")
+            return None,dict(**base,stage="swap reverted",error=first.get("error"))
+        paid=b[0]-a[0];net=a[1]-b[1]
+        if (want and (paid>cap or net<amount)) or (not want and paid!=amount) or net<=0 or a[2:]!=b[2:]:
+            return None,dict(**base,stage="wallet differs",paid=str(paid),net=str(net))
+        tight=paid if want else net
+        payment,out,before,after=play(tight,expiry)
+        if not OK(out) or before!=b or after!=a:return None,dict(**base,stage="strict boundary unavailable",paid=str(paid),net=str(net))
+        _,fail,bf,af=play(tight-1 if want else tight+1,expiry)
+        _,late,bl,al=play(tight,stamp-1 if mode=="v5" else stamp)
+        if OK(fail) or OK(late) or bf!=af or bl!=al:raise ValueError((pool,mode,"boundary rollback"))
+        return setup+[payment],dict(**base,stage="paid",paid=str(paid),net=str(net),gas=int(out["gasUsed"],16),logs=out["logs"],calldata=payment,
+                                    min_or_cap_error=fail.get("error"),deadline_error=late.get("error"))
+    modes=["module","v5"] if artifact else ["pool","router"]
+    def cycle(row):
+        pool=row["address"];token=row["token0"]
+        if row["token1"]!=USDC:raise ValueError(("unknown cash currency",pool))
+        cases=[]
+        for size in [1000,1_000_000]:
+            for mode in modes:
+                prefix,buy=probe(pool,mode,USDC,token,size,preparation,False)
+                c={"size_usdc":size,"mode":mode,"buy":buy};cases.append(c)
+                if prefix:
+                    amount=int(buy["net"]);_,sell=probe(pool,mode,token,USDC,amount,prefix,False);c["sell"]=sell
+                    if mode in ("pool","module"):
+                        _,target=probe(pool,mode,USDC,token,amount,preparation,True);c["buy_target"]=target
+                        if sell.get("stage")=="paid":
+                            _,target=probe(pool,mode,token,USDC,max(1,int(sell["net"])//2),prefix,True);c["sell_target"]=target
+        return {"pool":pool,"token":token,"cases":cases}
+    with ThreadPoolExecutor(max_workers=2) as ex:records=list(ex.map(cycle,d["pools"]))
+    return {"chain":8453,"selector":tag,"state_root":head["stateRoot"],"simulated_at":stamp,"payer":OWNER,"module":identity,
+            "funding":preparation,"records":records}
+
+
+if __name__=="__main__":
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("output",type=Path);parser.add_argument("--module",type=Path)
+    opt=parser.parse_args()
+    errors=[]
+    for endpoint in ENDPOINTS:
+        try:
+            result=capture(endpoint,json.loads(opt.module.read_bytes()) if opt.module else None)
+            opt.output.write_text(json.dumps(result,separators=(",",":")),encoding="utf8")
+            break
+        except (requests.RequestException,ValueError,KeyError,RuntimeError) as e:
+            errors.append(str(e)[:300])
+    else:raise RuntimeError(errors)

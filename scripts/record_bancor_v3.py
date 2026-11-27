@@ -101,6 +101,26 @@ def capture(endpoint):
     srcs = [t for t in [NATIVE,STABLES[0],STABLES[1],WETH] if pools.get(t,{}).get("enabled")]
     if not srcs or paused:
         return dict(block=snapshot["block"],selector=at,source_commit=REV,roles=roles,pools=pools,collections=collections,paused=paused,bnt=bnt,cases=[])
+    live=[t for t,m in pools.items() if m["enabled"]]
+    decimals={t:(18 if t==NATIVE else view(t,"decimals()","uint8")) for t in [bnt,*live]}
+    checks=[]
+    for source in [bnt,*live]:
+        for target in [bnt,*live]:
+            if source==target:continue
+            for exact in (True,False):
+                dp=decimals[source if exact else target]
+                for units in (10**dp//1000,10**dp//10):
+                    predicted=model(source,target,units,exact)
+                    if predicted:
+                        method=("tradeOutputBySourceAmount" if exact else "tradeInputByTargetAmount")+"(address,address,uint256)"
+                        checks.append((source,target,exact,units,predicted,method))
+    reads=posts(c,[(info,r[5],["address","address","uint256"],[r[0],r[1],r[3]]) for r in checks])
+    quotes=[]
+    for (source,target,exact,units,predicted,_),raw in zip(checks,reads,strict=True):
+        actual=decode(["uint256"],raw)[0]
+        if actual!=predicted:raise ValueError(("official marginal quote",source,target,units,predicted,actual))
+        quotes.append(dict(source=source,target=target,exact_input=exact,amount=str(units),result=str(actual)))
+    srcs=live
     candidates = [(t,bnt) for t in srcs]+[(bnt,t) for t in srcs]
     candidates.extend((a,b) for a in srcs[:2] for b in srcs[:2] if a!=b)
     cases = []
@@ -150,7 +170,7 @@ def capture(endpoint):
                         raise ValueError(("actual wallet differs",source,target,spent,received,left-x,y-right))
                     rec.update(spent=str(spent),received=str(received),gas=int(paid["gasUsed"],16),logs=paid["logs"])
             cases.append(rec)
-    return dict(block=snapshot["block"],selector=at,source_commit=REV,roles=roles,pools=pools,collections=collections,paused=paused,bnt=bnt,cases=cases)
+    return dict(block=snapshot["block"],selector=at,source_commit=REV,roles=roles,pools=pools,collections=collections,paused=paused,bnt=bnt,cases=cases,quotes=quotes)
 
 
 if __name__=="__main__":

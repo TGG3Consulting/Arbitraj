@@ -10,6 +10,8 @@
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
     algebra_integral_theorem:{file:'theorem-ethereum',key:'algebra-router-wallet:theorem:1',name:'AlgebraRouterWallet в Ethereum',load:()=>import('../assets/theorem-ethereum.json')},
+    mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
+    mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
     empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},

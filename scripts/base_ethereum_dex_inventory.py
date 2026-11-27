@@ -2228,6 +2228,18 @@ def tables(network, snapshots, profiles):
                     f"при той же выплате оригинал сэкономил {min(deltas)}–{max(deltas)} gas за своп. "
                     f"Обратная проверка пары и minOut +1 отклонили завышенный выход в обе стороны. "
                     f"[Квитанции и сроки](../{fixture.as_posix()}).")
+        if not base and str(row["id"]) == "8278":
+            fixture = data_dir / "ammalgam_ethereum_wallet.json.gz"
+            with gzip.open(fixture, "rt", encoding="utf8") as stream:
+                book = json.load(stream)
+            candidates = [book["factory"], book["helper"], book["pools"][0]["code"]["beacon"]]
+            controls = book["controls"]
+            paid = {m: sum("received" in r for r in controls if r["mode"] == m) for m in ("helper","wallet","v5")}
+            task = (f"Ammalgam · {len(book['pools'])} зарегистрированных пар. Подтверждены отдельно обе записи proxy "
+                    f"и текущая реализация маяка. На WETH/USDC и USDC/USDT проверены выплаты штатного helper ({paid['helper']}), "
+                    f"модуля с ограничением срока ({paid['wallet']}) и V5 ({paid['v5']}). Полный ввод измерялся по балансу "
+                    f"кошелька, выручка — по приросту выходного баланса. Для расчёта цены в графе требуется модель "
+                    f"квадратичной комиссии и недостающих активов после займа. [Пулы, роли, хеши и выплаты](../{fixture.as_posix()}).")
         if not base and str(row["id"]) == "812":
             fixture = data_dir / "llama_eth_v2_wallets.json.gz"
             with gzip.open(fixture, "rt", encoding="utf8") as stream:

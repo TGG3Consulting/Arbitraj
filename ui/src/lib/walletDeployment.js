@@ -1,5 +1,6 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
+import {mooniswap, loadMooniswap, checkMooniswap} from './mooniswapDeploy.js';
 import {loadAktionariat,checkAktionariat} from './aktionariatDeploy.js';
 import {loadAlgebra,checkAlgebra} from "./algebraWalletDeploy.js";
 import {loadCarbon,checkCarbon} from './carbonDeploy.js';
@@ -9,7 +10,7 @@ import {loadAngstrom, checkAngstrom} from "./angstromDeploy.js";
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
-const bindsWallet = kind => singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
+const bindsWallet = kind => mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -25,6 +26,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (mooniswap(settings.kind) || mooniswap(plan.kind)) return loadMooniswap(settings,plan,hashCode);
   if (settings.kind==='aktionariat' || plan.kind==='aktionariat') return loadAktionariat(settings,plan,hashCode);
   if (settings.kind==='algebra_integral_theorem' || plan.kind==='algebra_integral_theorem') return loadAlgebra(settings,plan,hashCode);
   if (singleFactory(settings.kind) || singleFactory(plan.kind)) return loadSingleFactory(settings,plan,hashCode);
@@ -53,6 +55,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (mooniswap(p.kind)) return checkMooniswap(provider,p,at);
   if (p.kind==='aktionariat') return checkAktionariat(provider,p,at);
   if (p.kind==='algebra_integral_theorem') return checkAlgebra(provider,p,at);
   if (singleFactory(p.kind)) return checkSingleFactory(provider,p,at);

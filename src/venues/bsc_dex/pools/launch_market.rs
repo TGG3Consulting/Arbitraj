@@ -53,7 +53,7 @@ pub(super) async fn market(
     at: &Value,
 ) -> GatewayResult<Market> {
     let generation = ctx.settings.generation();
-    let key = if f.variant==super::family_variant::Variant::BaseStonk {
+    let key = if f.variant.basestonk() {
         super::basestonk::restore(&launch_keys::roles(ctx,f)?,pair,id).ok_or_else(||invalid(ctx))?
     }else{launch_keys::configured(ctx, f, id)?};
     let PoolKey::Uniswap(k) = &key else {

@@ -105,7 +105,7 @@ impl Market {
             Box::pin(super::super::exec::ambient_plan::check_module(ctx,e,t,&h.selector())).await?;
             Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,h)).await?;
             anchor=Some((h,Box::new(e.clone())));Venue::AmbientWallet
-        } else if e.family.variant==super::super::pools::family_variant::Variant::BaseStonk{
+        } else if e.family.variant.basestonk(){
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
             anchor=Some((head,Box::new(e.clone())));

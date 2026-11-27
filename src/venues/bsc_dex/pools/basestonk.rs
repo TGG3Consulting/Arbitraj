@@ -22,8 +22,28 @@ alloy::sol! {
         function taxFor(Key calldata key,bool zeroForOne) external view returns(uint16);
     }
 }
+/// Шаг тиков в ключах изученных размещений Base. V2 задаёт 60 в AdvancedLauncherV2.sol:53–54
+/// и передаёт его в PoolKey на строках 172–176. V7 делает это в AdvancedLauncherV7.sol:46–47,307–311.
+/// https://sourcify.dev/server/v2/contract/8453/0x74655f443d25c5d401a582c68dea02acd170e12f?fields=sources
+/// https://sourcify.dev/server/v2/contract/8453/0x4bc0e8c2caab145612956652a5668864ffcc7af7?fields=sources
 pub(super) const SPACING: i32 = 60;
+/// Кандидаты для восстановления ключа: POOL_FEE V7 = 0, V2 = 3000 миллионных (0,3%).
+/// Активный launcher подтверждает конкретную ставку в read(). Налог хука учитывается отдельно.
 pub(super) const TIERS: [u32; 2] = [0, 3000];
+
+/// Младшие 14 бит адреса V4 задают разрешения. Биты 13, 6 и 2 включают beforeInitialize,
+/// afterSwap и возврат delta из afterSwap. У проверенного AdvancedFeeHookV6B.sol:457–491,620–627
+/// хуки ограничивают инициализацию и возвращают удержание при обмене.
+/// https://github.com/Uniswap/v4-core/blob/v4.0.0/src/libraries/Hooks.sol#L22-L45
+/// https://sourcify.dev/server/v2/contract/8453/0x3e6b46810b1fd5085086fd1417e8adb02f34a044?fields=sources
+const HOOK_FLAGS: u16 = 0x2044;
+
+pub(super) fn matches_key(k: &UniswapPoolKeyData) -> bool {
+    !k.currency0.is_zero()
+        && TIERS.contains(&k.fee)
+        && k.tick_spacing.as_i32() == SPACING
+        && u16::from_be_bytes([k.hooks[18], k.hooks[19]]) & 0x3fff == HOOK_FLAGS
+}
 
 pub(super) fn key(pair: (Address, Address), hook: Address, tier: u32) -> PoolKey {
     let (currency0, currency1) = super::discover::sorted(pair.0, pair.1);

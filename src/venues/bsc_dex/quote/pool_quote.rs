@@ -569,7 +569,7 @@ pub fn swap(
                 else{levels.iter().filter(|p|p.amount_out>=amount).min_by_key(|p|p.amount_in)}.ok_or_else(none)?;
             Ok(Swapped{amount_in:point.amount_in,amount_out:point.amount_out,complete:true})
         }
-        (PoolState::OraclePmm(d), kind) if (kind==PoolKind::Cl && e.family.variant==super::super::pools::family_variant::Variant::BaseStonk) || (kind==PoolKind::OraclePmm && super::uses_wallet_quoter(e.family.variant)) => {
+        (PoolState::OraclePmm(d), kind) if (kind==PoolKind::Cl && e.family.variant.basestonk()) || (kind==PoolKind::OraclePmm && super::uses_wallet_quoter(e.family.variant)) => {
             let points=if zero_for_one==d.base_is_token0 {&d.ladder_base_in} else {&d.ladder_quote_in};
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})

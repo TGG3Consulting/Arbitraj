@@ -4,7 +4,6 @@ use super::{
     basestonk,
     discover::sorted,
     families::{self, Family},
-    family_variant::Variant,
     launch_keys::{self, invalid},
     nami_batch as batch,
     stable_list::Extra,
@@ -98,7 +97,7 @@ pub(super) async fn scan(
     out: &mut Extra,
 ) {
     for f in families::all(ctx) {
-        if f.variant == Variant::BaseStonk
+        if f.variant.basestonk()
             && matches!(ctx.dex_flag("dex.pool_enabled", f.id), Ok(true))
             && let Err(e) = Box::pin(family(ctx, f, coins, quotes, size, out)).await
         {

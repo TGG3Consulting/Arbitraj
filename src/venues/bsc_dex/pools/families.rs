@@ -1006,7 +1006,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::UniswapV4 if f.variant.launch() => {
             list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles"]);
-            if f.variant != Variant::BaseStonk { list.push("dex.launch_pool_keys"); }
+            if !f.variant.basestonk() { list.push("dex.launch_pool_keys"); }
             if matches!(f.variant, Variant::LaunchBaseline | Variant::LaunchUmia) { list.push("dex.factory"); }
             if f.variant == Variant::LaunchO1Wrapped { list.extend(["dex.router", "dex.module_runtime_hashes"]); }
         }

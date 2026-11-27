@@ -242,6 +242,8 @@ pub enum Variant {
 
 impl Variant {
     pub(crate) fn prop_venue(self) -> bool { self == Self::PropVenue }
+    /// Рынок BaseStonk с зафиксированным V4-хуком.
+    pub(crate) fn basestonk(self) -> bool { self == Self::BaseStonk }
     pub(crate) fn motoswap(self) -> bool { self == Self::Motoswap }
     pub(crate) fn e3_lb(self) -> bool { self == Self::E3Lb }
     pub fn fluid_lite(self)->bool{ self==Self::FluidDexLite }
@@ -256,7 +258,7 @@ impl Variant {
     pub(crate) fn algebra_router(self) -> bool { self.caller_algebra() || self.treble_spot() }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
     pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
-    pub fn launch(self)->bool {matches!(self,Self::Angstrom|Self::BaseStonk|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
+    pub fn launch(self)->bool {self.basestonk() || matches!(self,Self::Angstrom|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}

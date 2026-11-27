@@ -1,5 +1,5 @@
 //! Реестр и оплата на Base по двум независимым размерам у десяти поколений хуков.
-use super::{basestonk, launch_keys::Role};
+use super::{basestonk, family_variant, key::PoolKey, launch_keys::Role};
 use alloy_primitives::{Address, B256, U256, keccak256};
 use flate2::read::GzDecoder;
 use serde_json::Value;
@@ -46,8 +46,10 @@ fn watched_pair_and_cold_pool_id_restore_the_same_registered_key() {
             }
         })
         .collect::<Vec<_>>();
-    assert_eq!(settings["dex.kind"], "launch_basestonk");
+    assert!(family_variant::of(settings["dex.kind"].as_str().unwrap()).basestonk());
     assert_eq!(roles.iter().filter(|r| r.kind == "hook").count(), 11);
+    key_tests::check_roles(&roles, &d);
+    let mut zero_fee = 0;
     let mut count = 0;
     let mut liquid = 0;
     for r in d["markets"].as_array().unwrap() {
@@ -58,6 +60,10 @@ fn watched_pair_and_cold_pool_id_restore_the_same_registered_key() {
             addr(&r["hook"]),
             r["key"][2].as_u64().unwrap() as u32,
         );
+        let PoolKey::Uniswap(k) = &expected else { panic!("ожидался ключ V4") };
+        assert!(basestonk::matches_key(k));
+        assert_eq!(r["key"][3].as_i64(), Some(i64::from(k.tick_spacing.as_i32())));
+        zero_fee += usize::from(k.fee == 0);
         assert_eq!(expected.id(), id);
         assert_eq!(
             basestonk::restore(&roles, (other, token), id)
@@ -76,7 +82,7 @@ fn watched_pair_and_cold_pool_id_restore_the_same_registered_key() {
         count += 1;
         liquid += usize::from(r["liquidity"].as_str().unwrap().parse::<u128>().unwrap() > 0);
     }
-    assert_eq!((count, liquid), (4781, 1580));
+    assert_eq!((count, liquid, zero_fee, count - zero_fee), (4781, 1580, 762, 4019));
     assert!(basestonk::config(&[0u8; 128]).is_none());
     assert!(basestonk::restore(&roles, (Address::ZERO, Address::ZERO), B256::ZERO).is_none());
 }
@@ -171,3 +177,6 @@ fn one_payment_even_when_the_hook_sells_its_tax_in_the_same_pool() {
         assert_eq!(modes[0].1, modes[1].1);
     }
 }
+
+#[path = "basestonk_key_tests.rs"]
+mod key_tests;

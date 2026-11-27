@@ -3,16 +3,9 @@ use super::super::{hashflow, parts::Parts, send::tx_1559::Fees};
 use super::{firm::firm, indicative::candidate, markets::Books, slot::Proof};
 use crate::core::types::{Asset, Quote, RouteMode, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::{
-    primitives::{Address, B256, U256, keccak256},
-    sol_types::SolValue,
-};
+use alloy::primitives::{Address, U256};
 use rust_decimal::Decimal;
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 pub(super) struct Prepared {
     pub book: Arc<Books>,
@@ -24,34 +17,9 @@ pub(super) struct Prepared {
     pub received: U256,
     pub decs: (u8, u8),
 }
-type PerWallet = HashMap<(Address, B256), Arc<Prepared>>;
-#[derive(Default, Clone)]
-pub(super) struct Tickets(Arc<Mutex<PerWallet>>);
-impl Tickets {
-    fn save(&self, q: Prepared) -> B256 {
-        let id = keccak256(
-            (
-                q.proof.calldata(),
-                q.proof.payer,
-                q.proof.executor,
-                q.proof.builder.clone(),
-                q.fees.max_fee,
-                q.fees.tip,
-            )
-                .abi_encode(),
-        );
-        let mut m = self.0.lock().unwrap_or_else(|x| x.into_inner());
-        m.retain(|_, v| v.book.current());
-        m.insert((q.proof.payer, id), Arc::new(q));
-        id
-    }
-    pub(super) fn take(&self, who: Address, id: B256) -> Option<Arc<Prepared>> {
-        self.0
-            .lock()
-            .unwrap_or_else(|x| x.into_inner())
-            .remove(&(who, id))
-    }
-}
+#[path = "tickets.rs"]
+mod tickets;
+pub(super) use tickets::Tickets;
 pub(in crate::venues::bsc_dex) fn active(p: &Parts) -> bool {
     p.ctx.chain_id() == Some(1) && !p.slot_markets.current(p).is_empty()
 }
@@ -171,7 +139,8 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let mut ticket: Option<Prepared> = None;
     for (prepared, mut q) in options.into_iter().flatten() {
         if mixed && let Some(route) = q.route.as_mut() {
-            route.exec_note = Some(crate::gateway::quote_stage::PROP_SETTLEMENT_SLOT.into());
+            route.mode = RouteMode::PropSettlementSlot(None);
+            route.exec_note = Some("PropAMM: собственный однократный слот денежного шага".into());
         }
         let score = match &prepared {
             Some(t) => super::firm::value(p, &q, t).await,
@@ -209,7 +178,12 @@ pub(in crate::venues::bsc_dex) async fn consider(
         && let Ok(q) = best.as_mut()
         && let Some(route) = q.route.as_mut()
     {
-        route.mode = RouteMode::Slot(p.slot_markets.tickets.save(prepared));
+        let id = p.slot_markets.tickets.save(prepared, mixed);
+        route.mode = if mixed {
+            RouteMode::PropSettlementSlot(Some(id))
+        } else {
+            RouteMode::Slot(id)
+        };
     }
     best
 }
@@ -217,3 +191,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
 #[cfg(test)]
 #[path = "slot_selection_tests.rs"]
 mod slot_selection_tests;
+
+#[cfg(test)]
+#[path = "settlement_mode_tests.rs"]
+mod settlement_mode_tests;

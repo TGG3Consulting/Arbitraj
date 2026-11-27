@@ -6,7 +6,7 @@ use submission::submit;
 use super::super::{num, parts::Parts};
 use super::{routing::Prepared, slot::Proof};
 use crate::{
-    core::types::{Side, TradeRequest, TradeResult},
+    core::types::{RouteMode, Side, TradeRequest, TradeResult},
     gateway::{
         errors::{ErrorCode, GatewayResult},
         settlement_intent as intent,
@@ -100,11 +100,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     req: TradeRequest,
     id: B256,
 ) -> GatewayResult<TradeResult> {
-    if req
-        .route
-        .as_ref()
-        .is_some_and(crate::gateway::quote_stage::prop_settlement_slot)
-    {
+    if req.route.as_ref().map(|r| r.mode) != Some(RouteMode::Slot(id)) {
         return Err(p.ctx.err(
             ErrorCode::NotApplicable,
             "Для слота нужен исходный денежный шаг",
@@ -118,10 +114,7 @@ pub(in crate::venues::bsc_dex) async fn trade_settlement(
     id: B256,
     cash: Address,
 ) -> GatewayResult<TradeResult> {
-    if !req
-        .route
-        .as_ref()
-        .is_some_and(crate::gateway::quote_stage::prop_settlement_slot)
+    if req.route.as_ref().map(|r| r.mode) != Some(RouteMode::PropSettlementSlot(Some(id)))
         || cash != p.tokens.usdt(&p.ctx)?
         || !intent::active()
         || !crate::gateway::settlement_proofs::active()

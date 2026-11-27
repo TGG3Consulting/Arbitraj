@@ -92,14 +92,6 @@ pub fn kyber_final(settings: &Store, venue: &VenueId) -> bool {
         .unwrap_or(false)
 }
 
-/// Защищённый однократный PropAMM слот, сохраняемый под внешним денежным поручением.
-pub const PROP_SETTLEMENT_SLOT: &str = "PropAMM: собственный однократный слот денежного шага";
-pub fn prop_settlement_slot(r: &crate::core::types::DexRoute) -> bool {
-    matches!(
-        r.mode,
-        crate::core::types::RouteMode::Slot(_) | crate::core::types::RouteMode::SlotIndicative
-    ) && r.exec_note.as_deref() == Some(PROP_SETTLEMENT_SLOT)
-}
 /// Проверяет, что исполнитель может восстановить ровно одно действие денежного маршрута.
 pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> bool {
     use crate::core::types::{CostKind, RouteMode};
@@ -108,8 +100,8 @@ pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> 
             r.executable
         }
         RouteMode::OrderbookIndicative | RouteMode::RelayIndicative => !firm,
-        RouteMode::Slot(_) if prop_settlement_slot(r) => r.executable,
-        RouteMode::SlotIndicative if prop_settlement_slot(r) => !firm,
+        RouteMode::PropSettlementSlot(Some(_)) => r.executable,
+        RouteMode::PropSettlementSlot(None) => !firm,
         _ => false,
     }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
 }

@@ -90,10 +90,8 @@ pub async fn trade(
     ) {
         return super::hanji::recovery::reconcile(p, req, pend).await;
     }
-    if matches!(
-        req.route.as_ref().map(|r| r.mode),
-        Some(crate::core::types::RouteMode::Slot(_))
-    ) {
+    // У старых поручений режим Slot. Подпись, внешний ключ, плательщика и nonce проверяет reconcile.
+    if req.route.as_ref().and_then(|r| r.mode.slot_ticket()).is_some() {
         return super::fermi::reconcile(p, req, pend).await;
     }
     // Решение 233: бандл — квитанции ВСЕХ его транзакций и nonce кошелька (resolve_bundle.rs), не одна по хешу.

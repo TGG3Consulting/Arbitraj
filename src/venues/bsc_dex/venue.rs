@@ -321,6 +321,7 @@ impl Venue for BscDex {
                 | crate::core::types::RouteMode::Rfq(_)
                 | crate::core::types::RouteMode::Orderbook(_)
                 | crate::core::types::RouteMode::Slot(_)
+                | crate::core::types::RouteMode::PropSettlementSlot(_)
                 | crate::core::types::RouteMode::OrderbookIndicative
                 | crate::core::types::RouteMode::SlotIndicative
         ) {
@@ -713,6 +714,7 @@ impl Venue for BscDex {
                 crate::core::types::RouteMode::Rfq(_)
                     | crate::core::types::RouteMode::Orderbook(_)
                     | crate::core::types::RouteMode::Slot(_)
+                    | crate::core::types::RouteMode::PropSettlementSlot(Some(_))
             )
         ) {
             return Err(self.p.ctx.err(
@@ -962,6 +964,9 @@ impl BscDex {
                 ));
             }
             req.route = firm.route;
+        }
+        if matches!(req.route.as_ref().map(|r| r.mode), Some(crate::core::types::RouteMode::PropSettlementSlot(_))) {
+            return Err(self.p.ctx.err(ErrorCode::NotApplicable, "Для слота нужен исходный денежный шаг"));
         }
         if let Some(crate::core::types::RouteMode::Orderbook(id)) =
             req.route.as_ref().map(|r| r.mode)

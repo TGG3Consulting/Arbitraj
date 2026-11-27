@@ -139,6 +139,8 @@ pub enum RouteMode {
     /// Исполняемый снимок и сугубо индикативная книга цены строителя следующего блока.
     Slot(alloy_primitives::B256),
     SlotIndicative,
+    /// Собственный слот PropAMM для денежного шага. До финальной котировки билета нет.
+    PropSettlementSlot(Option<alloy_primitives::B256>),
     /// Подтверждаемое релеем EIP-712 поручение Ryze и предварительная цена.
     Relay(alloy_primitives::B256),
     RelayIndicative,
@@ -146,6 +148,16 @@ pub enum RouteMode {
     Orderbook(alloy_primitives::B256),
     /// Глубина ончейн-книги для подбора размера до подтверждения условий исполнения.
     OrderbookIndicative,
+}
+
+impl RouteMode {
+    /// Билет для чтения исходной квитанции строителя. Старые записи сериализованы как Slot(id).
+    pub fn slot_ticket(self) -> Option<alloy_primitives::B256> {
+        match self {
+            Self::Slot(id) | Self::PropSettlementSlot(Some(id)) => Some(id),
+            _ => None,
+        }
+    }
 }
 
 /// Выбранная ставка опубликованного ABI роутера.

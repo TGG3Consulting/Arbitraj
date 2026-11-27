@@ -64,28 +64,22 @@ pub(super) async fn submit(
     }
     let signer = wallet::signer::signer(ctx)?;
     let who = signer.address();
-    let q = p.slot_markets.tickets.take(who, id).ok_or_else(|| {
-        ctx.err(
-            ErrorCode::NoRoute,
-            "В памяти нет выбранного билета Fermi этого кошелька",
-        )
-    })?;
-    if outer_cash.is_some_and(|cash| {
-        q.proof.prop.is_none()
-            || cash != q.book.config.cash
-            || cash
-                != (if req.side == Side::Buy {
-                    q.proof.input
-                } else {
-                    q.proof.output
-                })
-    }) {
-        return Err(ctx.err(
-            ErrorCode::QuoteMismatch,
-            "Контракт расчётной валюты расходится с билетом строителя",
-        ));
-    }
-    check(p, &req, &q, who)?;
+    let q = p.slot_markets.tickets.take(who, id, outer_cash.is_some(), |q| {
+        if outer_cash.is_some_and(|cash| {
+            q.proof.prop.is_none()
+                || cash != q.book.config.cash
+                || cash != (if req.side == Side::Buy { q.proof.input } else { q.proof.output })
+        }) {
+            return Err(ctx.err(
+                ErrorCode::QuoteMismatch,
+                "Контракт расчётной валюты расходится с билетом строителя",
+            ));
+        }
+        check(p, &req, q, who)
+    })?.ok_or_else(|| ctx.err(
+        ErrorCode::NoRoute,
+        "В памяти нет выбранного билета Fermi этого кошелька и назначения",
+    ))?;
     let notice = |text| {
         p.stats.emit(MarketEvent::Notice {
             venue: ctx.venue(),

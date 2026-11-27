@@ -48,6 +48,7 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
+        | RouteMode::PropSettlementSlot(_)
         | RouteMode::Orderbook(_)
         | RouteMode::OrderbookIndicative
         | RouteMode::Relay(_) | RouteMode::RelayIndicative
@@ -192,6 +193,7 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
+        | RouteMode::PropSettlementSlot(_)
         | RouteMode::Orderbook(_)
         | RouteMode::OrderbookIndicative
         | RouteMode::Relay(_) | RouteMode::RelayIndicative

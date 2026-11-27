@@ -26,6 +26,7 @@
 
 pub mod abandon;
 pub mod approve_bundle;
+mod direct_allowance;
 pub mod approve_gas;
 pub mod basin_depth;
 pub mod bound;

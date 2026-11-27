@@ -118,30 +118,8 @@ pub async fn details(
     // Решение 280: первый хоп — V2-форк без роутера (без исполнителя маршрут — сигнал): роутера нет, разрешение пошло
     // бы исполнителю — газ, измеренный пробой (dex.router не читается).
     if route.mode == RouteMode::Direct
-        && (super::vista_pricing::native_router(&e)
-            || super::oasis_pricing::is_oasis(&e)
-            || super::frax_pricing::is_frax(&e)
-            || super::white_pricing::is_white(&e)
-            || super::router_pricing::is_native(&e)
-            || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Pendle|super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)) || super::super::exec::carbon_direct::enabled(&e) || super::super::exec::mint_club_direct::enabled(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::vault_direct::enabled(&e)
-            || e.family.variant.exact_router()
-            || super::super::exec::o1_wallet::enabled(&e) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e) || super::delta_pricing::is_delta(&e))
+        && let Some(router) = super::direct_allowance::spender(ctx, &e, hop.fee_mode, native)?
     {
-        let router = if e.family.variant==super::super::pools::family_variant::Variant::Surge || super::super::exec::o1_wallet::enabled(&e) || e.family.variant.exact_router() || e.family.variant.umbrae() || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::NativeWallet{target,..}|crate::core::types::RouterFeeMode::ProtectedWallet{target}|crate::core::types::RouterFeeMode::Dagrow{target,..}|crate::core::types::RouterFeeMode::AntfarmProceeds{target,..})=>target,_=>return Err(bad())}}else if super::super::exec::carbon_direct::enabled(&e){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::CarbonWallet{module:Some(m),..})=>m,_=>ctx.dex_addr("dex.factory",e.family.id)?}}else if super::super::exec::mint_club_direct::enabled(&e) {match hop.fee_mode {Some(crate::core::types::RouterFeeMode::ProtectedWallet{target})=>target,_=>ctx.dex_addr("dex.factory",e.family.id)?}} else if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
-            hop.fee_mode,
-            Some(
-                crate::core::types::RouterFeeMode::NativeGrossMinimum
-                    | crate::core::types::RouterFeeMode::NativeSettlement {
-                        gross_minimum: true
-                    }
-            )
-        ) || (e.family.variant==super::super::pools::family_variant::Variant::BunnySwap && (native || matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::NativeSettlement{..})))) || super::oasis_pricing::is_oasis(&e)
-            || super::frax_pricing::is_frax(&e)
-        {
-            ctx.dex_addr("dex.quoter", e.family.id)?
-        } else {
-            super::super::pools::deltaswap::router(ctx, &e)?
-        };
         let wallet = signer::address(ctx)?;
         let current = q.allow.erc20(ctx, token, wallet, router).await?;
         let count = approve::fork_known(ctx, token, router, current, amount)?.len();

@@ -130,9 +130,41 @@ def capture(endpoint, artifact):
                     if public!=ZERO and mode!="separate":pre+=[tx(MODULE,"fundFees()",value=10**16)]
                     buy,prefix=leg(pre,mode,WETH,token,budget)
                     sell,_=leg(prefix,mode,token,WETH,int(buy["exact"]["received"]))
+                    preserved=None
+                    if public!=ZERO:
+                        # Perturb only the canonical balance by one wei in this isolated frame.
+                        # Code, proxy slots, pool liquidity and ERC20 allowances remain untouched.
+                        original=int(rpc(endpoint,"eth_getBalance",[public,c.selector]),16)
+                        env[public]={"balance":hex(original+1)}
+                        try:
+                            dirtied,dirty_prefix=leg(pre,mode,WETH,token,budget)
+                            if dirtied["exact"]["received"]!=buy["exact"]["received"]:
+                                raise ValueError("native input paid a different amount to the wallet")
+                            if dirtied["exact"]["before"][-1]!=str(original+1) or dirtied["exact"]["after"][-1]!=str(original+1):
+                                raise ValueError("public ETH inventory changed")
+                            w=dirtied["exact"]
+                            n=int(w["received"])
+                            target=EXEC if mode=="v5" else MODULE
+                            fee_sell=fees(dirty_prefix,token,WETH,n) if mode=="separate" else 0
+                            approve=tx(token,"approve(address,uint256)",["address","uint256"],[target,n])
+                            if mode=="separate":
+                                sell_order=tx(MODULE,"execute("+ORDER+")",[ORDER],[(token,WETH,n,1,OWNER,deadline)],fee_sell)
+                            elif mode=="module":
+                                sell_order=tx(MODULE,"swapFrom(address,address,uint256,uint256,address,uint256)",["address","address","uint256","uint256","address","uint256"],[token,WETH,n,1,OWNER,deadline])
+                            else:
+                                sell_order=tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[token,n,WETH,1,deadline,[(29,MODULE,token,WETH,10000,b"")]])
+                            reads=[balance(token,OWNER),balance(WETH,OWNER),ether(public),ether(MODULE)]
+                            trial=run(dirty_prefix+[approve]+reads+[sell_order]+reads)
+                            off=len(dirty_prefix)+1;win=trial[off+len(reads)]
+                            before=trial[off:off+len(reads)];after=trial[-len(reads):]
+                            if any(z["status"]!="0x1" for z in trial[:off]+before+after) or win["status"]!="0x0" or [z["returnData"] for z in before]!=[z["returnData"] for z in after]:
+                                raise ValueError("protected token-input sell failed to preserve public ETH")
+                            preserved=dict(injected_wei=1,canonical_wei=str(original),buy=dirtied,sell_refused=win["error"],
+                                           sell_snapshot=[z["returnData"] for z in before])
+                        finally: del env[public]
                     result.append(dict(profile=dep["id"],mode=mode,pool=m["pool"],token=token,payer=OWNER,module=MODULE,
                                        executor=EXEC,factory=factory,router=router,public=public,runtime="0x"+keccak(hexstr=code).hex(),
-                                       buy=buy,sell=sell))
+                                       buy=buy,sell=sell,preserved_public_ether=preserved))
     if {r["profile"] for r in result}!={"proxy-1","proxy-2"}:raise ValueError("missing protected market")
     return dict(selector=c.selector,height=d["height"],state_root=ROOT_HASH,runtime_template="0x"+keccak(hexstr=artifact["runtime"]).hex(),
                 cases=result)

@@ -127,6 +127,7 @@ pub mod quoter_refetch_ekubo;
 pub mod quoter_refetch_note;
 pub mod quoter_refetch_proof;
 pub(super) mod market_plan;
+pub(super) mod market_approval;
 pub(super) mod market_receipt;
 pub mod result;
 pub mod settlement_swap;

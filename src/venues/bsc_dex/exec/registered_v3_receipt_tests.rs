@@ -114,3 +114,43 @@ fn wallet_limits_and_identity_survive_serialization() {
         assert!(count > 0);
     }
 }
+
+#[test]
+fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() {
+    let archive: Value = serde_json::from_reader(GzDecoder::new(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/community_v3_ethereum_wallets.json.gz"
+    ).as_slice())).unwrap();
+    let parse = |v: &Value| serde_json::from_value::<Address>(v.clone()).unwrap();
+    let amount = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let cases = archive["cases"].as_array().unwrap();
+    let mut count = 0;
+    for row in cases.iter().filter(|r| r["wire"] == "module") {
+        let tx = &row["signed"];
+        let data: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
+        let market = archive["markets"].as_array().unwrap().iter().find(|e| e["pool"] == row["pool"]).unwrap();
+        let proof = Proof {
+            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), fee_event:false,wallet_module:true },
+            target:parse(&tx["to"]), payer:parse(&tx["from"]),input:parse(&row["source"]),output:parse(&row["target"]),
+            budget:amount(&row["spent"]),minimum:amount(&row["received"]),deadline:U256::from_be_slice(&data[data.len()-32..]),
+        };
+        assert_eq!(proof.data(), data);
+        let logs: Vec<SimLog> = serde_json::from_value(row["logs"].clone()).unwrap();
+        assert_eq!(proof.measured(&logs),Some((proof.budget,proof.minimum)));
+        let mut restored: Proof = serde_json::from_value(serde_json::to_value(&proof).unwrap()).unwrap();
+        assert_eq!(restored.data(), data);
+        restored.market.wallet_module = false;
+        assert_ne!(restored.data(), data);
+        restored.market.wallet_module = true;
+        restored.budget += U256::ONE;
+        assert!(restored.measured(&logs).is_none());
+        restored.budget = proof.budget;
+        restored.minimum += U256::ONE;
+        assert!(restored.measured(&logs).is_none());
+        for wire in ["router", "v5"] {
+            let alt = cases.iter().find(|r|r["wire"]==wire && r["pool"]==row["pool"] && r["source"]==row["source"] && r["spent"]==row["spent"]).unwrap();
+            assert_eq!(row["received"],alt["received"]);
+        }
+        count+=1;
+    }
+    assert_eq!(count,16);
+}

@@ -27,6 +27,7 @@ interface ISafeTrade {
     function percent() external view returns(uint256);
     function getFees(address[] calldata,uint256,address) external view returns(uint256,uint256,uint256,uint256);
     function swapExactTokensForTokensWithFeeAmount(Trade calldata) external payable;
+    function swapExactETHForTokensWithFeeAmount(Trade calldata,uint256 feeAmount) external payable;
 }
 
 contract SafeSwapAdapter {
@@ -97,7 +98,7 @@ contract SafeSwapAdapter {
         address[] memory path=_assets(input,output);
         (uint256 principal,uint256 charged)=_terms(path,amount,separate);
         uint256[] memory gross=router.getAmountsOut(principal,path);
-        require(gross.length==2 && gross[0]==principal && (address(trade)==address(0) || address(trade).balance==0),"quote");
+        require(gross.length==2 && gross[0]==principal && (address(trade)==address(0) || address(trade).balance==0 || input==address(wrapped)),"quote");
         net=gross[1];
         if(!separate && input!=address(wrapped)) net-=charged;
         return (net,charged);
@@ -125,7 +126,11 @@ contract SafeSwapAdapter {
         (uint256 principal,uint256 fee)=_terms(path,o.amount,separate);
         bool buy=o.input==address(wrapped);
         require(msg.value==(separate?fee:0),"fee value");
-        if(address(trade)!=address(0)) require(address(trade).balance==0,"fee balance");
+        uint256 publicBefore=address(trade)==address(0)?0:address(trade).balance;
+        // Only native exact-input explicitly pays feeJar(dexFee) and forwards precisely
+        // principal to the internal router. Token-input selectors forward the entire ETH balance.
+        bool nativeInput=publicBefore!=0;
+        require(!nativeInput || buy,"fee balance");
         ISafeAsset src=ISafeAsset(o.input);ISafeAsset dst=ISafeAsset(o.output);
         uint256 initial=address(this).balance-msg.value;
         uint256 srcBase=src.balanceOf(address(this));uint256 dstBase=dst.balanceOf(address(this));
@@ -135,11 +140,15 @@ contract SafeSwapAdapter {
         _move(src,abi.encodeCall(src.transferFrom,(msg.sender,address(this),o.amount)));
         require(src.balanceOf(address(this))-srcBase==o.amount,"funding");
         if(!separate && buy && fee!=0) wrapped.withdraw(fee);
-        _move(src,abi.encodeCall(src.approve,(address(router),principal)));
+        if(!nativeInput) _move(src,abi.encodeCall(src.approve,(address(router),principal)));
         bool repay=!separate && !buy && fee!=0;
         address destination=repay?address(this):o.recipient;
         if(address(trade)==address(0)) {
             router.swapExactTokensForTokensSupportingFeeOnTransferTokens(principal,o.minimum,path,destination,o.deadline);
+        } else if(nativeInput) {
+            wrapped.withdraw(principal);
+            trade.swapExactETHForTokensWithFeeAmount{value:principal+fee}(
+                ISafeTrade.Trade(principal,o.minimum,path,destination,o.deadline),fee);
         } else {
             trade.swapExactTokensForTokensWithFeeAmount{value:fee}(ISafeTrade.Trade(principal,o.minimum+(repay?fee:0),path,destination,o.deadline));
         }
@@ -153,7 +162,7 @@ contract SafeSwapAdapter {
         credit=dst.balanceOf(o.recipient)-recipientBase;
         require(credit!=0 && credit>=o.minimum && payerBase-src.balanceOf(msg.sender)==o.amount,"net");
         require(src.balanceOf(address(this))==srcBase && dst.balanceOf(address(this))==dstBase &&
-                address(this).balance==initial && src.allowance(address(this),address(router))==0,"residual");
+                address(this).balance==initial && (address(trade)==address(0) || address(trade).balance==publicBefore) && src.allowance(address(this),address(router))==0,"residual");
         emit Filled(msg.sender,o.recipient,o.input,o.output,o.amount,credit,fee,separate);
         entered=false;
     }

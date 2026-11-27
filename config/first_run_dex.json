@@ -2453,7 +2453,10 @@
         "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
       ],
       "dex.v3_quoter_method": "quoteExactInputSingle",
-      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)"
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.module_runtime_hashes": [
+        "0xafbd9d036c5e328add9c488ab102a006a9182449600f6d07111cbadaf4409571"
+      ]
     }
   },
   {

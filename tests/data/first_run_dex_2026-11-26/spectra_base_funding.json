@@ -7,19 +7,23 @@
   "holders": [
     {
       "token": "0x0000206329b97db379d5e1bf586bbdb969c63274",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0022228a2cc5e7ef0274a7baa600d44da5ab5776",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x00b174d66ada7d63789087f50a9b9e0e48446dc1",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x048b45e45ba6153f6badf05fcdc6154cf5e0e23a",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x04c0599ae5a44757c0af6f9ec3b93da8976c150a",
@@ -32,23 +36,28 @@
     },
     {
       "token": "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0887354c58af4392f6012c8cb96354342912902c",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0a1a1a107e45b7ced86833863f482bc5f4ed82ef",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0b0193fad49de45f5e2b0a9f5d6bc3bb7d281688",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0b25c51637c43decd6cc1c1e3da4518d54ddb528",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
@@ -61,31 +70,38 @@
     },
     {
       "token": "0x10076ed296571ce4fde5b1fdf0eb9014a880e47b",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x202d29a1749aa6f7d06d3982082133ebd83f45c5",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x22f757c0b434d93c93d9653f26c9441d8d06c8ec",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x23cd4f9a8251193b3ac798e4e52b542d63634438",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x270188c2f683731a5383dcc1663ce9f3602b4f54",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x27d8c7273fd3fcc6956a0b370ce5fd4a7fc65c18",
-      "examined": 1
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x284c60490212db0dc0b8f93503d35744f8053381",
-      "examined": 0
+      "examined": 1,
+      "window_errors": []
     },
     {
       "token": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
@@ -98,67 +114,83 @@
     },
     {
       "token": "0x31744e44d6af88225c1dbefbe5df8308faea641b",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x34ed3fc672fba382bbea53eac2fd16a9d3d55fcb",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x35ef1f2f187b326a93a3d74441f38fdcff85ce48",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x3852283c467694897460ccaf5308b10d66d6f82b",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x3f227c9d9d6489a6258f4a8286ee93aa98d5a2c3",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x40ed34a01857eb704e205b73c0a94ac3621b21b0",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x4621b7a9c75199271f773ebd9a499dbd165c3191",
-      "examined": 3
+      "examined": 6,
+      "window_errors": []
     },
     {
       "token": "0x46500eb791fb63559a53e577e9f4b2794fca7e9f",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x47e3daf382c4603450905fb68766db8308315407",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x4dd254cc17a466dd8e850f68b9f9f1711390f992",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x4e2d90f0307a93b54aca31dc606f93fe6b9132d2",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x4ea71a20e655794051d1ee8b6e4a3269b13ccacc",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x53fc8a209130c5f15098ff53b367aa0c074af486",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x55076e45a3ab31c4d9f92f63f0b7801c74b986f8",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x5a32099837d89e3a794a44fb131cbbad41f87a8c",
-      "examined": 0
+      "examined": 4,
+      "window_errors": []
     },
     {
       "token": "0x5b14ce8de84448e9a6f6af652af318472aa4fcaf",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
@@ -171,11 +203,13 @@
     },
     {
       "token": "0x61366a4e6b1db1b85dd701f2f4bfa275ef271197",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x616a4e1db48e22028f6bbf20444cd3b8e3273738",
-      "examined": 1
+      "examined": 5,
+      "window_errors": []
     },
     {
       "token": "0x64fcc3a02eeeba05ef701b7eed066c6ebd5d4e51",
@@ -188,91 +222,125 @@
     },
     {
       "token": "0x69efa3cd7fc773fe227b9cc4f41132dcde020a29",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x6a66697bb83b1660f58b618f85f37e413053d3a1",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x6c90f6cc42cc64d6fc110f02de964089b6298de7",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x70654aad8b7734dc319d0c3608ec7b32e03fa162",
-      "examined": 0
+      "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+      "balance": "5150800771286708628",
+      "code": "0x",
+      "native": "0x35f12d91f561f25",
+      "transfer": "0x050cd2ea295097f5dd2b65f405c61eb050b15ee93a09e4d3f46314ae63d4708c",
+      "examined": 5
     },
     {
       "token": "0x72432b8f837f3ed4c50499f57775ac820243b838",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x7e32f4c44e22ab20df287f8a15eb6c0f54da6e30",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x7fcd174e80f264448ebee8c88a7c4476aaf58ea6",
-      "examined": 12
+      "examined": 1,
+      "window_errors": []
     },
     {
       "token": "0x7fe7de5d72633b981191eaee2ccaed95c77e79a9",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x83db73ef5192de4b6a4c92bd0141ba1a0dc87c65",
-      "examined": 0
+      "owner": "0x2a315c59a6a95aeeec085c73badac801c2f4209f",
+      "balance": "168843061493021120",
+      "code": "0x",
+      "native": "0x2939721eb6fc4c",
+      "transfer": "0x9ca36cc3fcd9c856c5ea02e9479eb6be4c9168885091f422ad30b38c923915e6",
+      "examined": 12
     },
     {
       "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
-      "examined": 0
+      "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+      "balance": "49242796436832602298",
+      "code": "0x",
+      "native": "0xf01976222fcf15",
+      "transfer": "0x39ec295e5618e70f3f935a2e643c162e47622f39dd01a7f993956f2bbd3d873d",
+      "examined": 16
     },
     {
       "token": "0x8e7801bac71e92993f6924e7d767d7dbc5fce0ae",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x90613e167d42ca420942082157b42af6fc6a8087",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x916cd56a5fbbeae186f488f4db83b00c103b46e7",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x93fb87c732ff8d09832eee9a09d91f34aff9d880",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x940181a94a35a4569e4529a3cdfb74e38fd98631",
-      "examined": 29
+      "examined": 29,
+      "window_errors": []
     },
     {
       "token": "0x94aa414befb207b869904f3310665a63fba3ae50",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x963ceee215e5b0b1dcb221c3ba398de66abc73d9",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x97c07792833b0de228a2c33466729ed1d588b5f2",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0x99946cefb02249270373f7f2dc0bd9b085d52ae5",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xa39d400b57ed1772e9b3ec982ac433389ed2f16a",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xa3d1a8deb97b111454b294e2324efad13a9d8396",
-      "examined": 8
+      "examined": 14,
+      "window_errors": []
     },
     {
       "token": "0xa43455d99eb63473cfa186b388c1bc2ea1b63924",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xa88594d404727625a9437c3f886c7643872296ae",
@@ -285,15 +353,22 @@
     },
     {
       "token": "0xad55aebc9b8c03fc43cd9f62260391c13c23e7c0",
-      "examined": 0
+      "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+      "balance": "7114676661238555899",
+      "code": "0x",
+      "native": "0x35f12d91f561f25",
+      "transfer": "0x7bab1d5105d1ba1196809cb4bb2d97eb3dc8d4f5dc96e2ff51099c05308c41db",
+      "examined": 11
     },
     {
       "token": "0xb170000aeefa790fa61d6e837d1035906839a3c8",
-      "examined": 2
+      "examined": 7,
+      "window_errors": []
     },
     {
       "token": "0xb1caf74f8ef9059209a88ee3cb95b1e0571be0e4",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xb2000000000000000000002d0ba3164cc74f58b7",
@@ -333,27 +408,37 @@
     },
     {
       "token": "0xb99b6df96d4d5448cc0a5b3e0ef7896df9507cf5",
-      "examined": 0
+      "owner": "0x6d5edbb516a329c19e6e9e39d49c212d2f5c6aa0",
+      "balance": "27110100",
+      "code": "0x",
+      "native": "0xa9135dc842a6e",
+      "transfer": "0x5f1e2cd4c31eb718663b533fa3423baf6ede4f369faa1460152571a1e60ccdf9",
+      "examined": 15
     },
     {
       "token": "0xbb819d845b573b5d7c538f5b85057160cfb5f313",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xbc10718571fcb3c3f67800e7c0887e450d2ff398",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xbdabf94e061bc514a71d8061f90d22797cb85269",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xbde752ef69880c00a795d88438040b8f737eb254",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xbe36b2367b081cdb3e657ced2045729e5d8f89c4",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xbeef0e0834849acc03f0089f01f4f1eeb06873c9",
@@ -362,15 +447,17 @@
       "code": "0x",
       "native": "0x77cb6e3e1f3879",
       "transfer": "0xe577f6b63a395fb6b664ede0bcb525bcf256feb3ff99a24906b74338d0e7c66f",
-      "examined": 11
+      "examined": 9
     },
     {
       "token": "0xbfd984f6f9cef73e062fe6b840aa1a091051ca71",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xc101921178b843fdcb6d512e4c30cf44e10fa51b",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
@@ -383,23 +470,28 @@
     },
     {
       "token": "0xc38380a706bfcd29874bf7bc436382017c90c255",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xc5dc397b1db51da30dc9f3ac7084bbba1efbe249",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xc6ffbd6449c479fd132ef4a6823378b0e183bb6b",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xc76d7157eb29803760e7dce2d366e08e7a00a3e4",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xca5d8f8a8d49439357d3cf46ca2e720702f132b8",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xcfa3ef56d303ae4faaba0592388f19d7c3399fb4",
@@ -412,61 +504,71 @@
     },
     {
       "token": "0xd14359c2addb2194cc7319084b7b2a1ac006ec5a",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xdbfefd2e8460a6ee4955a68582f85708baea60a3",
-      "owner": "0xbc16f4eb00559bb28949ac89ff61574da87bae2d",
-      "balance": "1211127538445311",
+      "owner": "0xcd2b55688c038b79d6f041c63017fb992fbdc3ba",
+      "balance": "117126043271884447",
       "code": "0x",
-      "native": "0x137b7fd274788a",
-      "transfer": "0x9298a3838edd10ae8180cd9b8a81f28b988ed34dd210c050e04b28523265180b",
-      "examined": 6
+      "native": "0x524252123a49e7",
+      "transfer": "0x9e765ca08633b3667764db53cdf031dc49925afd6e3293deaf0742117ef1f3fc",
+      "examined": 24
     },
     {
       "token": "0xdcefd8c8fcc492630b943abcab3429f12ea9fea2",
-      "examined": 4
+      "examined": 4,
+      "window_errors": []
     },
     {
       "token": "0xe55e6887c794f489e6df0b7692f6c84239a2cabb",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xe78285a51f51916f2311b7017db036d8351f3cf9",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xea50f402653c41cadbafd1f788341db7b7f37816",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xecac9c5f704e954931349da37f60e39f515c11c1",
-      "owner": "0xad01c20d5886137e056775af56915de824c8fce5",
-      "balance": "1946",
+      "owner": "0x35d59d7bf8e722e597d6f021d0381e64258dfac9",
+      "balance": "538812",
       "code": "0x",
-      "native": "0xe678e1e9759dd7",
-      "transfer": "0xe12945aa5e6b119a2a5768ab65db079d2cbb8e7976d080a0810cb3e70eec384f",
-      "examined": 10
+      "native": "0x2a9c8dee25df8b",
+      "transfer": "0x80a46543385d6c0e0d80ba7c35949cfd32afe064b65c2efc5f1cb74524f66912",
+      "examined": 27
     },
     {
       "token": "0xf0de996292a195dbb5fc94ff1899781c874a9750",
-      "examined": 0
+      "examined": 11,
+      "window_errors": []
     },
     {
       "token": "0xf45f6cdbcd0d2d4bf4d9758b032a66a2cf4e55c8",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xf540d790413fcfaedac93518ae99eddace82cb78",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xfcdecfe37463912c03a644128eb02a1147715e36",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     },
     {
       "token": "0xfe63614d41c70deccdf6b5770a8500e287a654a4",
-      "examined": 0
+      "examined": 0,
+      "window_errors": []
     }
   ]
 }

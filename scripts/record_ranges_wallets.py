@@ -5,13 +5,13 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from eth_abi import encode
+from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, rpc, simulate_block
 from record_bitswap_ethereum import balance, read_batch, tx
 from record_ethereum_v2_factories import FUNDING, WETH
-from record_ranges_ethereum import AT, ENDPOINT, ROOT_HASH
+from record_ranges_ethereum import AT, DYNAMIC, ENDPOINT, ROOT_HASH
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
 USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7"
@@ -70,33 +70,50 @@ def run(endpoint, number):
         probe["from"]=ZERO
         # A successful Vault.quote mutates the simulated pool. Keep it out of the payment frame.
         quoted=simulate([*prefix,*approval,probe])[-1]
-        def attempt(floor, end):
+        def attempt(floor, end, capture_state=False):
             op=packet(mode,roles,pool,source,target,qty,end,floor)
-            values=simulate([*prefix,*approval,*checks,op,*checks])
+            state = [tx(pool,"getRangePoolDynamicData()")] if capture_state else []
+            values=simulate([*prefix,*approval,*state,*checks,op,*checks,*state])
             prep=values[:len(prefix)+len(approval)]
             if any(x["status"]!="0x1" for x in prep):
                 return None,{"stage":"funding_or_approval","error":next(x.get("error") for x in prep if x["status"]!="0x1")}
             rest=values[len(prep):]
+            changes = None
+            if capture_state:
+                def snapshot(item):
+                    if item["status"] != "0x1": raise ValueError(("pool state",pool,item.get("error")))
+                    raw,live,virtual,*_ = decode([DYNAMIC],bytes.fromhex(item["returnData"][2:]))[0]
+                    return {"raw":raw,"live":live,"virtual":virtual}
+                changes = [snapshot(rest[0]),snapshot(rest[-1])]
+                rest=rest[1:-1]
             if any(x["status"]!="0x1" or len(x["returnData"])!=66 for x in [*rest[:4],*rest[5:]]):
                 raise ValueError(("balance read",pool,source,target))
             b,a=([int(x["returnData"],16) for x in z] for z in (rest[:4],rest[5:]))
-            return (op,rest[4],b,a,quoted),None
+            return (op,rest[4],b,a,quoted,changes),None
         trial,err=attempt(1,deadline)
         if err:return None,err
-        op,result,b,a,quote=trial
+        op,result,b,a,quote,_=trial
         if result["status"]!="0x1":
             return None,{"stage":"swap","error":result.get("error"),"quote":quote.get("returnData")}
         paid, credit = b[0]-a[0], a[1]-b[1]
         if paid!=qty or credit<=0 or b[2:]!=a[2:]:
             raise ValueError(("wallet delta",mode,pool,qty,paid,credit))
-        checked,_=attempt(credit,deadline)
+        checked,_=attempt(credit,deadline,True)
         if checked is None or checked[1]["status"]!="0x1" or checked[3]!=a:
             raise ValueError(("exact minimum",mode,pool,qty,credit))
         for floor,end in ((credit+1,deadline),(1,0)):
             rejected,_=attempt(floor,end)
             if rejected is None or rejected[1]["status"]!="0x0" or rejected[2]!=rejected[3]:
                 raise ValueError(("failed protection",mode,pool,source,floor,end))
+        signature="0x"+keccak(text="Swap(address,address,address,uint256,uint256,uint256,uint256)").hex()
+        topics=[signature,*("0x"+x[2:].lower().rjust(64,"0") for x in (pool,source,target))]
+        events=[log for log in result.get("logs",[]) if log["address"].lower()==roles["vault"] and
+                [t.lower() for t in log["topics"]]==topics]
+        if len(events)!=1:raise ValueError(("missing unique Vault Swap",pool,source,target,len(events)))
+        amount_in,amount_out,rate,charge=decode(["uint256"]*4,bytes.fromhex(events[0]["data"][2:]))
+        if (amount_in,amount_out)!=(paid,credit):raise ValueError(("Vault and actual wallet differ",pool,source,target))
         return [*prefix,*approval,checked[0]],dict(stage="paid",debit=paid,credit=credit,
+             state=checked[5],swap_fee_rate=rate,swap_fee_raw=charge,
              quote=int(quote["returnData"],16) if quote["status"]=="0x1" else quote.get("error"),
              gas=int(result["gasUsed"],16),min_plus_one="reverted",expired="reverted")
     # All four shards cover each initialized pool with funded cash. Exercise every nonempty target for one cash.

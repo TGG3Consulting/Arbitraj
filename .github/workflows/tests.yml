@@ -847,6 +847,14 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/safeswap" SafeSwapAdapter
           python scripts/record_safeswap_protected.py "$RUNNER_TEMP/safeswap/SafeSwapAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'textile-wallet-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/textile" TextileWallet
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_textile_wallets.py "${MARKET#textile-wallet-}" "$RUNNER_TEMP/textile/TextileWallet.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'gladius-protected-')
         env:
           MARKET: ${{ matrix.market }}

@@ -6034,7 +6034,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "stabull-ethereum",
-    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_ethereum_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz",
+    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_ethereum_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_ethereum_native_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz",
     "settings": {
       "dex.kind": "stabull",
       "dex.factory": "0x2e9e34b5af24b66f12721113c1c8ffcbb7bc8051",

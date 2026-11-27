@@ -27,10 +27,16 @@ fn restore_cash_and_signed_request_for_exact_curve_router_and_module_orders() {
 
 #[test]
 fn restore_ethereum_protected_fills_and_the_original_signed_bounds() {
-    let a = include_bytes!(
+    let original = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/stabull_ethereum_native_wallets.json.gz"
+    );
+    let protected = include_bytes!(
         "../../../../tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz"
     );
-    assert_eq!(restored(&[a.as_slice()]), [0, 0, 12]);
+    assert_eq!(
+        restored(&[original.as_slice(), protected.as_slice()]),
+        [12, 6, 12]
+    );
 }
 
 fn restored(archives: &[&[u8]]) -> [usize; 3] {

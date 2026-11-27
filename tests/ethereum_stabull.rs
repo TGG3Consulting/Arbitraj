@@ -24,6 +24,13 @@ fn registered_ethereum_markets_keep_their_own_cash_and_freeze_state() {
         params["dex.quoter_runtime_hash"],
         directory["factory"]["router_runtime"]
     );
+    assert_eq!(directory["events"], 0);
+    let mut next = directory["start"].as_u64().unwrap();
+    for page in directory["event_pages"].as_array().unwrap() {
+        assert_eq!(page["from"].as_u64().unwrap(), next);
+        next = page["through"].as_u64().unwrap() + 1;
+    }
+    assert_eq!(next, directory["height"].as_u64().unwrap() + 1);
     let pools = directory["pools"].as_array().unwrap();
     assert_eq!(
         pools.len() as u64 + 1,

@@ -168,7 +168,7 @@ pub fn plan(
         // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
         let registry = if matches!(f.proto, Proto::BaiBai | Proto::Elfomo | Proto::Lunar) {
             "dex.pmm_pool"
-        } else if f.variant == super::family_variant::Variant::EulerV2 {
+        } else if f.variant.euler_v2() {
             "dex.euler_registry"
         } else if f.proto == Proto::WooPP {
             "dex.oracle"

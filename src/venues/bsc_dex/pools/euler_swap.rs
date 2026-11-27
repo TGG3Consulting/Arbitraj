@@ -43,6 +43,15 @@ alloy::sol! {
     interface IV2 {event PoolDeployed(address indexed a,address indexed b,address indexed account,address pool,V2Config config);}
 }
 
+/// Оба события испускает фабрика. Только у V2 в данных дополнительно передаётся V2Config.
+pub(super) fn creation_topic(f: &Family) -> Option<B256> {
+    match (f.proto, f.variant) {
+        (super::families::Proto::V2, Variant::EulerV1) => Some(IV1::PoolDeployed::SIGNATURE_HASH),
+        (super::families::Proto::V2, Variant::EulerV2) => Some(IV2::PoolDeployed::SIGNATURE_HASH),
+        _ => None,
+    }
+}
+
 pub(crate) struct Backing {
     pub installed: bool,
     pub sites: Vec<Address>,
@@ -184,3 +193,7 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
         Err(e) => Verdict::Failed(e.message),
     }
 }
+
+#[cfg(test)]
+#[path = "euler_profile_tests.rs"]
+mod profile_tests;

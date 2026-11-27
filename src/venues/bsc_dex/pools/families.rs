@@ -851,7 +851,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::V2 if f.variant.euler() => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.pmm_ladder_usd"]);
-            if f.variant==Variant::EulerV2 {list.push("dex.euler_registry");}
+            if f.variant.euler_v2() {list.push("dex.euler_registry");}
             if f.executor_kind==Some(ExecKind::Balancer) {list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::V2 if f.variant==Variant::Stabull => {list.extend(["dex.factory","dex.factory_runtime_hash","dex.pmm_ladder_usd"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}

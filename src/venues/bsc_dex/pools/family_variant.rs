@@ -242,7 +242,9 @@ pub enum Variant {
 
 impl Variant {
     pub fn fluid_lite(self)->bool{ self==Self::FluidDexLite }
-    pub(crate) fn euler(self)->bool {matches!(self,Self::EulerV1 | Self::EulerV2)}
+    pub(crate) fn euler(self)->bool { self.euler_v1() || self.euler_v2() }
+    pub(crate) fn euler_v1(self)->bool { self == Self::EulerV1 }
+    pub(crate) fn euler_v2(self)->bool { self == Self::EulerV2 }
     pub(crate) fn llamma(self)->bool{matches!(self,Self::Llamma(_))}
     pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
     pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }

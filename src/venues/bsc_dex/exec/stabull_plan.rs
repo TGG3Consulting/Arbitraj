@@ -172,7 +172,7 @@ pub(crate) fn probe(
         return Err(bad(ctx));
     };
     let t = Terms {
-        form: if e.family.variant.euler(){Form::Euler{v2:e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::EulerV2,
+        form: if e.family.variant.euler(){Form::Euler{v2:e.family.variant.euler_v2(),
                     guarded:e.family.executor_kind.is_some(),vaults:[Address::ZERO;2]}}else{form(ctx, e, target, None)?},
         pool,
         target,

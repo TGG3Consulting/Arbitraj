@@ -56,7 +56,9 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         if families::classify(ctx, f.id).is_err() {
             continue;
         }
-        if let Some(topic) = super::llamma_registry::creation_topic(f.variant) {
+        if let Some(topic) = super::llamma_registry::creation_topic(f.variant)
+            .or_else(|| super::euler_swap::creation_topic(f))
+        {
             if let Ok(address) = ctx.dex_addr("dex.factory", f.id) {
                 out.push((address, topic, false, f));
             }
@@ -79,8 +81,6 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
             // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
             // Camelot V2 (решение 443): PairCreated(token0 indexed, token1 indexed, pair, uint) — CamelotFactory.sol L23.
-            Proto::V2 if f.variant==super::family_variant::Variant::EulerV1 => ("dex.factory",super::euler_swap::IV1::PoolDeployed::SIGNATURE_HASH,false),
-            Proto::V2 if f.variant==super::family_variant::Variant::EulerV2 => ("dex.factory",super::euler_swap::IV2::PoolDeployed::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Stabull => ("dex.factory",super::stabull::IStabull::NewCurve::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),

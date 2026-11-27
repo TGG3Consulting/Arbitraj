@@ -89,7 +89,7 @@ pub fn needs(f: &Family) -> bool {
     // Решение 472 (доделка): метапул — курс LP базового пула (get_virtual_price) меняется без событий метапула;
     // Plain*Balances — балансы по balanceOf (переводы на пул без события пула).
     // Решение 481: пул с курсом оракула (ETH/wstETH) — latestAnswer() оракула меняется без событий пула.
-    if f.variant.empire() || f.variant.base_plugin_v1() || f.variant.ambient() || matches!(
+    if f.variant.empire() || f.variant.base_plugin_v1() || f.variant.ambient() || f.variant.euler() || matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal | Variant::TopazCl
             | Variant::BaseStonk | Variant::Angstrom | Variant::LaunchUmia | Variant::LaunchBaseline | Variant::LaunchDoppler | Variant::LaunchIndex | Variant::LaunchO1 | Variant::LaunchO1Wrapped
@@ -98,7 +98,6 @@ pub fn needs(f: &Family) -> bool {
             | Variant::UmbraeDamm | Variant::UmbraeDlmm
             | Variant::Bundles
             | Variant::Antfarm
-            | Variant::EulerV1 | Variant::EulerV2
             | Variant::Stabull
             | Variant::MaverickOne
             | Variant::Surge

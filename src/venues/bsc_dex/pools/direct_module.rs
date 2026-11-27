@@ -125,8 +125,8 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
         return Ok(());
     }
     let expected=match f.variant {
-        super::family_variant::Variant::EulerV1 => "eulerswap_v1_module",
-        super::family_variant::Variant::EulerV2 => "eulerswap_v2_module",
+        v if v.euler_v1() => "eulerswap_v1_module",
+        v if v.euler_v2() => "eulerswap_v2_module",
         super::family_variant::Variant::Stabull => "stabull_module",
         super::family_variant::Variant::MaverickOne => "maverick_v1_module",
         super::family_variant::Variant::EmpireModule => "empire_module",
@@ -143,7 +143,7 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     verify_code(ctx, f.id, addr, at).await?;
     if f.variant.euler(){
-        let bound=if f.variant==super::family_variant::Variant::EulerV2 {
+        let bound=if f.variant.euler_v2() {
             super::super::node::call::canonical(ctx,at,addr,super::euler_swap::IEuler::currentCall{}).await?
         }else{
             super::super::node::call::canonical(ctx,at,addr,super::euler_swap::IEuler::legacyCall{}).await?

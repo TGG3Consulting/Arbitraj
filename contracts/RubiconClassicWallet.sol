@@ -17,6 +17,7 @@ interface IRubiconCash {
 /// Uses only the caller's funds. Each action fixes the maker order and output amount.
 contract RubiconClassicWallet {
     IRubiconOrders public immutable market;
+    bytes32 public immutable marketCodeHash;
     bool transient private entered;
 
     struct Take {
@@ -30,6 +31,7 @@ contract RubiconClassicWallet {
     constructor(IRubiconOrders venue) {
         require(address(venue).code.length != 0, "market");
         market = venue;
+        marketCodeHash = address(venue).codehash;
     }
 
     function tokenCall(IRubiconCash token, bytes memory payload) private {
@@ -40,6 +42,7 @@ contract RubiconClassicWallet {
     function execute(IRubiconCash source, IRubiconCash target, Take[] calldata actions,
         uint256 maximum, uint256 minimum, uint256 deadline) external returns (uint256 spent, uint256 received) {
         require(!entered && block.timestamp <= deadline && source != target, "stale or invalid");
+        require(address(market).codehash == marketCodeHash, "market code changed");
         require(actions.length > 0 && maximum > 0 && minimum > 0, "empty");
         entered = true;
         uint256 walletIn = source.balanceOf(msg.sender);

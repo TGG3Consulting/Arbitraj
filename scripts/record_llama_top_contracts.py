@@ -22,7 +22,7 @@ def sig(name):
 def rpc(network, method, args):
     if method not in ('eth_chainId', 'eth_getBlockByNumber', 'eth_getLogs', 'eth_call', 'eth_getCode','eth_getTransactionReceipt','eth_getTransactionByHash'):
         raise ValueError(method)
-    if (network == 'ethereum' and method in ('eth_call','eth_getCode','eth_getTransactionReceipt')) or (network == 'base' and (method == 'eth_getCode' or (method=='eth_getLogs' and args[0]['fromBlock']==args[0]['toBlock']))):
+    if (network == 'ethereum' and method in ('eth_call','eth_getCode','eth_getTransactionReceipt')) or (network == 'base' and (method == 'eth_getCode' or (method=='eth_getLogs' and args[0]['fromBlock']==args[0]['toBlock']) or (method=='eth_getBlockByNumber' and int(args[0],16)<51000000))):
         session=LOCAL.__dict__.setdefault('http',requests.Session())
         last=None
         providers=('https://eth.drpc.org','https://ethereum-public.nodies.app') if network=='ethereum' else ('https://base.gateway.tenderly.co','https://base.drpc.org','https://base-public.nodies.app')

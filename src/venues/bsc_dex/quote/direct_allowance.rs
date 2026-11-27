@@ -65,6 +65,13 @@ pub(super) fn permit_router(
     mode: crate::core::types::RouteMode,
     fees: Option<RouterFeeMode>,
 ) -> GatewayResult<Option<(Address, Address)>> {
+    if mode == crate::core::types::RouteMode::Direct && e.family.variant == Variant::SlipstreamUniversal {
+        let router=ctx.dex_addr("dex.universal_router",e.family.id)?;
+        if !matches!(fees,Some(RouterFeeMode::ProtectedWallet{target}) if target==router) {
+            return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Slipstream: выбранный UniversalRouter изменился"));
+        }
+        return Ok(Some((router,ctx.dex_addr("dex.permit2",e.family.id)?)));
+    }
     if mode != crate::core::types::RouteMode::Direct || e.family.variant != Variant::PuzzleRanges {
         return Ok(None);
     }

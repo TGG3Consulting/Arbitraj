@@ -6930,6 +6930,9 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 
 ### `dex.router_exact_tokens`
 
+При `dex.kind = slipstream_dynamic_ur` пара для официального UniversalRouter требует двух записей адрес/хеш в области своей фабрики. На Base у BRETT и TOSHI владелец был нулевым, обе ставки перевода равнялись нулю. `dex.universal_router`, `dex.router_runtime_hash`, `dex.permit2` и `dex.permit2_runtime_hash` привязывают выдачу разрешений к проверенному размещению. Для V5 разрешение получает сам исполнитель. Доступные размеры и расходы различаются по сторонам пула. [Реестр и байткоды](../tests/data/first_run_dex_2026-11-26/early_slipstream_base.json).
+
+
 Вид `v2_fork_dual_router01` у Unicly сравнивает обычный Router01 и V5, прямой путь требует двух подтверждённых активов. Для `solidly_v1_pair_override` у Archly метод SupportingFeeOnTransferTokens дополнительно проверяет дельту получателя внутри транзакции. Для него достаточно подтвердить максимальное списание входного токена. Рекомендуемый список Ethereum содержит WETH и ARC. [Исходный код ARC](https://sourcify.dev/server/v2/contract/1/0x9482c407d32204462d8cbbc0755e96c39b79878e).
 
 - **Кейс:** Штатные Router WAGMI, Lif3 и Solidly сверяют номинальный минимум выхода.

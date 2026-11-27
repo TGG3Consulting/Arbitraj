@@ -63,7 +63,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 .unwrap();
             let market = Market {
                 pool,
-                algebra_deployer:None,fee_event:extended,wallet_module:false,
+                algebra_deployer:None,fee_event:extended,slipstream:None,wallet_module:false,
                 fee: U24::from(node["fee"].as_u64().unwrap() as u32),
             };
             let bound = Proof {
@@ -129,7 +129,7 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
         let data: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
         let market = archive["markets"].as_array().unwrap().iter().find(|e| e["pool"] == row["pool"]).unwrap();
         let proof = Proof {
-            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), algebra_deployer:None,fee_event:false,wallet_module:true },
+            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), algebra_deployer:None,fee_event:false,slipstream:None,wallet_module:true },
             target:parse(&tx["to"]), payer:parse(&tx["from"]),input:parse(&row["source"]),output:parse(&row["target"]),
             budget:amount(&row["spent"]),minimum:amount(&row["received"]),deadline:U256::from_be_slice(&data[data.len()-32..]),
         };
@@ -179,7 +179,7 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
                     let tx=x["calldata"].as_str().unwrap().parse::<Bytes>().unwrap();
                     let call=ICypherRouter::exactInputSingleCall::abi_decode(&tx).unwrap().args;
                     assert_eq!(call.deployer,parse(&m["deployer"]));
-                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,fee_event:false,wallet_module:false,algebra_deployer:Some(call.deployer)},
+                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,fee_event:false,slipstream:None,wallet_module:false,algebra_deployer:Some(call.deployer)},
                         target:parse(&d["router"]),payer:parse(&x["payer"]),input:call.tokenIn,output:call.tokenOut,budget:call.amountIn,minimum:call.minimum,deadline:call.deadline};
                     assert_eq!(p.data(),tx);assert_eq!(p.payer,call.recipient);assert_eq!(x["spent"],p.budget.to_string().as_str());
                     let q=leg["official_quote"]["response"].as_str().unwrap().parse::<Bytes>().unwrap();
@@ -198,4 +198,40 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
         }
     }
     assert_eq!(fills,336);assert!(admitted>0);
+}
+
+/// Каноническая операция раннего Router остаётся однозначной, даже если пул принял только часть бюджета.
+#[test]
+fn early_slipstream_recovers_actual_payment_and_spacing_from_saved_order() {
+    let raw:Value=serde_json::from_reader(GzDecoder::new(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/early_slipstream_wallets.json.gz"
+    ).as_slice())).unwrap();
+    let meta:Value=serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/early_slipstream_base.json")).unwrap();
+    let address=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+    let units=|v:&Value|v.as_str().unwrap().parse::<U256>().unwrap();
+    let mut full=0;
+    let mut partial=0;
+    for row in raw["cases"].as_array().unwrap().iter().filter(|r|r["mode"]=="UniversalRouter"){
+        let m=&meta["markets"][row["pool"].as_str().unwrap()];
+        let input=address(&row["asset"]);
+        let output=m["tokens"].as_array().unwrap().iter().map(address).find(|t|*t!=input).unwrap();
+        let tx=&row["exact_transaction"];
+        let calldata:Bytes=tx["data"].as_str().unwrap().parse().unwrap();
+        let decoded=super::super::ur::IUniversalRouter::executeCall::abi_decode(&calldata).unwrap();
+        let bound=Proof{market:Market{pool:address(&row["pool"]),fee:U24::ZERO,wallet_module:false,
+            algebra_deployer:None,fee_event:false,slipstream:Some((m["tick_spacing"].as_i64().unwrap() as i32,
+                   address(&meta["permit2"]["address"])))},payer:address(&raw["owner"]),
+            target:address(&tx["to"]),input,output,budget:units(&row["amount"]),minimum:units(&row["received"]),deadline:decoded.deadline};
+        let mut proof:Proof=serde_json::from_value(serde_json::to_value(bound).unwrap()).unwrap();
+        assert_eq!(proof.data(),calldata);
+        let logs:Vec<SimLog>=serde_json::from_value(row["trade"]["logs"].clone()).unwrap();
+        let spent=units(&row["spent"]);
+        assert_eq!(proof.measured(&logs),Some((spent,proof.minimum)));
+        assert_eq!(row["minimum_plus_one"]["status"],"0x0");
+        if spent<proof.budget {partial+=1;} else{full+=1;}
+        proof.minimum+=U256::ONE;
+        assert!(proof.measured(&logs).is_none());
+    }
+    assert_eq!((full,partial),(10,2));
 }

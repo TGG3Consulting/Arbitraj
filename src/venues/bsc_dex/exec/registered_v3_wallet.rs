@@ -37,6 +37,8 @@ pub struct Market {
     pub fee_event: bool,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub wallet_module: bool,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub slipstream: Option<(i32,Address)>,
 }
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
@@ -44,6 +46,7 @@ impl Market {
         let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         Some(Self {
+            slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
             pool: e.pool.reference.address(), fee: if algebra{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
@@ -97,6 +100,13 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
+        if let Some((spacing,_))=self.slipstream {
+            use alloy::sol_types::SolValue;
+            let mut path=Vec::with_capacity(43);
+            path.extend_from_slice(input.as_slice()); path.extend_from_slice(&spacing.to_be_bytes()[1..]); path.extend_from_slice(output.as_slice());
+            let params=(wallet,amount,minimum,Bytes::from(path),true).abi_encode_params();
+            return super::ur::execute(vec![(super::ur::V3_SWAP_EXACT_IN,Bytes::from(params))],deadline)
+        }
         if let Some(deployer)=self.algebra_deployer{return ICypherRouter::exactInputSingleCall{args:ICypherRouter::Params{tokenIn:input,tokenOut:output,deployer,recipient:wallet,deadline,amountIn:amount,minimum,limit:Default::default()}}.abi_encode().into()}
         if self.wallet_module{return super::super::pools::solidly_v3::execution_data(self.pool,input,output,amount,minimum,deadline)}
         IV3Router::exactInputSingleCall {
@@ -256,7 +266,11 @@ pub(super) async fn plan(
         wire: v2_wallet_sim::Wire::RegisteredV3(market),
     };
     v2_wallet_sim::measure(ctx, head, order, true).await?;
-    let mut p = white_direct::build(ctx, s, wallet, target, now, false, generation).await?;
+    let mut p = if let Some((_,permit))=market.slipstream {
+        let auth=super::super::wallet::approve::at_block(ctx,o.token_in,wallet,permit,target,o.amount_in,head).await?;
+        if generation!=ctx.settings.generation(){return Err(fail());}
+        Plan::new(ctx,(auth,target,wallet),o.token_out,Vec::new(),o.min_out,proof.deadline)?
+    } else {white_direct::build(ctx,s,wallet,target,now,false,generation).await?};
     p.set_direct_market(DirectCall::RegisteredV3(Arc::new(proof)));
     Ok(p)
 }

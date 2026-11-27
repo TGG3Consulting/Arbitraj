@@ -28,7 +28,7 @@ pub(crate) async fn checked_module(ctx:&Ctx,e:&Entry,at:&Value)->GatewayResult<A
     Ok(module)
 }
 pub(crate) fn target(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
-    let key = if e.family.variant == super::family_variant::Variant::VvsV3 { "dex.v3_native_router" } else { "dex.router" };
+    let key = if e.family.variant == super::family_variant::Variant::SlipstreamUniversal { "dex.universal_router" } else if e.family.variant == super::family_variant::Variant::VvsV3 { "dex.v3_native_router" } else { "dex.router" };
     ctx.dex_addr(key,e.family.id)
 }
 pub(crate) async fn checked(
@@ -47,6 +47,7 @@ pub(crate) async fn checked(
         )
     };
     use super::family_variant::Variant;
+    if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
     if !matches!(e.family.variant, Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::VvsV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))

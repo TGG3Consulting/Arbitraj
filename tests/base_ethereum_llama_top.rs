@@ -85,7 +85,7 @@ fn both_rankings_bind_the_exact_profile_without_turning_an_external_volume_into_
         if net == "base" {
             let early = &chain["early_slipstream"];
             assert_eq!(row("4524")["other_source_addresses"][0], early["factory"]);
-            assert_eq!(items(&row("4524")["domains"]).len(), 3);
+            assert_eq!(items(&row("4524")["domains"]).len(), 4);
             assert!(
                 items(&row("4524")["domains"])
                     .iter()

@@ -84,11 +84,12 @@
           "path": "dexs/aerodrome-slipstream/index.ts",
           "source_sha256": "df2ab5e324bee0ca1d83502339997c04e8eecde45440ae79283f89f8def3340a",
           "line_ranges": "17-38,50-52",
-          "kind": "partial",
+          "kind": "factory",
           "profiles": [
             "aerodrome-slipstream",
             "aerodrome-slipstream-2",
-            "aerodrome-slipstream-3"
+            "aerodrome-slipstream-3",
+            "aerodrome-slipstream-early"
           ],
           "domains": [
             {
@@ -108,12 +109,18 @@
               "setting": "dex.factory",
               "address": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
               "literal_in_adapter": true
+            },
+            {
+              "profile": "aerodrome-slipstream-early",
+              "setting": "dex.factory",
+              "address": "0x9592cd9b267748cbfbde90ac9f7df3c437a6d51b",
+              "literal_in_adapter": true
             }
           ],
           "other_source_addresses": [
             "0x9592cd9b267748cbfbde90ac9f7df3c437a6d51b"
           ],
-          "description": "Суточный расчёт включает четыре фабрики. У трёх есть отдельные торговые профили. Ранняя 0x9592… имеет 22 зарегистрированные пары и собственный реестр.",
+          "description": "Четыре фабрики совпали с четырьмя профилями. У ранней 0x9592… 22 зарегистрированные пары. В 24 архивных ногах V5 и Universal Router проверены две пары, в четырёх случаях вход исполнен частично.",
           "evidence": "llama_top_contracts.json.gz"
         },
         {
@@ -148,14 +155,14 @@
           "path": "dexs/hanji/index.ts",
           "source_sha256": "88f71d651a1754db8c13a0ec709cbbfc8eee3cf218c33f142d558e2a8489fdcb",
           "line_ranges": "6-13,46-55,117-132,152-160",
-          "kind": "registry",
+          "kind": "partial",
           "profiles": [],
           "domains": [],
           "other_source_addresses": [
             "0xc7264db7c78dd418632b73a415595c7930a9eea4"
           ],
-          "description": "Фабрика V2 регистрирует книги OnchainCLOBCreated. OrderPlaced учитывается по агрессивно исполненному объёму. Штатный Hanji использует адреса книг.",
-          "evidence": "hanji_base.json"
+          "description": "Три подтверждённые книги источника имеют другие адреса, чем восемь из API. За 8192 блока у трёх 44 агрессивных исполнения. В контрольной выплате одна из восьми касс приняла cbBTC и перечислила WETH через книгу источника; повторный учёт этого запаса исключён.",
+          "evidence": "llama_top_hanji.json.gz"
         },
         {
           "rank": 7,

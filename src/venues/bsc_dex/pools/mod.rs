@@ -254,6 +254,7 @@ mod launch_ladder;
 pub(super) mod deli_cl;
 mod deli_keys;
 pub(super) mod omni_ur;
+pub(super) mod slipstream_ur;
 pub mod oasis;
 mod oasis_abi;
 mod oasis_state;

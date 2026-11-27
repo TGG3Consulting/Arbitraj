@@ -64,6 +64,7 @@ pub enum Variant {
     SlipstreamAeroMetaquoter,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
+    SlipstreamUniversal,
     TopazCl,
     /// Solidly V3 Ethereum/Base, slot0 с комиссией, встроенный quoteSwap и свой ABI оплаты.
     SolidlyCl,
@@ -219,7 +220,7 @@ impl Variant {
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -262,6 +263,7 @@ pub fn of(kind: &str) -> Variant {
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
         "topaz_cl" => Variant::TopazCl,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
+        "slipstream_dynamic_ur" => Variant::SlipstreamUniversal,
         "solidly_v3" | "solidly_v3_module" => Variant::SolidlyCl,
         "curve_stableswap_plain" => Variant::CurvePlain,
         "curve_stableswap_meta" => Variant::CurveMeta,

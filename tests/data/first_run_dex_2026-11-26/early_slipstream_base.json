@@ -285,5 +285,9 @@
       "uniswapV2Pair": "0xbfc74e1de81e81b0a807469502f6662cc238795e",
       "swapEnabled": "False"
     }
+  },
+  "permit2": {
+    "address": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+    "runtime": "0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed"
   }
 }

@@ -49,10 +49,16 @@ def capture(url, artifact):
         raise ValueError("different market implementation")
     runtime=rpc("eth_call",[{"from":OWNER,"data":"0x"+artifact["creation"]+encode(["address"],[MARKET]).hex()},at])
     expected=bytearray.fromhex(artifact["runtime"])
-    refs,=artifact["immutableReferences"].values()
-    for ref in refs:
-        if ref["length"]!=32:raise ValueError("bad immutable length")
-        expected[ref["start"]:ref["start"]+32]=encode(["address"],[MARKET])
+    bound=bytes.fromhex(runtime[2:])
+    values=set()
+    for refs in artifact["immutableReferences"].values():
+        observed={bound[ref["start"]:ref["start"]+32] for ref in refs if ref["length"]==32}
+        if len(observed)!=1 or any(ref["length"]!=32 for ref in refs):raise ValueError("inconsistent immutable")
+        value,=observed
+        values.add(value)
+        for ref in refs:expected[ref["start"]:ref["start"]+32]=value
+    if values!={encode(["address"],[MARKET]),bytes.fromhex(market["hashes"][MARKET][2:])}:
+        raise ValueError("unexpected market identity")
     if runtime!="0x"+expected.hex():raise ValueError("deployed code mismatch")
     total,=view(MARKET,"last_offer_id()")
     fees=[view(MARKET,sig)[0] for sig in ("getFeeBPS()","makerFee()")]

@@ -653,6 +653,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         | "slipstream_aero_metaquoter"
         | "topaz_cl"
         | "slipstream_dynamic_fee"
+        | "slipstream_dynamic_ur"
         | "solidly_v3"
         | "slipstream_ramses" => (PoolKind::V3, Proto::Slipstream, true, false, false),
         "solidly_v3_module" => (PoolKind::V3, Proto::Slipstream, true, true, true),

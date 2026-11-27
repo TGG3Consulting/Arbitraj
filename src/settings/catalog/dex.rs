@@ -176,6 +176,7 @@ pub const DEX_KINDS: &[&str] = &[
     "slipstream_aero_metaquoter",
     "topaz_cl",
     "slipstream_dynamic_fee",
+    "slipstream_dynamic_ur",
     "solidly_v3",
     "solidly_v3_module",
     "slipstream_ramses",

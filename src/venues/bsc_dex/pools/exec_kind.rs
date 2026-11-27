@@ -215,6 +215,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "slipstream_aero_metaquoter"
         | "topaz_cl"
         | "slipstream_dynamic_fee"
+        | "slipstream_dynamic_ur"
         | "v3_fork_ramses"
         | "slipstream_ramses"
         | "v3_fork_uniswap_lm" => ExecKind::V3,

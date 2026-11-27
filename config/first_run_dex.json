@@ -131,7 +131,7 @@
     "id": "aerodrome-slipstream-early",
     "source": "https://sourcify.dev/server/v2/contract/8453/0x9592cd9b267748cbfbde90ac9f7df3c437a6d51b",
     "settings": {
-      "dex.kind": "slipstream_dynamic_fee",
+      "dex.kind": "slipstream_dynamic_ur",
       "dex.factory": "0x9592cd9b267748cbfbde90ac9f7df3c437a6d51b",
       "dex.quoter": "0xbe0ec710c44b75c34534690c01c22ac0609762d7",
       "dex.cl_tick_spacings": [
@@ -140,6 +140,15 @@
         "100",
         "200",
         "2000"
+      ],
+      "dex.universal_router": "0xf07835bbf6eea0d05392fb4d3b9e5a333ca4da2a",
+      "dex.router_runtime_hash": "0xf78ef8e21557fe356ebca846dfc3d9318bda42afedecf9b6f0c1797d69741c55",
+      "dex.permit2": "0x000000000022d473030f116ddee9f6b43ac78ba3",
+      "dex.permit2_runtime_hash": "0xa67739abc3ede9dbdc0491636c67d6a14ac07fab9030c3f509b1eb7b11dff8ed",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x532f27101965dd16442e59d40670faf5ebb142e4 0xefa3416aea40af9097ea9c8f36044be496fffa1e75cdd0e46cafdaf5f6282c7b",
+        "0xac1bd2486aaf3b5c0fc3fd868558b082a531b2b4 0xe7bdb43a1da45069dfed4a1994fd277d3eb268eab3f73c23f97a573afffbc763"
       ]
     }
   },

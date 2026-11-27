@@ -180,3 +180,23 @@ fn local_output_matches_each_deployed_quoter_in_both_directions() {
         }
     }
 }
+
+#[test]
+fn each_legacy_factory_can_discover_registered_spacing_without_an_indexer() {
+    let evidence:serde_json::Value=serde_json::from_str(include_str!("data/first_run_dex_2026-11-26/early_slipstream_base.json")).unwrap();
+    let profiles:Vec<serde_json::Value>=serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    for (id,spacing) in evidence["registry_spacings"].as_object().unwrap(){
+        let profile=profiles.iter().find(|p|p["id"]==id.as_str()).unwrap();
+        let settings=&profile["settings"];
+        let actual:Vec<i64>=settings["dex.cl_tick_spacings"].as_array().unwrap().iter().map(|n|n.as_str().unwrap().parse().unwrap()).collect();
+        assert_eq!(serde_json::json!(actual),*spacing);
+        let f=families::make(id,settings["dex.kind"].as_str().unwrap()).unwrap();
+        assert!(per_block::touched(f));
+        if id=="aerodrome-slipstream-early" {
+            assert_eq!(settings["dex.universal_router"],evidence["roles"]["router"]["address"]);
+            assert_eq!(settings["dex.factory"],evidence["roles"]["factory"]["address"]);
+            assert_eq!(settings["dex.quoter"],evidence["roles"]["quoter"]["address"]);
+            assert_eq!(settings["dex.permit2"],evidence["permit2"]["address"]);
+        }
+    }
+}

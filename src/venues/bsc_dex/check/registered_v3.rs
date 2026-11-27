@@ -102,7 +102,9 @@ pub(super) fn leg(
         )
     };
     Ok((
-        approve::fork_all(ctx, order.token_in, router, order.amount_in)?,
+        if e.family.variant==Variant::SlipstreamUniversal {
+            approve::all(ctx,order.token_in,ctx.dex_addr("dex.permit2",e.family.id)?,router,order.amount_in,now)?
+        }else{approve::fork_all(ctx, order.token_in, router, order.amount_in)?},
         router,
         d,
     ))

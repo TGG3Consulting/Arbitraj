@@ -130,7 +130,6 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
-    if e.family.variant.llamma(){return e.family.executor_kind==Some(ExecKind::StableU256) && crate::venues::bsc_dex::pools::llamma::shape(e).is_some();}
     if e.family.variant.ammalgam(){return super::super::super::pools::ammalgam::graph_target(ctx,e).map(|a|(k,a)).ok_or_else(||"Ammalgam: не подтверждены рынок и модуль".into());}
     if e.family.variant.defiplaza(){return super::super::defiplaza_plan::graph_target(ctx,e).map(|target|(k,target)).ok_or_else(||"DefiPlaza: касса и пара изменились".into());}
     if e.family.variant.issuer_shares() {
@@ -162,6 +161,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
 /// pool_gate::admitted (снимки кошельков и итогов пробы). Равенство с fits — тест tests/bsc_dex_pool_pass_401.rs.
 /// Принимает: окружение (кошелёк), запись реестра. Ошибок нет.
 pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
+    if e.family.variant.llamma(){return e.family.executor_kind==Some(ExecKind::StableU256) && crate::venues::bsc_dex::pools::llamma::shape(e).is_some();}
     if e.family.variant.ammalgam(){return super::super::super::pools::ammalgam::graph_target(ctx,e).is_some();}
     if e.family.variant.defiplaza(){return e.family.executor_kind==Some(ExecKind::Basin) && super::super::defiplaza_plan::graph_target(ctx,e).is_some();}
     let Some(k) = e.family.executor_kind else {

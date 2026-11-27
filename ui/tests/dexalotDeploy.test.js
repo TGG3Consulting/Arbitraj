@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
+import {dexalotVenues} from '../src/lib/dexalotNetwork.js';
 import {loadPlan} from '../src/lib/walletDeployment.js';
 import {loadDexalot,checkDexalot,addDexalot} from '../src/lib/dexalotDeploy.js';
 import {runtimeKeccak} from '../src/lib/uniswapV1Deploy.js';
@@ -41,4 +42,13 @@ test('Replacing one maker leaves an independently registered maker available; a 
   await checkDexalot(node(false),plan,tag);
   await assert.rejects(checkDexalot(node(true),plan,tag),/реализация/);
   await assert.rejects(checkDexalot(node(false),{...plan,makers:plan.makers.filter(a=>a!==active)},tag),/реестра/);
+});
+
+test('manual RFQ key check uses the registered DEX on the network in the recorded price response', () => {
+  const sample = JSON.parse(readFileSync(new URL('../../tests/data/first_run_dex_2026-11-26/dexalot_base_indicative.json', import.meta.url)));
+  const records = [{id:'base_dex',kind:'Dex'}, {id:'bsc_dex',kind:'Dex'}, {id:'mexc',kind:'Cex'}];
+  const values = {'dex.evm_chain_id|Venue|base_dex':String(sample.chain),
+    'dex.evm_chain_id|Venue|bsc_dex':56, 'dex.evm_chain_id|Venue|mexc':sample.chain};
+  assert.deepEqual(dexalotVenues(records,values),['base_dex']);
+  assert.deepEqual(dexalotVenues(records,{}),[]);
 });

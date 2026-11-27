@@ -21,6 +21,7 @@
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
   import { store, shownAtVenue } from '../lib/settings.svelte.js';
+  import { DEXALOT_KEY, dexalotVenues } from '../lib/dexalotNetwork.js';
   import { secrets, TELEGRAM_TOKEN } from '../lib/secrets.svelte.js';
   import { dex } from '../lib/dex.svelte.js';
   import BaseConversion from '../components/BaseConversion.svelte';
@@ -61,14 +62,16 @@
   /** Имена секретов, которые показаны в блоке каналов площадки. */
   const channelSecrets = (id) => new Set((dex.byVenue[id]?.channels ?? []).map((c) => c.info.secret).filter(Boolean));
   /** Секреты площадки без секретов каналов. */
-  const venueKeys = (id) => secrets.known.filter((k) => k.scope === id && !channelSecrets(id).has(k.name));
+  const dexalotSources = $derived(dexalotVenues(store.venueKinds, store.values));
+  const venueKeys = (id) => secrets.known.filter((k) => k.name === DEXALOT_KEY
+    ? dexalotSources.includes(id) : k.scope === id && !channelSecrets(id).has(k.name));
 
   /** Секреты площадок, которых нет в шлюзе (без секрета Telegram — он на экране «Уведомления»). */
   const telegramScope = $derived(secrets.known.find((k) => k.name === TELEGRAM_TOKEN)?.scope);
   const pending = $derived.by(() => {
     const out = new Map();
     for (const k of secrets.known) {
-      if (k.scope === telegramScope || store.venues.includes(k.scope)) continue;
+      if (k.name === DEXALOT_KEY || k.scope === telegramScope || store.venues.includes(k.scope)) continue;
       if (!out.has(k.scope)) out.set(k.scope, []);
       out.get(k.scope).push(k);
     }
@@ -95,7 +98,7 @@
 
     <h3>Ключи</h3>
     {#each uniqBy(venueKeys(id), (item) => item.name) as item (item.name)}
-      <SecretRow {item} />
+      <SecretRow {item} checkVenue={id} />
     {:else}
       <p class="muted">У площадки нет секретов в списке бэкенда.</p>
     {/each}

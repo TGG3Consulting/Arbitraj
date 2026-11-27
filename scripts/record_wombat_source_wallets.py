@@ -10,7 +10,8 @@ from eth_utils import keccak
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, calldata, simulate_block
 from record_bitswap_ethereum import balance, tx
 from record_concave_ethereum import approval
-from record_woo_base import SLOT, rpc
+from record_woo_base import SLOT
+from fork_fee_rpc import Reader, URLS
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26"
 ADAPTER = "https://raw.githubusercontent.com/DefiLlama/dimension-adapters/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/wombat-exchange/index.ts"
@@ -47,8 +48,9 @@ def capture(network, url):
     old = json.loads((DATA/f"wombat_{network}.json").read_bytes())
     head = json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())[network]
     tag = old["selector"]
-    e = {"endpoint":url}
-    request = lambda method,args: rpc(e,method,args)
+    URLS[network] = list(dict.fromkeys([*URLS[network],url]))
+    reader = Reader(network,{"chain_id":head["chain"],"block":head["block"],"selector":tag})
+    request = reader.one
     h = request("eth_getBlockByNumber",[hex(head["block"]),False])
     assert h["hash"] == head["hash"] == tag["blockHash"] and int(request("eth_chainId",[]),16)==head["chain"]
     assert all(request("eth_getCode",[who,tag])=="0x" for who in [EXEC,OWNER])
@@ -137,7 +139,7 @@ def capture(network, url):
                             assert [r["status"] for r in checked]==["0x0","0x0","0x1"]
                         row["legs"].append(leg)
     assert request("eth_getBlockByNumber",[hex(head["block"]),False])["hash"]==h["hash"]
-    return dict(head=head,endpoint=url,source=ADAPTER,owner=OWNER,executor=EXEC,v5_hash="0x"+keccak(hexstr=runtime).hex(),pools=rows)
+    return dict(head=head,providers=reader.by_method,source=ADAPTER,owner=OWNER,executor=EXEC,v5_hash="0x"+keccak(hexstr=runtime).hex(),pools=rows)
 
 
 if __name__=="__main__":

@@ -1,0 +1,67 @@
+{
+  "provenance": "Ответы собственного узла BSC, переданы владельцем 27.11.2026. blockNumber отдельным запросом.",
+  "clientVersion": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "result": "Geth/v1.8.2-54afaff4-20261103/linux-amd64/go1.25.14"
+  },
+  "observedHead": {
+    "jsonrpc": "2.0",
+    "id": 2,
+    "result": "0x81ca1be"
+  },
+  "usdt": {
+    "jsonrpc": "2.0",
+    "id": 3,
+    "result": {
+      "accessList": [
+        {
+          "address": "0x55d398326f99059ff775485246999027b3197955",
+          "storageKeys": [
+            "0x2a1e20cfdc0a1a03b0a1a44fdd9fd5fa930358e5b8221476467d529192e1b4b4"
+          ]
+        }
+      ],
+      "gasUsed": "0x6697"
+    }
+  },
+  "era": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "result": {
+      "accessList": [
+        {
+          "address": "0x00312400303d02c323295f6e8b7309bc30fb6bce",
+          "storageKeys": [
+            "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc",
+            "0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103",
+            "0xefd68dadff872b202aece5d830a106beb74d1933475c5ec3b7a915e9997af227"
+          ]
+        },
+        {
+          "address": "0xc9e5921e9c99ce3543287e123bed1421b57c42dc",
+          "storageKeys": []
+        }
+      ],
+      "gasUsed": "0x8360"
+    }
+  },
+  "usdtBalance": {
+    "jsonrpc": "2.0",
+    "id": 5,
+    "result": "0x000000000000000000000000000000000000000000000059f08dd0068d0e5311"
+  },
+  "eraRequest": {
+    "jsonrpc": "2.0",
+    "id": 4,
+    "method": "eth_createAccessList",
+    "params": [
+      {
+        "from": "0x8894e0a0c962cb723c1976a4421c95949be2d4e3",
+        "to": "0x00312400303d02c323295f6e8b7309bc30fb6bce",
+        "data": "0x70a082310000000000000000000000008894e0a0c962cb723c1976a4421c95949be2d4e3"
+      },
+      "latest"
+    ]
+  }
+}

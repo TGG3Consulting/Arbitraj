@@ -175,3 +175,37 @@ fn presell_cut_is_not_budget() {
     assert!(budget_bound("per_trade"));
     assert!(limited_label("presell_sim").contains("симуляция продажи"));
 }
+
+/// Два фактических accessList узла BSC. Адрес внутри balanceOf определяет ключ одного держателя.
+#[test]
+fn own_node_era_and_usdt_balance_keys_belong_to_the_recorded_holder() {
+    let sample: Value = serde_json::from_slice(include_bytes!(
+        "data/presell_bsc_2026-11-27/access_lists.json"
+    ))
+    .unwrap();
+    let call = &sample["eraRequest"]["params"][0];
+    let holder: Address = call["from"].as_str().unwrap().parse().unwrap();
+    assert_eq!(
+        call["data"],
+        format!("0x70a08231{:0>64}", hex::encode(holder))
+    );
+    assert_eq!(sample["eraRequest"]["params"][1], "latest");
+    let historic = address!("a9c3cacff416e644dec51986dfd0e17cc2132817");
+    for (label, slot) in [("era", 262), ("usdt", 1)] {
+        let list = sample[label]["result"]["accessList"].as_array().unwrap();
+        let target = if label == "era" {
+            call["to"].as_str().unwrap()
+        } else {
+            "0x55d398326f99059ff775485246999027b3197955"
+        };
+        let contract = list.iter().find(|r| r["address"] == target).unwrap();
+        let keys: Vec<B256> = serde_json::from_value(contract["storageKeys"].clone()).unwrap();
+        assert_eq!(
+            keys.iter()
+                .filter(|k| **k == presell_slot::key(sol(slot), holder))
+                .count(),
+            1
+        );
+        assert!(!keys.contains(&presell_slot::key(sol(slot), historic)));
+    }
+}

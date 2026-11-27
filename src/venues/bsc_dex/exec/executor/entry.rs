@@ -191,7 +191,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     if e.family.variant.aqua(){return k==ExecKind::Balancer && super::super::aqua_plan::graph(ctx,e).is_some();}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Motoswap{return k==ExecKind::Balancer && super::super::motoswap_plan::graph_target(ctx,e).is_some();}
     if e.family.variant.mooniswap(){return k==ExecKind::Balancer && super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).is_some();}
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::FluidDexLite{return k==ExecKind::Balancer && super::super::super::pools::fluid_dex_lite::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
+    if e.family.variant.fluid_lite(){return k==ExecKind::Balancer && super::super::super::pools::fluid_dex_lite::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if e.family.variant.ambient(){return k==ExecKind::Balancer && super::super::super::pools::ambient::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {
@@ -241,7 +241,7 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
         (k!=ExecKind::Balancer || super::super::bancor_legacy_plan::state(e).is_none()) {
         return Err("Bancor V2.1: конвертер или валюты не совпадают с реестром".into());
     }
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::FluidDexLite && super::super::super::pools::fluid_dex_lite::shape(e).is_none(){return Err("Fluid DEX Lite: физический ключ или касса не совпадают".into());}
+    if e.family.variant.fluid_lite() && super::super::super::pools::fluid_dex_lite::shape(e).is_none(){return Err("Fluid DEX Lite: физический ключ или касса не совпадают".into());}
     if e.family.variant.ambient() && super::super::super::pools::ambient::shape(e).is_none(){return Err("Ambient: физический ключ или касса не совпадают".into());}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis && super::super::super::pools::yield_basis_quotes::shape(e).is_none(){return Err("YieldBasis: состояние не соответствует зарегистрированному рынку и валютам".into());}
     if !k.singleton() {

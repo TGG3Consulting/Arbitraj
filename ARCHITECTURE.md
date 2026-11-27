@@ -998,3 +998,7 @@ DEX (id области «DEX», решение 58) — id DEX у индекса�
 В `nonceAndMeta` адрес получателя занимает старшие 160 битов. Срок для допуска заявки хранится в младших 32 битах `expiry`. Полное поле входит в подпись. Эти правила одинаковы для проверок кошелька и биржи. [MainnetRFQ исходной версии](https://github.com/Dexalot/contracts/blob/993df50c014f3c8a1a33e45b4364ab9e709662fb/contracts/MainnetRFQ.sol#L680-L704).
 
 `scripts/verify_dexalot_creation.py` сверяет прежний и новый конструкторы в двух изолированных вызовах на одном каноническом блоке. Карточки различаются метаданными Solidity. `ui/src/lib/dexalotVersions.js` связывает запись незавершённого размещения с исходной карточкой и проверяет ранее зарегистрированные версии. В архиве `dexalot_creation_v2.json.gz` записаны оба runtime и длина совпавших программ.
+
+### О-45. Расчёт и исполнение Fluid DEX Lite
+
+Общий код DEX распознаёт семейство через `Variant::fluid_lite()`. `pools/fluid_dex_lite.rs` проверяет контракты и идентичность рынка. `pools/fluid_lite_quotes.rs` и `fluid_lite_levels.rs` рассчитывают котировки и наполняют уровни. `quote/fluid_hop_paths.rs` перечисляет доступные пути через несколько рынков. Подготовка вызова и проверка результата находятся в `exec/fluid_plan_build.rs` и `exec/fluid_lite_fill.rs`. Пути Fluid и Motoswap читают прежний общий индекс через `pools/registry_market_paths.rs`.

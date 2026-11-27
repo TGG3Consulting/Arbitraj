@@ -1,4 +1,5 @@
 use super::*;
+use alloy::{rpc::types::Log, sol_types::SolEvent};
 use flate2::read::GzDecoder;
 use serde_json::Value;
 fn read(bytes: &[u8]) -> Value {

@@ -140,7 +140,7 @@ impl Market {
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             _ if e.family.variant.issuer_shares()=>Some(Self::Aktionariat),
             _ if e.family.variant==Variant::BancorLegacy=>Some(Self::BancorLegacy),
-            _ if e.family.variant==Variant::FluidDexLite=>Some(Self::FluidDexLite),
+            _ if e.family.variant.fluid_lite()=>Some(Self::FluidDexLite),
             _ if e.family.variant.ambient()=>Some(Self::Ambient),
             _ if e.family.variant.llamma()=>Some(Self::Llamma),
             _ if e.family.variant==Variant::Motoswap=>Some(Self::Motoswap),
@@ -446,7 +446,7 @@ pub(super) fn router_shape(
     }
     let native_flat=leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..})));
     let needs_wallet=native_flat||leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && (e.family.variant==Variant::Motoswap || e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.aqua() || e.family.variant.ambient() || matches!(e.family.variant,Variant::FluidDexLite|Variant::Brokerbot|Variant::BaseStonk|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (e.family.variant==Variant::Motoswap || e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.fluid_lite() || matches!(e.family.variant,Variant::Brokerbot|Variant::BaseStonk|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));

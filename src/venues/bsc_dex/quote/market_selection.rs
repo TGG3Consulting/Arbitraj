@@ -56,7 +56,7 @@ pub(super) fn order_book_quoter(variant:Variant)->Option<BookQuoter>{
     use super::super::pools::{carbon_quote,rubicon};
     match variant {
         Variant::Ammalgam=>Some(BookQuoter{request:super::super::pools::ammalgam::request,payout:super::super::pools::ammalgam::payout}),
-        Variant::FluidDexLite=>Some(BookQuoter{request:super::super::pools::fluid_dex_lite::request,payout:super::super::pools::fluid_dex_lite::payout}),
+        _ if variant.fluid_lite()=>Some(BookQuoter{request:super::super::pools::fluid_dex_lite::request,payout:super::super::pools::fluid_dex_lite::payout}),
         _ if variant.ambient()=>Some(BookQuoter{request:super::super::pools::ambient::request,payout:super::super::pools::ambient::payout}),
         Variant::Llamma(_)=>Some(BookQuoter{request:super::super::pools::llamma_quotes::request,payout:super::super::pools::llamma_quotes::payout}),
         Variant::Mooniswap=>Some(BookQuoter{request:super::super::pools::mooniswap::request,payout:super::super::pools::mooniswap::payout}),
@@ -155,6 +155,17 @@ impl Quoting {
 mod tests {
     use super::*;
     use crate::venues::bsc_dex::pools::families;
+
+    #[test]
+    fn recorded_fluid_market_uses_the_original_resolver() {
+        let raw = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/fluid_dex_lite_wallet.json.gz");
+        let wallet: serde_json::Value = serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();
+        let kind = wallet["manifest"]["kind"].as_str().unwrap();
+        let family = families::make(kind, kind).unwrap();
+        assert!(family.variant.fluid_lite());
+        assert!(order_book_quoter(family.variant).is_some());
+        assert!(!super::super::v2_pair_quote::kind_on(family));
+    }
 
     #[test]
     fn wallet_quoters_keep_their_own_abi_including_signal_only_families() {

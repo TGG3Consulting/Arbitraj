@@ -75,6 +75,8 @@ async fn bsc_quote_checks_paths_while_pool_registry_is_write_locked() {
     let parts = recovery_tests::parts(&dir, 56, Address::ZERO).await;
     let q = parts.quoting();
     let pair = fixtures::pancake();
+    assert!(!pair.family.variant.fluid_lite());
+    assert!(crate::venues::bsc_dex::pools::fluid_dex_lite::shape(&pair).is_none());
     q.reg.put(pair.clone());
     let input = Input {
         asset: Asset { chain: None, ticker: pair.ticker.clone(), contract: Some(pair.coin) },

@@ -135,6 +135,9 @@ def capture():
             i=tokens.index(src); reserve=int(m["reserves"][i]); unit=int(m["units"][i])
             # Include the smallest positive input and thin reserves without losing ordinary $0.10 and $1 trials.
             sizes=sorted({max(1,min(reserve//n,max(1,unit//d))) for n,d in [(100,10),(10,1)]})
+            if min(map(int,m["reserves"])) <= 10:
+                # Some pools need a large fraction of their input reserve to produce one output atom.
+                sizes=sorted(set(sizes)|{max(1,reserve),max(1,reserve*2)})
             for budget in sizes:
                 fund=[tx(WETH,"deposit()",value=budget)] if src==WETH else [
                     tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],

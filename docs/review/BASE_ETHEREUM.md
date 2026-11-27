@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `86cf9194` (27.11.2026).
+Последний просмотренный коммит: `f25d30d2` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2990,6 +2990,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-42 | 14c028f5 | `contracts/DexalotWallet.sol`: (1) `order.nonceAndMeta>>96` — сдвиг без имени и ссылки на строку MainnetRFQ.sol, где задана упаковка «адрес получателя в старших 160 битах». Дать именованную константу со ссылкой на строку. (2) `block.timestamp>uint32(order.expiry)` — поле `expiry` объявлено `uint128`, приведение к `uint32` отбрасывает старшие биты. Сравнивать полное значение, как сам MainnetRFQ, или ссылкой на исходник показать, почему uint32. После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **edb898c1: карточка `dexalot-base-create.json` уже собрана из текущего байткода. После правки О-42 её пересобрать и сверить (см. О-26, О-31).** |
 | О-43 | 77f6419b | R-42: прямые `== Variant::EulerV1/EulerV2` в общих файлах: `exec/stabull_plan.rs:175`, `pools/created_log.rs:76-77`, `pools/direct_module.rs:142`, `pools/factory_calls.rs:170`, `pools/families.rs:852`. Предикат `euler()` есть; для различия поколений завести, например, `euler_v2()` или выбор внутри `euler_swap.rs` и заменить. В профильных `euler_*.rs` сравнения допустимы. |
 | О-44 | b5584d2e | `contracts/FluidDexLiteWallet.sol`: раскладка хранилища ядра записана в комментарии со ссылкой на репозиторий и коммит, но без строки. Числа без имён: слот `1` массива DexKey, шаг `3` слова на ключ, `uint192` для индекса, `bytes8` идентификатора. Дать имена-константы со ссылкой на файл и строку `fluid-contracts-public@404d73f9`, как требуется в О-33 и О-37. После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **c2a328f9: карточка `fluid-dex-lite-ethereum.json` уже собрана из текущего байткода. После правки О-44 её пересобрать и сверить (см. О-26, О-31).** |
+| О-45 | c8772fa3 | Fluid DEX Lite. (1) R-42: прямые `== Variant::FluidDexLite` в общих файлах: `exec/executor/entry.rs:192,242`, `exec/market_plan.rs:137`, `exec/vista_gate.rs:31`, `quote/module_pricing.rs:39`, `quote/v2_execution.rs:80`. Завести предикат, как `euler()`, `aqua()` и `llamma()`. (2) Размер: `pools/fluid_dex_lite.rs` — 348 строк, `exec/fluid_lite_wallet.rs` — 224, ориентир 200. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -4120,6 +4121,18 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - В `executor/entry.rs` все новые ветки защищены `euler()` и стоят до общих `singleton`/UniV4. Для BSC-пулов V4 (PancakeSwap Infinity) путь тот же.
   - `exec/live.rs`: повторное чтение записи маршрута меняется только при `fee_mode == EulerModuleV5`, иначе `Ok(e)` как раньше.
   - `market_approval.rs`, `solidly_gate.rs`, `v2_execution.rs`: добавлен новый вариант `RouterFeeMode`, прежние ветки не тронуты.
-- О-43: в `created_log.rs` и `families.rs` прямых сравнений больше нет. Остались `stabull_plan.rs:175`, `direct_module.rs:142` и `factory_calls.rs:170`.
+- О-43 не изменился: прямые сравнения по-прежнему в `created_log.rs:76-77`, `families.rs:853`, `stabull_plan.rs:175`, `direct_module.rs:142` и `factory_calls.rs:170`. Исправление: в первой версии этой записи я ошибочно написал, что из `created_log.rs` и `families.rs` они ушли, — мой фильтр grep отсёк строки с `euler_registry`.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44.
+
+### c8772fa3, f25d30d2 — Fluid DEX Lite: обнаружение, цена и исполнение; PancakeSwap X (скрипт)
+
+- c8772fa3: наблюдение из 74f85467 закрыто — код площадки `fluid_dex_lite` появился (`Variant::FluidDexLite`, `pools/fluid_dex_lite.rs`, `exec/fluid_lite_*`, `quote/fluid_lite_pricing.rs`, `core/types/fluid_dex_lite.rs`).
+- Регрессия BSC проверена.
+  - Реестр (`registry.rs`, `registry_frozen.rs`, `registry_index.rs`, `ambient_head.rs`): проверка `matches!(PoolState::Ambient)` обобщена до `singleton_stamp()`, которая даёт `Some` только для `Ambient` и `FluidDexLite`. Для пулов BSC `None`, поведение то же, что после f9313fc9.
+  - Остальные ветки в общих файлах защищены новым вариантом, `PoolState` или `Wire`.
+- **Правка: О-45** — R-42 и размер файлов.
+- f25d30d2: только скрипт записи и данные.
+- Исправлена моя запись к 86cf9194 по О-43.
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44, О-45.

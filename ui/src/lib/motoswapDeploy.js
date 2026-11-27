@@ -58,7 +58,7 @@ export async function checkMoto(provider,plan,at){
     }
   }));
   const links=[['fee_router','0xf887ea40','core'],['core','0xc45a0155','factory'],['factory','0x59659e90','beacon'],
-    ['factory','0x5c60da1b','pair_impl'],['beacon','0x5c60da1b','pair_impl'],['fee_router','0x7b103999','registry'],
+    ['factory','0x5c60da1b','pair_impl'],['beacon','0x5c60da1b','pair_impl'],['fee_router','0x7b103999','registry'],['factory','0xa0e5a3e2','registry'],
     ['fee_router','0x9a6a5cf0','creator'],['fee_router','0x29269144','vault'],['fee_router','0x913e77ad','collector']];
   await Promise.all(links.map(([from,sig,to])=>linked(provider,at,r[from].target,sig,r[to].target)));
 }

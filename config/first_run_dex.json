@@ -7328,6 +7328,9 @@
       "dex.pool_code_hashes": [
         "0xeac8bc5d4e7e5e86e4d1b716aec4441c43ab7c1820d554975a7930e885a32448"
       ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ],
       "dex.motoswap_roles": [
         "factory 0x81c9cbc47d700da1777abd831d8da3f526dfae24 0x181affcf333db5470c2d673ad9efef9bee1bfcde703c90ac81fc9a89f569dd3d 0xdef707fcd1f36ee85450fe75e13e7601652213f4 0x805cf1d0bf17de1ec79e1f774e360e138848bd6c354335b92a597fc0218c3c9c",
         "fee_router 0x9f846ef584fd44d075b5e8df00ddb4416da61a80 0x181affcf333db5470c2d673ad9efef9bee1bfcde703c90ac81fc9a89f569dd3d 0x2eaf12022db5353a69c2632f0021687c8a24ac0b 0x00e96f6ec951b6cc6e3d2f7e62cec17fbdd531e6f3bb82ac8acf9c2a0a54234a",

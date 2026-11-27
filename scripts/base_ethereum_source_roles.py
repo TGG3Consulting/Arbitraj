@@ -75,6 +75,36 @@ def describe(network,source_id,adapter,configured,candidates):
     path = adapter.get("path")
     revision="be9967c3f0d3ccd06c871bab0d16beb3304de719"
     repository=f"https://github.com/DefiLlama/dimension-adapters/blob/{revision}/"
+    if network == "ethereum":
+        observed = {
+            "dexs/axiom.ts": "Терминал Axiom. Запрос Dune отбирает сделки DEX по плате Axiom и берёт наибольший шаг каждой транзакции. Физический пул принадлежит площадке исполнения.",
+            "dexs/aveai/index.ts": "Маршрутизатор Ave.ai. В объём входят обмены через исходные DEX и исполненные лимитные заявки. Тот же обмен может учитываться в строке его пула.",
+            "fees/fwa-v2/index.ts": "Покупка и расчёт по NFT-листингам FWA. Комиссии и выкуп FWA записаны отдельно. Для валютного маршрута нужен конкретный пул выкупа.",
+            "dexs/barterswap/index.ts": "Superposition распределяет вход и собирает выход с кошельков поставщиков ликвидности. Для заявки своего плательщика нужен подписанный ответ сервера с выбранными кошельками и сроком. [Архитектура Barter](https://barterdefi.gitbook.io/barter-docs/superposition/architecture-v1).",
+            "dexs/smardex-usdn/index.ts": "Объём открытия и закрытия длинных позиций USDN в залоговом токене. Спотовый AMM SmarDex учитывается отдельно.",
+            "dexs/clutch-anvil/index.ts": "NFTSold и NFTBought оплачиваются в ERC20 конкретной коллекции. Для встречной ноги требуется соответствующий NFT с tokenId.",
+            "dexs/dinari/index.ts": "OrderProcessor учитывает денежный объём заявок на цифровые ценные бумаги. Версия 1 читает OrderFill, версия 2 сопоставляет заявки и расчёты. Для новой сделки нужен доступный выпуск, принятая заявка и встречная выплата.",
+            "dexs/pancakeswap-x/index.ts": "Аукцион PancakeSwap X. Профиль, собственный плательщик и проверенные выплаты обеих сетей приведены в разделе PancakeSwap X этого справочника.",
+        }
+        if path in observed:
+            return observed[path]
+        if path == "dexs/motoswap/index.ts":
+            folder = Path(__file__).resolve().parents[1] / "tests/data/first_run_dex_2026-11-26"
+            original = json.loads(gzip.decompress((folder / "motoswap_ethereum.json.gz").read_bytes()))
+            protected = json.loads(gzip.decompress((folder / "motoswap_ethereum_wallets.json.gz").read_bytes()))
+            directory = original["directory"]
+            settings = configured["motoswap-ethereum"]["settings"]
+            if (original["selector"] != protected["selector"]
+                    or directory["roles"]["factory"] != settings["dex.factory"]
+                    or directory["roles"]["fee_router"] != settings["dex.quoter"]
+                    or protected["manifest"]["runtime"] not in settings["dex.module_runtime_hashes"]):
+                raise ValueError("Motoswap: profile differs from paid roles")
+            return (f"Профиль `motoswap-ethereum`. Фабрика подтвердила {len(directory['pairs'])} пары. "
+                    f"На высоте {original['block']} исходный FeeRouter выплатил {sum(r['paid']['ok'] for r in original['trials'])} обменов. "
+                    f"Защищённый модуль и V5 выплатили ещё {len(protected['payments'])}. Для них владелец размещает MotoswapWallet. "
+                    f"На этом блоке владелец FeeRouter ещё мог обновлять реализацию. "
+                    "[Квитанции FeeRouter](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz) · "
+                    "[Выплаты, газ и откаты защищённых путей](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz).")
     card = card_reference(network,adapter)
     if card:
         helper,_ = CARD_PROGRAMS[adapter["module"]]

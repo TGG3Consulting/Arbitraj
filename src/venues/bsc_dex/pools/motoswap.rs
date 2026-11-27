@@ -18,6 +18,7 @@ alloy::sol! {interface IMoto {
     function upgradesRenounced() external view returns(bool);
     function router() external view returns(address);
     function WETH() external view returns(address);
+    function quoteRegistry() external view returns(address);
     function registry() external view returns(address);
     function creatorRegistry() external view returns(address);
     function creatorVault() external view returns(address);
@@ -35,7 +36,7 @@ alloy::sol! {interface IMoto {
     function feeOnOutput(address[] path) external view returns(bool);
     function balanceOf(address owner) external view returns(uint256);
 }}
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Eq, PartialEq)]
 struct Role {
     address: Address,
     hash: B256,
@@ -83,6 +84,8 @@ impl Role {
         code::bind(ctx, self.address, self.hash, self.implementation, at).await
     }
 }
+#[path = "motoswap_frame.rs"]
+mod frame;
 pub(crate) async fn state(
     ctx: &Ctx,
     f: &Family,
@@ -116,21 +119,25 @@ pub(crate) async fn state(
     {
         return Err(bad(ctx));
     }
-    tokio::try_join!(
-        factory.check(ctx, at),
-        fee.check(ctx, at),
-        core.check(ctx, at),
-        beacon.check(ctx, at),
-        pair_impl.check(ctx, at),
-        registry.check(ctx, at),
-        creators.check(ctx, at),
-        vault.check(ctx, at),
-        collector.check(ctx, at),
+    let roles = frame::Roles {
+        factory,
+        fee,
+        core,
+        beacon,
+        pair_impl,
+        registry,
+        creators,
+        vault,
+        collector,
+        wrapped,
+        init,
+    };
+    let (frame, ()) = tokio::try_join!(
+        frame::read(ctx, roles, at),
         code::runtime(ctx, pool, shell, at)
     )?;
     let fac = factory.address;
     let router = fee.address;
-    let v = |to, call| batch::view(at, to, call);
     let get = |x, y| {
         batch::view(
             at,
@@ -143,29 +150,15 @@ pub(crate) async fn state(
     };
     let abi = |t| batch::view(at, creators.address, IMoto::activeCreatorCall { token: t });
     let output = |x, y| batch::view(at, router, IMoto::feeOnOutputCall { path: vec![x, y] });
-    let allowed = |who| batch::view(at, fac, IMoto::swapAllowedCall { who });
     let q = |token| batch::view(at, registry.address, IMoto::isQuoteCall { token });
     let slot = "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50";
     let [
         ab,
         ba,
-        cf,
-        ca,
-        cb,
         pf,
         t0,
         t1,
-        rw,
-        fw,
-        core_addr,
-        reg,
-        crt,
-        cv,
-        coll,
-        fb,
-        ib,
         pb,
-        init_raw,
         aa,
         bb,
         qa,
@@ -175,33 +168,15 @@ pub(crate) async fn state(
         fa,
         fbout,
         rr,
-        lp,
-        pct,
-        creator,
-        x,
-        frozen,
     ] = batch::read(
         ctx,
         [
             get(a, b),
             get(b, a),
-            batch::view(at, core.address, Pair::factoryCall {}),
-            allowed(core.address),
-            allowed(router),
             batch::view(at, pool, Pair::factoryCall {}),
             batch::view(at, pool, Pair::token0Call {}),
             batch::view(at, pool, Pair::token1Call {}),
-            v(router, IMoto::WETHCall {}),
-            v(core.address, IMoto::WETHCall {}),
-            batch::view(at, router, IMoto::routerCall {}),
-            batch::view(at, router, IMoto::registryCall {}),
-            batch::view(at, router, IMoto::creatorRegistryCall {}),
-            batch::view(at, router, IMoto::creatorVaultCall {}),
-            batch::view(at, router, IMoto::collectorCall {}),
-            batch::view(at, fac, IMoto::beaconCall {}),
-            batch::view(at, beacon.address, IMoto::implementationCall {}),
             ("eth_getStorageAt", json!([pool, slot, at])),
-            batch::view(at, fac, IMoto::pairCodeHashCall {}),
             batch::view(at, a, IMoto::balanceOfCall { owner: pool }),
             batch::view(at, b, IMoto::balanceOfCall { owner: pool }),
             q(a),
@@ -211,57 +186,36 @@ pub(crate) async fn state(
             output(a, b),
             output(b, a),
             batch::view(at, pool, IV2Pair::getReservesCall {}),
-            batch::view(at, fac, IMoto::swapFeeBpsCall {}),
-            batch::view(at, router, IMoto::protocolFeeBpsCall {}),
-            batch::view(at, router, IMoto::creatorFeeBpsCall {}),
-            batch::view(at, fac, IMoto::implementationCall {}),
-            batch::view(at, router, IMoto::upgradesRenouncedCall {}),
         ],
     )
     .await?;
-    let bindings = [
+    if [
         (ab, pool),
         (ba, pool),
-        (cf, fac),
         (pf, fac),
         (t0, a),
         (t1, b),
-        (rw, wrapped),
-        (fw, wrapped),
-        (core_addr, core.address),
-        (reg, registry.address),
-        (crt, creators.address),
-        (cv, vault.address),
-        (coll, collector.address),
-        (fb, beacon.address),
-        (ib, pair_impl.address),
         (pb, beacon.address),
-        (x, pair_impl.address),
-    ];
-    if bindings
-        .iter()
-        .any(|(raw, expected)| raw.as_ref() != expected.into_word().as_slice())
-        || init_raw.as_ref() != init.as_slice()
-        || !batch::decode(&ca, IMoto::swapAllowedCall { who: core.address })?
-        || !batch::decode(&cb, IMoto::swapAllowedCall { who: router })?
+    ]
+    .iter()
+    .any(|(raw, expected)| raw.as_ref() != expected.into_word().as_slice())
         || !(batch::decode(&qa, IMoto::isQuoteCall { token: a })?
             || batch::decode(&qb, IMoto::isQuoteCall { token: b })?)
-        || ctx.settings.generation() != generation
+        || generation != ctx.settings.generation()
     {
         return Err(bad(ctx));
     }
     let rr = batch::decode(&rr, IV2Pair::getReservesCall {})?;
-    let rate = |n: U256| u16::try_from(n).map_err(|_| bad(ctx));
     Ok(MotoswapState {
-        fee_router_frozen: batch::decode(&frozen, IMoto::upgradesRenouncedCall {})?,
+        fee_router_frozen: frame.frozen,
         reserves: [U256::from(rr.reserve0), U256::from(rr.reserve1)],
         balances: [
             batch::decode(&aa, IMoto::balanceOfCall { owner: pool })?,
             batch::decode(&bb, IMoto::balanceOfCall { owner: pool })?,
         ],
-        lp_bps: rate(batch::decode(&lp, IMoto::swapFeeBpsCall {})?)?,
-        protocol_bps: rate(batch::decode(&pct, IMoto::protocolFeeBpsCall {})?)?,
-        creator_bps: rate(batch::decode(&creator, IMoto::creatorFeeBpsCall {})?)?,
+        lp_bps: frame.lp,
+        protocol_bps: frame.protocol,
+        creator_bps: frame.creator,
         creators: u8::from(!batch::decode(&coa, IMoto::activeCreatorCall { token: a })?.is_zero())
             + u8::from(!batch::decode(&cob, IMoto::activeCreatorCall { token: b })?.is_zero()),
         fee_on_output: [
@@ -294,9 +248,12 @@ pub(crate) fn routing(
     ))
 }
 pub(crate) async fn frozen(ctx: &Ctx, router: Address, at: &Value) -> GatewayResult<()> {
-    let call = IMoto::upgradesRenouncedCall {};
-    let [raw] = batch::read(ctx, [batch::view(at, router, call)]).await?;
-    if batch::decode(&raw, call)? {
+    let [raw] = batch::read(
+        ctx,
+        [batch::view(at, router, IMoto::upgradesRenouncedCall {})],
+    )
+    .await?;
+    if batch::decode(&raw, IMoto::upgradesRenouncedCall {})? {
         Ok(())
     } else {
         Err(bad(ctx))

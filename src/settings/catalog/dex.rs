@@ -442,7 +442,7 @@ pub static DEX: &[SettingDef] = &[
     d("Контракты DEX", "dex.few_factory", K::Address, L::None, "адрес", DX, "Фабрика канонических ERC-20 обёрток Ring Few. Проверяется по коду и реестру на узле при загрузке пары.").optional(),
     d("Контракты DEX", "dex.few_init_hash", K::Text, L::None, "keccak256", DX, "Хеш кода создания канонической обёртки Ring Few для расчёта CREATE2. Источник — проверенный профиль этой фабрики.").optional(),
     d("Контракты DEX", "dex.few_runtime_hash", K::Text, L::None, "keccak256", DX, "Хеш развёрнутого кода обёртки Ring Few. Проверяются обе монеты при загрузке пары.").optional(),
-    d("Контракты DEX", "dex.bancor_native_token", K::Address, L::None, "адрес ETH в ABI", DX, "Обозначение физического ETH в сети Bancor V3. Путь с расчётом в WETH отдельно проверяет обёртку."),
+    d("Контракты DEX", "dex.bancor_native_token", K::Address, L::None, "адрес ETH в ABI", DX, "Обозначение физического ETH в путях Bancor V2.1 и V3. Путь с расчётом в WETH отдельно проверяет обёртку."),
     d("Контракты DEX", "dex.bancor_roles", K::TextList, L::None, "контракты", DX, "Bancor V3: адрес прокси, хеш прокси, адрес реализации, хеш реализации. Роли сверяются с официальным NetworkInfo на одном блоке."),
     d("Контракты DEX", "dex.bancor_collections", K::TextList, L::None, "коллекции", DX, "Bancor V3: адрес и хеш кода принятой PoolCollection. По каждой стороне проверяется назначение в реестре сети."),
     d("Контракты DEX", "dex.v1_template", K::Address, L::None, "адрес", DX, "Uniswap V1: исходный контракт биржи, возвращаемый exchangeTemplate() фабрики выбранной сети"),

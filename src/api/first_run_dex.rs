@@ -413,6 +413,22 @@ mod tests {
                         }));
                         continue;
                     }
+                    if k == "dex.bancor_native_token" && p.id == "bancor-v21-ethereum" {
+                        let bytes = include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v21_wallet.json.gz");
+                        let proof: Value = serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                        assert_eq!(proof["manifest"]["sourceBlock"], snapshot["selector"]["blockHash"]);
+                        let cases = proof["controls"].as_array().unwrap();
+                        for input in [true, false] {
+                            assert!(cases.iter().any(|row| {
+                                let path = row["path"].as_array().unwrap();
+                                let endpoint = if input {path.first()} else {path.last()};
+                                row["mode"] == "native_wallet" && endpoint.and_then(Value::as_str) == Some(text.as_str()) &&
+                                    row["spent"].as_str().is_some_and(|n| n != "0") &&
+                                    row["received"].as_str().is_some_and(|n| n != "0")
+                            }));
+                        }
+                        continue;
+                    }
                     if k=="dex.bancor_native_token" && p.id=="bancor-v3-ethereum"{
                         let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/bancor_v3_wallet.json.gz");
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();

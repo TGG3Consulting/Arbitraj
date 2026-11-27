@@ -86,7 +86,7 @@ impl Roles {
         )?;
         let native = ctx.dex_addr("dex.bancor_native_token", f.id)?;
         let wrapped = ctx.addr("dex.native_wrapped")?;
-        if r != registry || n != network || native == wrapped {
+        if r != registry || n != network || native != crate::venues::bsc_dex::exec::bancor_legacy_wallet::NATIVE || native == wrapped {
             return Err(bad(ctx));
         }
         Ok(Self {

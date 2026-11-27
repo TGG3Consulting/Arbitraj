@@ -7,6 +7,7 @@
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
 pub mod bundles;
+pub mod surge;
 pub mod account;
 pub mod balance;
 pub mod chain;

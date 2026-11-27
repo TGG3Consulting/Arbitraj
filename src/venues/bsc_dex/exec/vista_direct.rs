@@ -38,7 +38,18 @@ pub(super) async fn plan(
     let wrapped = ctx.addr("dex.native_wrapped")?;
     let h = white_state::head(ctx, "latest").await?;
     let (target, call) =
-        if s.entry.family.variant == super::super::pools::family_variant::Variant::BunnySwap {
+        if s.entry.family.variant == super::super::pools::family_variant::Variant::Surge {
+            let state=super::super::pools::surge::market(ctx,s.entry.family,s.entry.pool.reference.address(),
+                (s.entry.pool.token0,s.entry.pool.token1),&h.selector()).await?;
+            let direct=super::super::quote::surge_pricing::wire(ctx,&s.entry,&state,o.token_in,native())?;
+            if direct.1.form==Form::SurgeEthOut {
+                let required=super::super::math::surge::gross_for_net(o.min_out,90).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Surge: валовой минимум не помещается в заявку"))?;
+                if state.gross(o.token_in,o.amount_in).is_none_or(|gross|gross<required){
+                    return Err(ctx.err(ErrorCode::QuoteMismatch,"Surge: валовая выплата не гарантирует заданный чистый минимум"));
+                }
+            }
+            direct
+        } else if s.entry.family.variant == super::super::pools::family_variant::Variant::BunnySwap {
             super::super::pools::bunnyswap::native_state(ctx, &s.entry, &h.selector()).await?;
             vista_pricing::rabbit_wire(ctx, &s.entry, o.token_in)?
         } else {
@@ -62,7 +73,7 @@ pub(super) async fn plan(
             "Валовой минимум EtherVista не помещается в wei",
         ));
     }
-    let approvals = if matches!(form, Form::OfficialEthIn | Form::RabbitEthIn) {
+    let approvals = if matches!(form, Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn | Form::SurgeEthOut) {
         Vec::new()
     } else if all {
         approve::fork_all(ctx, o.token_in, target, o.amount_in)?
@@ -111,7 +122,7 @@ pub(super) fn proof(plan: &Plan) -> Option<super::vista_fact::Proof> {
                     | Form::ModuleEthOut
                     | Form::OfficialEthOut
                     | Form::RabbitEthIn
-                    | Form::RabbitEthOut,
+                    | Form::RabbitEthOut | Form::SurgeEthIn | Form::SurgeEthOut | Form::SurgeToken,
                 ..
             },
         input,

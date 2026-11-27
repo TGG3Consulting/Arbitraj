@@ -20,19 +20,36 @@ def before(k,pid,prefix,mode,owner,forward,receipt,tx,simulate):
     if forward!=(delta0<0) or (forward and last>active) or (not forward and last<active):
         raise ValueError("не совпало направление фактического обмена")
     lo,hi=sorted((active,last));ids=[active]
-    if hi-lo<=96:ids=list(range(lo,hi+1))
+    skipped=[]
+    path=[]
+    if hi-lo<=96:
+        dense=list(range(lo,hi+1))
+        pointers={}
+        probes={}
+        for pos in range(0,len(dense),24):
+            chunk=dense[pos:pos+24]
+            links=views([call("getNextNonEmptyBin(bytes32,bool,uint24)",["bytes32","bool","uint24"],[encoded,forward,n]) for n in chunk])
+            pointers.update((n,decode(["uint24"],v)[0]) for n,v in zip(chunk,links))
+            raw=views([call("getBin(bytes32,uint24)",["bytes32","uint24"],[encoded,n]) for n in chunk])
+            probes.update((n,decode(["uint128","uint128","uint256","uint256"],v)) for n,v in zip(chunk,raw))
+        while ids[-1]!=last:
+            n=pointers[ids[-1]]
+            if not lo<=n<=hi or (n>=ids[-1] if forward else n<=ids[-1]):raise ValueError("дерево не ведёт к Swap.activeId")
+            path.append([ids[-1],n]);ids.append(n)
+        skipped=[[n,str(v[0]),str(v[1]),str(v[3])] for n,v in probes.items() if n not in ids and (v[0] or v[1])]
+        amounts=[[n,str(probes[n][0]),str(probes[n][1])] for n in ids]
     else:
         while ids[-1]!=last:
             nxt,=views([call("getNextNonEmptyBin(bytes32,bool,uint24)",["bytes32","bool","uint24"],[encoded,forward,ids[-1]])])
             n=decode(["uint24"],nxt)[0]
             if not lo<=n<=hi or (n>=ids[-1] if forward else n<=ids[-1]):raise ValueError("нарушена последовательность непустых бинов")
-            ids.append(n)
-    amounts=[]
-    for start in range(0,len(ids),32):
-        chunk=ids[start:start+32]
-        amt=views([call("getBin(bytes32,uint24)",["bytes32","uint24"],[encoded,n]) for n in chunk])
-        for n,v in zip(chunk,amt):
-            x,y,_,_=decode(["uint128","uint128","uint256","uint256"],v)
-            amounts.append([n,str(x),str(y)])
+            path.append([ids[-1],n]);ids.append(n)
+        amounts=[]
+        for start in range(0,len(ids),32):
+            chunk=ids[start:start+32]
+            amt=views([call("getBin(bytes32,uint24)",["bytes32","uint24"],[encoded,n]) for n in chunk])
+            for n,v in zip(chunk,amt):
+                x,y,_,_=decode(["uint128","uint128","uint256","uint256"],v)
+                amounts.append([n,str(x),str(y)])
     return dict(active=active,last=last,protocol=protocol,lp=lp,event_fee=fee,event_protocol=pfee,
-                forward=forward,delta0=str(delta0),delta1=str(delta1),bins=amounts)
+                forward=forward,delta0=str(delta0),delta1=str(delta1),bins=amounts,successors=path,skipped_reserves=skipped)

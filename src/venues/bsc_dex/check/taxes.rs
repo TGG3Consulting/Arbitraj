@@ -181,7 +181,7 @@ async fn run(
                 Ok(None)
             )
         };
-        let source = match if super::super::exec::mint_club_direct::enabled(e) || super::super::exec::carbon_direct::enabled(e) || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none()){Ok(Some(wallet))}else{quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await} {
+        let source = match if e.family.variant==super::super::pools::family_variant::Variant::Surge || super::super::exec::mint_club_direct::enabled(e) || super::super::exec::carbon_direct::enabled(e) || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none()){Ok(Some(wallet))}else{quote_source(ctx, reg, sources, e.usdt, exclude, amount, deep).await} {
             Ok(Some(s)) => s,
             Ok(None) if super::registered_v3::configured(ctx,e) => wallet,
             Ok(None) => {

@@ -30,7 +30,7 @@ pub(in crate::venues::bsc_dex) fn is_vista(e: &Entry) -> bool {
     e.family.variant == Variant::EtherVista
 }
 pub(in crate::venues::bsc_dex) fn native_router(e: &Entry) -> bool {
-    matches!(e.family.variant, Variant::EtherVista | Variant::BunnySwap)
+    matches!(e.family.variant, Variant::EtherVista | Variant::BunnySwap | Variant::Surge)
 }
 pub(in crate::venues::bsc_dex) fn rabbit_wire(
     ctx: &Ctx,
@@ -126,6 +126,10 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
     let input = if i.side == Side::Buy { i.usdt } else { i.coin };
     let mut out = Vec::new();
     for entry in i.entries.iter().filter(|e| native_router(e)) {
+        if entry.family.variant==Variant::Surge{
+            out.extend(Box::pin(super::surge_pricing::options(q,i,entry,payer,input,is_native,h)).await);
+            continue;
+        }
         if entry.family.variant == Variant::BunnySwap {
             if !is_native {
                 continue;

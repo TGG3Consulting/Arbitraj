@@ -73,7 +73,7 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
         if row["mode"] != "separate" || book.market.tokens.contains(&book.bun) {
             let (least, _) = book
                 .swap(input, false, fill.credit)
-                .expect("executable archive output");
+                .unwrap_or_else(|| panic!("Bundles inverse pool={pool:#x} input={input:#x} amount={} target={} mode={}",row["amount"],fill.credit,row["mode"]));
             assert!(least.amount_in <= qty(&row["amount"]));
             assert!(least.amount_out >= fill.credit);
             assert!(

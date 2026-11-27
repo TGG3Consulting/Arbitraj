@@ -81,6 +81,7 @@ pub fn swap(
             let p=super::super::math::carbon_match::plan(s,token_in,!exact_in,size).ok_or_else(none)?;
             Ok(Swapped{amount_in:U256::from(p.spent),amount_out:U256::from(p.received),complete:true})
         }
+        (PoolState::Surge(s),PoolKind::V2)=>s.swap(token_in,exact_in,amount).ok_or_else(none),
         (PoolState::Dagrow(s),PoolKind::V2)=>s.fill(token_in,exact_in,amount).ok_or_else(none),
         (PoolState::MintClub(s), PoolKind::V2) => super::super::math::mint_club::fill(s,token_in,exact_in,amount).map(|f| f.swapped).ok_or_else(none),
         (PoolState::Virtuals(s), PoolKind::V2) => super::super::math::virtuals::quote(s,token_in,exact_in,amount).ok_or_else(none),

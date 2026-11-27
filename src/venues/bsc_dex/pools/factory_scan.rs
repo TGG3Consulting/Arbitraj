@@ -130,6 +130,8 @@ async fn pass(
     let temple=Box::pin(super::temple_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in temple.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(temple.notes);no_answer+=temple.no_answer;
+    let surge=super::surge::scan(ctx,coins,&quote_list);
+    for (coin,rows) in surge.found{found.entry(coin).or_default().extend(rows);}
     let dag=Box::pin(super::dagrow::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in dag.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(dag.notes);no_answer+=dag.no_answer;

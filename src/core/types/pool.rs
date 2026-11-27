@@ -512,6 +512,7 @@ pub enum PoolState {
     Carbon(Box<CarbonState>),
     Temple(Box<TempleState>),
     Dagrow(Box<DagrowState>),
+    Surge(Box<super::surge::SurgeState>),
     Antfarm(Box<AntfarmBook>),
     Bundles(Box<super::bundles::Book>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.

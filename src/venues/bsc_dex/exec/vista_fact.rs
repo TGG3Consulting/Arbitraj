@@ -47,6 +47,9 @@ impl Proof {
                 IVistaFlow::swapExactTokensForETHCall::abi_decode(data).map(|p| p.deadline)
             }
             Form::ModuleEthOut => IVistaFlow::swapNativeCall::abi_decode(data).map(|p| p.deadline),
+            Form::SurgeEthIn => IVistaFlow::_buyCall::abi_decode(data).map(|v|v.deadline),
+            Form::SurgeEthOut => IVistaFlow::_sellCall::abi_decode(data).map(|v|v.deadline),
+            Form::SurgeToken => IVistaFlow::swapFromCall::abi_decode(data).map(|v|v.deadline),
             Form::ModuleToken => return false,
         };
         deadline.is_ok_and(|deadline| {
@@ -114,6 +117,28 @@ impl Proof {
             }
         };
         let (spent, received) = match self.call.form {
+            Form::SurgeEthIn if self.call.wrapped==input && self.target==output => {
+                let mut events=logs.iter().filter(|l|l.address()==self.target)
+                    .filter_map(|l|IVistaFlow::Bought::decode_log_data(&l.inner.data).ok());
+                let ev=events.next()?;
+                if events.next().is_some() || ev.buyer!=wallet || ev.market!=output || ev.qty!=net(output,true)? {return None}
+                (ev.eth,ev.qty)
+            }
+            Form::SurgeEthOut if self.call.wrapped==output && self.target==input => {
+                let mut events=logs.iter().filter(|l|l.address()==self.target)
+                    .filter_map(|l|IVistaFlow::Sold::decode_log_data(&l.inner.data).ok());
+                let ev=events.next()?;
+                if events.next().is_some() || ev.seller!=wallet || ev.market!=input || ev.qty!=net(input,false)? {return None}
+                (ev.qty,ev.eth)
+            }
+            Form::SurgeToken if input==self.call.wrapped || output==self.call.wrapped => {
+                let mut events=logs.iter().filter(|l|l.address()==self.target)
+                    .filter_map(|l|IVistaFlow::Filled::decode_log_data(&l.inner.data).ok());
+                let ev=events.next()?;
+                if events.next().is_some() || ev.sender!=wallet || ev.recipient!=wallet || ev.input!=input || ev.output!=output ||
+                    ev.spent!=net(input,false)? || ev.received!=net(output,true)? {return None}
+                (ev.spent,ev.received)
+            }
             Form::RabbitEthIn if self.call.wrapped == input => {
                 let deposited = native::moved_logs(logs, input, self.target, Side::Sell);
                 if deposited != self.amount {

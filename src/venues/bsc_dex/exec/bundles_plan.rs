@@ -173,7 +173,7 @@ pub(in crate::venues::bsc_dex) fn probe(
     let deadline = now
         .checked_add(ctx.int("dex.deadline_s")?)
         .ok_or_else(|| fail(ctx))?;
-    let proof = t.proof(&order, o.min_out, deadline.into());
+    let proof = t.proof(&order, o.min_out, U256::from(deadline));
     Ok((
         approve::fork_exact(ctx, o.token_in, target, None, o.amount_in)?,
         target,

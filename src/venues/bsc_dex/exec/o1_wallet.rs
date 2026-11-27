@@ -1,7 +1,7 @@
 //! Оплата WETH на нативном рынке o1. Поручение и квитанция закрепляют физический PoolId.
 use super::super::{
     ctx::Ctx,
-    pools::{family_variant::Variant, launch_market, registry::Entry},
+    pools::{flux_native, launch_market, registry::Entry},
     send::track::Receipt,
 };
 use super::{fill, signed_call};
@@ -24,12 +24,12 @@ sol! {interface IWallet {
 }}
 
 pub(in crate::venues::bsc_dex) fn enabled(e: &Entry) -> bool {
-    e.family.variant == Variant::LaunchO1Wrapped
+    e.family.variant.native_market_module()
 }
 pub(super) fn missing(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
     ctx.err(
         ErrorCode::NoRoute,
-        "o1: требуется выбранный и проверенный модуль WETH с исходным PoolId",
+        "Требуется проверенный модуль расчёта в WETH с подписанным PoolId",
     )
 }
 pub(in crate::venues::bsc_dex) fn key(ctx: &Ctx, e: &Entry) -> GatewayResult<B256> {
@@ -42,6 +42,9 @@ pub(in crate::venues::bsc_dex) async fn at(ctx: &Ctx, e: &Entry, tag: &Value) ->
     let PoolRef::Singleton { manager, id } = e.pool.reference else {
         return Err(missing(ctx));
     };
+    if e.family.variant.flux_native() {
+        return flux_native::market(ctx, e.family, manager, id, (e.pool.token0,e.pool.token1), tag).await.map(|_| ());
+    }
     launch_market::check(
         ctx,
         e.family,

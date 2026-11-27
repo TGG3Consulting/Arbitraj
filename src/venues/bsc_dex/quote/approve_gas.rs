@@ -75,6 +75,8 @@ pub async fn details(
     let amount = amount.ok_or_else(bad)?;
     if matches!(&e.pool.state,crate::core::types::PoolState::Carbon(s) if s.native_side.and_then(|i|s.tokens.get(i)).copied()==Some(token)){return Ok(None);}
     if super::ekubo_v2_pricing::enabled(&e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native==Some(token)) {return Ok(None);}
+    if route.mode==RouteMode::Direct && e.family.variant==super::super::pools::family_variant::Variant::Surge
+        && e.family.executor_kind.is_none(){return Ok(None);}
     if quote.side == Side::Buy
         && super::vista_pricing::native_router(&e)
         && ctx
@@ -115,7 +117,7 @@ pub async fn details(
             || e.family.variant.exact_router()
             || super::super::exec::o1_wallet::enabled(&e) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e) || super::delta_pricing::is_delta(&e))
     {
-        let router = if super::super::exec::o1_wallet::enabled(&e) || e.family.variant.exact_router() || e.family.variant.umbrae() || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::ProtectedWallet{target}|crate::core::types::RouterFeeMode::Dagrow{target,..}|crate::core::types::RouterFeeMode::AntfarmProceeds{target,..})=>target,_=>return Err(bad())}}else if super::super::exec::carbon_direct::enabled(&e){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::CarbonWallet{module:Some(m),..})=>m,_=>ctx.dex_addr("dex.factory",e.family.id)?}}else if super::super::exec::mint_club_direct::enabled(&e) {match hop.fee_mode {Some(crate::core::types::RouterFeeMode::ProtectedWallet{target})=>target,_=>ctx.dex_addr("dex.factory",e.family.id)?}} else if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
+        let router = if e.family.variant==super::super::pools::family_variant::Variant::Surge || super::super::exec::o1_wallet::enabled(&e) || e.family.variant.exact_router() || e.family.variant.umbrae() || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::ProtectedWallet{target}|crate::core::types::RouterFeeMode::Dagrow{target,..}|crate::core::types::RouterFeeMode::AntfarmProceeds{target,..})=>target,_=>return Err(bad())}}else if super::super::exec::carbon_direct::enabled(&e){match hop.fee_mode{Some(crate::core::types::RouterFeeMode::CarbonWallet{module:Some(m),..})=>m,_=>ctx.dex_addr("dex.factory",e.family.id)?}}else if super::super::exec::mint_club_direct::enabled(&e) {match hop.fee_mode {Some(crate::core::types::RouterFeeMode::ProtectedWallet{target})=>target,_=>ctx.dex_addr("dex.factory",e.family.id)?}} else if super::ekubo_v2_pricing::enabled(&e) {ctx.dex_addr("dex.quoter",e.family.id)?} else if super::super::exec::vault_direct::enabled(&e) {ctx.dex_addr("dex.vault",e.family.id)?} else if matches!(
             hop.fee_mode,
             Some(
                 crate::core::types::RouterFeeMode::NativeGrossMinimum

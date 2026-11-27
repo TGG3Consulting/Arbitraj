@@ -444,12 +444,14 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
+        "omni_flux_native_cl" => (PoolKind::Cl, Proto::InfinityCl, true, false, true),
+        "omni_flux_native_bin" => (PoolKind::Bin, Proto::InfinityBin, true, false, true),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
         "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
-        "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "safeswap_v2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
@@ -841,6 +843,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.router_runtime_hash","dex.antfarm_fee_token","dex.pool_code_hashes","dex.antfarm_pair_runtime_hashes"]),
+        Proto::V2 if f.variant==Variant::Surge=>{
+            list.extend(["dex.factory","dex.factory_runtime_hash"]);
+            if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
+        }
         Proto::V2 if f.variant==Variant::Dagrow=>{
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
@@ -938,7 +944,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.factory", "dex.tick_lens", "dex.quoter"])
         }
         Proto::InfinityCl | Proto::InfinityBin => {
-            list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"])
+            list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"]);
+            if f.variant.flux_native() { list.extend(["dex.router","dex.module_runtime_hashes","dex.infinity_runtime_hashes"]); }
         }
         Proto::UniswapV4 if f.variant.launch() => {
             list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);

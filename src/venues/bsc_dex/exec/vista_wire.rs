@@ -11,6 +11,11 @@ sol! {interface IVistaFlow {
     function swapExactTokensForETH(uint256 amount,uint256 minimum,address to,uint256 deadline) external returns(uint256);
     function swapNative(address tokenIn,address tokenOut,uint256 amount,uint256 minimum,address recipient,uint256 deadline) external payable returns(uint256);
     function swapFrom(address tokenIn,address tokenOut,uint256 amount,uint256 minimum,address recipient,uint256 deadline) external returns(uint256);
+    function _buy(uint256 minimum,uint256 deadline) external payable returns(bool);
+    function _sell(uint256 amount,uint256 deadline,uint256 grossMinimum) external returns(bool);
+    event Bought(address indexed buyer,address indexed market,uint256 qty,uint256 eth,uint256 statistic);
+    event Sold(address indexed market,address indexed seller,uint256 qty,uint256 eth,uint256 statistic);
+    event Filled(address indexed sender,address indexed recipient,address indexed input,address output,uint256 spent,uint256 received);
     event NativeSettled(address indexed payer,address indexed recipient,address indexed tokenIn,address tokenOut,uint256 spent,uint256 received,uint256 fee);
 }}
 
@@ -22,6 +27,9 @@ pub enum Form {
     ModuleToken,
     RabbitEthIn,
     RabbitEthOut,
+    SurgeEthIn,
+    SurgeEthOut,
+    SurgeToken,
 }
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Call {
@@ -32,9 +40,9 @@ pub struct Call {
 impl Call {
     pub fn value(self, amount: U256) -> U256 {
         match self.form {
-            Form::OfficialEthIn | Form::RabbitEthIn => amount,
+            Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn => amount,
             Form::OfficialEthOut | Form::ModuleEthOut => self.fee,
-            Form::ModuleToken | Form::RabbitEthOut => U256::ZERO,
+            Form::ModuleToken | Form::RabbitEthOut | Form::SurgeEthOut | Form::SurgeToken => U256::ZERO,
         }
     }
     pub fn data(
@@ -88,7 +96,11 @@ impl Call {
                 deadline,
             }
             .abi_encode(),
-            Form::ModuleToken => IVistaFlow::swapFromCall {
+            Form::SurgeEthIn => IVistaFlow::_buyCall{minimum,deadline}.abi_encode(),
+            Form::SurgeEthOut => IVistaFlow::_sellCall{
+                amount,deadline,grossMinimum:super::super::math::surge::gross_for_net(minimum,90).unwrap_or(U256::MAX)
+            }.abi_encode(),
+            Form::ModuleToken | Form::SurgeToken => IVistaFlow::swapFromCall {
                 tokenIn: input,
                 tokenOut: output,
                 amount,

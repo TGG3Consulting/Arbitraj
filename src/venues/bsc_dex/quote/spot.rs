@@ -38,6 +38,9 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         }
         PoolState::Bundles(book) => { let s=&book.market; let i=usize::from(e.coin==s.tokens[1]); mul_div(amount,s.reserves[i],s.reserves[1-i]) }
         PoolState::Antfarm(book) => { let s=&book.market; let i=usize::from(e.coin==s.tokens[1]); mul_div(amount,s.reserves[i],s.reserves[1-i]) }
+        PoolState::Surge(s) => {
+            if e.coin==s.token {mul_div(amount,s.stock,s.liquidity)} else {mul_div(amount,s.liquidity,s.stock)}
+        }
         PoolState::Dagrow(s) => {
             let stable=s.reserves[0].checked_div(s.stable_scale)?;
             let balances=if e.coin==s.stable{[stable,s.reserves[1]]}else{[s.reserves[1],stable]};

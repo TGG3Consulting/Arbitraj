@@ -122,6 +122,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             };
             pair(rout, U256::ONE, rin, U256::ONE)
         }
+        (PoolState::Surge(s),PoolKind::V2) => {
+            let cap=if token_in==s.token {s.cash}else{s.capacity.min(s.stock)};
+            pair(cap,U256::ONE,U256::ONE,U256::ONE)
+        }
         (PoolState::Dagrow(s),PoolKind::V2) => {
             if token_in==s.stable {pair(s.reserves[1],s.stable_scale,s.reserves[0],U256::ONE)}
             else {pair(s.reserves[0],U256::ONE,s.reserves[1],s.stable_scale)}

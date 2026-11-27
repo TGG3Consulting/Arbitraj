@@ -107,7 +107,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         Wire::Carbon(c)=>(c.wrapped(),c.value()),
         Wire::EkuboV2(key,wrapped)=>(*wrapped,key.value()),
         Wire::Vista(v) => (
-            if v.form == super::super::exec::vista_wire::Form::ModuleToken {
+            if matches!(v.form,super::super::exec::vista_wire::Form::ModuleToken|super::super::exec::vista_wire::Form::SurgeToken) {
                 None
             } else {
                 Some(v.wrapped)
@@ -153,7 +153,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             approve::fork_exact(ctx,token,o.target,Some(U256::from_be_slice(&current)),amount)
         } else {approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)}
     };
-    let mut approvals=if wrapped==Some(o.input){Vec::new()}else{
+    let mut approvals=if wrapped==Some(o.input) || matches!(&o.wire,Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut){Vec::new()}else{
         let cap=match &o.wire {Wire::Carbon(c)=>c.cap(),Wire::MintClub(c) if c.mint=>c.limit,_=>o.amount};
         allowed(o.input,cap).await?
     };

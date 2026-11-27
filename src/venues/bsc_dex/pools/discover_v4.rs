@@ -73,6 +73,9 @@ pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<V
 pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Option<Found>> {
     if f.proto != Proto::InfinityStable {
         let found = parse(ctx, f, log)?;
+        if f.variant.flux_native() {
+            return super::flux_native::economic(ctx, found);
+        }
         if f.proto == Proto::UniswapV4
             && let Some(key) = &found.key
         {

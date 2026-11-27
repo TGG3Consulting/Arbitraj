@@ -290,7 +290,7 @@ pub async fn build(
     if super::vault_direct::enabled(e) {
         return Box::pin(super::vault_direct::plan(ctx,steps,wallet,now,all_approvals)).await;
     }
-    if super::super::quote::vista_pricing::is_vista(e) || (super::vista_direct::native() && super::super::quote::vista_pricing::native_router(e)) {
+    if e.family.variant==super::super::pools::family_variant::Variant::Surge || super::super::quote::vista_pricing::is_vista(e) || (super::vista_direct::native() && super::super::quote::vista_pricing::native_router(e)) {
         return Box::pin(super::vista_direct::plan(
             ctx,
             steps,

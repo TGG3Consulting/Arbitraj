@@ -103,6 +103,11 @@ pub async fn run(
     heads: &Heads,
     min: Option<U256>,
 ) -> GatewayResult<Result<Measured, String>> {
+    if e.family.variant==super::super::pools::family_variant::Variant::Surge{
+        let (base,_)=sim_base::head(ctx,heads).await?;
+        let h=super::super::quote::white_state::head(ctx,&format!("{:#x}",base.number)).await?;
+        return Box::pin(super::surge_probe::run(ctx,e,h,wallet,usdt_amount,min)).await;
+    }
     let (usdt, coin) = (e.usdt, e.coin);
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61);

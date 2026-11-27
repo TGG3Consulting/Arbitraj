@@ -162,7 +162,7 @@ def tables(network, snapshots, profiles):
                     "У Bundles фабрика `0xacff9eee0a5522000e7141b77107359a6462e8d2`, Router `0x7088d2a3855bf69320869ea28e5d95a142935441`, "
                     "токен комиссии BUN `0x695f775551fb0d28b64101c9507c06f334b4ba86`. Зарегистрировано 11 пар. У 10 обычных пар плата за обмен поступает в BUN. "
                     "Пара WETH/BUN `0x9dd78ea2b7a92b6cb5d4a495dac34f8641070ceb` удерживает комиссию из токена протокола. "
-                    "[Реестр, хеши кода и квитанция роутера](../tests/data/first_run_dex_2026-11-26/bundles_ethereum_directory.json.gz).",
+                    "На 11 парах подтверждены 84 обмена штатного Router, 84 прямых обмена защищённого модуля и 44 через V5. Повышенный минимум и истёкший срок вернули исходные остатки. [Проверка 128 обменов](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45931393415/job/140284613266). [Профили обычных переводов](../tests/data/first_run_dex_2026-11-26/bundles_exact_transfers.json). [Реестр, хеши кода и квитанция роутера](../tests/data/first_run_dex_2026-11-26/bundles_ethereum_directory.json.gz).",
                     "У DAGrow адрес пула `0x9fc2038b773bde9e44fdaba0e5093647f53c5105`, реализация `0x56202a54fb68fb456f1879f9add63d37e155d6bc`. "
                     "Guard `0xdde4b3cf28ad1409d6c79cf1bdc298424362e2ab`, реализация `0x0005144b17cf95d6b0f2d682abbccf5596db0a27`. "
                     "За 1 USDT пул котировал 0,876418871064609516 DAGR для Eco и 0,841008007587251556 DAGR для Exo. "

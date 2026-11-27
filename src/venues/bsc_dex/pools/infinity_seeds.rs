@@ -44,13 +44,22 @@ pub(super) fn extend(
             continue;
         };
         for raw in keys {
-            let Some((pool, tokens)) = candidate(&raw, manager) else {
+            let Some((pool, mut tokens)) = candidate(&raw, manager) else {
                 out.notes.push(format!(
                     "{}: ключ Infinity повреждён или указывает на другого менеджера",
                     f.id
                 ));
                 continue;
             };
+            if f.variant.flux_native() {
+                let Ok(wrapped) = ctx.addr("dex.native_wrapped") else {
+                    continue;
+                };
+                if !tokens[0].is_zero() || wrapped.is_zero() || tokens[1] == wrapped {
+                    continue;
+                }
+                tokens[0] = wrapped;
+            }
             for row in stable_list::candidates(f.id, pool, &tokens, coins, quotes) {
                 out.found.entry(row.base).or_default().push(row);
             }

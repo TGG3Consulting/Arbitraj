@@ -11,6 +11,7 @@ pub mod deli_cl;
 mod deli_cl_tests;
 pub mod temple;
 pub mod dagrow;
+pub mod surge;
 pub mod antfarm;
 pub mod bundles;
 mod bundles_inverse;

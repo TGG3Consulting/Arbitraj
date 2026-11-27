@@ -44,6 +44,10 @@ use super::verify_woo;
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
     let mut out = Vec::new();
     for c in cands {
+        if c.family.variant.flux_native() {
+            out.push(Box::pin(super::flux_native::verify(ctx,c)).await);
+            continue;
+        }
         if c.family.variant.launch(){
             out.push(match Box::pin(super::launch_market::verify(ctx,c)).await{
                 Ok(f)=>Verdict::Taken(Box::new(f)),
@@ -62,6 +66,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         if c.family.variant.umbrae() {out.push(Box::pin(super::umbrae::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Bundles {out.push(Box::pin(super::bundles::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Antfarm {out.push(Box::pin(super::antfarm::verify(ctx,c)).await);continue;}
+        if c.family.variant==super::family_variant::Variant::Surge {out.push(Box::pin(super::surge::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Dagrow {out.push(Box::pin(super::dagrow::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Temple {out.push(Box::pin(super::temple_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Carbon {out.push(Box::pin(super::carbon_directory::verify(ctx,c)).await);continue;}

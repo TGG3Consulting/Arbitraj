@@ -215,6 +215,15 @@ fn side(
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)
         }
+        (PoolState::Surge(s),PoolKind::V2) => {
+            let native=token_in==s.wrapped;
+            let rin=if native{s.liquidity}else{s.stock};
+            let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
+            let wanted=super::super::math::full_math::mul_div(rin,U256::from((grow*SCALE) as u128),U256::from(SCALE as u128)).ok_or("Surge: переполнение полосы")?;
+            let cap=if native{s.capacity.min(s.stock)}else{s.cash};
+            let sweep=s.swap(token_in,true,wanted).or_else(||s.swap(token_in,false,cap));
+            Ok((sweep.filter(|x|x.amount_in<=wanted).map_or(U256::ZERO,|x|pick(x.amount_in,x.amount_out)),false))
+        }
         (PoolState::Dagrow(s), PoolKind::V2) => {
             let side=usize::from(token_in==s.dagr);
             if s.fees[side].is_none() || s.stable_scale.is_zero() {return Ok((U256::ZERO,true));}

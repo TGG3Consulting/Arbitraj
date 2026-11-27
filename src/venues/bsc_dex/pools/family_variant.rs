@@ -74,6 +74,8 @@ pub enum Variant {
     LaunchIndex,
     LaunchO1,
     LaunchO1Wrapped,
+    FluxNativeCl,
+    FluxNativeBin,
     /// Размещение LB с обычным роутером и зарегистрированным клоном пула.
     SectorLb,
     /// Концентрированная ликвидность Deli с комиссией в wBLT.
@@ -117,6 +119,7 @@ pub enum Variant {
     Carbon,
     Temple,
     Dagrow,
+    Surge,
     Antfarm,
     Bundles,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
@@ -190,6 +193,8 @@ pub enum Variant {
 
 impl Variant {
     pub fn launch(self)->bool {matches!(self,Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
+    pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
+    pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
@@ -278,6 +283,8 @@ pub fn of(kind: &str) -> Variant {
         "launch_doppler" => Variant::LaunchDoppler,
         "launch_index" => Variant::LaunchIndex,
         "launch_o1" => Variant::LaunchO1,
+        "omni_flux_native_cl" => Variant::FluxNativeCl,
+        "omni_flux_native_bin" => Variant::FluxNativeBin,
         "launch_o1_wrapped" => Variant::LaunchO1Wrapped,
         "deli_v4_cl" => Variant::DeliCl,
         "deli_v4_constant" => Variant::DeliConstant,
@@ -288,6 +295,7 @@ pub fn of(kind: &str) -> Variant {
         "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
+        "surge_native" | "surge_v5" => Variant::Surge,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,
         "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,

@@ -17,7 +17,7 @@ use alloy_primitives::{U256, keccak256};
 use serde_json::{Value, json};
 
 pub(in crate::venues::bsc_dex) fn enabled(e: &Entry) -> bool {
-    e.family.variant == Variant::SectorLb
+    matches!(e.family.variant,Variant::SectorLb|Variant::E3Lb)
 }
 
 pub(in crate::venues::bsc_dex) fn bin(e: &Entry) -> Option<(bool, u32)> {
@@ -79,7 +79,9 @@ pub(in crate::venues::bsc_dex) async fn check(
     {
         return Err(invalid());
     }
-    if !legacy {
+    if f.variant==Variant::E3Lb {
+        super::e3::roles(ctx,f,factory,implementation,at).await?;
+    } else if !legacy {
         let c = ILBPair22::getLBHooksParametersCall {};
         let [raw] = batch::read(ctx, [batch::view(at, pool, c.clone())]).await?;
         let flags = U256::from_be_bytes(batch::decode(&raw, c)?.0);

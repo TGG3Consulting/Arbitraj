@@ -154,6 +154,7 @@ pub const DEX_KINDS: &[&str] = &[
     "puzzle_ranges",
     "lb_v21",
     "lb_v21_clone",
+    "e3_lb",
     "fluid_t1",
     "basin_well",
     "shell_proteus",

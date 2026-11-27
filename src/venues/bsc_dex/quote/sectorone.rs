@@ -23,6 +23,10 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     let graph = ctx.text("dex.router_mode").is_ok_and(|s| s == "graph");
     let mut quotes = Vec::new();
     for e in i.entries.iter().filter(|e| sectorone::enabled(e)) {
+        if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::E3Lb && let Some(h)=head{
+            let input=if i.side==crate::core::types::Side::Buy{i.usdt}else{i.coin};
+            if crate::venues::bsc_dex::pools::e3::input(ctx,e.pool.reference.address(),input,&h.selector()).await.is_err(){continue;}
+        }
         let Some((legacy, step)) = sectorone::bin(e) else {
             continue;
         };

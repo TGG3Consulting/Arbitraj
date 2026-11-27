@@ -7215,5 +7215,24 @@
         "0xd69663d10c59f075bdbca5302ead1e4a2886355fd5fb061acd1323dab562e739"
       ]
     }
+  },
+  {
+    "network": "base",
+    "id": "e3-base",
+    "chain_id": 8453,
+    "source": "https://eliteness.network/e3/allpools.js · tests/data/first_run_dex_2026-11-26/e3_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "e3_lb",
+      "dex.factory": "0x8597db3ba8de6baadeda8cba4dac653e24a0e57b",
+      "dex.router": "0xb9a64ab6b91f5c7a78c2360cff759de8a8a450d5",
+      "dex.factory_runtime_hash": "0x533553d24be0b373d235d727b6936150141d1e678675e58125d801bead9749ac",
+      "dex.router_runtime_hash": "0x04e7a6308d110a748e0c744187f86a46718d4749959f323e847f9a7ab7c87a21",
+      "dex.lb_implementations": [
+        "0xd9751ad0767ecd82c815628b0c3402aa788c11f3"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xa6ea02ce92a2998c9d07202981bad5ca34bc6a79eb88cf21bac79bc76f473490"
+      ]
+    }
   }
 ]

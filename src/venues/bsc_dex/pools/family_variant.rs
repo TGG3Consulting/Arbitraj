@@ -233,6 +233,8 @@ pub enum Variant {
     SmardexExactEquality,
     /// LB V2.1 с проверкой неизменяемого шаблона клона по коду пары.
     LbV21Clone,
+    /// Реестровый LB E3 с собственным кодом и тарифами.
+    E3Lb,
 }
 
 impl Variant {
@@ -313,6 +315,7 @@ pub fn of(kind: &str) -> Variant {
         "solidly_v2_clone" => Variant::SolidlyClone,
         "solidly_v1_generator" => Variant::SolidlyGenerator,
         "ring_few_v2" => Variant::RingFew,
+        "e3_lb" => Variant::E3Lb,
         "lb_v21_clone" => Variant::LbV21Clone,
         "smardex_exact_equality" => Variant::SmardexExactEquality,
         "kyber_elastic_v1" => Variant::ElasticV1,

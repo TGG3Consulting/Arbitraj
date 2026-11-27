@@ -200,6 +200,7 @@ pub async fn trade(
     // Решение 273: пары Solidly с паузой/пределом газа фабрики — заново с фабрики; предел проверяет send_capped.
     let used: Vec<_> = legs.iter().flatten().map(|s| &s.entry).collect();
     let cap = super::super::solidly_gate::fresh_cap(q, &used).await?;
+    crate::venues::bsc_dex::pools::e3::presend(ctx,&legs).await?;
     crate::venues::bsc_dex::pools::fraxswap::unchanged(ctx,frax_generation)?;
     if let Some(generation)=vista_generation {
         Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)).collect(),generation)).await?;

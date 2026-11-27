@@ -2072,6 +2072,16 @@ def tables(network, snapshots, profiles):
                 task = (f"SharkSwap Router02 и V5 · {scope['registered']} CREATE2-пары; на двух рынках {scope['paid_legs']} "
                         "платежей исходного и обратного направления, точный вход, min+1 и истечение срока. "
                         "Штатный путь сравнивает ERC20, включая WETH. Форма выплаты ETH использует весь WETH роутера и в эти измерения не входит. DefiLlama учитывает только объём, историческое распределение комиссии не установлено")
+        if base and str(row["id"])=="2926":
+            e3_wallet=base_launch_inventory.evidence("e3_base_wallets.json.gz")
+            bins=base_launch_inventory.evidence("e3_base_bins.json.gz")
+            candidates=[e3_wallet["factory"],e3_wallet["router"]]
+            live=sum(all(m["reserves"]) for m in e3_wallet["markets"])
+            task=(f"E3 · профили e3-base. Из {len(e3_wallet['markets'])} зарегистрированных пулов {live} имеют ненулевые резервы на обеих сторонах. "
+                  f"Подтверждено {len(e3_wallet['payments'])} выплат Router и V5 на WETH/axlUSDC и USDbC/USDC. "
+                  "Два других пула имеют только протокольные сборы. Котировка getSwapOut сообщает неиспользованный вход; "
+                  f"сняты {sum(len(m['quotes']) for m in bins['pools'])} значений на обеих сторонах, включая границы доступного объёма. "
+                  "Ставка и её распределение зависят от бина. Первичный интерфейс публикует адреса четырёх пулов и роутера.")
         if str(row["id"])=="6358":
             network="base" if base else "ethereum"
             directory=base_launch_inventory.evidence(f"eulerswap_{network}_directory.json.gz")

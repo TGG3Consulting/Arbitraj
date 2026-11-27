@@ -299,7 +299,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
-        "lb_v21" | "lb_v21_clone" => ExecKind::Lb,
+        "lb_v21" | "lb_v21_clone" | "e3_lb" => ExecKind::Lb,
         // Решение 441: Vault V3 — unlock / swap / settle / sendTo любым контрактом (Vault.sol 20241204-v3-vault L133-L163,
         // L197-L291: onlyWhenUnlocked, без белого списка); шаг 23, только исполнитель v4 (EVM-проба — после записи с узла).
         "balancer_v3" | "puzzle_ranges" => ExecKind::BalancerV3,

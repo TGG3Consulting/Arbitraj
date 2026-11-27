@@ -13,6 +13,13 @@ use crate::{
     },
     venues::bsc_dex::{parts::Parts, quote::white_state},
 };
+// Строим крупную RPC future только в её действительной ветви. В debug-кадре poll
+// вызывающей функции также не должно быть временной копии этого состояния.
+#[inline(never)]
+fn boxed<F: Future>(build: impl FnOnce() -> F) -> std::pin::Pin<Box<F>> {
+    Box::pin(build())
+}
+
 pub(super) fn closed(expired: bool, unused: bool, events: &Events) -> bool {
     expired && events.original.is_none() && (unused || events.excludes)
 }
@@ -67,22 +74,21 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
                 .await
                 .map_err(|_| unknown())?
         };
-        let (cutoff, events) = history::scan(ctx, &m, &t, tip)
+        let (cutoff, events) = boxed(|| history::scan(ctx, &m, &t, tip))
             .await
             .map_err(|_| unknown())?;
         if let Some(id) = events.original {
             if !own {
                 return Err(unknown());
             }
-            paid(p, r, &m, &t, id).await.map_err(|_| unknown())?
+            boxed(|| paid(p, r, &m, &t, id))
+                .await
+                .map_err(|_| unknown())?
         } else {
             if !expired {
                 return Ok(None);
             }
-            m.ticket
-                .cfg
-                .p
-                .check(ctx, cutoff, &m.ticket.offer.version)
+            boxed(|| m.ticket.cfg.p.check(ctx, cutoff, &m.ticket.offer.version))
                 .await
                 .map_err(|_| unknown())?;
             let unused = m
@@ -140,7 +146,17 @@ pub(in crate::venues::bsc_dex) async fn prior(
     if !current && !recorded {
         return Ok(None);
     }
-    let record = intent::load(db, &key)
+    boxed(|| saved_order(p, r, key, recorded)).await
+}
+
+async fn saved_order(
+    p: &Parts,
+    r: &TradeRequest,
+    key: String,
+    recorded: bool,
+) -> GatewayResult<Option<TradeResult>> {
+    let ctx = &p.ctx;
+    let record = intent::load(ctx.journal.db(), &key)
         .await
         .map_err(|e| ctx.err(ErrorCode::OutcomeUnknown, e))?;
     let Some(entry) = record.filter(|e| {

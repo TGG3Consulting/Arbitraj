@@ -203,3 +203,34 @@ async fn damaged_permit_isolated_from_bsc_and_new_signatures() {
             .is_none()
     );
 }
+
+#[tokio::test]
+async fn ordinary_trade_future_excludes_rpc_and_receipt_state() {
+    // Измеряем конкретные типы без конструирования или опроса сетевых операций.
+    fn bytes<F: Future>(_: impl FnOnce() -> F) -> usize {
+        std::mem::size_of::<F>()
+    }
+
+    let m = marker();
+    let dir = directory("pancakex-size", 8453);
+    let p = parts(&dir, 8453, m.ticket.req.owner).await;
+    let r = request(&p, &m);
+    let terms = m.terms().unwrap();
+    let pending = m.pending();
+    let h = crate::venues::bsc_dex::quote::white_state::Head {
+        hash: m.anchor,
+        number: alloy_primitives::U64::from(m.start),
+        timestamp: alloy_primitives::U64::ZERO,
+    };
+    let hot = bytes(|| prior(&p, &r));
+    let recovery = bytes(|| super::recovery::reconcile(&p, r.clone(), &pending));
+    let scan = bytes(|| super::history::scan(&p.ctx, &m, &terms, h));
+    let paid = bytes(|| super::result::paid(&p, r.clone(), &m, &terms, m.anchor));
+    let profile = bytes(|| m.ticket.cfg.p.check(&p.ctx, h, &m.ticket.offer.version));
+    let sizes =
+        json!({"prior":hot, "reconcile":recovery,"history":scan,"receipt":paid,"roles":profile});
+    if let Some(path) = std::env::var_os("ARB_PANCAKEX_FUTURE_SIZES") {
+        std::fs::write(path, sizes.to_string()).unwrap();
+    }
+    assert!(hot < 1024 && hot < scan && hot < paid, "{sizes}");
+}

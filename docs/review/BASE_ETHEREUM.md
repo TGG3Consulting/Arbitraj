@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `f86fbce4` (27.11.2026).
+Последний просмотренный коммит: `9bfe7077` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2972,6 +2972,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-24~~ ✅ 9d47ae9d | 5a37bce3 | `pools/ammalgam.rs`: у `BEACON_SLOT` (0xa3f0…3d50) нет имени источника. Нужна ссылка на EIP-1967, слот beacon. У `SWAP_INTEREST_PERIOD` нет ссылки на исходник TokenController. Файл 238 строк, ориентир — 200: разделить. | **95d04d2e: файл вырос до 292 строк, источники по-прежнему не указаны.** |
 | ~~О-25~~ ✅ 25d6dba7 | 7c743f64 | `exec/defiplaza_wallet.rs` — 234 строки, ориентир 200: разделить. |
 | ~~О-26~~ ✅ bd4bf3b4 | 583e3260 | `contracts/AmmalgamWallet.sol` изменён (прямой `pair.swap` вместо `swapHelper`), но карточка `ui/src/assets/ammalgam-ethereum-create.json` и закреплённый хеш `0xcf7d5d61…` в `config/first_run_dex.json:6719` остались от сборки 95d04d2e. Кнопка в UI разместит старый контракт, а закрепление примет старый runtime. Нужно пересобрать в CI, обновить карточку и хеш и сверить их с новым байткодом. |
+| О-27 | 9bfe7077 | (1) R-42: в общем `pools/created_log.rs:73` прямое сравнение `f.variant==Variant::Llamma(Registry::Mint)`. Нужен предикат или выбор события внутри `llamma.rs`. (2) Новый `pools/llamma.rs` — 239 строк, ориентир 200: разделить. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3440,3 +3441,12 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Изменены только скрипты записи и CI, код бота не менялся. Замечаний нет.
 
 Открыто: О-22, О-23.
+
+### 9bfe7077 — Curve LLAMMA: три реестра фабрик и привязка к V5
+
+- Новый вариант `Llamma(Registry)` и `PoolState::Llamma`. Почти во всех общих файлах (`entry.rs`, `vista_gate.rs`, `load.rs`, `verify.rs`, `registry.rs`, `multi_pair.rs`, `depth_band.rs`, `pool_quote.rs`, `spot.rs`, `quoter.rs`, `v2_pair_quote.rs`, `emptiness.rs`, `market_fees.rs`) новые ветки защищены `llamma()` или новым `PoolState`. BSC не затронут.
+- `factory_scan.rs`: `llamma_directory::scan` вызывается для всех сетей, но внутри берёт только семейства `Variant::Llamma`. На BSC это ничего не делает.
+- В рекомендациях `first_run_dex.json` есть адреса и хеши фабрик трёх реестров, `dex.pmm_ladder_usd` и `dex.module_runtime_hashes`. Это значения настроек, а не хардкод.
+- Новая правка: О-27.
+
+Открыто: О-22, О-23, О-27.

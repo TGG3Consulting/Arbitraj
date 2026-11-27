@@ -32,7 +32,7 @@
 
 ### Прямое исполнение DEX с кошелька
 
-`src/venues/bsc_dex/exec/market_plan.rs` выбирает семейство и сохраняет адрес исполнения, `exec/market_approval.rs` определяет получателя разрешения для этого выбора, `quote/direct_allowance.rs` передаёт его в оценку газа. Для прямого Puzzle Ranges разрешения принадлежат ERC20 → Permit2 и Permit2 → Router. `exec/ranges_wallet.rs` связывает подписанные параметры с событием хранилища и чистыми движениями кошелька при восстановлении.
+`src/venues/bsc_dex/exec/market_plan.rs` выбирает семейство и сохраняет адрес исполнения, `exec/market_call.rs` формирует calldata, значение ETH и обновляемый минимум выбранного вызова, `exec/market_approval.rs` определяет получателя разрешения для этого выбора, `quote/direct_allowance.rs` передаёт его в оценку газа. Для прямого Puzzle Ranges разрешения принадлежат ERC20 → Permit2 и Permit2 → Router. `exec/ranges_wallet.rs` связывает подписанные параметры с событием хранилища и чистыми движениями кошелька при восстановлении.
 
 ## Слои
 

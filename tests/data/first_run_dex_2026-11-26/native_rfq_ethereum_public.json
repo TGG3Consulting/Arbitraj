@@ -1,0 +1,656 @@
+{
+  "official": "https://docs.native.org/native-dev/build-with-native/swap-aggregators/guide",
+  "addresses": "https://docs.native.org/native-dev/resources/addresses",
+  "height": 26494988,
+  "roles": {
+    "roles": [
+      {
+        "address": "0x4777a6b3a9a889abfd4c7666bdd2a7ab633293be",
+        "bytes": 18168,
+        "runtime": "0x98ba0cd2ebc1a0c9c165bcfca51f02a23aee4e358fae04de96550d25e55ff739",
+        "implementation": "0x0000000000000000000000000000000000000000"
+      },
+      {
+        "address": "0xef435b99c2108d0309211d0cc05b70d202c0b5df",
+        "bytes": 15414,
+        "runtime": "0x3343a77f0eb64c8e132131707b441b4367b63b184d81e3258bc80c5c0b4ecaad",
+        "implementation": "0x0000000000000000000000000000000000000000"
+      }
+    ],
+    "markets": [
+      {
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "response": [
+          {
+            "id": 0,
+            "jsonrpc": "2.0",
+            "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "result": "0x1f160fb6b5eff44c72397d5a5dca127da716ebbf5efe6a024a6a09031fb359f4"
+          }
+        ],
+        "enabled": [
+          {
+            "jsonrpc": "2.0",
+            "id": 0,
+            "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      {
+        "tokens": [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        "response": [
+          {
+            "id": 0,
+            "jsonrpc": "2.0",
+            "result": "0x000000000000000000000000427fb58709c47fb8794771bd2e17784c0cda845a"
+          },
+          {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "result": "0x96e50e0e17d065e8070c5511096fbb18939595495b63c76f2e97af7a5bf13155"
+          }
+        ],
+        "enabled": [
+          {
+            "id": 0,
+            "jsonrpc": "2.0",
+            "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      {
+        "tokens": [
+          "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        "response": [
+          {
+            "id": 0,
+            "jsonrpc": "2.0",
+            "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "id": 1,
+            "jsonrpc": "2.0",
+            "result": "0xea14b3e894601578a31df225a23a15bdd1e6a539f7e4a84df4ce1a4605e21f99"
+          }
+        ],
+        "enabled": [
+          {
+            "id": 0,
+            "jsonrpc": "2.0",
+            "result": "0x0000000000000000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      }
+    ],
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    }
+  },
+  "book_summary": [
+    {
+      "base": "WETH",
+      "quote": "USDT",
+      "side": "bid",
+      "levels": 6,
+      "minimum_in_base": 100000000000
+    },
+    {
+      "base": "USDT",
+      "quote": "WETH",
+      "side": "bid",
+      "levels": 20,
+      "minimum_in_base": 0
+    },
+    {
+      "base": "WETH",
+      "quote": "USDC",
+      "side": "bid",
+      "levels": 9,
+      "minimum_in_base": 100000000000
+    },
+    {
+      "base": "USDC",
+      "quote": "WETH",
+      "side": "bid",
+      "levels": 20,
+      "minimum_in_base": 100
+    },
+    {
+      "base": "WBTC",
+      "quote": "USDT",
+      "side": "bid",
+      "levels": 6,
+      "minimum_in_base": 0
+    },
+    {
+      "base": "USDT",
+      "quote": "WBTC",
+      "side": "bid",
+      "levels": 1,
+      "minimum_in_base": 0
+    }
+  ],
+  "source": "https://v2-pub.api.native.org/swap-api-v2/v1/firm-quote",
+  "firm_summaries": [
+    {
+      "at": "2026-11-27T04:35:20.823537+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "token_out": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "amount_wei": "1000000000000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504185,
+      "block": "0xdf278be5ea467708a2a19bf65d64c713e1d02f51562c7fa55e32a520ec34b6d1",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "4ea7638914e00912cab49bf68af3ed6f0b82d21cb9c70bcc7e602202854a6828",
+      "quoteId": "d391e5ad84e543ebae705793e4a61574",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "buyerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "sellerAmount": "1000000000000000",
+      "buyerAmount": "1725042",
+      "minimum": "1725042",
+      "deadline": 1795754196,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:22.360137+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "token_out": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "amount_wei": "10000000000000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504185,
+      "block": "0xdf278be5ea467708a2a19bf65d64c713e1d02f51562c7fa55e32a520ec34b6d1",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "ff3dc13c82ad4efe66d1ae373cecb3abc1f71ba86e76e2efbe025a1a8e16577d",
+      "quoteId": "249471513c6b4eee979903995f3a4a57",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "buyerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "sellerAmount": "10000000000000000",
+      "buyerAmount": "17252898",
+      "minimum": "17251172",
+      "deadline": 1795754198,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:23.884570+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "amount_wei": "1000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504185,
+      "block": "0xdf278be5ea467708a2a19bf65d64c713e1d02f51562c7fa55e32a520ec34b6d1",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "d28939312206f61e7c17752b8ddfe8e28edba9893d9b34597549856164a18156",
+      "quoteId": "9bf5f466a8c846c482d7e783d69fe1b3",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "buyerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "sellerAmount": "1000000",
+      "buyerAmount": "573735809161379",
+      "minimum": "573735809161379",
+      "deadline": 1795754199,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:25.419404+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "amount_wei": "10000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504185,
+      "block": "0xdf278be5ea467708a2a19bf65d64c713e1d02f51562c7fa55e32a520ec34b6d1",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "5d45992f4d154cdc01b4bb4517907b293d2102c1c48a38611edfa09a19cfb506",
+      "quoteId": "c152f42f86714ccd85e2dec5cb034843",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "buyerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "sellerAmount": "10000000",
+      "buyerAmount": "5738624913496014",
+      "minimum": "5738624913496014",
+      "deadline": 1795754201,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:26.936359+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "token_out": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "amount_wei": "1000000000000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504185,
+      "block": "0xdf278be5ea467708a2a19bf65d64c713e1d02f51562c7fa55e32a520ec34b6d1",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "f54c7be5c15aea8e1849d45b2a98d15a30f17e3e0ba3b60ca287159540dc99af",
+      "quoteId": "75f38f4ce61e489093a00ca445ab07b5",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "buyerToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "sellerAmount": "1000000000000000",
+      "buyerAmount": "1722600",
+      "minimum": "1722600",
+      "deadline": 1795754202,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:28.436596+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "token_out": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "amount_wei": "10000000000000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "3dbd355dfc606d637be1ec5e97076d1058a253ec10d287fa57a507a76d28f360",
+      "quoteId": "acc13d50bd85406eb24f9d5e999f475a",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "buyerToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "sellerAmount": "10000000000000000",
+      "buyerAmount": "17226003",
+      "minimum": "17224280",
+      "deadline": 1795754204,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:29.931888+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "amount_wei": "1000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "037d1b253d66f10ba8901fef49340f5061c2476b48168925a18df0928f8dc985",
+      "quoteId": "e4848fc7e228406f908f1f2a7fe1fbaa",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "buyerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "sellerAmount": "1000000",
+      "buyerAmount": "574369546296332",
+      "minimum": "574369546296332",
+      "deadline": 1795754205,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:31.448586+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "token_out": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "amount_wei": "10000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "b2197411048c779d152963c3b06fc6b1acc6a43565a1c217ebf33e7c23bfc7cc",
+      "quoteId": "90068aafbb4f462095833f444dd413fc",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "buyerToken": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "sellerAmount": "10000000",
+      "buyerAmount": "5743830739894705",
+      "minimum": "5743830739894705",
+      "deadline": 1795754207,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:32.949607+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "token_out": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "amount_wei": "10000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "164410c284b5e15e88f03307249d136430f86535aed61288468cddbe5ae2d487",
+      "quoteId": "2bed505aa77d4cc1bf56854ec3d9bb62",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "buyerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "sellerAmount": "10000",
+      "buyerAmount": "6130517",
+      "minimum": "6130517",
+      "deadline": 1795754237,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:34.470184+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "token_out": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "amount_wei": "100000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "8d57a2720f94c21cf7d6ccff05693556ed641a77e5069ea1bceafa3b3fc490df",
+      "quoteId": "adba7099fb7d487f8979b60343aadc2f",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "buyerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "sellerAmount": "100000",
+      "buyerAmount": "61309089",
+      "minimum": "61290696",
+      "deadline": 1795754239,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:35.971220+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "token_out": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "amount_wei": "1000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "6e1c4d96356c22555c99fb263beca45bbd5edfc8539544068ab4fbe4538d65b4",
+      "quoteId": "047c38143a1d45e8baebb88450e434a8",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "buyerToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "sellerAmount": "1000000",
+      "buyerAmount": "1614",
+      "minimum": "1614",
+      "deadline": 1795754240,
+      "direct_order": true
+    },
+    {
+      "at": "2026-11-27T04:35:37.489748+00:00",
+      "request": {
+        "src_chain": "ethereum",
+        "dst_chain": "ethereum",
+        "token_in": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "token_out": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "amount_wei": "10000000",
+        "from_address": "0x730a17276a9720871c98622ffce5db23f38acf99",
+        "version": "6"
+      },
+      "height": 26504186,
+      "block": "0x723bf95b746d907fefc49d0d4354723ad1be0aa32398070970465e8f40596012",
+      "success": true,
+      "version": "6",
+      "function": "tradeRFQT",
+      "target": "0x4777A6B3A9A889ABfd4C7666Bdd2a7AB633293be",
+      "selector": "0x7083527c",
+      "calldata_bytes": 1220,
+      "calldata_sha256": "19271097c25ba600349ad536d729814848e940b0f5ebca3c2ccb2ed81defee08",
+      "quoteId": "3f87ca2476284941821dcce5f5ea47dc",
+      "signer": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+      "maker_pool": "0xEF435b99C2108D0309211d0Cc05B70D202C0b5dF",
+      "recipient": "0x730a17276a9720871c98622ffce5db23f38acf99",
+      "sellerToken": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "buyerToken": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "sellerAmount": "10000000",
+      "buyerAmount": "16145",
+      "minimum": "16145",
+      "deadline": 1795754242,
+      "direct_order": true
+    }
+  ],
+  "history": {
+    "start": 26494489,
+    "end": 26494988,
+    "events": 51,
+    "transactions": 46,
+    "examples": [
+      {
+        "receiver": "0xbc1d9760bd6ca468ca9fb5ff2cfbeac35d86c973",
+        "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "output": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "paid": 3571428571428571428,
+        "received": 6006534649,
+        "quoteId": "0x44a5144e60504dce901413b0f44b4a49",
+        "maker": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+        "height": 26494505,
+        "block": "0x8db952e79390654a3fb73d2cb1c90c0f68704a9b3df57a61842caa4e0d29d536",
+        "tx": "0x218999747b734d286606dda4896345fedaaf156b8e0da12e98c81c224c5a29ef",
+        "idx": 51,
+        "incoming_transfers": [
+          {
+            "source": "0xe3d41d19564922c9952f692c5dd0563030f5f2ef",
+            "amount": 6006534649,
+            "idx": 50
+          }
+        ]
+      },
+      {
+        "receiver": "0x47501b19d6db513308d126a3460382cdc61ab3a7",
+        "input": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "paid": 25000000,
+        "received": 14855122480602283,
+        "quoteId": "0xce73ff22700e4178a962bedc8158833b",
+        "maker": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+        "height": 26494639,
+        "block": "0x15aa5d86378d208d70e46e9370dfec8764e7228d0de1ff5798e56bb6f922ce66",
+        "tx": "0xfc4f1a67e8fe3b16e51291bd06b3d622762f2aa95b9bbfbb40b16b1df23b914c",
+        "idx": 457,
+        "incoming_transfers": [
+          {
+            "source": "0xe3d41d19564922c9952f692c5dd0563030f5f2ef",
+            "amount": 14855122480602283,
+            "idx": 456
+          }
+        ]
+      },
+      {
+        "receiver": "0x4997db14d45af82636f4f1cf73658d0316fbe8d2",
+        "input": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "output": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "paid": 4769,
+        "received": 2875920,
+        "quoteId": "0x73b150ed3b1e4c71b1a122c006c12429",
+        "maker": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+        "height": 26494703,
+        "block": "0xfa7bf4932d94adfaeb5127c3abf97f9910e02bf3cca2efe39eaad8d1549ff892",
+        "tx": "0x70e07bd1f0915a43eb29eeb3324d9fd6c3c90792940967e9b47584787feffe0f",
+        "idx": 532,
+        "incoming_transfers": [
+          {
+            "source": "0xe3d41d19564922c9952f692c5dd0563030f5f2ef",
+            "amount": 2875920,
+            "idx": 531
+          }
+        ]
+      },
+      {
+        "receiver": "0x9008d19f58aabd9ed0d60971565aa8510560ab41",
+        "input": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "output": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "paid": 19990375650334858799,
+        "received": 33700229016,
+        "quoteId": "0x8226324d43bb42d7ac928775bf892225",
+        "maker": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+        "height": 26494706,
+        "block": "0x3df7ae53f502bf811bcf4c106feaab5c19d52f1e49784b9ff3e42e570f901f3b",
+        "tx": "0xd347384f6c2c503f297365f0df6bbc3d23221e4548337103cae6b46d8c1d462c",
+        "idx": 824,
+        "incoming_transfers": [
+          {
+            "source": "0xe3d41d19564922c9952f692c5dd0563030f5f2ef",
+            "amount": 33700229016,
+            "idx": 823
+          },
+          {
+            "source": "0x2d90ebffc87bbe29e4d78e7627adfe9d0f3d7978",
+            "amount": 48921894,
+            "idx": 831
+          },
+          {
+            "source": "0x000000000004444c5dc75cb358380d2e3de08a90",
+            "amount": 8103108992,
+            "idx": 836
+          },
+          {
+            "source": "0x000000000004444c5dc75cb358380d2e3de08a90",
+            "amount": 8155285002,
+            "idx": 839
+          }
+        ]
+      },
+      {
+        "receiver": "0xbc1d9760bd6ca468ca9fb5ff2cfbeac35d86c973",
+        "input": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "output": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "paid": 119116948,
+        "received": 70419851869106430,
+        "quoteId": "0xa763a309025f45f1a09763f51ea87cf3",
+        "maker": "0x129b3d9a0a6e4beab88f5cb1e57995d72a6e24f1",
+        "height": 26494764,
+        "block": "0x873a4b51ccf439d73a63217d9fdfca245ed39c70d15d746da786d60a1c5d3671",
+        "tx": "0x564ca2d27b3d5ec247abf837bd0df060cd62d9fadc589fc643a906237c83221d",
+        "idx": 230,
+        "incoming_transfers": [
+          {
+            "source": "0xe3d41d19564922c9952f692c5dd0563030f5f2ef",
+            "amount": 70419851869106430,
+            "idx": 229
+          }
+        ]
+      }
+    ]
+  }
+}

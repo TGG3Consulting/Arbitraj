@@ -228,9 +228,6 @@ impl Variant {
         matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
-    pub fn wallet_ladder(self) -> bool {
-        matches!(self, Self::SafeSwapTrade | Self::Pendle)
-    }
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(

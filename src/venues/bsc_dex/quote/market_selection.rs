@@ -7,6 +7,32 @@ use crate::{
     core::types::Quote,
     gateway::errors::{ErrorCode, GatewayResult},
 };
+use alloy_primitives::{Address, Bytes, U256};
+use super::super::{
+    ctx::Ctx,
+    pools::{family_variant::Variant, pendle_quotes, registry::Entry, safeswap_quotes},
+};
+
+/// Обе части ABI выбираются вместе. Этот рынок получает цены от собственного контракта.
+pub(super) struct WalletQuoter {
+    pub request: fn(&Ctx, &Entry, Address, U256) -> GatewayResult<(Address, Bytes)>,
+    pub payout: fn(&[u8]) -> Option<U256>,
+}
+
+pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
+    match variant {
+        Variant::SafeSwapTrade => Some(WalletQuoter {
+            request: safeswap_quotes::request,
+            payout: safeswap_quotes::payout,
+        }),
+        Variant::Pendle => Some(WalletQuoter {
+            request: pendle_quotes::request,
+            payout: pendle_quotes::payout,
+        }),
+        _ => None,
+    }
+}
+
 impl Quoting {
     pub(super) async fn market_routes(
         &self,

@@ -29,46 +29,7 @@ use super::chain::{self, Step};
 use super::native::Wrap;
 use super::ur;
 
-#[derive(Debug, Clone)]
-pub(super) enum DirectCall {
-    SolidlyRouter(std::sync::Arc<super::solidly_router_wallet::Proof>),
-    Ranges(std::sync::Arc<super::ranges_wallet::Proof>),
-    RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
-    Carbon(std::sync::Arc<super::carbon_wire::Call>),
-    O1(std::sync::Arc<super::o1_wallet::Proof>),
-    FluxEth(std::sync::Arc<super::flux_eth::Proof>),
-    Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
-    Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
-    SafeSwap(std::sync::Arc<super::safeswap_wallet::Proof>),
-    Pendle(std::sync::Arc<super::pendle_wallet::Proof>),
-    Temple(std::sync::Arc<super::temple_wallet::Proof>),
-    Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
-    AntfarmOutput(std::sync::Arc<super::antfarm_output_wallet::Proof>),
-    MintClub(super::mint_club_wire::Call),
-    EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
-    Module {
-        pool: Address,
-        input: Address,
-        amount: U256,
-    },
-    Vista {
-        call: super::vista_wire::Call,
-        input: Address,
-        amount: U256,
-    },
-    Oasis {
-        input: Address,
-        amount: U256,
-        rebate: bool,
-    },
-    Vault { id: alloy_primitives::B256, input: Address, amount: U256 },
-    Umbrae {path:super::umbrae::Path,input:Address,amount:U256},
-    SectorLb { path:super::sectorone::Path,input:Address,amount:U256 },
-    V2SupportingFee {
-        input: Address,
-        amount: U256,
-    },
-}
+pub(super) use super::market_call::DirectCall;
 
 /// План обмена.
 #[derive(Debug, Clone)]
@@ -144,14 +105,8 @@ impl Plan {
                 "минимум выхода 0 — обмен без минимума не отправляется",
             ));
         }
-        if let Some(DirectCall::Ranges(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
-        if let Some(DirectCall::FluxEth(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
-        if let Some(DirectCall::Bundles(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
-        if let Some(DirectCall::Dagrow(proof))=self.direct_market.as_deref_mut(){
-            std::sync::Arc::make_mut(proof).minimum=m;
-        }
-        if let Some(DirectCall::RegisteredV3(proof)) = self.direct_market.as_deref_mut() {
-            std::sync::Arc::make_mut(proof).minimum = m;
+        if let Some(call) = self.direct_market.as_deref_mut() {
+            call.set_remeasured_minimum(m);
         }
         self.min_total = m;
         Ok(self)
@@ -165,11 +120,8 @@ impl Plan {
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub(super) fn ekubo_proof(&self)->Option<super::ekubo_v2_fact::Proof>{super::ekubo_v2_fact::Proof::of(self,self.deadline)}
     pub fn value(&self) -> U256 {
-        if let Some(DirectCall::FluxEth(p))=self.direct_market(){return p.value();}
-        if let Some(DirectCall::Carbon(c))=self.direct_market(){return c.value();}
-        if let Some(DirectCall::EkuboV2{key,..})=self.direct_market(){return key.value();}
-        if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market() {
-            return call.value(amount);
+        if let Some(value) = self.direct_market().and_then(DirectCall::native_value) {
+            return value;
         }
         match self.native {
             Wrap::Wrap(v) => v,
@@ -183,71 +135,7 @@ impl Plan {
     /// последней вместо BALANCE_CHECK_ERC20 (база тогда не нужна).
     pub fn data(&self, base: U256) -> Bytes {
         if let Some(direct) = self.direct_market() {
-            return match direct {
-                DirectCall::FluxEth(p)=>p.data(),
-                DirectCall::Module {
-                    pool,
-                    input,
-                    amount,
-                } => super::super::pools::solidly_v3::execution_data(
-                    pool,
-                    input,
-                    self.token_out,
-                    amount,
-                    self.min_total,
-                    self.deadline,
-                ),
-                DirectCall::Vista {
-                    call,
-                    input,
-                    amount,
-                } => call.data(
-                    input,
-                    self.token_out,
-                    amount,
-                    self.min_total,
-                    self.wallet,
-                    self.deadline,
-                ),
-                DirectCall::Oasis {
-                    input,
-                    amount,
-                    rebate,
-                } => super::oasis_direct::swap_data(
-                    input,
-                    self.token_out,
-                    amount,
-                    self.min_total,
-                    self.wallet,
-                    self.deadline,
-                    rebate,
-                ),
-                DirectCall::Carbon(c)=>c.data(),
-                DirectCall::O1(t)=>t.data(),
-                DirectCall::Bundles(t)=>t.data(),
-                DirectCall::Dagrow(t)=>t.data(),
-                DirectCall::SafeSwap(t)=>t.data(),
-                DirectCall::Pendle(t)=>t.data(),
-                DirectCall::Temple(t)=>t.data(),
-                DirectCall::Antfarm(a)=>a.data(),
-                DirectCall::AntfarmOutput(a)=>a.data(),
-                DirectCall::MintClub(order)=>order.data(self.wallet),
-                DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
-                DirectCall::Vault { id, input, amount } => super::vault_direct::data(
-                    id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
-                DirectCall::SolidlyRouter(proof) => proof.data(),
-                DirectCall::Ranges(proof) => proof.data(),
-                DirectCall::RegisteredV3(proof) => proof.data(),
-                DirectCall::Umbrae{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
-                DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
-                DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
-                    amount,
-                    self.min_total,
-                    &[input, self.token_out],
-                    self.wallet,
-                    self.deadline,
-                ),
-            };
+            return direct.data(self.token_out, self.min_total, self.wallet, self.deadline);
         }
         let mut steps = Vec::with_capacity(self.steps.len() + 2);
         if let Wrap::Wrap(v) = self.native {

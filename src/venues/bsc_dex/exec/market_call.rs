@@ -1,0 +1,143 @@
+//! Подписываемые вызовы одной площадки. Формы с собственным платежом сообщают ETH отдельно.
+use alloy_primitives::{Address, Bytes, U256};
+
+#[derive(Debug, Clone)]
+pub(super) enum DirectCall {
+    SolidlyRouter(std::sync::Arc<super::solidly_router_wallet::Proof>),
+    Ranges(std::sync::Arc<super::ranges_wallet::Proof>),
+    RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
+    Carbon(std::sync::Arc<super::carbon_wire::Call>),
+    O1(std::sync::Arc<super::o1_wallet::Proof>),
+    FluxEth(std::sync::Arc<super::flux_eth::Proof>),
+    Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
+    Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
+    SafeSwap(std::sync::Arc<super::safeswap_wallet::Proof>),
+    Pendle(std::sync::Arc<super::pendle_wallet::Proof>),
+    Temple(std::sync::Arc<super::temple_wallet::Proof>),
+    Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
+    AntfarmOutput(std::sync::Arc<super::antfarm_output_wallet::Proof>),
+    MintClub(super::mint_club_wire::Call),
+    EkuboV2 {
+        key: super::super::pools::ekubo_v2::OrderKey,
+        core: Address,
+        wrapped: Option<Address>,
+    },
+    Module {
+        pool: Address,
+        input: Address,
+        amount: U256,
+    },
+    Vista {
+        call: super::vista_wire::Call,
+        input: Address,
+        amount: U256,
+    },
+    Oasis {
+        input: Address,
+        amount: U256,
+        rebate: bool,
+    },
+    Vault {
+        id: alloy_primitives::B256,
+        input: Address,
+        amount: U256,
+    },
+    Umbrae {
+        path: super::umbrae::Path,
+        input: Address,
+        amount: U256,
+    },
+    SectorLb {
+        path: super::sectorone::Path,
+        input: Address,
+        amount: U256,
+    },
+    V2SupportingFee {
+        input: Address,
+        amount: U256,
+    },
+}
+
+impl DirectCall {
+    pub(super) fn set_remeasured_minimum(&mut self, minimum: U256) {
+        match self {
+            Self::Ranges(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::FluxEth(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Bundles(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::Dagrow(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::RegisteredV3(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            _ => {}
+        }
+    }
+
+    pub(super) fn native_value(self) -> Option<U256> {
+        match self {
+            Self::FluxEth(p) => Some(p.value()),
+            Self::Carbon(c) => Some(c.value()),
+            Self::EkuboV2 { key, .. } => Some(key.value()),
+            Self::Vista { call, amount, .. } => Some(call.value(amount)),
+            _ => None,
+        }
+    }
+
+    pub(super) fn data(
+        self,
+        output: Address,
+        minimum: U256,
+        wallet: Address,
+        deadline: U256,
+    ) -> Bytes {
+        match self {
+            Self::FluxEth(p) => p.data(),
+            Self::Module {
+                pool,
+                input,
+                amount,
+            } => super::super::pools::solidly_v3::execution_data(
+                pool, input, output, amount, minimum, deadline,
+            ),
+            Self::Vista {
+                call,
+                input,
+                amount,
+            } => call.data(input, output, amount, minimum, wallet, deadline),
+            Self::Oasis {
+                input,
+                amount,
+                rebate,
+            } => super::oasis_direct::swap_data(
+                input, output, amount, minimum, wallet, deadline, rebate,
+            ),
+            Self::Carbon(c) => c.data(),
+            Self::O1(t) => t.data(),
+            Self::Bundles(t) => t.data(),
+            Self::Dagrow(t) => t.data(),
+            Self::SafeSwap(t) => t.data(),
+            Self::Pendle(t) => t.data(),
+            Self::Temple(t) => t.data(),
+            Self::Antfarm(a) => a.data(),
+            Self::AntfarmOutput(a) => a.data(),
+            Self::MintClub(order) => order.data(wallet),
+            Self::EkuboV2 { key, .. } => key.calldata(minimum, deadline),
+            Self::Vault { id, input, amount } => {
+                super::vault_direct::data(id, input, output, amount, minimum, wallet, deadline)
+            }
+            Self::SolidlyRouter(proof) => proof.data(),
+            Self::Ranges(proof) => proof.data(),
+            Self::RegisteredV3(proof) => proof.data(),
+            Self::Umbrae {
+                path,
+                input,
+                amount,
+            } => path.data(input, output, amount, minimum, wallet, deadline),
+            Self::SectorLb {
+                path,
+                input,
+                amount,
+            } => path.data(input, output, amount, minimum, wallet, deadline),
+            Self::V2SupportingFee { input, amount } => {
+                super::fork_swap::swap_data(amount, minimum, &[input, output], wallet, deadline)
+            }
+        }
+    }
+}

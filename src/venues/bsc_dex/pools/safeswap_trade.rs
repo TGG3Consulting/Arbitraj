@@ -133,8 +133,10 @@ pub(in crate::venues::bsc_dex) async fn market(
     {
         return Err(bad(ctx));
     }
-    // The verified OptimizedTransparentUpgradeableProxy reads address(uint160(slot)) and
-    // obtains its implementation from that factory. Its storage key is part of the ABI.
+    // У пары UpgradeableProxy читает адрес фабрики из этого слота и вызывает factory.implementation().
+    // SafeswapFactory.sol, строки 991 и 996–1005 (в оболочке самой фабрики другой слот):
+    // https://etherscan.io/address/0x511406a39a074782b8e4ec6d4a77ac6466970b14#code
+    // https://sourcify.dev/server/v2/contract/1/0x511406a39a074782b8e4ec6d4a77ac6466970b14?fields=sources
     let slot: B256 = "0xb2101b231486a8a17a16c101f8dde1145d21799358462f57035a227f25614da3"
         .parse()
         .expect("static storage key");

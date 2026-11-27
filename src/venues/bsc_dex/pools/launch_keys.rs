@@ -67,6 +67,9 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
     k.currency0 < k.currency1
         && !k.hooks.is_zero()
         && match f.variant {
+            // Hooks 0x3a80: beforeInitialize, afterInitialize, beforeAddLiquidity,
+            // beforeRemoveLiquidity, beforeSwap. afterSwap и все возвраты delta выключены.
+            // https://sourcify.dev/server/v2/contract/8453/0x128bedebaa9304db74726efba848a98e7fb53a80?fields=sources
             Variant::LaunchUmia => !k.currency0.is_zero() && (1..1_000_000).contains(&k.fee)
                 && k.tick_spacing.as_i32() > 0 && (u16::from_be_bytes([k.hooks[18],k.hooks[19]]) & 0x3fff) == 0x3a80,
             Variant::LaunchDoppler => k.fee == 0x800000 && k.tick_spacing.as_i32() == 200,

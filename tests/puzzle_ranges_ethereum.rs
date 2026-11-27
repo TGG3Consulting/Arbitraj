@@ -288,45 +288,57 @@ fn both_wallet_paths_advance_real_and_virtual_reserves_at_their_native_precision
     let dir = archive(include_bytes!(
         "data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
     ));
-    let wallet = archive(include_bytes!(
-        "data/first_run_dex_2026-11-26/ranges_ethereum_wallets.json.gz"
-    ));
-    let mut count = 0;
-    for row in wallet["cases"].as_array().unwrap() {
-        let p = dir["pools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|p| p["pool"] == row["pool"])
-            .unwrap();
-        let tokens = p["tokens"].as_array().unwrap();
-        let cash = tokens.iter().position(|t| *t == row["cash"]).unwrap();
-        let token = tokens.iter().position(|t| *t == row["token"]).unwrap();
-        let mut state = market(p);
-        for (action, i, j) in [("buy", cash, token), ("sell", token, cash)] {
-            let l = &row[action];
-            if l["stage"] != "paid" {
-                continue;
-            }
-            let check = |state: &VaultPoolData, x: &Value| {
-                let v = state.v3.as_ref().unwrap();
-                assert_eq!(state.balances, quantities(&x["raw"]));
-                assert_eq!(v.live, quantities(&x["live"]));
-                let VaultV3Rule::PuzzleRanges {
-                    virtual_balances, ..
-                } = &v.rule
-                else {
-                    panic!()
+    for (bytes, expected) in [
+        (
+            include_bytes!("data/first_run_dex_2026-11-26/ranges_ethereum_wallets.json.gz")
+                .as_slice(),
+            240,
+        ),
+        (
+            include_bytes!("data/first_run_dex_2026-11-26/ranges_ethereum_stress.json.gz")
+                .as_slice(),
+            244,
+        ),
+    ] {
+        let wallet = archive(bytes);
+        assert_eq!(wallet["state_root"], dir["state_root"]);
+        let mut count = 0;
+        for row in wallet["cases"].as_array().unwrap() {
+            let p = dir["pools"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["pool"] == row["pool"])
+                .unwrap();
+            let tokens = p["tokens"].as_array().unwrap();
+            let cash = tokens.iter().position(|t| *t == row["cash"]).unwrap();
+            let token = tokens.iter().position(|t| *t == row["token"]).unwrap();
+            let mut state = market(p);
+            for (action, i, j) in [("buy", cash, token), ("sell", token, cash)] {
+                let l = &row[action];
+                if l["stage"] != "paid" {
+                    continue;
+                }
+                let check = |state: &VaultPoolData, x: &Value| {
+                    let v = state.v3.as_ref().unwrap();
+                    assert_eq!(state.balances, quantities(&x["raw"]));
+                    assert_eq!(v.live, quantities(&x["live"]));
+                    let VaultV3Rule::PuzzleRanges {
+                        virtual_balances, ..
+                    } = &v.rule
+                    else {
+                        panic!()
+                    };
+                    assert_eq!(*virtual_balances, quantities(&x["virtual"]));
                 };
-                assert_eq!(*virtual_balances, quantities(&x["virtual"]));
-            };
-            check(&state, &l["state"][0]);
-            let (out, next) = ranges_sequence::advance(&state, i, j, qty(&l["debit"])).unwrap();
-            assert_eq!(out, qty(&l["credit"]));
-            check(&next, &l["state"][1]);
-            state = next;
-            count += 1;
+                check(&state, &l["state"][0]);
+                let (out, next) = ranges_sequence::advance(&state, i, j, qty(&l["debit"])).unwrap();
+                assert_eq!(out, qty(&l["credit"]));
+                check(&next, &l["state"][1]);
+                state = next;
+                count += 1;
+            }
         }
+        assert_eq!(count, expected);
     }
-    assert_eq!(count, 240);
 }

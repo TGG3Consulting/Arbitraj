@@ -1,0 +1,230 @@
+{
+  "block": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+  "markets": [
+    {
+      "pool": "0x3bd8f9086cc4fbab7ca734260396df450d594168",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "tx": "0x0271013540d7b3cce70a3e2367e8651c7624ca3293ffa1679485da53c0dd1ff1",
+      "block": 53254169,
+      "hash": "0xfbcc44cc5270f586d637bfe484c51d160ca4a81ed74406ae5a67a42f8a93f33f",
+      "index": 489,
+      "liquidity": "0",
+      "runtime": "0x8d9c5d77ddfa001aaf434a71b874961d9e6d81326b6eacdab38dad82ddf0153a"
+    },
+    {
+      "pool": "0x9b486a6465ff1632c81b060033dadd4864da1e1c",
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2"
+      ],
+      "fee": 350,
+      "spacing": 10,
+      "tx": "0x24862ae73a2b37991ff2b9054ae6a2568bd0b5a47d12d474bdab9a0632fb596c",
+      "block": 53348562,
+      "hash": "0xa5c285f7e413790e76098ab06b5031fd67bb2bdbfd6e055cae0493daf45bc24e",
+      "index": 387,
+      "liquidity": "0",
+      "runtime": "0xf8d3040f57235d48662f839453d04ff94d19d5faae7d785a1a77d9c4955319a5"
+    },
+    {
+      "pool": "0x3cef23c674727677be10612da3c620a06441736d",
+      "tokens": [
+        "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "fee": 100,
+      "spacing": 1,
+      "tx": "0x44dd82a7c96886a7d2f543442362aeb109f2a35c9dea3a3195d76ddb1fbf8a71",
+      "block": 54542432,
+      "hash": "0xf7502857d86e6f51b1eefca7058d82f94bcf87868e93e73bc035a7da6a03488a",
+      "index": 11,
+      "liquidity": "751167639328",
+      "runtime": "0x98138b362b81d238640463acdd087b5e651e1410971735aeed3494101e3fed75"
+    }
+  ],
+  "roles": {
+    "factory": {
+      "address": "0xe84fa17c2ea423e0dea3c986ee3e1560d684bb2d",
+      "code": {
+        "bytes": 24535,
+        "keccak256": "0x6b9498e51756555a1b4c146105a65cbcb556c276ba097c3c2d76bc0fe345d390"
+      },
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xe84fa17c2ea423e0dea3c986ee3e1560d684bb2d",
+      "tx": "0x90c0509834c211c84de5803b54a0b3ff0564ca15a0dc646784984e0558ee8d79"
+    },
+    "manager": {
+      "address": "0x3ae7de59ce67b3a79d2fc06536aa1bcf91b3671c",
+      "code": {
+        "bytes": 23444,
+        "keccak256": "0x248b2a26b7f9a2f0d5385c7433e9a7ea775e57f701cf5c3497d956d1bc2e599d"
+      },
+      "source": "https://sourcify.dev/server/v2/contract/8453/0x3ae7de59ce67b3a79d2fc06536aa1bcf91b3671c",
+      "tx": "0xa5ab15c53fec55009158d8778827965ba486d076f994458df581013d14ad61eb"
+    },
+    "router": {
+      "address": "0xa3b64a58f324ecccdd70b585853ee3cba5340d81",
+      "code": {
+        "bytes": 10088,
+        "keccak256": "0xdb8abdf146ea12ffa4c481014f76d5a0230598c63f533979ffbed862854de2e9"
+      },
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xa3b64a58f324ecccdd70b585853ee3cba5340d81",
+      "tx": "0x1077994fac6ae2b1ee0f0792413e9fb9bef777a8024f2c9e60e87e34d64ce982"
+    },
+    "quoter": {
+      "address": "0xd8148115dd02787a5e2e6ebf895f6c8b9819027b",
+      "code": {
+        "bytes": 7015,
+        "keccak256": "0xb074300d5ac9173ef86d517945fcf1955f77dcde25011a20668be55788a75dbb"
+      },
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xd8148115dd02787a5e2e6ebf895f6c8b9819027b",
+      "tx": "0x20723deb68143599ff4b45e70508fb491875d935d56a06bab471afb8adc6312c"
+    },
+    "tick_lens": {
+      "address": "0xfa5f4d9ea9c6dec477f546101c95221203ddea8e",
+      "code": {
+        "bytes": 1308,
+        "keccak256": "0xad3ae3c09bc8d3ce5addcde01835b128336a0ba2fee71842c93a14de85f06225"
+      },
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xfa5f4d9ea9c6dec477f546101c95221203ddea8e",
+      "tx": "0xcace8ab97e6ca0664804200c447da2186e64c48f0850ea58dd36bb58749c795a"
+    }
+  },
+  "nonce": 4,
+  "init_hash": "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54",
+  "reference": "0x4c36388be6f416a29c8d8eee81c771ce6be14b18",
+  "template_hash": "0x625b6d8f5997d0c283ff977419660c618cb36c48553129d0ecbb8c7bcde0c9ca",
+  "immutable_slots": {
+    "5": [
+      {
+        "start": 11259,
+        "length": 32
+      }
+    ],
+    "105": [
+      {
+        "start": 8315,
+        "length": 32
+      },
+      {
+        "start": 8829,
+        "length": 32
+      },
+      {
+        "start": 10457,
+        "length": 32
+      }
+    ],
+    "109": [
+      {
+        "start": 2258,
+        "length": 32
+      },
+      {
+        "start": 4853,
+        "length": 32
+      },
+      {
+        "start": 6740,
+        "length": 32
+      },
+      {
+        "start": 7822,
+        "length": 32
+      },
+      {
+        "start": 9150,
+        "length": 32
+      },
+      {
+        "start": 15650,
+        "length": 32
+      }
+    ],
+    "113": [
+      {
+        "start": 4551,
+        "length": 32
+      },
+      {
+        "start": 6789,
+        "length": 32
+      },
+      {
+        "start": 7924,
+        "length": 32
+      },
+      {
+        "start": 9284,
+        "length": 32
+      },
+      {
+        "start": 10529,
+        "length": 32
+      },
+      {
+        "start": 15979,
+        "length": 32
+      }
+    ],
+    "117": [
+      {
+        "start": 3311,
+        "length": 32
+      },
+      {
+        "start": 6603,
+        "length": 32
+      },
+      {
+        "start": 6658,
+        "length": 32
+      },
+      {
+        "start": 10565,
+        "length": 32
+      }
+    ],
+    "121": [
+      {
+        "start": 3072,
+        "length": 32
+      },
+      {
+        "start": 10493,
+        "length": 32
+      },
+      {
+        "start": 19402,
+        "length": 32
+      },
+      {
+        "start": 19452,
+        "length": 32
+      }
+    ],
+    "125": [
+      {
+        "start": 8174,
+        "length": 32
+      },
+      {
+        "start": 19295,
+        "length": 32
+      },
+      {
+        "start": 19350,
+        "length": 32
+      }
+    ]
+  }
+}

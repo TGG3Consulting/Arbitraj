@@ -1,6 +1,7 @@
 """Изолированный taker Aqua с собственным USDC: две суммы, два порядка оплаты, обе стороны."""
 import argparse
 import json
+import gzip
 from pathlib import Path
 
 from eth_abi import decode, encode
@@ -23,25 +24,20 @@ def traits(flags, minimum, deadline):
     return offsets.to_bytes(20, "big") + flags.to_bytes(2, "big") + minimum.to_bytes(32, "big") + deadline.to_bytes(5, "big")
 
 
-def measure(url):
-    book = json.loads((ROOT / "tests/data/first_run_dex_2026-11-26/aqua_base_public_order.json").read_bytes())
+def measure_order(url, book, cash, stock, sizes, fund):
     at = book["parent"]
     hdr = rpc(url, "eth_getBlockByHash", [at["blockHash"], False])
-    assert rpc(url, "eth_chainId", []) == "0x2105" and rpc(url, "eth_getCode", [OWNER, at]) == "0x"
-    stock = book["source"]["tokenOut"]
+    assert rpc(url, "eth_getCode", [OWNER, at]) == "0x"
     order = (book["maker"], int(book["traits"]), bytes.fromhex(book["data"][2:]))
     assert "0x" + keccak(encode([ORDER], [order])).hex() == book["order_hash"]
     end = int(hdr["timestamp"], 16) + 900
     env = {OWNER: {"balance": hex(10**20)}}
-    seed = 10**16
-    fund = [tx(WETH, "deposit()", value=seed), approve(WETH, FUND, seed),
-            tx(FUND, "exactInputSingle(" + FUND_ARGS + ")", [FUND_ARGS], [(WETH, BASE_CASH, 500, OWNER, seed, 1800000, 0)])]
     rows = []
-    for qty in [900000, 1800000]:
+    for qty in sizes:
         for flags in (0x41, 0x61):
-            prep = fund + [approve(BASE_CASH, ROUTER, qty)]
-            for src, dst in [(BASE_CASH, stock), (stock, BASE_CASH)]:
-                now_qty = qty if src == BASE_CASH else buy
+            prep = fund + [approve(cash, ROUTER, qty)]
+            for src, dst in [(cash, stock), (stock, cash)]:
+                now_qty = qty if src == cash else buy
                 if src == stock:
                     prep += [approve(stock, ROUTER, now_qty)]
                 def wire(name, limit, expiry=end):
@@ -71,14 +67,76 @@ def measure(url):
                 assert [v["returnData"] for v in controls[-2:]] == [v["returnData"] for v in trial[-2:]]
                 row.update(paid=paid, net=got, quote=amt, gas=int(controls[4]["gasUsed"],16),
                            rejects=[v.get("error") for v in controls[2:4]], logs=logs)
-                if src == BASE_CASH:
+                if src == cash:
                     buy = got
                     prep += [wire("swap", got)]
     return dict(selector=at, order=book["order_hash"], wallet=OWNER, router=ROUTER, rows=rows)
 
 
+def measure(network, url):
+    folder = ROOT / "tests/data/first_run_dex_2026-11-26"
+    if network == "base":
+        assert rpc(url,"eth_chainId",[]) == "0x2105"
+        book=json.loads((folder/"aqua_base_public_order.json").read_bytes())
+        seed=10**16
+        fund=[tx(WETH,"deposit()",value=seed), approve(WETH,FUND,seed),
+              tx(FUND,"exactInputSingle("+FUND_ARGS+")",[FUND_ARGS],[(WETH,BASE_CASH,500,OWNER,seed,1800000,0)])]
+        return measure_order(url,book,BASE_CASH,book["source"]["tokenOut"],[900000,1800000],fund)
+
+    from record_aktionariat_wallet import FUND as ROUTER_V3, SWAP, WETH as ETH_WETH
+    from record_balancer_markets import Capture
+    assert rpc(url,"eth_chainId",[]) == "0x1"
+    day=json.loads(gzip.decompress((folder/"aqua_ethereum_day.json.gz").read_bytes()))
+    end=day["timestamp"]+900
+    cash_bridge = "0x111111111117dc0aa78b770fa6a738034120c302"
+    uni_factory="0x1f98431c8ad98523631ae4a59f267346ea31f984"
+    reader=Capture(dict(selector=day["selector"],endpoint=url))
+    fees=[]
+    for fee in [500,3000,10000]:
+        pool,=reader.one(uni_factory,"getPool(address,address,uint24)",["address","address","uint24"],[ETH_WETH,cash_bridge,fee],["address"])
+        if int(pool,16):
+            liquid,=reader.one(pool,"liquidity()",returns=["uint128"])
+            if liquid:fees.append((liquid,fee))
+    paid=[]; checked=set()
+    for row in day["directions"]:
+        h=row["order"]; outcome=row.get("quote")
+        if not isinstance(outcome,str) or h in checked:continue
+        pair=(row["tokenIn"],row["tokenOut"])
+        if ETH_WETH in pair: cash=ETH_WETH
+        elif cash_bridge in pair: cash=cash_bridge
+        else:continue
+        checked.add(h)
+        stock=next(t for t in pair if t!=cash)
+        book=dict(parent=day["selector"],order_hash=h,**day["orders"][h])
+        seed=10**16
+        quantities=[10**14,2*10**14] if cash==ETH_WETH else [10**17,2*10**17]
+        fund=[tx(ETH_WETH,"deposit()",value=seed)]
+        if cash!=ETH_WETH:
+            for _,fee in sorted(fees,reverse=True):
+                trial=fund+[approve(ETH_WETH,ROUTER_V3,seed),tx(ROUTER_V3,"exactInputSingle("+SWAP+")",[SWAP],[(ETH_WETH,cash,fee,OWNER,end,seed,max(quantities),0)])]
+                probe=simulate_block(url,day["selector"],{OWNER:{"balance":hex(10**20)}},trial)
+                if all(v["status"]=="0x1" for v in probe):
+                    fund=trial
+                    break
+            else:
+                paid.append(dict(order=h,funding="no funded WETH bridge to "+cash));continue
+        paid.append(measure_order(url,book,cash,stock,quantities,fund))
+    return dict(selector=day["selector"],strategies=paid)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("network", choices=("base","ethereum"))
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
-    args.output.write_text(json.dumps(measure("https://mainnet.base.org"), separators=(",",":")), encoding="utf8")
+    endpoints = (["https://mainnet.base.org","https://base.gateway.tenderly.co"] if args.network=="base"
+                 else ["https://rpc.mevblocker.io","https://eth.drpc.org"])
+    import requests
+    for endpoint in endpoints:
+        try:
+            output=measure(args.network,endpoint)
+            break
+        except (requests.RequestException, ValueError, RuntimeError) as error:
+            last=error
+    else:
+        raise RuntimeError("no complete archive response") from last
+    args.output.write_text(json.dumps(output, separators=(",",":")), encoding="utf8")

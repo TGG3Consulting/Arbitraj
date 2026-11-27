@@ -91,6 +91,14 @@ def capture(network, endpoint):
         receipt = rpc("eth_getTransactionReceipt", [txid])
         assert tx["blockHash"] == receipt["blockHash"] == group[0]["blockHash"] and int(receipt["status"], 16) == 1
         orders.update(from_transaction(tx["input"], {row["hash"] for row in group}))
+        missing = {row["hash"] for row in group} - orders.keys()
+        if missing and network == "ethereum":
+            traces = sess.post("https://eth.drpc.org", json={"jsonrpc":"2.0", "id":1,
+                "method":"trace_transaction", "params":[txid]}, timeout=30).json().get("result") or []
+            for trace in traces:
+                action = trace.get("action", {})
+                if str(action.get("to")).lower() == ROUTER:
+                    orders.update(from_transaction(action.get("input", "0x"), missing))
         previous = -1
         for fill in group:
             transfers = []

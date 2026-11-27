@@ -42,6 +42,43 @@ contract SurgeAdapter {
         require(msg.sender == address(wrapped) || msg.sender == address(market), "sender");
     }
 
+    // Wrapped denotes the native side in the ABI. Only the payer can settle ETH to its own wallet.
+    function swapNative(address input, address output, uint256 amount, uint256 minimum,
+                        address recipient, uint256 deadline) external payable returns (uint256 received) {
+        require(!entered && msg.sender == payer && recipient == payer, "payer");
+        require(block.timestamp <= deadline && amount != 0 && minimum != 0, "order");
+        bool buy = input == address(wrapped) && output == address(market);
+        require(buy || (input == address(market) && output == address(wrapped)), "pair");
+        require(msg.value == (buy ? amount : 0), "value");
+        entered = true;
+        uint256 initialEth = address(this).balance - msg.value;
+        uint256 initialTokens = market.balanceOf(address(this));
+        uint256 initialWallet = market.balanceOf(payer);
+        uint256 initialWalletEth = payer.balance;
+
+        if (buy) {
+            require(market._buy{value:amount}(minimum, deadline), "buy");
+            uint256 tokens = market.balanceOf(address(this)) - initialTokens;
+            require(market.transfer(payer, tokens), "delivery");
+            received = market.balanceOf(payer) - initialWallet;
+            require(received == tokens && payer.balance == initialWalletEth, "net tokens");
+        } else {
+            require(market.transferFrom(payer, address(this), amount) &&
+                    market.balanceOf(address(this)) - initialTokens == amount, "funding");
+            require(market._sell(amount, deadline, minimum), "sell");
+            uint256 earned = address(this).balance - initialEth;
+            require(earned >= minimum && initialWallet - market.balanceOf(payer) == amount, "net ETH");
+            (bool paid,) = payer.call{value:earned}("");
+            require(paid, "delivery");
+            received = payer.balance - initialWalletEth;
+            require(received == earned, "net ETH");
+        }
+        require(received >= minimum && market.balanceOf(address(this)) == initialTokens &&
+                address(this).balance == initialEth, "settlement");
+        emit Filled(payer, payer, input, output, amount, received);
+        entered = false;
+    }
+
     function swapFrom(address input, address output, uint256 amount, uint256 minimum,
                       address recipient, uint256 deadline) external returns (uint256 received) {
         require(!entered && (msg.sender == payer || msg.sender == executor), "payer");

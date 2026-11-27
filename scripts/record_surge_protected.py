@@ -63,9 +63,11 @@ def capture(endpoint, artifact):
     protected = lambda a,b: (29,MODULE,a,b,10000,b"")
     def order(mode,cash,buy,n,minimum,end):
         a,b = (cash,TOKEN) if buy else (TOKEN,cash)
-        if mode=="module":
-            return tx(MODULE,"swapFrom(address,address,uint256,uint256,address,uint256)",
-                      ["address","address","uint256","uint256","address","uint256"],[a,b,n,minimum,OWNER,end])
+        if mode in ("module","native_module"):
+            method="swapNative" if mode=="native_module" else "swapFrom"
+            return tx(MODULE,method+"(address,address,uint256,uint256,address,uint256)",
+                      ["address","address","uint256","uint256","address","uint256"],[a,b,n,minimum,OWNER,end],
+                      n if mode=="native_module" and buy else 0)
         steps = [protected(WETH,TOKEN)] if buy else [protected(TOKEN,WETH)]
         if cash==USDT:
             steps = [exchange(USDT,WETH),*steps] if buy else [*steps,exchange(WETH,USDT)]
@@ -79,19 +81,22 @@ def capture(endpoint, artifact):
             raise ValueError("invalid parent or partial results")
         return [f["calls"] for f in frames]
     cases=[]
-    for mode,cash,sizes in [("module",WETH,(10**15,10**16)),("v5",WETH,(10**15,10**16)),("v5",USDT,(10**6,10**7))]:
-        spender=MODULE if mode=="module" else EXEC
+    for mode,cash,sizes in [("native_module",WETH,(10**15,10**16)),("module",WETH,(10**15,10**16)),("v5",WETH,(10**15,10**16)),("v5",USDT,(10**6,10**7))]:
+        native_cash=mode=="native_module"
+        spender=EXEC if mode=="v5" else MODULE
+        def cash_balance(who):
+            return tx(MC,"getEthBalance(address)",["address"],[who]) if native_cash else balance(cash,who)
         approve=lambda a,n:tx(a,"approve(address,uint256)",["address","uint256"],[spender,n])
-        holdings=[balance(t,a) for a in (OWNER,MODULE,EXEC) for t in (cash,TOKEN)]
+        holdings=[read for a in (OWNER,MODULE,EXEC) for read in (cash_balance(a),balance(TOKEN,a))]
         holdings += [tx(MC,"getEthBalance(address)",["address"],[MODULE])]
-        if cash!=WETH:holdings += [balance(WETH,a) for a in (MODULE,EXEC)]
+        if cash!=WETH or native_cash:holdings += [balance(WETH,a) for a in (MODULE,EXEC)]
         def sample(calls):
             if any(r["status"]!="0x1" or len(r["returnData"])!=66 for r in calls):raise ValueError("balance read failed")
             return [int(r["returnData"],16) for r in calls]
         for n in sizes:
             fund=tx(WETH,"deposit()",value=n) if cash==WETH else tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                  ["uint256","address[]","address","uint256"],[n,[WETH,USDT],OWNER,deadline],10**18)
-            prep=[fund,approve(cash,n)]
+            prep=[] if native_cash else [fund,approve(cash,n)]
             def discover(a_prefix,op,probe):
                 first,second=batch([*a_prefix,op,probe],[tx(MC,"getEthBalance(address)",["address"],[OWNER])])
                 if any(r["status"]!="0x1" for r in first+second):raise ValueError(("buy preparation",[(r.get("error")) for r in first if r["status"]!="0x1"]))
@@ -100,7 +105,7 @@ def capture(endpoint, artifact):
             buy=order(mode,cash,True,n,bought,deadline)
             sale_prep=[approve(TOKEN,bought)]
             trial=order(mode,cash,False,bought,1,deadline)
-            a,b=batch(prep+[buy],sale_prep+[balance(cash,OWNER),trial,balance(cash,OWNER)])
+            a,b=batch(prep+[buy],sale_prep+[cash_balance(OWNER),trial,cash_balance(OWNER)])
             if any(r["status"]!="0x1" for r in a+b):raise ValueError(("sell preparation",mode,cash,n,b[2].get("error")))
             net=int(b[-1]["returnData"],16)-int(b[1]["returnData"],16)
             if not net or not bought:raise ValueError("empty return")
@@ -121,7 +126,7 @@ def capture(endpoint, artifact):
             ac=assess(a[len(prep):],True,n,bought);bc=assess(b[len(sale_prep):],False,bought,net)
             if a[-len(holdings)-1]["status"]!="0x0" or sample(a[-len(holdings):])!=list(map(int,ac["after"])) or ac["after"]!=bc["before"]:
                 raise ValueError("same block sale accepted or continuation differs")
-            cases.append(dict(mode=mode,cash=cash,buy=ac,sell=bc,approval_gas=[int(a[1]["gasUsed"],16),int(b[0]["gasUsed"],16)],
+            cases.append(dict(mode=mode,cash=cash,native_cash=native_cash,buy=ac,sell=bc,approval_gas=[0 if native_cash else int(a[1]["gasUsed"],16),int(b[0]["gasUsed"],16)],
                               same_block=a[-len(holdings)-1]["error"]))
     return dict(chain=1,selector=tag,height=native["height"],state_root=ROOT_HASH,payer=OWNER,market=TOKEN,wrapped=WETH,executor=EXEC,
                 runtime_template="0x"+keccak(template).hex(),runtime="0x"+keccak(hexstr=deployed).hex(),immutable_references=artifact["immutableReferences"],

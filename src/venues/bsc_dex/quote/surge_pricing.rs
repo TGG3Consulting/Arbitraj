@@ -31,8 +31,11 @@ pub(crate) fn wire(
     if !buy && input != s.token {
         return Err(ctx.err(ErrorCode::NoRoute, "Surge: неизвестный вход"));
     }
-    let (target, form) = if e.family.executor_kind.is_some() && !native {
-        (s.trader, Form::SurgeToken)
+    let (target, form) = if e.family.executor_kind.is_some() {
+        let form = match (native,buy) {
+            (false,_)=>Form::SurgeToken, (true,true)=>Form::SurgeModuleEthIn, (true,false)=>Form::SurgeModuleEthOut,
+        };
+        (s.trader, form)
     } else if e.family.executor_kind.is_none() && native {
         (
             s.token,

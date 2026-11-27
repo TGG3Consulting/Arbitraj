@@ -50,6 +50,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Bundles(super::super::exec::bundles_wallet::Terms),
+    Pendle(Address),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
     AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
@@ -222,6 +223,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::o1_wallet::Proof{id:*id,module:o.target,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::Pendle(m)=&o.wire && super::super::exec::pendle_wallet::Proof::order(*m,&o,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Temple(key)=&o.wire {
         let proof=super::super::exec::temple_wallet::Proof{key:**key,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -275,6 +277,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::Pendle(m)=>super::super::exec::pendle_wallet::data(*m,o.input,o.output,o.amount,minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::FluxEth(m)=>m.proof(o,minimum,deadline).data(),

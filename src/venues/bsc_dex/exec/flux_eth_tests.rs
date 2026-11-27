@@ -89,17 +89,7 @@ fn signed_native_order_and_recovered_wallet_amounts_match_every_recorded_positiv
                     }
                 }
             }
-            if !module
-                || collection["markets"].as_array().unwrap().iter().any(|m| {
-                    m["cases"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .any(|c| c["mode"] == "native_module")
-                })
-            {
-                assert!(count >= if bin { 6 } else { 28 });
-            }
+            assert!(count >= if bin {6} else {28});
         }
     }
 }

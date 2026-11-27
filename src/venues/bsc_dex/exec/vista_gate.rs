@@ -9,6 +9,9 @@ use crate::{
 };
 use alloy_primitives::Address;
 
+pub(super) fn needs(e:&Entry)->bool{
+    vista_pricing::is_vista(e)||e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Pendle
+}
 pub(super) async fn check(
     ctx: &Ctx,
     steps: Vec<(&Entry, Address)>,
@@ -24,6 +27,9 @@ pub(super) async fn check(
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
     for (e, input) in steps {
+        if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Pendle {
+            Box::pin(crate::venues::bsc_dex::pools::pendle_module::checked(ctx,e,input,head)).await?;continue
+        }
         if !vista_pricing::is_vista(e) {
             continue;
         }
@@ -49,7 +55,7 @@ pub(super) async fn check(
     if ctx.settings.generation() != generation {
         return Err(ctx.err(
             ErrorCode::StaleData,
-            "EtherVista: параметры изменились после подготовки исполнения",
+            "Настройки модуля изменились после подготовки исполнения",
         ));
     }
     Ok(())

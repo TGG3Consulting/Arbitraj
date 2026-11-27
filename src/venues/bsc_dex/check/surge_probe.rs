@@ -108,7 +108,9 @@ pub(super) async fn run(
         &at,
     )
     .await?;
-    let native = e.family.executor_kind.is_none();
+    let native = e.family.executor_kind.is_none()
+        || (e.usdt == state.wrapped && ctx.text("venue.quote_asset").is_ok_and(|t| super::super::exec::native::cash(ctx,&t,e.usdt)))
+        || (e.coin == state.wrapped && super::super::exec::native::cash(ctx,&e.ticker,e.coin));
     let multi = if native {
         ctx.addr("dex.multicall3")?
     } else {
@@ -158,7 +160,7 @@ pub(super) async fn run(
             .cash
             .checked_add(budget)
             .ok_or_else(|| err("переполнение"))?;
-        if native {
+        if state.trader==wallet {
             post.capacity = post.capacity.saturating_sub(expected);
         }
     } else {
@@ -170,7 +172,7 @@ pub(super) async fn run(
             .gross(cash, budget)
             .ok_or_else(|| err("не установлена валовая выплата"))?;
         post.cash -= expected;
-        if native {
+        if state.trader==wallet {
             post.capacity = post.capacity.saturating_add(budget);
         }
     }
@@ -181,7 +183,7 @@ pub(super) async fn run(
     let leg = |input, output, amount, end| {
         let (target, wire) = surge_pricing::wire(ctx, e, &state, input, native)?;
         let mut rows = vec![read(input, wallet), read(output, wallet)];
-        if wire.form == Form::SurgeToken {
+        if matches!(wire.form,Form::SurgeToken|Form::SurgeModuleEthOut) {
             for (token, data) in approve::fork_all(ctx, input, target, amount)? {
                 rows.push(Call {
                     from: wallet,

@@ -29,6 +29,10 @@ def record(ep,bin_pool=False,wrapped_module=None,native_direct=False):
             rows.append(dict(id=m["id"],group=group,key=key,terms=dict(quote=cash)))
     framed=dict(selector=directory["selector"],state_root=snapshot["state_root"],height=snapshot["height"],
                 manager=cfg["dex.pool_manager"],flux=cfg,rows=rows,native_direct=native_direct)
+    if bin_pool:
+        funding=json.loads((DATA/"omni_flux_funding.json").read_bytes())
+        if funding["selector"]!=directory["selector"]:raise ValueError("держатели взяты с другого блока")
+        framed["holders"]={x["token"]:x["owner"] for x in funding["holders"] if x.get("owner")}
     return replay(group,ep,framed,wrapped_module)
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)

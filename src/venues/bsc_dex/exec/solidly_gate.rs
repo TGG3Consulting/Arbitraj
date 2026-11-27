@@ -128,7 +128,10 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         }
         if f.variant==Variant::Surge {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
-            Box::pin(super::super::pools::surge::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            let current=Box::pin(super::super::pools::surge::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            if !matches!(&e.pool.state,PoolState::Surge(original) if original.trader==current.trader && original.token==current.token && original.wrapped==current.wrapped) {
+                return Err(ctx.err(ErrorCode::QuoteMismatch,"Surge: изменились торговый модуль или расчётная валюта после котировки"));
+            }
             continue;
         }
         if f.variant==Variant::Dagrow {

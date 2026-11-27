@@ -30,6 +30,8 @@ pub enum Form {
     SurgeEthIn,
     SurgeEthOut,
     SurgeToken,
+    SurgeModuleEthIn,
+    SurgeModuleEthOut,
 }
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Call {
@@ -40,9 +42,9 @@ pub struct Call {
 impl Call {
     pub fn value(self, amount: U256) -> U256 {
         match self.form {
-            Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn => amount,
+            Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn | Form::SurgeModuleEthIn => amount,
             Form::OfficialEthOut | Form::ModuleEthOut => self.fee,
-            Form::ModuleToken | Form::RabbitEthOut | Form::SurgeEthOut | Form::SurgeToken => U256::ZERO,
+            Form::ModuleToken | Form::RabbitEthOut | Form::SurgeEthOut | Form::SurgeToken | Form::SurgeModuleEthOut => U256::ZERO,
         }
     }
     pub fn data(
@@ -87,7 +89,7 @@ impl Call {
                 deadline,
             }
             .abi_encode(),
-            Form::ModuleEthOut => IVistaFlow::swapNativeCall {
+            Form::ModuleEthOut | Form::SurgeModuleEthIn | Form::SurgeModuleEthOut => IVistaFlow::swapNativeCall {
                 tokenIn: input,
                 tokenOut: output,
                 amount,

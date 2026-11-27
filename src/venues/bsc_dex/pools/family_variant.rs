@@ -297,7 +297,7 @@ pub fn of(kind: &str) -> Variant {
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
         "surge_native" | "surge_v5" => Variant::Surge,
-        "pendle_market" => Variant::Pendle,
+        "pendle_market" | "pendle_market_v5" => Variant::Pendle,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,
         "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,

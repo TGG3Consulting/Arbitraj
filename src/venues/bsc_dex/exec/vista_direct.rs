@@ -42,7 +42,7 @@ pub(super) async fn plan(
             let state=super::super::pools::surge::market(ctx,s.entry.family,s.entry.pool.reference.address(),
                 (s.entry.pool.token0,s.entry.pool.token1),&h.selector()).await?;
             let direct=super::super::quote::surge_pricing::wire(ctx,&s.entry,&state,o.token_in,native())?;
-            if direct.1.form == Form::SurgeToken && NATIVE.try_with(|v| v.2).ok().flatten() != Some(direct.0) {
+            if matches!(direct.1.form, Form::SurgeToken|Form::SurgeModuleEthIn|Form::SurgeModuleEthOut) && NATIVE.try_with(|v| v.2).ok().flatten() != Some(direct.0) {
                 return Err(ctx.err(ErrorCode::QuoteMismatch,"Surge: адрес модуля изменился после выбора котировки"));
             }
             if direct.1.form==Form::SurgeEthOut {
@@ -76,7 +76,7 @@ pub(super) async fn plan(
             "Валовой минимум EtherVista не помещается в wei",
         ));
     }
-    let approvals = if matches!(form, Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn | Form::SurgeEthOut) {
+    let approvals = if matches!(form, Form::OfficialEthIn | Form::RabbitEthIn | Form::SurgeEthIn | Form::SurgeEthOut | Form::SurgeModuleEthIn) {
         Vec::new()
     } else if all {
         approve::fork_all(ctx, o.token_in, target, o.amount_in)?
@@ -125,7 +125,7 @@ pub(super) fn proof(plan: &Plan) -> Option<super::vista_fact::Proof> {
                     | Form::ModuleEthOut
                     | Form::OfficialEthOut
                     | Form::RabbitEthIn
-                    | Form::RabbitEthOut | Form::SurgeEthIn | Form::SurgeEthOut | Form::SurgeToken,
+                    | Form::RabbitEthOut | Form::SurgeEthIn | Form::SurgeEthOut | Form::SurgeToken | Form::SurgeModuleEthIn | Form::SurgeModuleEthOut,
                 ..
             },
         input,

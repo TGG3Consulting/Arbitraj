@@ -28,6 +28,7 @@ enum Venue {
     FollowingBlock(Head),
     WalletRouter(Address),
     FundedExecutor,
+    Pendle,
     Dagrow,
     Bundles,
     Temple,
@@ -105,6 +106,14 @@ impl Market {
                     }
                 }
             }
+        } else if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            if e.family.executor_kind.is_none(){return Err(super::super::pools::pendle::bad(ctx))}
+            Box::pin(super::super::pools::pendle_module::checked(ctx,e,e.usdt,head)).await?;
+            if super::super::pools::dagrow::balance(ctx,e.usdt,wallet,&head.selector()).await?<amount{
+                return Err(ctx.err(ErrorCode::NoRoute,"Pendle: для пробы нужны собственные средства в исходной валюте"));
+            }
+            anchor=Some((head,Box::new(e.clone())));Venue::Pendle
         } else if antfarm_wallet::enabled(e) {
             anchor = Some(Box::pin(antfarm_probe::anchor(ctx, e, number)).await?);
             Venue::Antfarm(ctx.dex_addr("dex.vault",e.family.id).ok().filter(|v|!v.is_zero()))
@@ -181,7 +190,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -302,7 +311,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

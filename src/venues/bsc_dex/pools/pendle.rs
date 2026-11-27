@@ -14,7 +14,7 @@ use alloy::sol;
 use alloy_primitives::{Address, B256, U256};
 use std::collections::HashMap;
 
-sol! {pub(crate) interface IMarket {
+sol! {interface IMarket {
     function factory() external view returns(address);
     function expiry() external view returns(uint256);
     function isValidMarket(address m) external view returns(bool);
@@ -86,17 +86,51 @@ pub(crate) fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
         "Pendle: рынок, серия, роли или доступность валюты изменились",
     )
 }
-pub(crate) fn series(ctx: &Ctx, id: &str, pool: Address) -> GatewayResult<Series> {
-    let rows = ctx.dex_list("dex.pendle_markets", id)?;
-    let mut hits = rows
+struct MarketIndex {
+    store: crate::settings::store::Store,
+    generation: u64,
+    id: String,
+    markets: MarketRows,
+}
+type MarketRows = std::sync::Arc<HashMap<Address, (Series, Vec<Address>)>>;
+fn index(ctx: &Ctx, id: &str) -> GatewayResult<MarketRows> {
+    static CACHE: std::sync::Mutex<Vec<MarketIndex>> = std::sync::Mutex::new(Vec::new());
+    let generation = ctx.settings.generation();
+    let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(v) = cache
         .iter()
-        .filter_map(|line| Series::parse(line))
-        .filter(|(s, _)| s.pool == pool);
-    let (s, _) = hits.next().ok_or_else(|| bad(ctx))?;
-    if hits.next().is_some() {
+        .find(|v| v.generation == generation && v.id == id && v.store.same(&ctx.settings))
+    {
+        return Ok(v.markets.clone());
+    }
+    let mut map = HashMap::new();
+    for row in ctx.dex_list("dex.pendle_markets", id)? {
+        let (s, terminals) = Series::parse(&row).ok_or_else(|| bad(ctx))?;
+        if map.insert(s.pool, (s, terminals)).is_some() {
+            return Err(bad(ctx));
+        }
+    }
+    if ctx.settings.generation() != generation {
         return Err(bad(ctx));
     }
-    Ok(s)
+    cache.retain(|x| x.id != id || !x.store.same(&ctx.settings));
+    if cache.len() >= 16 {
+        cache.remove(0);
+    }
+    let markets = std::sync::Arc::new(map);
+    cache.push(MarketIndex {
+        store: ctx.settings.clone(),
+        generation,
+        id: id.into(),
+        markets: markets.clone(),
+    });
+    Ok(markets)
+}
+pub(crate) fn series(ctx: &Ctx, id: &str, pool: Address) -> GatewayResult<Series> {
+    index(ctx, id)?
+        .get(&pool)
+        .map(|(s, _)| *s)
+        .ok_or_else(|| bad(ctx))
 }
 #[derive(Clone, Copy)]
 pub(super) struct Role {
@@ -264,10 +298,9 @@ pub(super) fn scan(
         .into_iter()
         .filter(|f| f.variant == Variant::Pendle)
     {
-        let Ok(rows) = ctx.dex_list("dex.pendle_markets", f.id) else {
-            continue;
-        };
-        for (s, mut terms) in rows.iter().filter_map(|v| Series::parse(v)) {
+        let Ok(rows) = index(ctx, f.id) else { continue };
+        for (s, terminal) in rows.values() {
+            let mut terms = terminal.clone();
             terms.push(s.sy);
             terms.sort_unstable();
             terms.dedup();
@@ -335,6 +368,9 @@ mod tests {
         for row in settings["dex.pendle_roles"].as_array().unwrap() {
             let fields: Vec<_> = row.as_str().unwrap().split_whitespace().collect();
             let r = Role::parse(&fields[1..]).unwrap();
+            if fields[0].starts_with("0x") {
+                continue;
+            } // Привязка селекторов отдельно в тестах денежного архива.
             let canonical = &registry["roles"][fields[0]];
             assert_eq!(canonical["address"], serde_json::json!(r.address));
             assert_eq!(canonical["hash"], serde_json::json!(r.hash));

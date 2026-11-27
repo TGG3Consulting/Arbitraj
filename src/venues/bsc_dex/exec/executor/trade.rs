@@ -133,10 +133,10 @@ pub async fn trade(
         .iter()
         .flatten()
         .any(|s| {
-            matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis)
+            matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis | crate::venues::bsc_dex::pools::family_variant::Variant::Surge)
         })
         .then(|| ctx.settings.generation());
-    let vista_generation = legs.iter().flatten().any(|s|super::super::super::quote::vista_pricing::is_vista(&s.entry))
+    let vista_generation = legs.iter().flatten().any(|s|super::super::vista_gate::needs(&s.entry))
         .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, executor, nat).await?;
     let need = super::approvals(ctx, &c, wallet, executor).await?;

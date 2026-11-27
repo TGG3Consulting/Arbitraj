@@ -53,6 +53,7 @@ pub(super) mod bundles_plan;
 #[cfg(test)]
 mod dagrow_wallet_tests;
 pub(super) mod temple_wallet;
+pub(super) mod pendle_wallet;
 pub(super) mod o1_wallet;
 pub(super) mod flux_eth;
 pub(super) mod flux_eth_plan;
@@ -65,6 +66,8 @@ pub(super) mod antfarm_wallet;
 pub(super) mod antfarm_output_wallet;
 #[cfg(test)]
 mod temple_wallet_tests;
+#[cfg(test)]
+mod pendle_wallet_tests;
 pub(super) mod mint_club_wire;
 pub(super) mod mint_club_fact;
 pub(super) mod mint_club_direct;

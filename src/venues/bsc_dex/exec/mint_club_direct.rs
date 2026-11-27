@@ -268,6 +268,7 @@ pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -
     if let [h] = leg.hops.as_slice()
         && let Some(
             crate::core::types::RouterFeeMode::ProtectedWallet { target }
+            | crate::core::types::RouterFeeMode::NativeWallet {target, ..}
             | crate::core::types::RouterFeeMode::FluxEth {target, ..}
             | crate::core::types::RouterFeeMode::CarbonWallet {
                 module: Some(target),

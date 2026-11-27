@@ -286,7 +286,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "smardex" | "smardex_exact_equality" => ExecKind::Smardex,
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
-        "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" => ExecKind::Balancer,
+        "pendle_market_v5" | "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" => ExecKind::Balancer,
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.

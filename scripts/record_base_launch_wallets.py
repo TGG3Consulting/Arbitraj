@@ -25,7 +25,7 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
     d=directory
     holders=json.loads((DATA/"o1_launch_holders.json").read_bytes())
     if holders["selector"]!=d["selector"]:raise ValueError("держатели на другой высоте")
-    payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()}}
+    payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()},**d.get("holders",{})}
     at=d["selector"];header=rpc(endpoint,"eth_getBlockByHash",[at["blockHash"],False]);end=int(header["timestamp"],16)+120
     if d["state_root"]!=header["stateRoot"]:raise ValueError("изменилось состояние родителя")
     cfg=next(p["settings"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["chain_id"]==8453 and p["settings"]["dex.kind"]=="uniswap_v4")

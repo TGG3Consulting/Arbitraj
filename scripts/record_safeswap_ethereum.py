@@ -54,6 +54,15 @@ def initcode(factory,expected):
     if len(copies)!=1:raise ValueError("pair creation code not uniquely bound to factory runtime")
     return copies[0]
 
+def slot(c,address,position):
+    reply=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_getStorageAt",
+                                          "params":[address,position,c.selector]},timeout=25)
+    reply.raise_for_status()
+    word=raw(reply.json()["result"])
+    if len(word)!=32 or any(word[:12]) or not any(word[12:]):raise ValueError("invalid address in proxy slot")
+    return "0x"+word[12:].hex()
+
+
 def roles(c,factory,router,proxy,pair_fee):
     if c.one(router,"factory()",returns=["address"])!=(factory,) or c.one(router,"WETH()",returns=["address"])!=(WETH,):
         raise ValueError("router binding differs")
@@ -61,12 +70,7 @@ def roles(c,factory,router,proxy,pair_fee):
     for key,address in (("factory",factory),("router",router)):
         out[key],body=verified(c,address,pair_fee)
         if proxy:
-            reply=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_getStorageAt",
-                                                  "params":[address,IMPLEMENTATION_SLOT,c.selector]},timeout=25)
-            reply.raise_for_status()
-            word=raw(reply.json()["result"])
-            if len(word)!=32 or any(word[:12]) or not any(word[12:]):raise ValueError("invalid implementation slot")
-            implementation[key],body=verified(c,"0x"+word[12:].hex(),pair_fee)
+            implementation[key],body=verified(c,slot(c,address,IMPLEMENTATION_SLOT),pair_fee)
         if key=="factory":factory_code=body
     return out,implementation,factory_code
 
@@ -89,7 +93,11 @@ def capture(endpoint,wallet):
         row["creation_code"]=initcode(factory_code,row["init"])
         if impl:row["implementations"]=impl
         result.append(row)
-        if name=="proxy-2":continue
+        if name=="proxy-2":
+            import record_safeswap_trade as public
+            row["access"]=public.roles(c,row,verified,slot,IMPLEMENTATION_SLOT)
+            if wallet:public.wallets(c,row,int(h["timestamp"],16))
+            continue
         if not impl and binding["factory"]["deployer"].lower()!=binding["router"]["deployer"].lower():raise ValueError("unrelated factory and router deployments")
         if len({m["runtime"] for m in markets})!=1:raise ValueError("multiple pair runtime versions")
         row["pair_pips"]=2000;row["router_pips"]=(impl or binding)["router"]["fee_pips"]
@@ -100,6 +108,8 @@ def capture(endpoint,wallet):
             native=money==WETH
             cap=int(m["reserves"][m["tokens"].index(money)])
             values=sorted(set(min(n,max(1,cap//div)) for n,div in [(10**14 if native else 100_000,10000),(10**16 if native else 1_000_000,500)]))
+            if name=="proxy-1" and cap:
+                values=sorted(set([*values,max(1,min(10**14,cap//16)),max(1,min(10**15,cap))]))
             m["rounds"]=[];m["unavailable"]=[]
             stamp=int(h["timestamp"],16)
             def fund(amount):return tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[amount,[WETH,money],OWNER,stamp+120],10**16)

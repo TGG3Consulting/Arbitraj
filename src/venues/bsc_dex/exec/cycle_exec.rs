@@ -80,7 +80,7 @@ pub async fn trade(
     {
         return Err(ctx.err(ErrorCode::NoRoute, why));
     }
-    let vista_generation=legs.iter().any(|s|super::super::quote::vista_pricing::is_vista(&s.entry))
+    let vista_generation=legs.iter().any(|s|super::vista_gate::needs(&s.entry))
         .then(|| ctx.settings.generation());
     let (mut c, mut at) = build(q, &legs, req, executor).await?;
     let need = approve_executor::missing(ctx, base, wallet, executor, c.amount_in).await?;

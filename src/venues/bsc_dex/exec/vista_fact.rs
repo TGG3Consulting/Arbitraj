@@ -46,7 +46,7 @@ impl Proof {
             Form::RabbitEthOut => {
                 IVistaFlow::swapExactTokensForETHCall::abi_decode(data).map(|p| p.deadline)
             }
-            Form::ModuleEthOut => IVistaFlow::swapNativeCall::abi_decode(data).map(|p| p.deadline),
+            Form::ModuleEthOut | Form::SurgeModuleEthIn | Form::SurgeModuleEthOut => IVistaFlow::swapNativeCall::abi_decode(data).map(|p| p.deadline),
             Form::SurgeEthIn => IVistaFlow::_buyCall::abi_decode(data).map(|v|v.deadline),
             Form::SurgeEthOut => IVistaFlow::_sellCall::abi_decode(data).map(|v|v.deadline),
             Form::SurgeToken => IVistaFlow::swapFromCall::abi_decode(data).map(|v|v.deadline),
@@ -131,12 +131,17 @@ impl Proof {
                 if events.next().is_some() || ev.seller!=wallet || ev.market!=input || ev.qty!=net(input,false)? {return None}
                 (ev.qty,ev.eth)
             }
-            Form::SurgeToken if input==self.call.wrapped || output==self.call.wrapped => {
+            Form::SurgeToken | Form::SurgeModuleEthIn | Form::SurgeModuleEthOut => {
+                let buy = input == self.call.wrapped;
+                if input==output || (!buy && output!=self.call.wrapped) || self.call.form==Form::SurgeModuleEthIn && !buy
+                    || self.call.form==Form::SurgeModuleEthOut && buy { return None; }
                 let mut events=logs.iter().filter(|l|l.address()==self.target)
                     .filter_map(|l|IVistaFlow::Filled::decode_log_data(&l.inner.data).ok());
                 let ev=events.next()?;
                 if events.next().is_some() || ev.sender!=wallet || ev.recipient!=wallet || ev.input!=input || ev.output!=output ||
-                    ev.spent!=net(input,false)? || ev.received!=net(output,true)? {return None}
+                    self.call.form!=Form::SurgeModuleEthIn && ev.spent!=net(input,false)? ||
+                    self.call.form!=Form::SurgeModuleEthOut && ev.received!=net(output,true)? { return None; }
+                // Only this immutable, payer-bound module pays ETH. It checks the payer's physical ETH delta in the same call.
                 (ev.spent,ev.received)
             }
             Form::RabbitEthIn if self.call.wrapped == input => {

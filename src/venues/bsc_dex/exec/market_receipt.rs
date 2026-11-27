@@ -20,6 +20,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::O1(t)) => c.o1 = Some(Box::new((*t).clone())),
         Some(DirectCall::Bundles(t))=>c.bundles=Some(Box::new((*t).clone())),
         Some(DirectCall::Dagrow(t)) => c.dagrow=Some(Box::new((*t).clone())),
+        Some(DirectCall::Pendle(t)) => c.pendle = Some(Box::new((*t).clone())),
         Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
         Some(DirectCall::Carbon(a)) => {
             c.carbon = Some(super::carbon_fact::Proof {
@@ -47,6 +48,7 @@ pub(super) enum Saved<'a> {
     FluxEth(&'a super::flux_eth::Proof),
     Bundles(&'a super::bundles_wallet::Proof),
     Dagrow(&'a super::dagrow_wallet::Proof),
+    Pendle(&'a super::pendle_wallet::Proof),
     Temple(&'a super::temple_wallet::Proof),
     Carbon(&'a super::carbon_fact::Proof),
     MintClub(&'a super::mint_club_fact::Proof),
@@ -63,6 +65,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.flux_eth.as_deref().map(Saved::FluxEth),
         c.bundles.as_deref().map(Saved::Bundles),
         c.dagrow.as_deref().map(Saved::Dagrow),
+        c.pendle.as_deref().map(Saved::Pendle),
         c.temple.as_deref().map(Saved::Temple),
         c.carbon.as_ref().map(Saved::Carbon),
         c.mint_club.as_ref().map(Saved::MintClub),
@@ -94,6 +97,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::O1(p) => p.included(ctx, hash, receipt).await?,
             Saved::Bundles(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Dagrow(p)=>p.included(ctx,hash,receipt).await?,
+            Saved::Pendle(p) => p.included(ctx, hash, receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
             Saved::MintClub(p) => p.included(ctx, hash, receipt).await?,
@@ -124,6 +128,7 @@ impl Saved<'_> {
             Self::O1(p) => p.amounts(&r.logs, wallet, input, output).ok_or("o1: ключ, списание или выплата расходятся с подписанным поручением"),
             Self::Bundles(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Bundles Swap: подписанное поручение и движения денег расходятся"),
             Self::Dagrow(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("DAGrow: исходные границы, получатель или движения кошелька не подтверждены"),
+            Self::Pendle(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Pendle: рынок, плательщик или переданные активы расходятся с поручением"),
             Self::Temple(p) => p.amounts(&r.logs, wallet, input, output).ok_or(
                 "TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты",
             ),

@@ -1,0 +1,60 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "holders": [
+    {
+      "token": "0x3d9b15274e579411555ff1f96fe9e1abf3df4b07",
+      "reason": "Независимый EOA с обоими остатками не найден",
+      "holder_index": "https://base.blockscout.com/api/v2/tokens/0x3d9b15274e579411555ff1f96fe9e1abf3df4b07/holders",
+      "index_error": "403 Client Error: Forbidden for url: https://base.blockscout.com/api/v2/tokens/0x3d9b15274e579411555ff1f96fe9e1abf3df4b07/holders",
+      "initialize_tx": "0xf85f843492ffa66866b08979bb872000ace4ff3813f91d138d9c3170bbe275d0",
+      "examined": 2
+    },
+    {
+      "token": "0x981112befc86a091c0e5144ddf1bd0432c4e5122",
+      "owner": "0xac5f9f7a20eab7971411cbcd2cd521491c7a4079",
+      "code": "0x",
+      "balance": "1568481817378948460096965",
+      "balance_raw": "0x000000000000000000000000000000000000000000014c2391d78d53c4bcadc5",
+      "balance_calldata": "0x70a08231000000000000000000000000ac5f9f7a20eab7971411cbcd2cd521491c7a4079",
+      "native": "0x5444961e",
+      "holder_index": "https://base.blockscout.com/api/v2/tokens/0x981112befc86a091c0e5144ddf1bd0432c4e5122/holders",
+      "initialize_tx": "0x4f8851e56715e15c5da0bb71f1dd6b3693ca85134e65175f439544d5a22f6dc8",
+      "transfer_tx": null
+    },
+    {
+      "token": "0xc3de830ea07524a0761646a6a4e4be0e114a3c83",
+      "owner": "0xd68d601b4a8a0e782f7a2a36f93c7aada89f17aa",
+      "code": "0x",
+      "balance": "500000000000000000000",
+      "balance_raw": "0x00000000000000000000000000000000000000000000001b1ae4d6e2ef500000",
+      "balance_calldata": "0x70a08231000000000000000000000000d68d601b4a8a0e782f7a2a36f93c7aada89f17aa",
+      "native": "0xfc24a8dfb21bc",
+      "holder_index": "https://base.blockscout.com/api/v2/tokens/0xc3de830ea07524a0761646a6a4e4be0e114a3c83/holders",
+      "initialize_tx": "0xce0d74df14c5c408e0df3ddec2a89b63a0cb24cbeab2375e7c6b98cd0f7011ab",
+      "transfer_tx": "0x008874b60e58f528a2bf8e5660dfda7a76013d3eee3e2e92901a850ba9516ec2"
+    },
+    {
+      "token": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+      "reason": "Независимый EOA с обоими остатками не найден",
+      "holder_index": "https://base.blockscout.com/api/v2/tokens/0xe5020a6d073a794b6e7f05678707de47986fb0b6/holders",
+      "index_error": "403 Client Error: Forbidden for url: https://base.blockscout.com/api/v2/tokens/0xe5020a6d073a794b6e7f05678707de47986fb0b6/holders",
+      "initialize_tx": "0xde45eeeb90054d7c151c0548fa1b4c1a2d58e9f91909789bcf6a919822169109",
+      "examined": 22
+    },
+    {
+      "token": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+      "owner": "0xf70da97812cb96acdf810712aa562db8dfa3dbef",
+      "code": "0x",
+      "balance": "52567196785",
+      "balance_raw": "0x0000000000000000000000000000000000000000000000000000000c3d3fc471",
+      "balance_calldata": "0x70a08231000000000000000000000000f70da97812cb96acdf810712aa562db8dfa3dbef",
+      "native": "0x750f79450a520a3e9",
+      "holder_index": "https://base.blockscout.com/api/v2/tokens/0xfde4c96c8593536e31f229ea8f37b2ada2699bb2/holders",
+      "initialize_tx": "0xdb73e752aa8636895e5ae140d04ab1009088364c2c2c63a6bf3dc1e73193be98",
+      "transfer_tx": "0x092b0e689bbdf79daf2837d09bb70dd96e6fd023e10297a15a3fa73203b29cc3"
+    }
+  ]
+}

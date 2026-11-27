@@ -90,11 +90,26 @@ pub(super) async fn option(
         execution.wire=super::v2_wallet_sim::Wire::Antfarm(std::sync::Arc::new(terms));
         }
     }
+    // A plain SURGE sale checks gross ETH before a mutable tax. Do not let a cheap
+    // quote win when even the configured minimum cannot be signed on this form.
+    if matches!(&execution.wire,v2_wallet_sim::Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut) {
+        let crate::core::types::PoolState::Surge(state)=&c.entry.pool.state else {
+            return Err(ctx.err(ErrorCode::NoRoute,"Surge: отсутствуют данные для нативной продажи"));
+        };
+        let decimals=if i.side==Side::Buy{i.coin_dec}else{i.usdt_dec};
+        let receive=num::to_decimal(c.swapped.amount_out,decimals);
+        let slip=Decimal::ONE-ctx.dec("exec.dex_slippage_pct")?/Decimal::ONE_HUNDRED;
+        let minimum=receive.and_then(|v|v.checked_mul(slip)).and_then(|v|num::to_units(v,decimals));
+        let required=minimum.and_then(|v|super::super::math::surge::gross_for_net(v.max(U256::ONE),90));
+        if !required.zip(state.gross(state.token,c.swapped.amount_in)).is_some_and(|(floor,gross)|floor<=gross) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Surge: нативная продажа не обеспечивает требуемый минимум после налога"));
+        }
+    }
     let fee_mode = match &execution.wire {
         super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae() || c.entry.family.variant==super::super::pools::family_variant::Variant::VvsV3=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::FluxEth(m)=>Some(RouterFeeMode::FluxEth{target:m.router,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
-        super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
@@ -103,6 +118,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,allocation:Some(c.allocation()),native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::MintClub(c) if c.protection.is_some()=>c.protection.map(|p|RouterFeeMode::ProtectedWallet{target:p.module}),
         super::v2_wallet_sim::Wire::EkuboV2(_,Some(_)) if super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)=>Some(RouterFeeMode::NativeSettlement{gross_minimum:false}),
+        super::v2_wallet_sim::Wire::Vista(v) if matches!(v.form,super::super::exec::vista_wire::Form::SurgeModuleEthIn|super::super::exec::vista_wire::Form::SurgeModuleEthOut)=>Some(RouterFeeMode::NativeWallet{target:execution.target,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeToken=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Vista(v)
             if super::vista_pricing::cash(&q.ctx, &i.usdt_ticker, i.usdt) =>

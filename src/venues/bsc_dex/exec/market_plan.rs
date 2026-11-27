@@ -22,6 +22,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     O1,
     Antfarm,
     Dagrow,
+    Pendle,
     Bundles,
     Temple,
     Carbon,
@@ -68,6 +69,7 @@ impl Market {
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
             PoolState::Bundles(_) => Some(Self::Bundles),
+            _ if e.family.variant==Variant::Pendle && e.family.executor_kind.is_some()=>Some(Self::Pendle),
             PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             PoolState::Carbon(_) => Some(Self::Carbon),
@@ -94,6 +96,7 @@ impl Market {
             Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
             Self::Bundles=>"Bundles Swap: требуется выбранный адрес исполнения",
             Self::Dagrow => "DAGrow: требуются исходные условия поручения",
+            Self::Pendle => "Pendle: требуется выбранный модуль этой серии",
             Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
             Self::Carbon => "Carbon: требуется подтвержденный вектор действий контроллера",
             Self::MintClub => {
@@ -111,6 +114,7 @@ impl Market {
             Self::Bundles=>"Bundles Swap",
             Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
+            Self::Pendle => "Pendle",
             Self::Carbon => "Carbon",
             Self::MintClub => "Mint Club",
         }
@@ -164,6 +168,7 @@ impl Market {
                 .await
             }
             Self::Bundles=>Box::pin(super::bundles_plan::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Dagrow=>Box::pin(super::dagrow_wallet::plan(ctx,s,wallet,height,selected.dagrow)).await,
             Self::Temple => {
                 Box::pin(super::temple_wallet::plan(
@@ -236,6 +241,7 @@ pub(in crate::venues::bsc_dex) fn probe(
             ctx, e, order, now,
         )),
         (_,Variant::Bundles)=>Some(super::bundles_plan::probe(ctx,e,order,wallet,now)),
+        (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
         (_,Variant::Dagrow)=>Some(super::dagrow_wallet::probe(ctx,e,order,wallet,now)),
         (_, Variant::Temple) => Some(super::temple_wallet::probe(ctx, e, order, wallet, now)),
         (PoolState::MintClub(_), _) => Some(super::mint_club_direct::probe(

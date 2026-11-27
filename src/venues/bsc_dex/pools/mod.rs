@@ -109,6 +109,7 @@ pub(in crate::venues::bsc_dex) mod surge;
 pub(in crate::venues::bsc_dex) mod dagrow;
 pub(crate) mod pendle;
 pub(crate) mod pendle_quotes;
+pub(crate) mod pendle_module;
 pub mod mint_club;
 pub mod ekubo_v2;
 pub(super) mod deployment_at_head;

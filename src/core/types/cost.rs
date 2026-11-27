@@ -152,6 +152,8 @@ pub enum RouterFeeMode {
     NativeGrossMinimum,
     /// Нативный ETH Omni Flux, подписанный Universal Router и направление расчёта.
     FluxEth {target:alloy_primitives::Address, native_cash:bool},
+    /// Нативный расчёт через принятый модуль кошелька. Адрес и денежная сторона сохраняются в поручении.
+    NativeWallet {target:alloy_primitives::Address, native_cash:bool},
     /// Защитный модуль ERC20 выбран по чистой выплате и закреплён до подписи.
     ProtectedWallet { target: alloy_primitives::Address },
     /// DAGrow SSP: точный вход или заявленная сумма выхода, привязанные к адресу исполнения.

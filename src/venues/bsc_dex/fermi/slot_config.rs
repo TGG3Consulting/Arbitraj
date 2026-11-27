@@ -140,6 +140,10 @@ pub(super) fn timely(p: &Parts, b: &super::markets::Books) -> bool {
             .fresh(&p.ctx)
             .is_ok_and(|h| h.number == b.head.number.to::<u64>())
 }
+pub(super) fn same_frame(old: &super::Frame, new: &super::Frame) -> bool {
+    old.deployment == new.deployment
+        && (old.target, old.slot, &old.diff) == (new.target, new.slot, &new.diff)
+}
 pub(super) async fn fresh(p: &Parts, b: &super::markets::Books) -> bool {
     if !timely(p, b) {
         return false;
@@ -159,11 +163,7 @@ pub(super) async fn fresh(p: &Parts, b: &super::markets::Books) -> bool {
         Source::Fermi { .. } => super::Frame::read(b.config.builder, &raw, b.config.deployment),
         Source::Prop { oracle, .. } => oracle.frame(b.config.builder, &raw),
     };
-    h.hash == b.head.hash
-        && timely(p, b)
-        && new.is_some_and(|f| {
-            (f.target, f.slot, &f.diff) == (b.frame.target, b.frame.slot, &b.frame.diff)
-        })
+    h.hash == b.head.hash && timely(p, b) && new.is_some_and(|f| same_frame(&b.frame, &f))
 }
 pub(super) async fn simulate(
     ctx: &super::Ctx,

@@ -74,6 +74,16 @@ pub(in crate::venues::bsc_dex) fn breaks(
     }
     points.into_iter().collect()
 }
+/// Сравнение двух полных выплат одной физической кассы после перевода газа в эту же валюту.
+fn improves(side: Side, value: Decimal, baseline: Option<Decimal>) -> bool {
+    baseline.is_none_or(|old| {
+        if side == Side::Buy {
+            value < old
+        } else {
+            value > old
+        }
+    })
+}
 pub(in crate::venues::bsc_dex) async fn consider(
     p: &Parts,
     asset: &Asset,
@@ -132,13 +142,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
         let Some(net) = hashflow::routing::total(p, &q).await else {
             continue;
         };
-        if value.is_some_and(|v| {
-            if side == Side::Buy {
-                net >= v
-            } else {
-                net <= v
-            }
-        }) {
+        if !improves(side, net, value) {
             continue;
         }
         if prepared
@@ -159,3 +163,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     }
     best
 }
+
+#[cfg(test)]
+#[path = "slot_selection_tests.rs"]
+mod slot_selection_tests;

@@ -1,4 +1,5 @@
 """Проверка создания модуля Aqua, сопоставления программы V5 и реальной выплаты."""
+from hashlib import sha256
 from eth_abi import encode, decode
 from eth_utils import keccak
 
@@ -46,7 +47,8 @@ class Guard:
         self.endpoint=EXEC if mode=="v5" else self.module
         self.manifest=dict(module=self.module,engine=ROUTER,registry=REGISTRY,code_hash="0x"+keccak(code).hex(),
                            v5_hash="0x"+keccak(runtime).hex(),creation="0x"+creation.hex(),creation_gas=int(created["gasUsed"],16),
-                           cache_gas=int(registered["gasUsed"],16),repeat_cache_gas=int(repeated["gasUsed"],16))
+                           cache_gas=int(registered["gasUsed"],16),repeat_cache_gas=int(repeated["gasUsed"],16),
+                           runtime_sha256=sha256(code).hexdigest(),cache_data=cache["data"])
 
     def wire(self, src, dst, amount, minimum, deadline, flags, unknown=False):
         first=flags==0x61

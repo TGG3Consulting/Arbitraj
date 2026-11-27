@@ -163,13 +163,20 @@ if __name__ == "__main__":
     parser.add_argument("network", choices=("base","ethereum"))
     parser.add_argument("output", type=Path)
     parser.add_argument("--compiled", type=Path)
+    parser.add_argument("--manifest", type=Path, help="Карточка CREATE из проверенных выплат wallet и V5")
     args = parser.parse_args()
     endpoints = (["https://mainnet.base.org","https://base.gateway.tenderly.co"] if args.network=="base"
                  else ["https://rpc.mevblocker.io","https://eth.drpc.org"])
+    if args.manifest and not args.compiled:
+        parser.error("--manifest requires --compiled")
     import requests
     for endpoint in endpoints:
         try:
             output=measure(args.network,endpoint,json.loads(args.compiled.read_bytes()) if args.compiled else None)
+            if args.manifest:
+                from export_aqua_create import read_roles, write_card
+                output["roles"] = read_roles(endpoint, output["selector"])
+                write_card(args.network, output, args.manifest)
             break
         except (requests.RequestException, ValueError, RuntimeError) as error:
             last=error

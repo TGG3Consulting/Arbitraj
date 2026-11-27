@@ -17,7 +17,7 @@ pub(in crate::venues::bsc_dex) async fn anchor(
 ) -> GatewayResult<(white_state::Head, Box<Entry>)> {
     let h = white_state::head(ctx, &format!("{number:#x}")).await?;
     let mut entry = Box::new(e.clone());
-    let b=super::antfarm_book::read(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await?;
+    let b=super::antfarm_book::read(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),h).await?;
     entry.pool.state=PoolState::Antfarm(Box::new(b));
     entry.pool.block = number;
     Ok((h, entry))
@@ -111,21 +111,12 @@ fn observed(
     }
     let cumulative = read(rows, IFarm::price1CumulativeLastCall {})?;
     let base = read(rows, IFarm::price1CumulativeLastCall {})?;
-    let elapsed = now.wrapping_sub(read(rows, IFarm::blockTimestampLastCall {})?);
-    let first = read(rows, IFarm::firstUpdateCallCall {})?;
-    if elapsed < 3600 && !first {
-        return Some(Some(avg));
-    }
-    if elapsed == 0 || m.reserves.contains(&U256::ZERO) {
-        return Some(None);
-    }
-    let unit: U256 = (m.reserves[0] << 112) / m.reserves[1];
-    let next = cumulative.checked_add(unit * U256::from(now.wrapping_sub(r.last)));
-    Some(
-        next.map(|n| {
-            (n.wrapping_sub(base) / U256::from(elapsed)) & ((U256::ONE << 224) - U256::ONE)
-        }),
-    )
+    let observation=super::antfarm_oracle::Observation{
+        pair_cumulative:cumulative, oracle_cumulative:base, pair_time:r.last,
+        oracle_time:read(rows,IFarm::blockTimestampLastCall {})?,
+        first:read(rows,IFarm::firstUpdateCallCall {})?, average:avg,
+    };
+    Some(observation.rate(m.reserves,now))
 }
 fn snapshot(book: &AntfarmBook, raw: &[u8]) -> Option<AntfarmBook> {
     let count = |m: &AntfarmMarket, project: bool| {

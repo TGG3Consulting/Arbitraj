@@ -33,11 +33,13 @@ pub struct Base {
 }
 
 impl Base {
+    pub(crate) fn next_time(parent:u64)->u64 { parent.saturating_add(NEXT_BLOCK_S) }
+
     /// Блок `number` со временем головы `head_time` (секунды): симулированный блок — на NEXT_BLOCK_S позже. Ошибок нет.
     pub fn timed(number: u64, head_time: u64) -> Self {
         Base {
             number,
-            time: Some(head_time.saturating_add(NEXT_BLOCK_S)),
+            time: Some(Self::next_time(head_time)),
         }
     }
 }

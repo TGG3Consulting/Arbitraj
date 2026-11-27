@@ -30,7 +30,7 @@ pub(super) async fn options(
             e.family,
             e.pool.reference.address(),
             (e.coin, e.usdt),
-            &h.selector(),
+            h,
         )
         .await
         else {

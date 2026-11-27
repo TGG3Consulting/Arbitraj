@@ -276,7 +276,6 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let h = super::super::quote::white_state::head(ctx, &format!("{height:#x}")).await?;
-    let tag = h.selector();
     let (target, source, book) = tokio::try_join!(
         module(ctx, e, h),
         funds(ctx, payer, o.token_out, h, use_loan),
@@ -285,7 +284,7 @@ pub(super) async fn plan(
             e.family,
             e.pool.reference.address(),
             (e.coin, e.usdt),
-            &tag
+            h
         )
     )?;
     if Some(target) != selected

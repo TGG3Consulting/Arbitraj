@@ -91,3 +91,43 @@ fn registered_markets_and_both_sources_of_working_capital_are_distinct() {
         assert!(stock["gas"].as_u64().unwrap() < loan["gas"].as_u64().unwrap());
     }
 }
+
+#[test]
+fn reverse_sale_uses_both_post_purchase_reserves_and_the_owners_remaining_tokens() {
+    let proof = read(include_bytes!("data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"));
+    let cases = proof["roundtrips"].as_array().unwrap();
+    assert_eq!(cases.len(), 4);
+    let mut samples = BTreeSet::new();
+    for row in cases {
+        let n = amount(&row["bought"]);
+        let rest = n - n / U256::from(2) - n / U256::from(4);
+        assert_eq!(rest, amount(&row["sold"]));
+        assert!(samples.insert((row["pair"].as_str().unwrap(), n)));
+        let reserves = row["post_reserves"].as_array().unwrap();
+        assert_eq!(reserves.len(), 2);
+        let rs = row["results"].as_array().unwrap();
+        let calls = row["calls"].as_array().unwrap();
+        assert_eq!(calls.len(), rs.len());
+        assert_eq!(calls[5]["to"], row["input_module"]);
+        assert_eq!(rs[5]["status"], "0x1");
+        let val = |r: &Value| amount(&r["returnData"]);
+        assert_eq!(val(&rs[2]) - val(&rs[6]), amount(&row["cash_budget"]));
+        assert_eq!(val(&rs[7]) - val(&rs[3]), n);
+        assert_eq!(val(&rs[4]), val(&rs[8]));
+        for (words, value) in rs[9..11].iter().zip(reserves) {
+            let hex = words["returnData"].as_str().unwrap().strip_prefix("0x").unwrap();
+            for (i, reserve) in value.as_array().unwrap().iter().enumerate() {
+                assert_eq!(U256::from_str_radix(&hex[64*i..64*(i+1)],16).unwrap(), amount(reserve));
+            }
+        }
+        assert_eq!(calls[rs.len()-4]["to"], proof["module"]);
+        let tail = &rs[rs.len()-8..];
+        assert_eq!(tail[3]["status"], "0x0");
+        assert!(tail[3]["logs"].as_array().unwrap().is_empty());
+        assert_eq!(tail[4]["status"], "0x1");
+        assert_eq!(val(&tail[0]) - val(&tail[5]), rest);
+        assert_eq!(val(&tail[6]) - val(&tail[1]), amount(&row["net"]));
+        assert_eq!(val(&tail[2]), val(&tail[7]));
+    }
+    assert!(cases.iter().any(|r| r["earlier_cost"] != r["after_cost"]));
+}

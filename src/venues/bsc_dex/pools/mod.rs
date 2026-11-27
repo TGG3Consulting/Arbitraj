@@ -99,6 +99,7 @@ mod antfarm;
 pub(crate) mod antfarm_probe;
 pub(super) mod antfarm_probe_wallet;
 pub(crate) mod antfarm_book;
+mod antfarm_oracle;
 pub(crate) mod antfarm_capacity;
 mod temple_directory;
 pub mod mint_club;

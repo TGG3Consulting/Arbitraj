@@ -206,7 +206,7 @@ pub(in crate::venues::bsc_dex) async fn fresh(
         e.family,
         e.pool.reference.address(),
         (e.coin, e.usdt),
-        &h.selector(),
+        h,
     )
     .await?;
     e.pool.state = PoolState::Antfarm(Box::new(s));

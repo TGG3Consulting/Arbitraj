@@ -85,7 +85,7 @@ pub async fn state(
     }
     if f.variant==Variant::Antfarm {
         let h=super::super::quote::white_state::head(ctx,&tag).await?;
-        let mut s=Box::pin(super::antfarm_book::read(ctx,f,reference.address(),pair,&h.selector())).await?;
+        let mut s=Box::pin(super::antfarm_book::read(ctx,f,reference.address(),pair,h)).await?;
         s.limits=Box::pin(super::antfarm_capacity::available(ctx,f,&s,h)).await;
         return Ok(Loaded{state:PoolState::Antfarm(Box::new(s)),ticks:None,bins:None,fee_pips:None});
     }

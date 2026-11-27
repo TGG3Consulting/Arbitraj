@@ -1,5 +1,6 @@
 //! Share the fee-acquisition markets across all ordinary pairs at the same canonical block.
-use super::super::{ctx::Ctx, node::rpc};
+use super::super::{check::sim_base::Base, ctx::Ctx, quote::white_state::Head};
+use super::antfarm_oracle::Observation;
 use super::{
     antfarm::{self, ATF, FACTORY, IFarm},
     families::Family,
@@ -10,7 +11,7 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
 };
 use alloy_primitives::{Address, B256, U256};
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::{
     collections::VecDeque,
     sync::{Arc, LazyLock, Mutex},
@@ -42,7 +43,7 @@ async fn projected(
     pool: Address,
     market: &AntfarmMarket,
     at: &Value,
-    hash: B256,
+    now: u32,
 ) -> GatewayResult<Option<U256>> {
     let [o, p, res] = batch::read(
         ctx,
@@ -66,34 +67,19 @@ async fn projected(
             batch::view(at, oracle, IFarm::price1AverageCall {}),
         ],
     );
-    let header = rpc::call::<Value>(ctx, "eth_getBlockByHash", json!([hash, false]));
-    let ([back, old, ts, first, avg], head) = tokio::try_join!(query, header)?;
-    let now = head["timestamp"]
-        .as_str()
-        .and_then(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).ok())
-        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "Antfarm: время блока недоступно"))?
-        as u32;
+    let [back, old, ts, first, avg] = query.await?;
     if batch::decode(&back, IFarm::pairCall {})? != pool {
         return Err(ctx.err(ErrorCode::NotApplicable, "Antfarm: другая пара оракула"));
     }
-    let elapsed = now.wrapping_sub(batch::decode(&ts, IFarm::blockTimestampLastCall {})?);
-    if elapsed < 3600 && !batch::decode(&first, IFarm::firstUpdateCallCall {})? {
-        return Ok(Some(U256::from(batch::decode(
-            &avg,
-            IFarm::price1AverageCall {},
-        )?)));
+    Ok(Observation {
+        pair_cumulative: cum,
+        oracle_cumulative: batch::decode(&old, IFarm::price1CumulativeLastCall {})?,
+        pair_time: pair_last,
+        oracle_time: batch::decode(&ts, IFarm::blockTimestampLastCall {})?,
+        average: U256::from(batch::decode(&avg, IFarm::price1AverageCall {})?),
+        first: batch::decode(&first, IFarm::firstUpdateCallCall {})?,
     }
-    if elapsed == 0 || market.reserves.contains(&U256::ZERO) {
-        return Ok(None);
-    }
-    let unit: U256 = (market.reserves[0] << 112) / market.reserves[1];
-    let next = cum.checked_add(unit * U256::from(now.wrapping_sub(pair_last)));
-    let old = batch::decode(&old, IFarm::price1CumulativeLastCall {})?;
-    Ok(
-        next.map(|n| {
-            (n.wrapping_sub(old) / U256::from(elapsed)) & ((U256::ONE << 224) - U256::ONE)
-        }),
-    )
+    .rate(market.reserves, now))
 }
 
 async fn sources(
@@ -101,7 +87,7 @@ async fn sources(
     f: &Family,
     asset: Address,
     at: &Value,
-    hash: B256,
+    now: u32,
 ) -> GatewayResult<Vec<Source>> {
     let request = IFarm::getFeesForPairCall {
         token0: ATF,
@@ -119,7 +105,7 @@ async fn sources(
             continue;
         }
         let rate = if tier == 10 {
-            projected(ctx, pool, &market, at, hash).await?
+            projected(ctx, pool, &market, at, now).await?
         } else {
             None
         };
@@ -135,26 +121,29 @@ pub(in crate::venues::bsc_dex) async fn read(
     f: &Family,
     pool: Address,
     edge: (Address, Address),
-    at: &Value,
+    head: Head,
 ) -> GatewayResult<AntfarmBook> {
-    let market = antfarm::market(ctx, f, pool, edge, at).await?;
+    let at = head.selector();
+    let market = antfarm::market(ctx, f, pool, edge, &at).await?;
     let mut funding = Vec::new();
     if !market.tokens.contains(&ATF) {
-        let hash = at["blockHash"]
-            .as_str()
-            .and_then(|s| s.parse::<B256>().ok())
-            .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "Antfarm: нет хеша блока"))?;
+        let now = Base::next_time(head.timestamp.to()) as u32;
         for asset in market.tokens {
-            let v = cell((hash, asset));
+            let v = cell((head.hash, asset));
             funding.extend(
-                v.get_or_try_init(|| sources(ctx, f, asset, at, hash))
+                v.get_or_try_init(|| sources(ctx, f, asset, &at, now))
                     .await?
                     .iter()
                     .cloned(),
             );
         }
     }
-    Ok(AntfarmBook { market, funding, proceeds:None, limits:None })
+    Ok(AntfarmBook {
+        market,
+        funding,
+        proceeds: None,
+        limits: None,
+    })
 }
 
 pub(in crate::venues::bsc_dex) async fn module(

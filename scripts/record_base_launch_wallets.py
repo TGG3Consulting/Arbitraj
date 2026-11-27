@@ -19,7 +19,7 @@ PAYER=dict(HOLDERS,**{ZERO:HOLDERS[WETH],"0xb20000000000000000000078ee7ce2fe4908
 word=lambda n:"0x"+format(n,"064x")
 
 
-def replay(group,endpoint,directory=None):
+def replay(group,endpoint,directory=None,wrapped_module=None):
     if directory is None:
         with gzip.open(DATA/"base_launch_hooks.json.gz") as f:directory=json.load(f)
     d=directory
@@ -34,19 +34,25 @@ def replay(group,endpoint,directory=None):
     runtime="0x"+RUNTIME.read_text().strip().removeprefix("0x")
     def simulate(payer,calls,mode):
         frame=dict(calls=calls)
-        if mode=="v5":
-            frame["stateOverrides"]={EXEC:dict(code=runtime,stateDiff={word(0):word(int(payer,16)),word(1):word(int(WETH,16))})}
+        if mode in ("wrapped","wrapped_v5"):
+            address,code=wrapped_module
+            frame["stateOverrides"]={address:dict(code=code)}
+        if mode in ("v5","wrapped_v5"):
+            frame.setdefault("stateOverrides",{})[EXEC]=dict(code=runtime,stateDiff={word(0):word(int(payer,16)),word(1):word(int(WETH,16))})
         b,=rpc(endpoint,"eth_simulateV1",[dict(blockStateCalls=[frame],validation=False),at])
         if b["parentHash"]!=at["blockHash"] or len(calls)!=len(b["calls"]):raise ValueError("другая база симуляции")
         return b["calls"]
     def leg(k,owner,prefix,mode,x,y,qty):
         forward=x==k[0]
+        if mode in ("wrapped","wrapped_v5"):
+            x=WETH if x==ZERO else x
+            y=WETH if y==ZERO else y
         def tx(to,sig,ts,vs):return dict(to=to,data=calldata(sig,ts,vs),gas="0xe00000",**{"from":owner})
         def bal(asset):
             return tx(MC,"getEthBalance(address)",["address"],[owner]) if asset==ZERO else tx(asset,"balanceOf(address)",["address"],[owner])
         approvals=[]
         if x!=ZERO:
-            spender=EXEC if mode=="v5" else permit
+            spender=EXEC if mode in ("v5","wrapped_v5") else (wrapped_module[0] if mode=="wrapped" else permit)
             allowance=tx(x,"allowance(address,address)",["address","address"],[owner,spender])
             checked=simulate(owner,prefix+[allowance],mode)[-1]
             if checked["status"]!="0x1":return None,dict(input=str(qty),stage="allowance",call=allowance,result=checked)
@@ -54,8 +60,11 @@ def replay(group,endpoint,directory=None):
                 approvals.append(tx(x,"approve(address,uint256)",["address","uint256"],[spender,qty]))
             if mode=="router":approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
         def trade(minimum,deadline):
-            if mode=="v5":
-                return tx(EXEC,f"execute(address,uint256,address,uint256,uint256,{STEP}[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[x,qty,y,minimum,deadline,[(19,manager,x,y,10000,encode([KEY],[k]))]])
+            if mode=="wrapped":
+                return tx(wrapped_module[0],"swapFrom(address,address,uint256,uint256,address,uint256)",["address","address","uint256","uint256","address","uint256"],[x,y,qty,minimum,owner,deadline])
+            if mode in ("v5","wrapped_v5"):
+                step=(29,wrapped_module[0],x,y,10000,b"") if mode=="wrapped_v5" else (19,manager,x,y,10000,encode([KEY],[k]))
+                return tx(EXEC,f"execute(address,uint256,address,uint256,uint256,{STEP}[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[x,qty,y,minimum,deadline,[step]])
             params=encode([f"({KEY},bool,uint128,uint128,uint256,bytes)"],[(k,forward,qty,minimum,0,b"")])
             body=encode(["bytes","bytes[]"],[bytes([6,12,15]),[params,encode(["address","uint256"],[x,qty]),encode(["address","uint256"],[y,minimum])]])
             args=tx(router,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[b"\x10",[body],deadline])
@@ -76,9 +85,10 @@ def replay(group,endpoint,directory=None):
     markets=[]
     for row in [r for r in d["rows"] if r["group"]==group and "key" in r]:
         key=row["key"]
+        if wrapped_module and ZERO not in key[:2]:continue
         cash=row["terms"].get("quote") or next((t for t in key[:2] if t in (WETH,USDC)),None)
         item=dict(pool=row["id"],key=key,cash=cash,cases=[]);markets.append(item)
-        owner=payers.get(cash)
+        owner=payers.get(WETH if wrapped_module and cash==ZERO else cash)
         if not owner:item["reason"]="нет подтверждённого независимого держателя котируемого актива";continue
         if rpc(endpoint,"eth_getCode",[owner,at])!="0x":raise ValueError("пробный держатель не является EOA")
         item["payer"]=owner;asset=next(t for t in key[:2] if t!=cash)
@@ -88,7 +98,8 @@ def replay(group,endpoint,directory=None):
         if cash=="0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf":
             sizes=[10**13,10**15]
         for qty in sizes:
-            for mode in (["router"] if ZERO in key[:2] else ["router","v5"]):
+            modes=["wrapped","wrapped_v5"] if wrapped_module else (["router"] if ZERO in key[:2] else ["router","v5"])
+            for mode in modes:
                 prefix,buy=leg(key,owner,[],mode,cash,asset,qty)
                 sell=leg(key,owner,prefix,mode,asset,cash,int(buy["net"]))[1] if prefix else None
                 item["cases"].append(dict(mode=mode,amount=str(qty),buy=buy,sell=sell))

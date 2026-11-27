@@ -1103,6 +1103,16 @@ jobs:
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
+      - if: startsWith(matrix.market, 'basestonk-protected-')
+        shell: bash
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/stonk" BaseStonkWallet
+          flags=()
+          if [[ "$MARKET" == basestonk-protected-secondary ]]; then flags=(--secondary); fi
+          python scripts/record_basestonk_wallets.py "$RUNNER_TEMP/market.json" --protected "$RUNNER_TEMP/stonk/BaseStonkWallet.json" "${flags[@]}"
       - if: matrix.market == 'basestonk-base-secondary'
         run: python scripts/record_basestonk_wallets.py "$RUNNER_TEMP/market.json" --secondary
       - if: matrix.market == 'basestonk-base-wallets'

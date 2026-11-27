@@ -19,7 +19,7 @@ AAPL="0xb200000000000000000000c2e324d24d7eecd1fb"
 BSTONK="0x0f61edbfe6cd86024c0f210c0695b08df55fdfc9"
 CL_FUNDING={WTCOIN:"0x089262b9d991d7bc4a55b7cff0b7f26bde407985",AAPL:"0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0"}
 
-def capture(secondary):
+def capture(secondary,protected=None):
     r=Reader("base");directory=json.loads(gzip.decompress((DATA/"basestonk_base_directory.json.gz").read_bytes()))
     src=json.loads(gzip.decompress((DATA/"basestonk_base_listed.json.gz").read_bytes()))
     assert directory["tag"]==r.tag and directory["router_hash"]==r.code_hash(ROUTER)
@@ -27,11 +27,23 @@ def capture(secondary):
     code="0x"+RUNTIME.read_text().strip().removeprefix("0x");word=lambda v:"0x"+format(v,"064x")
     state={OWNER:{"balance":hex(2*10**18)},EXEC:{"code":code,"stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     assert all(r.rpc("eth_getCode",[a,r.tag])=="0x" for a in (OWNER,EXEC))
+    module="0x00000000000000000000000000000000ba5e57aa"
+    manifest=None
+    if protected:
+        artifact=json.loads(protected.read_text())
+        args=encode(["address","bytes32","address"],[ROUTER,bytes.fromhex(directory["router_hash"][2:]),MANAGER])
+        runtime=r.rpc("eth_call",[{"from":OWNER,"data":"0x"+artifact["creation"]+args.hex()},r.tag])
+        assert len(runtime)>6 and r.rpc("eth_getCode",[module,r.tag])=="0x"
+        state[module]={"code":runtime}
+        manifest={"router":ROUTER,"router_hash":directory["router_hash"],"manager":MANAGER,
+                  "module_simulated":module,"runtime_hash":"0x"+keccak(bytes.fromhex(runtime[2:])).hex(),"compiler":artifact["solc"]}
     def run(calls):
         b,=r.rpc("eth_simulateV1",[dict(blockStateCalls=[dict(stateOverrides=state,blockOverrides=dict(time=hex(stamp)),calls=calls)],validation=False),r.tag])
         assert b["parentHash"]==r.tag["blockHash"];return b["calls"]
     def order(p,src,dst,amount,minimum,mode,deadline):
         key=p["key"];direction=src==key[0]
+        if mode=="protected":
+            return tx(module,"execute("+KEY+",bool,uint256,uint256,uint256,uint256)",[KEY,"bool","uint256","uint256","uint256","uint256"],[key,direction,amount,amount,minimum,deadline])
         if mode=="official":
             return tx(ROUTER,"swap("+KEY+",bool,uint256,uint256,address)",[KEY,"bool","uint256","uint256","address"],[key,direction,amount,minimum,OWNER])
         return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
@@ -40,7 +52,7 @@ def capture(secondary):
         if payer_token==WETH:return tx(WETH,"deposit()",[],[],amount)
         return tx(UNI,"exactOutputSingle((address,address,uint24,address,uint256,uint256,uint160))",["(address,address,uint24,address,uint256,uint256,uint160)"],[(WETH,USDC,500,OWNER,amount,10**18,0)],10**18)
     def leg(p,a,b,qty,prefix,mode):
-        spender=ROUTER if mode=="official" else EXEC
+        spender={"official":ROUTER,"v5":EXEC,"protected":module}[mode]
         approve=tx(a,"approve(address,uint256)",["address","uint256"],[spender,qty])
         bal=lambda t:tx(t,"balanceOf(address)",["address"],[OWNER])
         body=prefix+[approve,bal(a),bal(b)];suffix=[bal(a),bal(b)]
@@ -60,7 +72,7 @@ def capture(secondary):
         assert ok(at) and (debit,credit)==(paid,net)
         strict,_,_,_,_=measure(net+1,stamp+90)
         row.update(gas=int(at["gasUsed"],16),approval_gas=allowance,logs=at["logs"],strict=dict(success=ok(strict),error=strict.get("error")))
-        if mode=="v5":
+        if mode in ("v5","protected"):
             expired,e_in,e_out,_,_=measure(net,stamp-1)
             assert not ok(strict) and not ok(expired) and e_in==e_out==0
             row["expired"]=expired.get("error")
@@ -103,16 +115,16 @@ def capture(secondary):
             funding,amounts=cash(p["pair"])
             before=len(rows)
             for amount in amounts:
-                for mode in ("official","v5"):
+                for mode in (("protected",) if protected else ("official","v5")):
                     buy,prefix=leg(p,p["pair"],p["token"],amount,funding,mode);rows.append(buy)
                     if prefix:
                         sell,_=leg(p,p["token"],p["pair"],buy["received"],prefix,mode);rows.append(sell)
             if any(x["success"] for x in rows[before:]):break
-    return dict(tag=r.tag,height=r.height,timestamp=stamp,payer=OWNER,executor=EXEC,router=ROUTER,results=rows)
+    return dict(tag=r.tag,height=r.height,timestamp=stamp,payer=OWNER,executor=EXEC,router=ROUTER,results=rows,**({"protected":manifest} if manifest else {}))
 
 
 if __name__=="__main__":
     a=argparse.ArgumentParser(description=__doc__);a.add_argument("output",type=Path)
-    a.add_argument("--secondary",action="store_true");args=a.parse_args()
-    args.output.write_text(json.dumps(capture(args.secondary),separators=(",",":")),encoding="utf8")
+    a.add_argument("--secondary",action="store_true");a.add_argument("--protected",type=Path);args=a.parse_args()
+    args.output.write_text(json.dumps(capture(args.secondary,args.protected),separators=(",",":")),encoding="utf8")
 

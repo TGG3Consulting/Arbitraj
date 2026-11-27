@@ -55,7 +55,7 @@ pub(super) struct Order {
 pub(super) const TYPE: &str = "OrderERC20(uint256 nonce,uint256 expiry,address signerWallet,address signerToken,uint256 signerAmount,uint256 protocolFee,address senderWallet,address senderToken,uint256 senderAmount)";
 fn integer(v: &Value) -> Option<U256> {
     if let Some(n) = v.as_u64() {
-        return Some(n.into());
+        return Some(U256::from(n));
     }
     let n = v.as_str()?;
     if n.is_empty() || !n.bytes().all(|c| c.is_ascii_digit()) {
@@ -116,20 +116,7 @@ impl Order {
         keccak256(b)
     }
     pub(super) fn data(&self, payer: Address, protected: bool, any: bool, minimum: U256) -> Bytes {
-        let expiry = self.expiry.into();
-        let args = (
-            payer,
-            self.nonce,
-            expiry,
-            self.maker,
-            self.output,
-            self.quoted,
-            self.input,
-            self.amount,
-            self.v,
-            self.r,
-            self.s,
-        );
+        let expiry = U256::from(self.expiry);
         if protected {
             let q = abi::OrderTerms {
                 nonce: self.nonce,
@@ -152,13 +139,23 @@ impl Order {
             .abi_encode()
             .into()
         } else {
-            let selector = if any {
-                ISwap::swapAnySenderCall::SELECTOR
-            } else {
-                ISwap::swapCall::SELECTOR
-            };
-            let mut data = selector.to_vec();
-            data.extend(args.abi_encode());
+            let mut data = ISwap::swapCall {
+                recipient: payer,
+                nonce: self.nonce,
+                expiry,
+                signerWallet: self.maker,
+                signerToken: self.output,
+                signerAmount: self.quoted,
+                senderToken: self.input,
+                senderAmount: self.amount,
+                v: self.v,
+                r: self.r,
+                s: self.s,
+            }
+            .abi_encode();
+            if any {
+                data[..4].copy_from_slice(&ISwap::swapAnySenderCall::SELECTOR);
+            }
             data.into()
         }
     }

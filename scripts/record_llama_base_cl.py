@@ -18,6 +18,11 @@ CREATE = "0x" + keccak(text="PoolCreated(address,address,uint24,int24,address)")
 WAGMI = "https://github.com/RealWagmi/"
 THICK = "https://docs.equalizer.exchange/equal-fantom/contracts/"
 VENUES = {
+    "goblins": (21481309, "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8",
+                "0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4", "0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf",
+                ["https://repo.sourcify.dev/8453/0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8",
+                 "https://repo.sourcify.dev/8453/0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf",
+                 "https://repo.sourcify.dev/8453/0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4"]),
     "wagmi": (14250787, "0x576a1301b42942537d38fb147895fe83fb418fd4", "0xb5fa77e3929fe198a86aa40fd6c77886785bcd0e", "0x8b741b0d79be80e135c880f7583d427b4d41f015",
               [WAGMI+"v3-sdk/blob/055bffed07f05ab57be7bfab899f3c0df45f1c02/src/constants/addresses.ts",
                WAGMI+"smart-router/blob/8a3869f5bb5facaf154ad1677da0ad3a98cb7c4a/src/constants/exchange.ts",
@@ -55,8 +60,12 @@ def registry(reader, cap, name, head):
         assert cap.one(address,"factory()",returns=["address"]) == (factory,)
         assert cap.one(address,"WETH9()",returns=["address"]) == (WETH,)
     keytype = "int24" if name=="2thick" else "uint24"
-    if name == "wagmi":
-        init=bytes.fromhex("30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb")
+    published_init = {
+        "wagmi": "30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb",
+        "goblins": "e34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54",
+    }
+    if name in published_init:
+        init=bytes.fromhex(published_init[name])
         assert init in bytes.fromhex(code[2][2:])
     else:
         init,=cap.one(factory,"POOL_INIT_CODE_HASH()",returns=["bytes32"])

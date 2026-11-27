@@ -1,7 +1,7 @@
 """Каталог Goblins AMM Base. Nonce фабрики и корень хранилища проверяют полноту."""
 import json
 from pathlib import Path
-import requests
+from fork_fee_rpc import Reader, pool_blocks
 from eth_abi import decode
 from eth_utils import keccak
 from record_base_slipstream_executor import ROOT, calldata
@@ -12,52 +12,18 @@ QUOTER = "0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf"
 ROUTER = "0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4"
 DEPLOY = 21481309
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26"
-NODES = ["https://base.drpc.org","https://mainnet.base.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"]
 POOL = "0x"+keccak(text="PoolCreated(address,address,uint24,int24,address)").hex()
 FEE = "0x"+keccak(text="FeeAmountEnabled(uint24,int24)").hex()
-ALLOWED = {"eth_getCode","eth_getTransactionCount","eth_getLogs","eth_call","eth_getBlockByHash","eth_getProof","eth_chainId"}
-
-def batch(calls):
-    if any(m not in ALLOWED for m,_ in calls):raise ValueError("unexpected RPC method")
-    if not calls:return []
-    if len(calls)>12:
-        return [row for i in range(0,len(calls),12) for row in batch(calls[i:i+12])]
-    q=[dict(jsonrpc="2.0",id=i,method=m,params=p) for i,(m,p) in enumerate(calls)]
-    for site in NODES:
-        try:
-            response=requests.post(site,json=q,timeout=15)
-            response.raise_for_status()
-            rows=sorted(response.json(),key=lambda v:v["id"])
-            if len(rows)==len(q) and all(row["id"]==i and row.get("result") is not None for i,row in enumerate(rows)):
-                return [row["result"] for row in rows]
-        except (ValueError,KeyError,TypeError,requests.RequestException):
-            pass
-    if len(calls)>1:
-        mid=len(calls)//2;return batch(calls[:mid])+batch(calls[mid:])
-    raise ValueError(("all archive endpoints rejected",calls[0][0],str(calls[0][1])[:110]))
-
-def single(m,p):return batch([(m,p)])[0]
-
 def read(a,func,args=(),values=(),tag=None):
     return ("eth_call",[{"to":a,"data":calldata(func,args,values)},tag])
 
 def discover():
     snap=json.loads((DATA/"base.json").read_bytes());h=snap["selector"];end=snap["block"]
-    header=single("eth_getBlockByHash",[h["blockHash"],False]);assert int(header["number"],16)==end
+    reader=Reader("base",snap);header=reader.header;single=reader.one;batch=reader.many
     proof=single("eth_getProof",[FACTORY,[],h]);storage=prove_account(header,proof,FACTORY)
-    hi=int(proof["nonce"],16);counts={DEPLOY-1:0,end:hi};changed={}
-    intervals=[(DEPLOY,end)]
-    counts[DEPLOY]=int(single("eth_getTransactionCount",[FACTORY,hex(DEPLOY)]),16)
-    while intervals:
-        nxt=[]; mids=[]
-        for l,r in intervals:
-            if counts[l]==counts[r]:continue
-            if l+1==r:
-                changed[r]=counts[r]-counts[l]
-            else:
-                m=(l+r)//2;mids.append(m);nxt.extend([(l,m),(m,r)])
-        counts.update({m:int(v,16) for m,v in zip(mids,batch([("eth_getTransactionCount",[FACTORY,hex(m)]) for m in mids]),strict=True)})
-        intervals=nxt
+    hi=int(proof["nonce"],16)
+    initial=int(single("eth_getTransactionCount",[FACTORY,hex(DEPLOY)]),16)
+    changed=pool_blocks(reader,FACTORY,DEPLOY,end,initial,hi)
     records=batch([("eth_getLogs",[dict(address=FACTORY,fromBlock=hex(b),toBlock=hex(b),topics=[[FEE,POOL]])]) for b in [DEPLOY,*sorted(changed)]])
     markets=[];fees={};fee_logs=[]
     for b,logs in zip([DEPLOY,*sorted(changed)],records,strict=True):
@@ -70,7 +36,7 @@ def discover():
                                     block=b,hash=log["blockHash"],tx=log["transactionHash"]))
             else:
                 fee=int(ts[1],16);gap,=decode(["int24"],bytes.fromhex(ts[2][2:]));fees[str(fee)]=gap;fee_logs.append(log)
-        assert num==changed.get(b,counts[DEPLOY]-1)
+        assert num==changed.get(b,initial-1)
     # Any further, unused registration is visible in the storage root. Resolve the
     # observed pool tiers independently at the canonical head before reconstruction.
     pending=sorted(({m["fee"] for m in markets} | {1,10,50,100,200,250,300,400,1000,2000,2500,5000}) - set(map(int,fees)))

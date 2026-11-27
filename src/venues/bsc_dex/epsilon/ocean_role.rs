@@ -75,15 +75,10 @@ impl Roles {
     }
     pub async fn fee(&self, ctx: &Ctx, h: Head) -> Option<u16> {
         let r = self.venue.address;
+        let provider = self.ocean.address.into_word();
         let (open, accept, fee) = tokio::join!(
             word(ctx, h, r, "isPaused()", &[]),
-            word(
-                ctx,
-                h,
-                r,
-                "allowedTargets(address)",
-                self.ocean.address.into_word().as_slice()
-            ),
+            word(ctx, h, r, "allowedTargets(address)", provider.as_slice()),
             word(ctx, h, r, "protocolFeeBps()", &[])
         );
         if open? != B256::ZERO || accept? != B256::from(U256::ONE) {

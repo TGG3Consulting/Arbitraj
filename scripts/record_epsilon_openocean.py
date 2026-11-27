@@ -9,6 +9,7 @@ from eth_utils import keccak
 from record_epsilon_base import OWNER, PROVIDERS, ROUTER, USDC, WETH, UINT, ZERO, call, data, leg, method, read, rpc
 
 OCEAN = "0x6352a56caadc4f1e25cd6c75970fa768a3304e64"
+PREPAID = "0x114b11ae066a7785452c4570b42fff1b7fa5b001"
 EXEC = "0x9cafca2507a6128931f88ccc3d83d8bcf74b09f0"
 WALLET = "0x" + keccak(text="Epsilon public OpenOcean terminal archive")[-20:].hex()
 API = "https://open-api.openocean.finance/v4/base/swap"
@@ -31,10 +32,16 @@ def firm(src, dst, n, caller):
         raise ValueError("unexpected provider target, funding or method")
     params = ["address", DESC, CALLS]
     executor, t, calls = decode(params, raw[4:])
-    if ((executor, t[:6], t[7:10]) != (EXEC, (src, dst, EXEC, caller, n, int(d["minOutAmount"])), (2, ZERO, b""))
+    if ((executor, t[:6], t[7:10]) != (EXEC, (src, dst, t[2], caller, n, int(d["minOutAmount"])), (2, ZERO, b""))
             or not calls or not t[5] or encode(params, [executor, t, calls]) != raw[4:]):
         raise ValueError("provider returned another kind of payment")
-    return dict(data=d["data"], block=int(d["blockNumber"]), minimum=str(t[5]), expected=str(d["outAmount"]))
+    if t[2]!=EXEC:
+        if t[2]!=PREPAID or calls[0][0]!=int(PREPAID,16) or calls[0][2]!=0 or calls[0][3][:4]!=bytes.fromhex("d6531cdc"):
+            raise ValueError("unverified source receiver")
+        transfer=decode(["address","address","uint256","address","bytes"],calls[0][3][4:])
+        if (transfer[0],transfer[1],transfer[3])!=(src,dst,EXEC):
+            raise ValueError("unaccepted source-to-provider payment")
+    return dict(funding=t[2],data=d["data"], block=int(d["blockNumber"]), minimum=str(t[5]), expected=str(d["outAmount"]))
 
 
 def latest_header(endpoint):
@@ -69,7 +76,7 @@ def capture(url, artifact):
     ts = int(latest["timestamp"], 16) + 2
     if any(rpc(url, "eth_getCode", [a, tag]) != "0x" for a in [OWNER, WALLET]):
         raise ValueError("experimental addresses already occupied")
-    init = artifact["creation"].removeprefix("0x") + encode(["address"]*3, [ROUTER, OCEAN, EXEC]).hex()
+    init = artifact["creation"].removeprefix("0x") + encode(["address"]*4, [ROUTER, OCEAN, EXEC, PREPAID]).hex()
     overrides = {OWNER: {"balance": hex(10**18)}}
     runtime = read(url, [{"from": OWNER, "data": "0x" + init}, tag, overrides])
     template = bytes.fromhex(artifact["runtime"].removeprefix("0x"))
@@ -121,7 +128,7 @@ def capture(url, artifact):
             if (fail['status'],fail['spent'],fail['received'])!=('0x0','0','0'): raise ValueError("net/expiry")
             o["controls"].append(fail["error"])
     return dict(chain=8453,block=int(latest["number"],16),head=head,ts=ts,fee=fee,source=API,owner=OWNER,wallet=WALLET,
-                router=ROUTER,ocean=OCEAN,executor=EXEC,walletHash="0x"+keccak(runtime).hex(),cases=offers)
+                router=ROUTER,ocean=OCEAN,executor=EXEC,funding=PREPAID,fundingHash="0x"+keccak(hexstr=rpc(url,"eth_getCode",[PREPAID,tag])).hex(),walletHash="0x"+keccak(runtime).hex(),cases=offers)
 
 
 if __name__=="__main__":

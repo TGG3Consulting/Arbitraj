@@ -183,3 +183,25 @@ async fn lost_ack_and_restart_keep_the_original_intent_and_nonce() {
     }
     std::fs::remove_dir_all(folder).unwrap();
 }
+
+#[test]
+fn same_height_reorg_reopens_the_inclusive_deadline() {
+    use super::history::{Child, boundary};
+    use crate::venues::bsc_dex::quote::white_state::Head;
+    let h = Head {
+        number: 100u64.into(),
+        timestamp: 120u64.into(),
+        hash: B256::repeat_byte(1),
+    };
+    let mut child = Child {
+        number: 101u64.into(),
+        timestamp: 121u64.into(),
+        parent_hash: h.hash,
+    };
+    assert!(boundary(h, &child, 120));
+    child.parent_hash = B256::repeat_byte(2);
+    assert!(!boundary(h, &child, 120));
+    child.parent_hash = h.hash;
+    child.timestamp = 120u64.into();
+    assert!(!boundary(h, &child, 120));
+}

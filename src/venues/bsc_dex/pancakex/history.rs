@@ -28,6 +28,19 @@ pub(super) fn fill_filter(who: Address) -> Value {
 pub(super) fn expired(timestamp: u64, deadline: u64) -> bool {
     timestamp > deadline
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct Child {
+    pub number: U64,
+    pub parent_hash: B256,
+    pub timestamp: U64,
+}
+pub(super) fn boundary(last: Head, next: &Child, deadline: u64) -> bool {
+    last.number.to::<u64>().checked_add(1) == Some(next.number.to())
+        && last.hash == next.parent_hash
+        && last.timestamp.to::<u64>() <= deadline
+        && expired(next.timestamp.to(), deadline)
+}
 async fn last(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> GatewayResult<u64> {
     let origin = white_state::head(ctx, &format!("{:#x}", m.start)).await?;
     let mut high = tip.number.to::<u64>();
@@ -168,6 +181,18 @@ pub(super) async fn scan(
         != tip.hash
     {
         return Err(bad());
+    }
+    if expired(tip.timestamp.to(), t.deadline) {
+        let next = end.checked_add(1).ok_or_else(bad)?;
+        let child: Child = rpc::call(
+            ctx,
+            "eth_getBlockByNumber",
+            json!([format!("{next:#x}"), false]),
+        )
+        .await?;
+        if child.number > tip.number || !boundary(cutoff, &child, t.deadline) {
+            return Err(bad());
+        }
     }
     Ok((cutoff, out))
 }

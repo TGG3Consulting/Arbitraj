@@ -10,7 +10,7 @@ import requests
 from eth_abi import decode
 from eth_abi.exceptions import DecodingError
 
-from aqua_evidence import ORDER, REGISTRY, ROUTER, TOPICS, order_record, unpack
+from aqua_evidence import call, ORDER, REGISTRY, ROUTER, TOPICS, order_record, unpack
 from record_base_slipstream_executor import ROOT
 
 DEPLOYMENT = {"ethereum":(25567141,"0xe37e4dd7e73302a57cbf8ef6cff2424a787df9bf462d69f2de6d149dca43fb1a"),
@@ -63,19 +63,15 @@ def snapshot(network):
     with ThreadPoolExecutor(max_workers=3) as workers:
         records=[log for interval in workers.map(logs,spans) for log in interval]
     counts=Counter()
-    latest={}
+    shipped=[]
     for log in sorted(records,key=lambda v:(int(v["blockNumber"],16),int(v["logIndex"],16))):
         name,values=unpack(log)
         maker,app,h=values[:3]
         counts[(app,name)]+=1
-        if app!=ROUTER: continue
-        k=(maker,h)
-        if name=="Docked":
-            latest.pop(k,None)
-            continue
-        latest[k]=(log,values[3])
+        if app==ROUTER and name=="Shipped":shipped.append((maker,h,log,values[3]))
+    pushed=next(k for k,v in TOPICS.items() if v=="Pushed")
     def registration(item):
-        (maker,h),(log,data)=item
+        maker,h,log,data=item
         try: rec=order_record(decode([ORDER],bytes.fromhex(data[2:]))[0])
         except (DecodingError,ValueError,OverflowError):rec=None
         row=dict(maker=maker,order=h,tx=log["transactionHash"],block=log["blockNumber"],blockHash=log["blockHash"])
@@ -87,17 +83,40 @@ def snapshot(network):
         assets=[]
         for event in sorted(receipt["logs"],key=lambda x:int(x["logIndex"],16)):
             if int(event["logIndex"],16)<=pos:continue
-            if event["address"].lower()!=REGISTRY or event["topics"][:1]!=[next(k for k,v in TOPICS.items() if v=="Pushed")]:break
+            if event["address"].lower()!=REGISTRY or event["topics"][:1]!=[pushed]:break
             _,v=unpack(event)
             if tuple(v[:3])!=(maker,ROUTER,h):break
             assets.append(v[3])
         return dict(**row,traits=rec[1]["traits"],data=rec[1]["data"],assets=assets)
-    with ThreadPoolExecutor(max_workers=3) as workers:active=list(workers.map(registration,latest.items()))
+    with ThreadPoolExecutor(max_workers=3) as workers:history=list(workers.map(registration,shipped))
+    programs={}
+    for row in history:
+        if row.get("unsupported"):continue
+        k=(row["maker"],row["order"])
+        p=programs.setdefault(k,dict(maker=k[0],order=k[1],traits=row["traits"],data=row["data"],assets={}))
+        for token in row["assets"]:p["assets"].setdefault(token,None)
+    # Docked omits the affected tokens. safeBalances checks count of each token independently.
+    selector={"blockHash":header["hash"],"requireCanonical":True}
+    jobs=[(key,t) for key,p in programs.items() for t in p["assets"]]
+    types=["address","address","bytes32","address"]
+    multi="0xca11bde05977b3631167028862be2a173976ca11"
+    for i in range(0,len(jobs),64):
+        part=jobs[i:i+64]
+        calls=[(REGISTRY,False,bytes.fromhex(call("rawBalances",types,[k[0],ROUTER,bytes.fromhex(k[1][2:]),t])[2:])) for k,t in part]
+        args=call("aggregate3",["(address,bool,bytes)[]"],[calls])
+        raw=query("eth_call",[{"to":multi,"data":args},selector])
+        results,=decode(["(bool,bytes)[]"],bytes.fromhex(raw[2:]))
+        for (key,token),(ok,res) in zip(part,results,strict=True):
+            if not ok:raise ValueError("rawBalances failed")
+            value,count=decode(["uint248","uint8"],res)
+            programs[key]["assets"][token]={"virtual":str(value),"count":count}
+    active=[p for p in programs.values() if any(0<v["count"]<255 for v in p["assets"].values())]
     if query("eth_getBlockByNumber",[hex(last),False])["hash"]!=header["hash"]:
         raise ValueError("directory reorg")
     return dict(chain=network,registry=REGISTRY,app=ROUTER,first=first,creation=creation,through=last,
                 blockHash=header["hash"],stateRoot=header["stateRoot"],events=len(records),
-                counts=[[*k,v] for k,v in counts.items()],active=active)
+                counts=[[*k,v] for k,v in counts.items()],registration_transactions=len(history),
+                unsupported_registrations=sum(bool(p.get("unsupported")) for p in history),active=active)
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)

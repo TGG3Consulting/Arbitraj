@@ -6773,5 +6773,100 @@
         "0x1a1307f1dffd6a8240f9c8e4ac90a7e64e71b6c7396e010180926786c64073fc"
       ]
     }
+  },
+  {
+    "network": "ethereum",
+    "id": "curve-llamalend-ethereum",
+    "chain_id": 1,
+    "source": "https://docs.curve.finance/developer/integration/llamma/",
+    "settings": {
+      "dex.kind": "llamma_lending",
+      "dex.factory": "0xea6876dde9e3467564acbee1ed5bac88783205e0",
+      "dex.factory_runtime_hash": "0x7b67403fdfb27c10a31af56f83ab2812a4d31ace1283ab4a643bdb352ea64784",
+      "dex.llamma_runtime_classes": [
+        "23541 416 0xa98308a5003d5431c8c009447120609f4aaaa94f8e87f4d0783e8176cd539bd9",
+        "23741 416 0x0c11eec9bff60f8eb72450dca5adf39c2010b3e206d47b4d8cc76fbcaed0e2d8",
+        "23758 416 0x77fad7baac76dbe119d5701a2a067929a161db1285e8564eaa84f199de418cf8"
+      ],
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "5",
+        "10",
+        "50",
+        "100",
+        "500",
+        "1000",
+        "5000"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0x3870951351ee262d5af40e20ead0b48aff4c6b2f634422631b9a3dc55abafaae"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "id": "curve-llamma-mint-ethereum",
+    "chain_id": 1,
+    "source": "https://docs.curve.finance/developer/integration/llamma/",
+    "settings": {
+      "dex.kind": "llamma_mint",
+      "dex.factory": "0xc9332fdcb1c491dcc683bae86fe3cb70360738bc",
+      "dex.factory_runtime_hash": "0x0d3f87cb418b8edf6536a6e3fe9e03d96590802dfec656106027e82d97da176a",
+      "dex.llamma_runtime_classes": [
+        "24131 384 0x1e853979f80783b181dbcd786aeb4c7d81fb1139a3ba7c24487416768715d560",
+        "24146 384 0xc9be392bff5f50f0c3dc4f3893f209f29b0b455cc86e0a04d706f5457170ba6b",
+        "23524 416 0x6749ee5dbe5867d6b468048b48040b720852e1952c4eb52ba144caf10b6ab85d",
+        "23758 416 0x77fad7baac76dbe119d5701a2a067929a161db1285e8564eaa84f199de418cf8"
+      ],
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "5",
+        "10",
+        "50",
+        "100",
+        "500",
+        "1000",
+        "5000"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0xd6f026a51d357080d3e9dd1235fb9accfdc951ecb90a2bd2ce2c757299c8396f"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "id": "curve-llamalend-v2-ethereum",
+    "chain_id": 1,
+    "source": "https://docs.curve.finance/developer/integration/llamma/",
+    "settings": {
+      "dex.kind": "llamma_v2",
+      "dex.factory": "0x8f6b56ec5ddf1f2691a1059f1d3cd97ac9eab0bd",
+      "dex.factory_runtime_hash": "0x34105039181f9834ba20d4085d1748bd8aa1d1d9c55b2724234873d3c7fcaf92",
+      "dex.llamma_runtime_classes": [
+        "22831 416 0xc0c55286f588dcf49265694c4c8db7eea054af07ecf8c07fe57bdd95575e265d"
+      ],
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "5",
+        "10",
+        "50",
+        "100",
+        "500",
+        "1000",
+        "5000"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0x67d697e887db2a08da841f4d86cd90a96edf5f5ad340375b34336c443f9586e2"
+      ]
+    }
   }
 ]

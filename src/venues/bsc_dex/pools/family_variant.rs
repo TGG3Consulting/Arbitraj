@@ -148,6 +148,7 @@ pub enum Variant {
     PropVenue,
     RubiconClassic,
     YieldBasis,
+    Llamma(super::llamma::Registry),
     BalancerV1,
     BancorLegacy,
     BancorV3,
@@ -229,6 +230,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn llamma(self)->bool{matches!(self,Self::Llamma(_))}
     pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
     pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
@@ -377,6 +379,9 @@ pub fn of(kind: &str) -> Variant {
         "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,
         "surge_native" | "surge_v5" => Variant::Surge,
         "rubicon_classic" => Variant::RubiconClassic,
+        "llamma_lending" => Variant::Llamma(super::llamma::Registry::Lending),
+        "llamma_mint" => Variant::Llamma(super::llamma::Registry::Mint),
+        "llamma_v2" => Variant::Llamma(super::llamma::Registry::V2),
         "yield_basis" => Variant::YieldBasis,
         "balancer_v1" => Variant::BalancerV1,
         "bancor_legacy" => Variant::BancorLegacy,

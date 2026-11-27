@@ -78,6 +78,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         if c.family.variant.mooniswap() {out.push(Box::pin(super::mooniswap::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Brokerbot {out.push(Box::pin(super::brokerbot_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Temple {out.push(Box::pin(super::temple_directory::verify(ctx,c)).await);continue;}
+        if c.family.variant.llamma(){out.push(Box::pin(super::llamma_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::YieldBasis {out.push(Box::pin(super::yield_basis_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::BalancerV1 {out.push(Box::pin(super::balancer_v1_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::BancorLegacy {out.push(Box::pin(super::bancor_legacy_directory::verify(ctx,c)).await);continue;}

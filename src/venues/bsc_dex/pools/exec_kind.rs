@@ -272,7 +272,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // msg.sender по умолчанию; вход — transferFrom(msg.sender) (twocrypto-ng 89c8dfb CurveTwocryptoOptimized.vy
         // L364-L404, L286-L335; tricrypto-ng ecaa816 CurveTricryptoOptimizedWETH.vy L410-L442, L313-L379 — use_eth =
         // False: монета ERC-20, у WETH-монеты пул отдаёт WETH): тот же шаг STABLE_U256 (без нового кода исполнителя).
-        "curve_twocrypto_ng" | "curve_tricrypto_ng" => ExecKind::StableU256,
+        "llamma_lending" | "llamma_mint" | "llamma_v2" | "curve_twocrypto_ng" | "curve_tricrypto_ng" => ExecKind::StableU256,
         // Решение 453: crypto v1 — exchange(uint256 i, uint256 j, dx, min_dy) с умолчаниями use_eth = False и (у
         // фабрики v1) receiver = msg.sender — тот же селектор (curve-factory-crypto 7ed1011 CurveCryptoSwap2ETH.vy
         // L859-L866: вход transferFrom(sender) L709-L716, выход transfer(receiver) L733-L738; curve-crypto-contract

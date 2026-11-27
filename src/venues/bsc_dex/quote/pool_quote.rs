@@ -532,6 +532,15 @@ pub fn swap(
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})
         }
+        (PoolState::Llamma(s),PoolKind::V2)=>{
+            let side=s.side(token_in).ok_or_else(none)?;
+            let points=&s.levels[side];
+            if exact_in && let Some(last)=points.last() && amount>last.amount_in && s.partial_cap[side].is_some_and(|cap|amount<=cap){
+                return Ok(Swapped{amount_in:last.amount_in,amount_out:last.amount_out,complete:false});
+            }
+            let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
+            Ok(Swapped{amount_in,amount_out,complete:true})
+        }
         (PoolState::YieldBasisPool(s),PoolKind::V2)=>{
             let points=s.points(token_in).ok_or_else(none)?;
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;

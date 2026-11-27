@@ -38,6 +38,13 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if e.family.variant.llamma(){
+        use super::super::pools::llamma::{self,ILlama};
+        return llamma::shape(e).is_some_and(|s|s.amm==log.address) &&
+            ILlama::TokenExchange::decode_raw_log(log.topics.iter().copied(),&log.data).is_ok_and(|x|
+                !x.recipient.is_zero() && !x.tokens_sold.is_zero() && !x.tokens_bought.is_zero() &&
+                ((x.sold_id.is_zero() && x.bought_id==alloy_primitives::U256::from(1)) || (x.bought_id.is_zero() && x.sold_id==alloy_primitives::U256::from(1))));
+    }
     if e.family.variant.ammalgam() {
         return log.address==e.pool.reference.address() && IV2Pair::Swap::decode_raw_log(log.topics.iter().copied(),&log.data).is_ok_and(|s|
             (!s.amount0In.is_zero() && s.amount1In.is_zero() && s.amount0Out.is_zero() && !s.amount1Out.is_zero()) ||

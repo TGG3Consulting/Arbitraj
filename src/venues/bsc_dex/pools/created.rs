@@ -164,7 +164,7 @@ async fn filters(p: &Pools, usdt: Address) -> Vec<Value> {
             if !out.contains(&filter){out.push(filter);}
             continue;
         }
-        if matches!(family.variant,super::family_variant::Variant::YieldBasis | super::family_variant::Variant::UniswapV1 | super::family_variant::Variant::BancorLegacy | super::family_variant::Variant::BancorV3) {
+        if family.variant.llamma() || matches!(family.variant,super::family_variant::Variant::YieldBasis | super::family_variant::Variant::UniswapV1 | super::family_variant::Variant::BancorLegacy | super::family_variant::Variant::BancorV3) {
             out.push(json!({"address":addr,"topics":[t0]}));
             continue;
         }

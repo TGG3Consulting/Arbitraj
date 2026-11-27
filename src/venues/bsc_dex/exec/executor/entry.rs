@@ -59,7 +59,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
+    if f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -76,6 +76,10 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
     let k = f
         .executor_kind
         .ok_or_else(|| format!("{}: у вида пула нет шага исполнителя", f.id))?;
+    if f.variant.llamma(){
+        if k==ExecKind::StableU256 && let PoolRef::Singleton{manager,id}=pool && crate::venues::bsc_dex::pools::llamma::decode_key(*id).is_some_and(|(_,amm)|amm==*manager){return Ok((k,*manager));}
+        return Err("LLAMMA: неверный индекс или физический адрес".into());
+    }
     if f.variant.defiplaza(){
         if k==ExecKind::Basin && let PoolRef::Multi{contract,token0,token1}=pool && !contract.is_zero() && token0<token1{return Ok((k,*contract));}
         return Err("DefiPlaza: нужен зарегистрированный рынок кассы".into());
@@ -126,6 +130,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
+    if e.family.variant.llamma(){return e.family.executor_kind==Some(ExecKind::StableU256) && crate::venues::bsc_dex::pools::llamma::shape(e).is_some();}
     if e.family.variant.ammalgam(){return super::super::super::pools::ammalgam::graph_target(ctx,e).map(|a|(k,a)).ok_or_else(||"Ammalgam: не подтверждены рынок и модуль".into());}
     if e.family.variant.defiplaza(){return super::super::defiplaza_plan::graph_target(ctx,e).map(|target|(k,target)).ok_or_else(||"DefiPlaza: касса и пара изменились".into());}
     if e.family.variant.issuer_shares() {
@@ -207,6 +212,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
 pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
+    if e.family.variant.llamma() && crate::venues::bsc_dex::pools::llamma::shape(e).is_none(){return Err("LLAMMA: физические валюты или адрес не совпадают с рынком".into());}
     if e.family.variant.issuer_shares() &&
         !matches!((&e.pool.reference,&e.pool.state),(PoolRef::Contract(a),PoolState::Brokerbot(s)) if *a==s.broker && k==ExecKind::Balancer) {
         return Err("Aktionariat: неподтверждённый рынок или несовместимый вид шага".into());
@@ -236,6 +242,11 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 /// менеджера-синглтона, у CURVE нет состояния StableSwap или токен входа не из пары пула; NotConfigured — комиссия V2
 /// не задана или не в целых долях 1e-6. `token_in` — токен входа шага (нужен виду CURVE для порядка i → j).
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
+    if e.family.variant.llamma(){
+        let (k,amm)=supported(e.family,&e.pool.reference).map_err(|w|ctx.err(ErrorCode::NoRoute,w))?;
+        let i=crate::venues::bsc_dex::pools::llamma::shape(e).and_then(|s|s.side(token_in)).filter(|_|k==ExecKind::StableU256).ok_or_else(||ctx.err(ErrorCode::NoRoute,"LLAMMA: неизвестный актив или рынок"))? as u8;
+        return Ok((Params::StableU256{i,j:1-i},amm));
+    }
     if e.family.variant.ammalgam(){
         let module=super::super::super::pools::ammalgam::graph_target(ctx,e).filter(|_|[e.pool.token0,e.pool.token1].contains(&token_in)).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Ammalgam: неверный рынок или валюта шага"))?;
         return Ok((Params::Basin,module));

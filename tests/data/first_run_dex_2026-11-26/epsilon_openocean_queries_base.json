@@ -1,0 +1,143 @@
+{
+  "chain": 8453,
+  "block": 62949774,
+  "head": "0x68b6468e38eb65c3a7dc676c097f7031646ac387fa3e6852af0f681b4a8083c6",
+  "fee": 5,
+  "wallet": "0x21999d25a0efef4993b4042ede2cc550b5ef51c9",
+  "router": "0x303ca5c65aabcb1ce242df93f478c41e0e4d2580",
+  "cases": [
+    {
+      "src": "0x4200000000000000000000000000000000000006",
+      "dst": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "n": "1000000000000000",
+      "nested": false,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=1000000000000000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=1000000000000000&gasPriceDecimals=6000000&slippage=0.5&sender=0x21999d25a0efef4993b4042ede2cc550b5ef51c9&account=0x21999d25a0efef4993b4042ede2cc550b5ef51c9",
+      "quote_out": "1722008",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "1711675",
+      "spent": "1000000000000000",
+      "received": "1720286",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x4200000000000000000000000000000000000006",
+      "dst": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "n": "1000000000000000",
+      "nested": true,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=999500000000000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=999500000000000&gasPriceDecimals=6000000&slippage=0.5&sender=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580&account=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580",
+      "quote_out": "1721149",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "1710822",
+      "spent": "1000000000000000",
+      "received": "1719428",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x4200000000000000000000000000000000000006",
+      "dst": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "n": "4000000000000000",
+      "nested": false,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=4000000000000000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=4000000000000000&gasPriceDecimals=6000000&slippage=0.5&sender=0x21999d25a0efef4993b4042ede2cc550b5ef51c9&account=0x21999d25a0efef4993b4042ede2cc550b5ef51c9",
+      "quote_out": "6881536",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "6840247",
+      "spent": "4000000000000000",
+      "received": "6874655",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x4200000000000000000000000000000000000006",
+      "dst": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "n": "4000000000000000",
+      "nested": true,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=3998000000000000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x4200000000000000000000000000000000000006&outTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&amountDecimals=3998000000000000&gasPriceDecimals=6000000&slippage=0.5&sender=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580&account=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580",
+      "quote_out": "6878098",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "6836829",
+      "spent": "4000000000000000",
+      "received": "6871220",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dst": "0x4200000000000000000000000000000000000006",
+      "n": "1000000",
+      "nested": false,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=1000000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=1000000&gasPriceDecimals=6000000&slippage=0.5&sender=0x21999d25a0efef4993b4042ede2cc550b5ef51c9&account=0x21999d25a0efef4993b4042ede2cc550b5ef51c9",
+      "quote_out": "582348411002563",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "578854320536548",
+      "spent": "1000000",
+      "received": "581766062591561",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dst": "0x4200000000000000000000000000000000000006",
+      "n": "1000000",
+      "nested": true,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=999500&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=999500&gasPriceDecimals=6000000&slippage=0.5&sender=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580&account=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580",
+      "quote_out": "582057240491310",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "578564897048362",
+      "spent": "1000000",
+      "received": "581475183250819",
+      "controls": [
+        3,
+        3
+      ]
+    },
+    {
+      "src": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dst": "0x4200000000000000000000000000000000000006",
+      "n": "4000000",
+      "nested": false,
+      "refused": "HTTPSConnectionPool(host='open-api.openocean.finance', port=443): Read timed out. (read timeout=15)"
+    },
+    {
+      "src": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "dst": "0x4200000000000000000000000000000000000006",
+      "n": "4000000",
+      "nested": true,
+      "quote_url": "https://open-api.openocean.finance/v4/base/quote?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=3998000&gasPriceDecimals=6000000&slippage=0.5",
+      "swap_url": "https://open-api.openocean.finance/v4/base/swap?inTokenAddress=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&outTokenAddress=0x4200000000000000000000000000000000000006&amountDecimals=3998000&gasPriceDecimals=6000000&slippage=0.5&sender=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580&account=0x303ca5c65aabcb1ce242df93f478c41e0e4d2580",
+      "quote_out": "2325412609568119",
+      "gas_price": "6000000",
+      "slippage": "0.5",
+      "minimum": "2311460133910710",
+      "spent": "4000000",
+      "received": "2320481608102712",
+      "controls": [
+        3,
+        3
+      ]
+    }
+  ]
+}

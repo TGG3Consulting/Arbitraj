@@ -104,3 +104,59 @@ fn check(raw: &[u8], counts: [usize; 2], missing: usize) {
     assert_eq!(forms, counts);
     assert_eq!(refusals, missing);
 }
+
+#[test]
+fn production_requests_match_public_price_and_funded_swap() {
+    use reqwest::Url;
+    use rust_decimal::Decimal;
+    use std::collections::BTreeMap;
+
+    let archive: Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/epsilon_openocean_queries_base.json"
+    ))
+    .unwrap();
+    let number = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let address = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let mut forms = [0, 0];
+    for row in archive["cases"].as_array().unwrap() {
+        if row.get("refused").is_some() {
+            continue;
+        }
+        let nested = row["nested"].as_bool().unwrap();
+        let amount = number(&row["n"]);
+        let provider_amount = if nested {
+            amount - amount * U256::from(archive["fee"].as_u64().unwrap()) / U256::from(10_000)
+        } else {
+            amount
+        };
+        let payer = address(&archive[if nested { "router" } else { "wallet" }]);
+        for (key, account) in [("quote_url", None), ("swap_url", Some(payer))] {
+            let sample = Url::parse(row[key].as_str().unwrap()).unwrap();
+            let base = sample.join("./").unwrap();
+            let args = |url: &Url| url.query_pairs().into_owned().collect::<BTreeMap<_, _>>();
+            let current = super::ocean_api::query(
+                &base,
+                (address(&row["src"]), address(&row["dst"])),
+                provider_amount,
+                number(&row["gas_price"]),
+                row["slippage"]
+                    .as_str()
+                    .unwrap()
+                    .parse::<Decimal>()
+                    .unwrap(),
+                account,
+            )
+            .unwrap();
+            assert_eq!(current.path(), sample.path());
+            assert_eq!(args(&current), args(&sample));
+        }
+        assert_eq!(number(&row["spent"]), amount);
+        assert!(
+            number(&row["quote_out"]) > U256::ZERO
+                && number(&row["received"]) >= number(&row["minimum"])
+        );
+        assert_eq!(row["controls"], serde_json::json!([3, 3]));
+        forms[usize::from(nested)] += 1;
+    }
+    assert_eq!(forms, [3, 4]);
+}

@@ -2034,6 +2034,11 @@ def tables(network, snapshots, profiles):
                     f"до и после транзакции и исходные остатки обоих токенов исполнителя. Недоступность этих данных оставляет "
                     f"операцию на сверке. [Суммы, расходы и квитанции](../{wallets.as_posix()}) · "
                     f"[Канонические балансы по индексу транзакции](../{(data_dir / 'shibaswap_historical_returns.json').as_posix()})")
+        if base and str(row["id"]) == "2589":
+            index = json.loads(gzip.decompress((data_dir / "dexalot_base_registry.json.gz").read_bytes()))
+            candidates = [index["router"], *index["members"]]
+            task = ("Dexalot Base · источник суммирует долларовый оборот production-multi-base по дате. "
+                    "Отдельно сверены три разрешённых кассы и пять выплат в сети. См. раздел Dexalot на Base.")
         if str(row["id"]) == "1447":
             assert hashflow["factory"] in {a.lower() for a in candidates}
             candidates = [hashflow["factory"], hashflow["router"]]
@@ -2626,6 +2631,8 @@ def main():
         "[Архив кошелька, строгих границ и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46023325745)", ""
     ])
     lines.extend(hashflow_market_observation())
+    from base_dexalot_markets import settings as dexalot_settings
+    lines.extend(dexalot_settings())
     ambient = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz").read_bytes()))
     preset = next(r["settings"] for r in profiles if r["id"] == "ambient-ethereum" and r["chain_id"] == 1)
     lines.extend(["### Ambient на Ethereum", "",
@@ -2641,6 +2648,7 @@ def main():
         "ликвидность. Проверенные выплаты относятся к ETH/USDC и USDC/USDT. На одном состоянии сверены 8 обменов через "
         "исходный контракт, 8 через модуль напрямую и 4 через действующий V5. "
         "Отдельный прогон дал 32 котировки ETH/USDC, ETH/USDT и USDC/USDT на 1, 10, 100 и 1 000 единиц выбранного стейблкоина. "
+        "В 31 случае заполнена вся заданная сторона. При запросе 1 000 USDT из пары ETH/USDT получено только 224,141839 USDT. "
         "[Архив размеров и направлений](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46025778985). "
         f"Создание модуля в архивной симуляции потребовало {ambient['manifest']['gas']:,} gas.", "",
         "При достижении предельной цены исходный контракт принял запрос на 1 USDC и выдал 0,499995 USDC. "

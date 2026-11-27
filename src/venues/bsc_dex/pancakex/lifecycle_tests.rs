@@ -186,22 +186,23 @@ async fn lost_ack_and_restart_keep_the_original_intent_and_nonce() {
 
 #[test]
 fn same_height_reorg_reopens_the_inclusive_deadline() {
+    use alloy_primitives::U64;
     use super::history::{Child, boundary};
     use crate::venues::bsc_dex::quote::white_state::Head;
     let h = Head {
-        number: 100u64.into(),
-        timestamp: 120u64.into(),
+        number: U64::from(100u64),
+        timestamp: U64::from(120u64),
         hash: B256::repeat_byte(1),
     };
     let mut child = Child {
-        number: 101u64.into(),
-        timestamp: 121u64.into(),
+        number: U64::from(101u64),
+        timestamp: U64::from(121u64),
         parent_hash: h.hash,
     };
     assert!(boundary(h, &child, 120));
     child.parent_hash = B256::repeat_byte(2);
     assert!(!boundary(h, &child, 120));
     child.parent_hash = h.hash;
-    child.timestamp = 120u64.into();
+    child.timestamp = U64::from(120u64);
     assert!(!boundary(h, &child, 120));
 }

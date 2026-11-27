@@ -4,12 +4,14 @@
 Использует только файлы. Другие разделы документа сохраняются.
 """
 import argparse
+from collections import Counter
 import hashlib
 import gzip
 import json
 from pathlib import Path
 from base_eth_omni_mars_deli import paragraphs as omni_mars_deli
 import base_launch_inventory
+from base_ethereum_source_roles import card_reference, classify_source, describe
 
 
 def read(path):
@@ -1838,9 +1840,9 @@ def tables(network, snapshots, profiles):
     hashflow = next(n for n in hashflow_data["networks"] if n["chain"] == (8453 if base else 1))
     king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
                   if s["network"] == network}
+    coverage_counts = Counter()
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
-        from base_ethereum_source_roles import card_reference, nonspot
         ref = card_reference(network,r) or r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
@@ -2550,16 +2552,29 @@ def tables(network, snapshots, profiles):
             assert empire["factory"] in {a.lower() for a in candidates}
             task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
                     f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
-        measured = nonspot(network, r)
-        if measured:
-            task = measured
-        elif task == f"`T-SOURCE-{network}-{row['id']}`":
-            from base_ethereum_source_roles import describe
-            measured = describe(network,str(row["id"]),r,configured,candidates)
-            if measured:
-                task = measured
+        kind, profile, status = classify_source(network, r, configured)
+        coverage_counts[kind] += 1
+        coverage_counts["profile"] += int(profile is not None)
+        if kind == "nonspot":
+            task = status
+        else:
+            pending = f"`T-SOURCE-{network}-{row['id']}`"
+            if task == pending:
+                measured = describe(network, str(row["id"]), r, configured, candidates)
+                if measured:
+                    task = measured
+            task = f"{status}. {task}" if task else status
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
+    direct, provider = coverage_counts["spot"], coverage_counts["provider"]
+    out.extend(["", f"Из {len(llama['rows'])} строк оборота спотовый обмен установлен в "
+                f"{direct + provider}, в том числе {provider} через провайдера. "
+                f"В {coverage_counts['profile']} строках подтверждена привязка как минимум одного "
+                f"DEX-профиля первого запуска на этой сети. Для {coverage_counts['nonspot']} указан статус "
+                f"«нет спота», для {coverage_counts['other']} установлен иной предмет или способ расчёта, "
+                f"по {coverage_counts['unknown']} вид обмена в этой сети остался открытым. "
+                "Каждый ID считается один раз. API-доступ, наличие ликвидности, разрешение на торговлю и "
+                "количество независимых физических пулов проверяются отдельно."])
     scope_note = (
         "Из Base двадцатки обнаружено одно дополнительное размещение уже известной площадки. "
         "У ранней фабрики Aerodrome Slipstream 22 пула, у двух положительна активная ликвидность. "

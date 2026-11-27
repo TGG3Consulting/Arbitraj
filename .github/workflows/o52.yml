@@ -12,4 +12,4 @@ jobs:
         with:
           shared-key: tests
           save-if: false
-      - run: cargo test --locked --test base_ethereum_llama_top
+      - run: cargo test --locked --test base_ethereum_llama_top --test base_ethereum_catalog_coverage

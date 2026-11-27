@@ -39,6 +39,7 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         output,
         amount_raw,
         amount_tokens,
+        buy_amount_raw: _, // venue::source_quote accepts exact output only for Textile.
         trader,
         market,
         builder,

@@ -3571,6 +3571,15 @@ title = "Clipper / Sushi Blade — проверенные пулы для кот
 intro = "Пул и хеш кода привязаны к сети. Для каждого запроса проверяются адрес получателя, подпись источника и срок действия."
 
 [[section.rec]]
+name = "clipper.base_url"
+area = "площадка base_dex"
+unit = "HTTPS"
+value = "https://blade-api.sushi.com/rfq/v2/"
+source = "https://docs.sushi.com/api/blade/swagger"
+rationale = "Официальный путь для pool и quote-sign. Успешный личный доступ проверяется ответом поставщика."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
 name = "clipper.pools"
 area = "площадка base_dex"
 unit = "пул и хеш байткода"
@@ -3578,6 +3587,15 @@ value = "0xb32d856cad3d2ef07c94867a800035e37241247c 0xddc707f62c6f07045367300f26
 source = "tests/data/first_run_dex_2026-11-26/clipper_base_directory.json.gz и clipper_rfq_access.json.gz"
 rationale = "В архиве воспроизведена действительная подпись для этого пула. Свежую заявку поставщик подписывает на адрес кошелька оператора."
 prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "clipper.base_url"
+area = "площадка eth_dex"
+unit = "HTTPS"
+value = "https://blade-api.sushi.com/rfq/v2/"
+source = "https://docs.sushi.com/api/blade/swagger"
+rationale = "Официальный путь для pool и quote-sign. Успешный личный доступ проверяется ответом поставщика."
+prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
 name = "clipper.pools"

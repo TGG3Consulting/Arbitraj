@@ -79,7 +79,7 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
         ("dex.router", json!(module)),
         (
             "dex.module_runtime_hashes",
-            json!(["0xc89be9fbbce19d4f938d94776d4eec71574a276bc61bf8bbe8ff158a670857d3"]),
+            json!([tape["module_runtime"].as_str().unwrap()]),
         ),
     ] {
         ctx.settings

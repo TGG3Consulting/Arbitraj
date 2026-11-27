@@ -96,7 +96,7 @@ async fn balance(
     let call = json!({"from":payer,"to":token,"data":data});
     if let Some(i) = index {
         let result=rpc::call::<Value>(ctx,"debug_traceCall",json!([call,at,{"txIndex":format!("{i:#x}"),"tracer":"callTracer","tracerConfig":{"onlyTopCall":true}}])).await.ok()?;
-        shiba_return::balance(&result, payer, token, data)
+        shiba_return::balance(&result, ctx.chain_id()?, payer, token, data)
     } else {
         let raw = rpc::call::<Bytes>(ctx, "eth_call", json!([call, at]))
             .await

@@ -97,3 +97,16 @@ fn published_sushi_offer_recovers_the_canonical_designated_signer() {
     o.amount += U256::ONE;
     assert!(!o.valid(&q, signer));
 }
+
+#[test]
+fn blade_key_is_scoped_to_its_issuer_even_when_the_api_path_is_configurable() {
+    assert!(super::api::endpoint("https://blade-api.sushi.com/partner/rfq/v2").is_some());
+    for url in [
+        "http://blade-api.sushi.com/rfq", "https://blade-api.sushi.com:8443/rfq",
+        "https://blade-api.sushi.com.example.org/rfq", "https://example.org/",
+        "https://user@blade-api.sushi.com/rfq", "https://blade-api.sushi.com/rfq?token=x",
+        "https://blade-api.sushi.com/rfq#fragment",
+    ] {
+        assert!(super::api::endpoint(url).is_none());
+    }
+}

@@ -2194,6 +2194,13 @@ def tables(network, snapshots, profiles):
                 task += ("Старый on-chain пул показывал 0,998237 и 9,980753 USDT за 1 и 10 USDC. "
                          "Обе профинансированные покупки отклонил контракт: swapsAllowed=false; кошелёк сохранил USDC. "
                          "В исходном Cove не найдено ни одного события депозита или обмена от создания по этот блок. ")
+            import tomllib
+            first_run = tomllib.loads(Path("config/first_run.toml").read_text(encoding="utf8"))
+            venue_id = "base_dex" if base else "eth_dex"
+            settings = {r["name"]: r["value"] for section in first_run["section"] for r in section.get("rec", [])
+                        if r["name"].startswith("clipper.") and r.get("prefill", {}).get("id") == venue_id}
+            task += (f"Для `{venue_id}` укажите `clipper.base_url = {settings['clipper.base_url']}`, "
+                     f"`clipper.pools = {settings['clipper.pools']}` и личный секрет `clipper.api_key`. ")
             task += (f"[Адреса, роли, остатки и квитанции](../{fixture.as_posix()}) · "
                      "[Официальный список Sushi](https://github.com/sushi-labs/clipper-rfq-subgraph/tree/453c83478f2553270f4fcf52797695fc52553240/scripts/deploy-codegen/networks).")
         classic_ids = {"119": "sushiswap-v2-base" if base else "sushiswap",

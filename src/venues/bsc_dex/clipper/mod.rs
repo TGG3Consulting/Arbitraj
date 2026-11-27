@@ -45,8 +45,8 @@ pub(super) async fn preview(ctx: &Ctx, r: Request) -> GatewayResult<Preview> {
     let rev = ctx.settings.generation();
     let chain = ctx
         .chain_id()
-        .filter(|c| matches!(c, 1 | 8453))
-        .ok_or_else(|| bad("Clipper: нужна проверенная сеть Ethereum или Base"))?;
+        .filter(|c| *c > 0)
+        .ok_or_else(|| bad("Clipper: укажите chainId сети этой площадки"))?;
     let terms = r
         .firm
         .as_ref()

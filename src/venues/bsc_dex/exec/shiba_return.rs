@@ -52,6 +52,7 @@ fn net(call: &Call, output: &Bytes, order: Erc20Call) -> Option<U256> {
 }
 pub(super) fn balance(
     v: &serde_json::Value,
+    chain: u64,
     payer: Address,
     token: Address,
     data: Bytes,
@@ -64,7 +65,7 @@ pub(super) fn balance(
         &frame.call,
         &frame.output,
         Erc20Call {
-            chain: 1,
+            chain,
             payer,
             module: token,
             calldata: keccak256(data),

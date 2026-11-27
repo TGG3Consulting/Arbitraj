@@ -180,7 +180,8 @@ async fn by_chain(
 
 fn clipper_configured(st: &AppState, venue: &str) -> bool {
     let at = crate::settings::read::At { venue: Some(venue), coin: None };
-    matches!(st.settings.integer("dex.evm_chain_id",at).ok(),Some(1 | 8453))
+    st.settings.integer("dex.evm_chain_id",at).is_ok_and(|chain| chain > 0)
+        && st.settings.text("clipper.base_url",at).is_ok_and(|url| !url.is_empty())
         && st.settings.get_exact("clipper.pools", &crate::settings::scope::Scope::Venue(venue.into()))
             .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
 }

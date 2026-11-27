@@ -2,16 +2,27 @@
 use super::{Ctx, ErrorCode, GatewayResult};
 use crate::gateway::http;
 use alloy_primitives::Address;
-use reqwest::{Client, header::HeaderValue};
+use reqwest::{Client, Url, header::HeaderValue};
 use serde_json::Value;
 
 pub(super) struct Api {
+    base: Url,
     client: Client,
     auth: HeaderValue,
     chain: u64,
 }
+// Общий секрет Blade выдан этому origin. Перенаправления при запросе отключены.
+pub(super) fn endpoint(raw: &str) -> Option<Url> {
+    let url = Url::parse(raw).ok()?;
+    (url.scheme() == "https" && url.host_str() == Some("blade-api.sushi.com")
+        && url.port_or_known_default() == Some(443) && url.username().is_empty()
+        && url.password().is_none() && url.query().is_none() && url.fragment().is_none())
+        .then_some(url)
+}
 impl Api {
     pub fn new(ctx: &Ctx, chain: u64) -> GatewayResult<Self> {
+        let base = endpoint(&ctx.text("clipper.base_url")?).ok_or_else(||
+            ctx.err(ErrorCode::NotConfigured, "Укажите HTTPS URL официального Blade API в clipper.base_url"))?;
         let key = ctx.vault.get("clipper.api_key").map_err(|_| {
             ctx.err(
                 ErrorCode::NotConfigured,
@@ -37,6 +48,7 @@ impl Api {
             .build()
             .map_err(|_| ctx.err(ErrorCode::Internal, "Не создан клиент Blade API"))?;
         Ok(Self {
+            base,
             client,
             auth,
             chain,
@@ -48,14 +60,12 @@ impl Api {
         method: &str,
         args: &[(&str, String)],
     ) -> GatewayResult<Value> {
-        let request = self
-            .client
-            .get(format!(
-                "https://blade-api.sushi.com/rfq/v2/{method}/{}",
-                self.chain
-            ))
-            .header("x-api-key", self.auth.clone())
-            .query(args);
+        let mut url = self.base.clone();
+        url.path_segments_mut()
+            .map_err(|_| ctx.err(ErrorCode::NotConfigured, "Некорректный путь Blade API"))?
+            .pop_if_empty().push(method).push(&self.chain.to_string());
+        url.query_pairs_mut().extend_pairs(args.iter().map(|(k, v)| (*k, v.as_str())));
+        let request = self.client.get(url).header("x-api-key", self.auth.clone());
         let lim = ctx.limits()?;
         let (status, body) = http::exchange(request, lim).await.map_err(|e| {
             ctx.err(

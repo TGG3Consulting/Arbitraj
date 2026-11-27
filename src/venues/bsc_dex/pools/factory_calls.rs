@@ -109,7 +109,7 @@ pub fn plan(
             // Решение 482: Liquidity Book V2.1 — getAllLBPairs(a, b) только у DEX без справочника индексатора
             // (indexer_gap.rs; Swapline V1 в сети arbitrum): у DEX из списка индексатора (LFJ BSC и др.) — как раньше,
             // без поиска. V2.2 / v2.0 — отдельные виды, их фабрики здесь не сверялись.
-            Proto::LbV21 if f.variant==super::family_variant::Variant::E3Lb => vec![Q::Lb],
+            Proto::LbV21 if f.variant.e3_lb() => vec![Q::Lb],
             Proto::LbV20 | Proto::LbV22 if f.variant == super::family_variant::Variant::SectorLb => vec![Q::Lb],
             Proto::LbV21 => match indexer_gap::outside(ctx, f.id) {
                 Some(true) => vec![Q::Lb],

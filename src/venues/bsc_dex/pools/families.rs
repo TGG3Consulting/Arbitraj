@@ -1155,7 +1155,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // пул getSwapOut (адрес не нужен).
         Proto::LbV21 => {
             list.push("dex.factory");
-            if f.variant==Variant::E3Lb {list.extend(["dex.factory_runtime_hash","dex.router","dex.router_runtime_hash","dex.lb_implementations","dex.proxy_runtime_hashes"]);}
+            if f.variant.e3_lb() {
+                list.extend(["dex.factory_runtime_hash", "dex.router", "dex.router_runtime_hash",
+                    "dex.lb_implementations", "dex.proxy_runtime_hashes"]);
+            }
             if f.variant == Variant::LbV21Clone {
                 list.push("dex.lb_implementations");
             }

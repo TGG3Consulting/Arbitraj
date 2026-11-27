@@ -83,7 +83,7 @@ pub(in crate::venues::bsc_dex) async fn plan(
         .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "LBRouter: не определён шаг бина"))?;
     let router = ctx.dex_addr("dex.router", s.entry.family.id)?;
     sectorone::check(ctx, &s.entry, &h.selector(), true).await?;
-    if s.entry.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::E3Lb{
+    if s.entry.family.variant.e3_lb() {
         crate::venues::bsc_dex::pools::e3::input(ctx,s.entry.pool.reference.address(),s.order.token_in,&h.selector()).await?;
     }
     let mut plan = white_direct::build(ctx, s, wallet, router, now, all, generation).await?;

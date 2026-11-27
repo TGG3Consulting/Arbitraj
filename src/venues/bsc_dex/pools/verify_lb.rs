@@ -74,7 +74,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 None => Verdict::Failed("нет ответа фабрики".into()),
                 Some(Err(node)) => Verdict::Failed(node),
                 Some(Ok(a)) => match decide(c, p, f, &a) {
-                    Ok(found) if matches!(c.family.variant,super::family_variant::Variant::LbV21Clone | super::family_variant::Variant::E3Lb) => {
+                    Ok(found)
+                        if c.family.variant.e3_lb()
+                            || c.family.variant == super::family_variant::Variant::LbV21Clone =>
+                    {
                         verify_clone(ctx, found, p.0).await
                     }
                     Ok(found) => Verdict::Taken(Box::new(found)),

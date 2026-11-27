@@ -76,7 +76,7 @@ pub(crate) async fn presend(
     let steps: Vec<_> = legs
         .iter()
         .flatten()
-        .filter(|s| s.entry.family.variant == super::family_variant::Variant::E3Lb)
+        .filter(|s| s.entry.family.variant.e3_lb())
         .map(|s| (s.entry.clone(), s.order.token_in))
         .collect();
     if steps.is_empty() {

@@ -229,7 +229,7 @@ jobs:
         with:
           shared-key: tests
           save-if: false
-      - name: Run the four PancakeSwap X hot-path and recovery checks separately
+      - name: Measure each PancakeSwap X recovery and empty path registry test on the default stack
         env:
           ARB_PANCAKEX_FUTURE_SIZES: ${{ runner.temp }}/pancakex-futures.json
         run: |

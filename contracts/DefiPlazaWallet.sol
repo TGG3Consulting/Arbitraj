@@ -30,6 +30,8 @@ contract DefiPlazaWallet {
     bool public immutable stable;
     bytes32 public immutable executorHash;
     uint256 private constant STABLE_ASSETS=4;
+    uint8 private constant LISTED=3;
+    uint256 private constant Q64_FRACTION_BITS=64;
     bool transient private busy;
     error Bounds();
     error Cash();
@@ -67,10 +69,10 @@ contract DefiPlazaWallet {
         if(stable) return IStablePlaza(exchange).getOutFromIn(index(src),index(dst),amount);
         (bool open,uint64 keep,)=IMultiPlaza(exchange).DFPconfig();
         if(!open) revert Bounds();
-        if(src!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(src);if(state!=3)revert Bounds();}
-        if(dst!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(dst);if(state!=3)revert Bounds();}
+        if(src!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(src);if(state!=LISTED)revert Bounds();}
+        if(dst!=address(0)){(uint8 state,)=IMultiPlaza(exchange).listedTokens(dst);if(state!=LISTED)revert Bounds();}
         uint256 credited=amount*keep;
-        return credited*balance(dst,exchange)/((balance(src,exchange)<<64)+credited);
+        return credited*balance(dst,exchange)/((balance(src,exchange)<<Q64_FRACTION_BITS)+credited);
     }
     function swapFrom(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
         external payable returns(uint256 received)

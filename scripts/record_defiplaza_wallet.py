@@ -1,5 +1,6 @@
 """Сверка чистой оплаты DefiPlaza через защищённый кошелёк и исходный V5 kind 29."""
 import argparse
+from hashlib import sha256
 import gzip
 import json
 from pathlib import Path
@@ -54,7 +55,7 @@ def test_leg(reader, pool, leg, mode, states, deadline):
                 zero_min=rows[len(prefix)].get("error") if zero else None,plus_one=high["error"],expiry=expired["error"],logs=filled["logs"],action=trade)
 
 
-def capture(kind, artifact):
+def capture(kind, artifact, manifest):
     folder=ROOT/"tests/data/first_run_dex_2026-11-26"
     original=json.loads(gzip.decompress((folder/f"defiplaza_{kind}_ethereum.json.gz").read_bytes()))
     head=json.loads((folder/"ethereum.json").read_bytes())
@@ -86,6 +87,17 @@ def capture(kind, artifact):
         modes=["wallet","v5"]
         if ZERO in (leg["input"],leg["output"]): modes.append("native")
         fills.extend(test_leg(reader,pool,leg,mode,states,deadline) for mode in modes)
+    if manifest is not None:
+        roles={}
+        for role,address in [("factory",pool),("wrapped",WETH)]:
+            code=reader.one("eth_getCode",[address,reader.tag])
+            assert code!="0x"
+            roles[role]=dict(address=address,keccak256="0x"+keccak(hexstr=code).hex())
+        plan=dict(kind="defiplaza_"+kind,chainId=1,network="Ethereum",sourceBlock=reader.tag["blockHash"],roles=roles,
+                  stable=kind=="stable",executorHash="0x"+params[-1].hex(),solc=artifact["solc"],data=data,
+                  runtimeKeccak="0x"+keccak(hexstr=deployed).hex(),runtimeSha256=sha256(bytes.fromhex(deployed[2:])).hexdigest(),
+                  creationSha256=sha256(bytes.fromhex(data[2:])).hexdigest())
+        manifest.write_text(json.dumps(plan,separators=(",",":")),encoding="utf8")
     return dict(pool=pool,kind=kind,block=head["block"],selector=reader.tag,payer=OWNER,module=MODULE,executor=EXEC,
                 runtime="0x"+keccak(hexstr=deployed).hex(),fills=fills)
 
@@ -95,6 +107,7 @@ if __name__=="__main__":
     cli.add_argument("kind",choices=MARKETS)
     cli.add_argument("artifact",type=Path)
     cli.add_argument("output",type=Path)
+    cli.add_argument("--manifest",type=Path)
     args=cli.parse_args()
-    args.output.write_text(json.dumps(capture(args.kind,json.loads(args.artifact.read_bytes())),separators=(",",":")),encoding="utf8")
+    args.output.write_text(json.dumps(capture(args.kind,json.loads(args.artifact.read_bytes()),args.manifest),separators=(",",":")),encoding="utf8")
 

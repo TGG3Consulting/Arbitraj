@@ -233,6 +233,31 @@ mod tests {
                 .filter(|s| s["cases"].is_array())
                 .cloned(),
         );
+        for (network, snapshot, raw) in [
+            ("base", &base, include_bytes!("../../tests/data/first_run_dex_2026-11-26/llama_base_v2_wallets.json.gz").as_slice()),
+            ("ethereum", &eth, include_bytes!("../../tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz").as_slice()),
+        ] {
+            let records: std::collections::BTreeMap<String,Value> =
+                serde_json::from_reader(flate2::read::GzDecoder::new(raw)).unwrap();
+            for (slug, record) in records {
+                assert_eq!(record["selector"], snapshot["selector"]);
+                let sample = record["samples"].as_array().unwrap().iter()
+                    .find(|s| s["cases"].as_array().is_some_and(|v| v.len() == 2)).unwrap();
+                assert_eq!(sample["network"],network);
+                assert_eq!(sample["dex"],format!("{slug}-{network}"));
+                assert_eq!(sample["factory"],record["factory"]);
+                assert_eq!(sample["creation_code_hash"],record["origin"]["creation_code_hash"]);
+                pairs.push(sample.clone());
+            }
+        }
+        let cl_bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz");
+        let cl_books: std::collections::BTreeMap<String,Value> =
+            serde_json::from_reader(flate2::read::GzDecoder::new(cl_bytes.as_slice())).unwrap();
+        for (slug, book) in cl_books {
+            assert_eq!(book["selector"],base["selector"]);
+            assert!(book["cases"].as_array().unwrap().iter().any(|c| c["wire"]=="v5"));
+            pairs.push(serde_json::json!({"dex":format!("{slug}-base"), "network":"base", "creation_code_hash":book["init"]}));
+        }
         for raw in markets {
             let registered: std::collections::BTreeMap<String, Value> =
                 serde_json::from_str(raw).unwrap();

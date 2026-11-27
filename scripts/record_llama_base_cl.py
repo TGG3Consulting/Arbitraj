@@ -7,7 +7,7 @@ from eth_abi import decode, encode
 from eth_utils import keccak
 
 from fork_fee_rpc import Reader, pool_blocks
-from record_balancer_markets import Capture, posts
+from record_balancer_markets import posts
 from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, simulate_block
 from record_bitswap_ethereum import tx, balance
 from record_concave_ethereum import approval
@@ -24,6 +24,21 @@ VENUES = {
     "thick": (6314325, "0xe6da85feb3b4e0d6aed95c41a125fba859bb9d24", "0x1f7a12b40bfc8e8561008bc2ca1fbdc71a36d0e8", "0xf5b7181877feab982a4b49a99e84bb7cbebeff98", [THICK]),
     "2thick": (23864246, "0x7ca1dccfb4f49564b8f13e18a67747fd428f1c40", "0xe4ba08712c404042b8eefc3fdf3b603c977500df", "0xc701e92db1ef14ab64f66f18536b1e07678db678", [THICK]),
 }
+
+
+class CanonicalCalls:
+    """Decode one Ethereum call on the same verified block across archive providers."""
+    def __init__(self, reader):
+        self.reader = reader
+        self.selector = reader.tag
+        self.endpoint = reader.endpoints[0]
+
+    def one(self, target, signature, args=(), values=(), returns=()):
+        call = tx(target, signature, args, values)
+        # Multicall may contain 64 independent tick reads.
+        call["gas"] = hex(24_000_000)
+        response = self.reader.one("eth_call", [call, self.selector])
+        return decode(returns, bytes.fromhex(response[2:]))
 
 
 def registry(reader, cap, name, head):
@@ -169,6 +184,6 @@ def wallet(reader,cap,book):
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("name",choices=VENUES);ap.add_argument("output",type=Path)
     a=ap.parse_args();snap=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes()); reader=Reader("base",snap)
-    cap=Capture(dict(snap,endpoint="https://base.gateway.tenderly.co"))
+    cap=CanonicalCalls(reader)
     book=wallet(reader,cap,registry(reader,cap,a.name,snap))
     a.output.write_bytes(json.dumps(book,separators=(",",":")).encode())

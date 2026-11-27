@@ -1797,11 +1797,15 @@ def tables(network, snapshots, profiles):
                         assert directory["roles"]["factory"]["address"] == candidates[0] and directory["selector"] == wallets["selector"]
                         active = sum(int(m["liquidity"]) > 0 for m in directory["markets"])
                         counts = {wire: sum("received" in c.get(side, {}) for c in wallets["cases"] if c["wire"] == wire
-                                            for side in ("buy", "sell")) for wire in ("router", "v5")}
+                                            for side in ("buy", "sell")) for wire in ("router", "router_fot", "router_sweep", "module", "v5")}
                         task += (f" · {len(directory['markets'])} зарегистрированных пулов, {active} с активной ликвидностью. "
                                  f"На двух размерах V5 подтвердил {counts['v5']} выплат с проверкой чистого минимума, "
-                                 f"официальный Router — {counts['router']}. При покупке A7A5 за USDT Router дважды выдал на атом "
-                                 f"меньше подписанного минимума. Прямой путь проверяет runtime обеих валют. "
+                                 f"три штатных входа Router — по {counts['router']} каждый. На USDT→A7A5 каждый штатный вход "
+                                 f"дважды принял минимум на атом выше зачисленного. Модуль AlgebraRouterWallet подтвердил "
+                                 f"{counts['module']} чистых выплат, в том числе две продажи A7A5 с фактическим списанием "
+                                 f"на атом меньше номинала. V5 на этих продажах откатился. На WETH/wA7A5 обычный Router "
+                                 f"сэкономил 19 326–26 047 gas относительно V5 при одинаковом расходе и выплате. "
+                                 f"Для одобренного владельцем модуля укажите dex.v3_wallet_module. "
                                  f"[Фабрика, плагины, квитанции и отказы](../{snapshot.as_posix()})")
                     if slug == "goblins" and base:
                         directory_path = data_dir / "goblins_base_directory.json.gz"

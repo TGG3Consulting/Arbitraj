@@ -13,6 +13,7 @@ alloy::sol! {
         struct Query { address tokenIn; address tokenOut; address deployer; uint256 amount; uint160 limit; }
         function quoteExactInputSingle(Query calldata query) external returns (
             uint256 out, uint256 spent, uint160 price, uint32 ticks, uint256 gasUsed, uint16 fee);
+        function router() external view returns (address);
         function getPool() external view returns (address);
         function implementation() external view returns (address);
     }
@@ -58,6 +59,18 @@ pub(super) async fn plugin(ctx:&Ctx,f:&Family,pool:Address,plug:Address,at:&Valu
         batch::read(ctx,[batch::view(at,beacon,getter.clone())])
     )?;
     if batch::decode(&value,getter)?!=implementation{return Err(bad())}
+    Ok(())
+}
+
+pub(super) async fn wallet(ctx:&Ctx,e:&super::registry::Entry,module:Address,at:&Value)->GatewayResult<()> {
+    let original=ctx.dex_addr("dex.router",e.family.id)?;
+    let runtime=super::safeswap_trade::hash(ctx,e.family.id,"dex.router_runtime_hash")?;
+    let getter=ITheorem::routerCall{};
+    let ((),(),[value])=tokio::try_join!(super::cypher::router(ctx,e,original,at),plain(ctx,original,runtime,at),
+        batch::read(ctx,[batch::view(at,module,getter.clone())]))?;
+    if batch::decode(&value,getter)?!=original {
+        return Err(ctx.err(ErrorCode::NotApplicable,"Theorem: модуль обслуживает другой Router"));
+    }
     Ok(())
 }
 

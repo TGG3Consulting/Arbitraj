@@ -215,8 +215,9 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
     let exact_target=matches!(&o.wire,Wire::BalancerV1(t) if t.desired.is_some())||matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
+    let bounded_input=matches!(&o.wire,Wire::RegisteredV3(m) if m.algebra_wallet.is_some());
     let charged=spent.ok_or_else(fail)?;
-    if charged.is_zero() || charged>o.amount || (!exact_target && charged!=o.amount) || received.is_zero() || received < o.minimum {
+    if charged.is_zero() || charged>o.amount || (!exact_target && !bounded_input && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
@@ -239,7 +240,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if let Wire::Ranges(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::RegisteredV3(market)=&o.wire {
         let proof=super::super::exec::registered_v3_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
-        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+        if proof.measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     }
     if let Wire::Carbon(c)=&o.wire {
         let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};

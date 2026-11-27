@@ -74,9 +74,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
-        if let Some(target)=registered_router::wallet_module(ctx,e) && let Some(mut m)=Market::from_entry(ctx,e)
-            && (head.is_none() || registered_router::checked_module(ctx,e,&head.unwrap().selector()).await.is_ok()){
-            m.wallet_module=true;
+        if registered_router::wallet_module(ctx,e).is_some() && let Ok((target,m))=
+            Box::pin(super::super::exec::registered_v3_wallet::module_market(ctx,e,head.map(|h|h.selector()).as_ref())).await {
             let order=Execution{mode:RouteMode::Direct,target,wire:Wire::RegisteredV3(m)};
             if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,order,head).await{options.push(option)}
         }

@@ -63,7 +63,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 .unwrap();
             let market = Market {
                 pool,
-                maverick_chain:None,maverick:false,algebra_short_event:false,algebra_deployer:None,fee_event:extended,router02:None,slipstream:None,wallet_module:false,
+                maverick_chain:None,maverick:false,algebra_wallet:None,algebra_short_event:false,algebra_deployer:None,fee_event:extended,router02:None,slipstream:None,wallet_module:false,
                 fee: U24::from(node["fee"].as_u64().unwrap() as u32),
             };
             let bound = Proof {
@@ -129,7 +129,7 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
         let data: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
         let market = archive["markets"].as_array().unwrap().iter().find(|e| e["pool"] == row["pool"]).unwrap();
         let proof = Proof {
-            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), maverick_chain:None,maverick:false,algebra_short_event:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:None,wallet_module:true },
+            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), maverick_chain:None,maverick:false,algebra_wallet:None,algebra_short_event:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:None,wallet_module:true },
             target:parse(&tx["to"]), payer:parse(&tx["from"]),input:parse(&row["source"]),output:parse(&row["target"]),
             budget:amount(&row["spent"]),minimum:amount(&row["received"]),deadline:U256::from_be_slice(&data[data.len()-32..]),
         };
@@ -179,7 +179,7 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
                     let tx=x["calldata"].as_str().unwrap().parse::<Bytes>().unwrap();
                     let call=ICypherRouter::exactInputSingleCall::abi_decode(&tx).unwrap().args;
                     assert_eq!(call.deployer,parse(&m["deployer"]));
-                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,maverick_chain:None,maverick:false,fee_event:false,router02:None,slipstream:None,wallet_module:false,algebra_short_event:false,algebra_deployer:Some(call.deployer)},
+                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,maverick_chain:None,maverick:false,fee_event:false,router02:None,slipstream:None,wallet_module:false,algebra_wallet:None,algebra_short_event:false,algebra_deployer:Some(call.deployer)},
                         target:parse(&d["router"]),payer:parse(&x["payer"]),input:call.tokenIn,output:call.tokenOut,budget:call.amountIn,minimum:call.minimum,deadline:call.deadline};
                     assert_eq!(p.data(),tx);assert_eq!(p.payer,call.recipient);assert_eq!(x["spent"],p.budget.to_string().as_str());
                     let q=leg["official_quote"]["response"].as_str().unwrap().parse::<Bytes>().unwrap();
@@ -220,7 +220,7 @@ fn early_slipstream_recovers_actual_payment_and_spacing_from_saved_order() {
         let calldata:Bytes=tx["data"].as_str().unwrap().parse().unwrap();
         let decoded=super::super::ur::IUniversalRouter::executeCall::abi_decode(&calldata).unwrap();
         let bound=Proof{market:Market{pool:address(&row["pool"]),fee:U24::ZERO,wallet_module:false,
-            maverick_chain:None,maverick:false,algebra_short_event:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:Some((m["tick_spacing"].as_i64().unwrap() as i32,
+            maverick_chain:None,maverick:false,algebra_wallet:None,algebra_short_event:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:Some((m["tick_spacing"].as_i64().unwrap() as i32,
                    address(&meta["permit2"]["address"])))},payer:address(&raw["owner"]),
             target:address(&tx["to"]),input,output,budget:units(&row["amount"]),minimum:units(&row["received"]),deadline:decoded.deadline};
         let mut proof:Proof=serde_json::from_value(serde_json::to_value(bound).unwrap()).unwrap();
@@ -264,7 +264,7 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
             let proof = Proof {
                 market: Market {
                     pool: addr(&row["pool"]), fee: U24::from(market["current_fee"].as_u64().unwrap() as u32),
-                    algebra_short_event:false,algebra_deployer: None, fee_event:false, wallet_module:module,
+                    algebra_wallet:None,algebra_short_event:false,algebra_deployer: None, fee_event:false, wallet_module:module,
                     maverick:false, maverick_chain:None, slipstream:None, router02:Some(key),
                 },
                 target:addr(&tx["to"]), payer:addr(&tx["from"]), input:addr(&row["input"]),
@@ -303,7 +303,7 @@ fn shibaswap_original_router_reconciles_all_recorded_wallet_payments() {
         let proof = Proof {
             market: Market {
                 pool:address(&row["pool"]),fee:U24::from(market["fee"].as_u64().unwrap() as u32),
-                algebra_short_event:false,algebra_deployer:None,fee_event:false,wallet_module:false,maverick:false,maverick_chain:None,
+                algebra_wallet:None,algebra_short_event:false,algebra_deployer:None,fee_event:false,wallet_module:false,maverick:false,maverick_chain:None,
                 slipstream:None,router02:None,
             },
             target:address(&signed["to"]),payer:address(&signed["from"]),input:address(&row["source"]),
@@ -346,7 +346,7 @@ fn theorem_short_swap_event_recovers_the_signed_wallet_order() {
             let args = ICypherRouter::exactInputSingleCall::abi_decode(&data).unwrap().args;
             let proof = Proof {
                 market:Market{pool:address(&row["pool"]),fee:U24::ZERO,algebra_deployer:Some(args.deployer),
-                    algebra_short_event:true,fee_event:false,wallet_module:false,maverick:false,maverick_chain:None,
+                    algebra_wallet:None,algebra_short_event:true,fee_event:false,wallet_module:false,maverick:false,maverick_chain:None,
                     slipstream:None,router02:None},
                 target:address(&tx["to"]),payer:address(&tx["from"]),input:args.tokenIn,output:args.tokenOut,
                 budget:args.amountIn,minimum:args.minimum,deadline:args.deadline,

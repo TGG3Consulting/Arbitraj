@@ -267,6 +267,7 @@ pub(super) async fn option(
         } else {
             None
         };
+        let algebra_wallet=matches!(&execution.wire,v2_wallet_sim::Wire::RegisteredV3(m) if m.algebra_wallet.is_some());
         let o = Order {
             payer,
             target,
@@ -292,6 +293,9 @@ pub(super) async fn option(
         }
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;
+            if algebra_wallet {c.coins=num::to_decimal(fill.charged,i.coin_dec).ok_or_else(bad)?.min(i.qty);}
+        } else if algebra_wallet {
+            c.usdt=num::to_decimal(fill.charged,i.usdt_dec).ok_or_else(bad)?;
         }
         c.usable.gas = fill.swap_gas;
         approval = Some(fill.approval);

@@ -1,6 +1,7 @@
 """Compare Theorem's QuoterV2 with funded original Router and Algebra V5 on the same state."""
 import argparse
 import json
+import hashlib
 from pathlib import Path
 
 from eth_abi import decode, encode
@@ -95,6 +96,12 @@ def wallets(reader,book,artifact):
         return dict(input=a,output=b,requested=str(size),spent=str(spent),received=str(received),
                     gas=int(exact["gasUsed"],16),approval_gas=int(checks[-1][len(prefix)]["gasUsed"],16),
                     upper=above["error"],expired=late["error"],transaction=paid,logs=exact["logs"],quote=quoted),prefix+[permit,paid]
+    deployment=dict(kind="algebra_integral_theorem",chainId=book["chain_id"],factory=FACTORY,
+                    factoryHash=book["roles"]["factory"]["runtime"],router=ROUTER,
+                    routerHash=book["roles"]["router"]["runtime"],deployer=book["roles"]["physical"]["address"],
+                    deployerHash=book["roles"]["physical"]["runtime"],sourceBlock=tag["blockHash"],
+                    runtimeKeccak=module_hash,runtimeSha256=hashlib.sha256(bytes.fromhex(deployed["returnData"][2:])).hexdigest(),
+                    data=create["data"],creationSha256=hashlib.sha256(bytes.fromhex(create["data"][2:])).hexdigest())
     rows=[]
     for m in book["markets"]:
         cash=next((a for a in [WETH,*STABLES] if a in m["tokens"]),None)
@@ -120,7 +127,7 @@ def wallets(reader,book,artifact):
                     rec["sell"],_=leg(guarded_prefix,m,other,cash,guarded_size,wire)
     assert any("received" in r.get("sell",{}) for r in rows)
     return dict(selector=tag,height=book["height"],state_root=book["state_root"],cases=rows,payer=OWNER,
-                executor=EXEC,module_hash=module_hash,module=module,deployment_gas=int(deployed["gasUsed"],16),creation=create["data"])
+                executor=EXEC,module_hash=module_hash,module=module,deployment_gas=int(deployed["gasUsed"],16),deployment=deployment)
 
 if __name__=="__main__":
     cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("artifact",type=Path);args=cli.parse_args()

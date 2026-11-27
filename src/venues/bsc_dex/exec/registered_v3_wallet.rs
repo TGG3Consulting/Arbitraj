@@ -35,6 +35,8 @@ pub struct Market {
     pub algebra_deployer:Option<Address>,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub algebra_short_event: bool,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub algebra_wallet: Option<(Address,B256)>,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub fee_event: bool,
     #[serde(default, skip_serializing_if = "standard_event")]
@@ -70,12 +72,13 @@ impl Market {
             maverick_chain: if maverick {Some(ctx.chain_id()?)} else {None},
             slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
             pool: e.pool.reference.address(), maverick, fee: if algebra || maverick{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
-            algebra_short_event:e.family.variant==Variant::TheoremIntegral,
+            algebra_wallet:None,algebra_short_event:e.family.variant==Variant::TheoremIntegral,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
     }
 }
 pub trait RouterMarket: Copy {
+    fn algebra_wallet(self) -> Option<(Address,B256)> { None }
     fn emitter(self) -> Address;
     fn topics(self, actual: &[B256], signature: B256, target:Address, payer:Address, _input:Address, _output:Address) -> bool {
         actual == [signature, target.into_word(), payer.into_word()]
@@ -94,6 +97,7 @@ pub trait RouterMarket: Copy {
     ) -> Bytes;
 }
 impl RouterMarket for Market {
+    fn algebra_wallet(self) -> Option<(Address,B256)> { self.algebra_wallet }
     fn emitter(self) -> Address {
         self.pool
     }
@@ -140,6 +144,9 @@ impl RouterMarket for Market {
             let params=(wallet,amount,minimum,Bytes::from(path),true).abi_encode_params();
             return super::ur::execute(vec![(super::ur::V3_SWAP_EXACT_IN,Bytes::from(params))],deadline)
         }
+        if let Some(deployer)=self.algebra_deployer && self.wallet_module {
+            return super::algebra_wallet::order(self.pool,input,output,deployer,amount,minimum,deadline);
+        }
         if let Some(deployer)=self.algebra_deployer{return ICypherRouter::exactInputSingleCall{args:ICypherRouter::Params{tokenIn:input,tokenOut:output,deployer,recipient:wallet,deadline,amountIn:amount,minimum,limit:Default::default()}}.abi_encode().into()}
         if self.wallet_module{return super::super::pools::solidly_v3::execution_data(self.pool,input,output,amount,minimum,deadline)}
         if let Some(key) = self.router02 {
@@ -184,6 +191,9 @@ impl<M: RouterMarket> Proof<M> {
         )
     }
     pub(super) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
+        if let Some((_,code))=self.market.algebra_wallet() {
+            super::algebra_wallet::included(ctx,self.target,code,r).await?;
+        }
         signed_call::included(
             ctx,
             hash,
@@ -220,6 +230,9 @@ impl<M: RouterMarket> Proof<M> {
         {
             return None;
         }
+        if let Some((router,_))=self.market.algebra_wallet() {
+            return super::algebra_wallet::amounts(self,router,logs);
+        }
         let (signature, bytes) = self.market.event();
         let swap = keccak256(signature);
         let mut hits = logs
@@ -247,6 +260,19 @@ impl<M: RouterMarket> Proof<M> {
     }
 }
 
+pub(in crate::venues::bsc_dex) async fn module_market(ctx:&Ctx,e:&super::super::pools::registry::Entry,at:Option<&serde_json::Value>)
+    -> GatewayResult<(Address,Market)> {
+    let bad=||ctx.err(ErrorCode::NoRoute,"Не задан или не подтверждён кошелёк зарегистрированного пула");
+    let mut market=Market::from_entry(ctx,e).ok_or_else(bad)?;
+    market.wallet_module=true;
+    let module=if let Some(at)=at {
+        let (module,code)=registered_router::module_binding(ctx,e,at).await?;
+        if market.algebra_short_event {market.algebra_wallet=Some((ctx.dex_addr("dex.router",e.family.id)?,code));}
+        module
+    } else {registered_router::wallet_module(ctx,e).ok_or_else(bad)?};
+    Ok((module,market))
+}
+
 pub(super) async fn plan(
     ctx: &Ctx,
     s: &Step,
@@ -272,13 +298,16 @@ pub(super) async fn plan(
         return Ok(plan);
     }
     let guarded=selected.is_some() && registered_router::wallet_module(ctx,e)==selected;
-    let target=if guarded{registered_router::checked_module(ctx,e,&head.selector()).await?}else{
-        registered_router::checked(ctx, e, o.token_in, o.token_out, &head.selector()).await?
+    let (target,mut market)=if guarded{
+        module_market(ctx,e,Some(&head.selector())).await?
+    }else{
+        let target=registered_router::checked(ctx,e,o.token_in,o.token_out,&head.selector()).await?;
+        (target,Market::from_entry(ctx,e).ok_or_else(fail)?)
     };
+    market.wallet_module=guarded;
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let mut market = Market::from_entry(ctx,e).ok_or_else(fail)?;market.wallet_module=guarded;
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,

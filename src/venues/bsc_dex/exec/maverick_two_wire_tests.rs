@@ -41,7 +41,7 @@ fn signed_market_matches_multicall_and_unique_pool_swap_on_both_chains() {
                         market: Market {
                             pool: addr(&row["pool"]),
                             fee: U24::ZERO,
-                            algebra_short_event:false,algebra_deployer: None,
+                            algebra_wallet:None,algebra_short_event:false,algebra_deployer: None,
                             fee_event: false,
                             wallet_module: false,
                             router02:None,slipstream: None,

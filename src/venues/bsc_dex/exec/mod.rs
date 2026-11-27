@@ -89,6 +89,7 @@ pub(super) mod bundles_plan;
 mod dagrow_wallet_tests;
 pub(super) mod temple_wallet;
 pub(super) mod safeswap_wallet;
+mod algebra_wallet;
 pub(crate) mod degen_router;
 pub(super) mod pendle_wallet;
 pub(super) mod o1_wallet;

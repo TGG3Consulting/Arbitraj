@@ -30,7 +30,7 @@ fn safeswap_router_pips(ctx:&Ctx,e:&Entry)->GatewayResult<u32> {
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     matches!(
         e.family.variant,
-        Variant::Gemswap | Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::SafeSwapV2 | Variant::ToonSwap | Variant::V2DualCreate2LiveFee | Variant::DiamondV2 | Variant::KewlV2
+        Variant::EmpireRaw | Variant::Gemswap | Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::SafeSwapV2 | Variant::ToonSwap | Variant::V2DualCreate2LiveFee | Variant::DiamondV2 | Variant::KewlV2
     )
 }
 
@@ -57,6 +57,7 @@ async fn approved(
     hash: B256,
     at: &Value,
 ) -> GatewayResult<()> {
+    if e.family.variant==Variant::EmpireRaw {Box::pin(super::super::pools::empire::fresh(ctx,e,at)).await?;}
     if e.family.variant==Variant::SafeSwapV2 {
         use super::super::pools::{solidly_classic_factory,v2_pair_binding};
         use alloy::sol_types::SolCall;

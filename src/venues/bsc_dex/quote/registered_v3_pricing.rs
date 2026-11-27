@@ -58,7 +58,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         } else {
             None
         };
-        let plain=e.family.variant==Variant::V2ExactRouter;
+        let plain=matches!(e.family.variant,Variant::V2ExactRouter|Variant::EmpireNominal);
         let wire = if plain {
             Some(Wire::SolidlyRouter(super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false}))
         } else if classic {
@@ -91,7 +91,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             let order=Execution{mode:RouteMode::Direct,target,wire:Wire::RegisteredV3(m)};
             if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,order,head).await{options.push(option)}
         }
-        if let Some(target) = executor && e.family.variant != Variant::VvsV3 {
+        if let Some(target) = executor && !matches!(e.family.variant,Variant::VvsV3|Variant::EmpireNominal) {
             let (kind,data)=if plain {
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};

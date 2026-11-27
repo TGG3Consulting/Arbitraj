@@ -256,7 +256,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
             .unwrap();
         assert_eq!(profile["settings"]["dex.factory"], capture["factory"]);
         let live = profile["settings"]["dex.kind"] == "v2_fork_executor_create2_live_fee";
-        if live || profile["settings"]["dex.kind"] == "v2_fork_executor_create2" {
+        if live || matches!(profile["settings"]["dex.kind"].as_str(),Some("v2_fork_executor_create2"|"empire_v2")) {
             use alloy_primitives::{Address, B256};
             use arb::venues::bsc_dex::pools::verify::v2_create2;
             let parse = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();

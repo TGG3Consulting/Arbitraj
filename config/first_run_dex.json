@@ -6094,15 +6094,68 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "empire-ethereum",
-    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd674b01e778cf43d3e6544985f893355f46a74a5 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd674b01e778cf43d3e6544985f893355f46a74a5 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz · https://eth.blockscout.com/api/v2/smart-contracts/0xe7a504316bebbe540496e29798187c9ecad6ef4f · tests/data/first_run_dex_2026-11-26/empire_ethereum_wallets.json.gz",
     "settings": {
-      "dex.kind": "v2_fork_executor_create2",
+      "dex.kind": "empire_v2",
       "dex.factory": "0xd674b01e778cf43d3e6544985f893355f46a74a5",
       "dex.pool_code_hashes": [
         "0xf1fe94ebb9864b9c3f0bc8f49c058990133fe8cb981093210b082b8f6b383b13"
       ],
       "dex.v2_fee_source": "fixed",
-      "dex.v2_fee_pct": "0.3"
+      "dex.v2_fee_pct": "0.3",
+      "dex.factory_runtime_hash": "0xa182c8336f0245c5f222874466cec8ddbf1624ff8a6954f5105a3b7a08c9db83",
+      "dex.router": "0xe7a504316bebbe540496e29798187c9ecad6ef4f",
+      "dex.router_runtime_hash": "0x736743e7ed07d53244ba5405d8b4729b1bfb7d331850789453be0ef6150ca8c1",
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "empire-nominal-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd674b01e778cf43d3e6544985f893355f46a74a5 · https://eth.blockscout.com/api/v2/smart-contracts/0xe7a504316bebbe540496e29798187c9ecad6ef4f · tests/data/first_run_dex_2026-11-26/empire_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "empire_nominal",
+      "dex.factory": "0xd674b01e778cf43d3e6544985f893355f46a74a5",
+      "dex.pool_code_hashes": [
+        "0xf1fe94ebb9864b9c3f0bc8f49c058990133fe8cb981093210b082b8f6b383b13"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3",
+      "dex.factory_runtime_hash": "0xa182c8336f0245c5f222874466cec8ddbf1624ff8a6954f5105a3b7a08c9db83",
+      "dex.router": "0xe7a504316bebbe540496e29798187c9ecad6ef4f",
+      "dex.router_runtime_hash": "0x736743e7ed07d53244ba5405d8b4729b1bfb7d331850789453be0ef6150ca8c1",
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "empire-module-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd674b01e778cf43d3e6544985f893355f46a74a5 · https://eth.blockscout.com/api/v2/smart-contracts/0xe7a504316bebbe540496e29798187c9ecad6ef4f · tests/data/first_run_dex_2026-11-26/empire_ethereum_wallets.json.gz · tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz",
+    "settings": {
+      "dex.kind": "empire_module",
+      "dex.factory": "0xd674b01e778cf43d3e6544985f893355f46a74a5",
+      "dex.pool_code_hashes": [
+        "0xf1fe94ebb9864b9c3f0bc8f49c058990133fe8cb981093210b082b8f6b383b13"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3",
+      "dex.factory_runtime_hash": "0xa182c8336f0245c5f222874466cec8ddbf1624ff8a6954f5105a3b7a08c9db83",
+      "dex.quoter": "0xe7a504316bebbe540496e29798187c9ecad6ef4f",
+      "dex.module_runtime_hashes": [
+        "0x00dd0f17aff3fdbf7322bfb3e10f35acf665091cdfe3111beefa7577e2d7f16a"
+      ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7"
+      ]
     }
   },
   {

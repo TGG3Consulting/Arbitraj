@@ -138,7 +138,8 @@ async fn load_at(
 
 /// Адрес получателя разрешения совпадает с адресом, чей код и фабрика проверены при загрузке состояния.
 pub(crate) fn router(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
-    let router = ctx.dex_addr("dex.router", e.family.id)?;
+    let key=if e.family.variant==super::family_variant::Variant::EmpireModule {"dex.quoter"} else {"dex.router"};
+    let router = ctx.dex_addr(key, e.family.id)?;
     if e.family.variant == super::family_variant::Variant::DeltaSwap
         && !matches!(&e.pool.state,PoolState::DeltaSwap{fee,..} if fee.router==router && fee.generation==ctx.settings.generation())
     {

@@ -474,6 +474,7 @@ fn found(
         Variant::V2Create2
             | Variant::OmniV2
             | Variant::Memebox
+            | Variant::EmpireRaw | Variant::EmpireModule | Variant::EmpireNominal
             | Variant::CandySwap
             | Variant::V2Create2LiveFee
             | Variant::DiamondV2

@@ -641,6 +641,12 @@ mod tests {
                             archive["current"]["proof"]["pair_init"].as_str(),
                             Some(text.as_str())
                         );
+                    } else if k=="dex.pool_code_hashes" && matches!(p.id.as_str(),"empire-module-ethereum"|"empire-nominal-ethereum"){
+                        let records:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&include_bytes!("../../tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz")[..])).unwrap();
+                        let basis=&records["empire"];
+                        assert_eq!(basis["selector"],snapshot["selector"]);
+                        assert_eq!(p.settings.get("dex.factory"),Some(&Parameter::Text(basis["factory"].as_str().unwrap().to_owned())));
+                        assert_eq!(basis["origin"]["creation_code_hash"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.id == "ring-exchange-ethereum" {
                         let directory: serde_json::Value = serde_json::from_str(include_str!(
                             "../../tests/data/first_run_dex_2026-11-26/ring_directory.json"

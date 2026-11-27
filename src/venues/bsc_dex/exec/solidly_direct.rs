@@ -33,7 +33,10 @@ pub(super) async fn plan(
     }
     let pool = direct_module::market(ctx, &step.entry)?;
     let router = ctx.dex_addr("dex.router", step.entry.family.id)?;
-    direct_module::verify(ctx, step.entry.family, router, "latest").await?;
+    if step.entry.family.variant==super::super::pools::family_variant::Variant::EmpireModule {
+        let at=super::super::pools::nami::block(ctx,"latest").await?;
+        tokio::try_join!(super::super::pools::empire::fresh(ctx,&step.entry,&at),direct_module::verify_factory(ctx,step.entry.family,router,&at))?;
+    }else{direct_module::verify(ctx, step.entry.family, router, "latest").await?;}
     let order = &step.order;
     let approvals = if all {
         approve::fork_all(ctx, order.token_in, router, order.amount_in)?

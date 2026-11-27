@@ -255,6 +255,7 @@ pub(super) mod bancor_directory;
 pub(crate) mod uniswap_v1;
 pub(crate) mod uniswap_v1_quotes;
 pub mod ethervista;
+pub(crate) mod empire;
 mod ethervista_registry;
 pub(super) mod ethervista_reserve;
 pub(super) mod deli;

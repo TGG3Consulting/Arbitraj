@@ -49,7 +49,7 @@ pub(crate) async fn checked(
     use super::family_variant::Variant;
     if e.family.variant == Variant::MaverickTwoRouter {return Box::pin(super::maverick_two_router::checked(ctx,e,input,output,at)).await;}
     if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
-    if !matches!(e.family.variant, Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3)
+    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -70,6 +70,7 @@ pub(crate) async fn checked(
             if matches!(e.family.variant, Variant::RegisteredUniV3|Variant::RegisteredSpacingV3) {
                 return registered_v3::fresh(ctx,e,at).await;
             }
+            if e.family.variant==Variant::EmpireNominal {return Box::pin(super::empire::fresh(ctx,e,at)).await;}
             let pool=e.pool.reference.address();
             let factory=ctx.dex_addr("dex.factory",id)?;
             let query=super::abi_v2v3::IV2Factory::getPairCall {tokenA:input,tokenB:output};

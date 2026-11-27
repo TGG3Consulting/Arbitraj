@@ -276,6 +276,16 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
         return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
     }
+    if let PoolState::Empire(s)=&e.pool.state {
+        let i=usize::from(token_in!=e.pool.token0);
+        if token_in!=e.pool.token0 && token_in!=e.pool.token1 {return Err(ctx.err(ErrorCode::NoRoute,"Empire: неизвестный вход"));}
+        if s.debt_aware && k==ExecKind::Basin {
+            return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+        }
+        if k!=ExecKind::V2 || s.debt_aware || s.balances[i]>s.reserves[i] {
+            return Err(ctx.err(ErrorCode::NoRoute,"Empire: стандартный шаг не учитывает эти условия оплаты"));
+        }
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::CandySwap {
         let PoolState::CandySwap(s)=&e.pool.state else {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: состояние пары не установлено"));};
         if token_in!=e.pool.token0 && token_in!=e.pool.token1 {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: неизвестный вход"));}

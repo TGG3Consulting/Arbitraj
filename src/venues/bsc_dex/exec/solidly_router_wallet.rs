@@ -116,7 +116,7 @@ pub(super) async fn plan(
     let o = &s.order;
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
     let plain =
-        e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::V2ExactRouter;
+        matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::V2ExactRouter|crate::venues::bsc_dex::pools::family_variant::Variant::EmpireNominal);
     let target = if plain {
         crate::venues::bsc_dex::pools::registered_router::checked(
             ctx,
@@ -134,7 +134,7 @@ pub(super) async fn plan(
     }
     let stable = match &e.pool.state {
         crate::core::types::PoolState::Solidly { stable, .. } if !plain => Some(*stable),
-        crate::core::types::PoolState::V2 { .. } if plain => None,
+        crate::core::types::PoolState::V2 { .. } | crate::core::types::PoolState::Empire(_) if plain => None,
         _ => return Err(fail()),
     };
     let market = Market {

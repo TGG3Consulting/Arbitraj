@@ -264,6 +264,12 @@ fn side(
             xy_band(raw[side],raw[1-side],b,buy)
         }
         (PoolState::ToonSwap(s), PoolKind::V2) => { let i=usize::from(!zfo); xy_band(s.reserves[i],s.reserves[1-i],b,buy) }
+        (PoolState::Empire(s),PoolKind::V2) => {
+            let i=usize::from(!zfo);
+            let (desired,_) = xy_band(s.reserves[i],s.reserves[1-i],b,true)?;
+            let fit=s.paid(zfo,desired).map(|x|x.0).or_else(||s.quote(zfo,false,s.balances[1-i].min(s.reserves[1-i].saturating_sub(U256::ONE))));
+            Ok((fit.filter(|v|v.amount_in<=desired).map_or(U256::ZERO,|v|pick(v.amount_in,v.amount_out)),false))
+        }
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)

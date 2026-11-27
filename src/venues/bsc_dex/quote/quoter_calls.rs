@@ -438,8 +438,12 @@ pub fn request(
             } else {
                 vec![token_in, token_out]
             };
+            let priced=if let PoolState::Empire(state)=&e.pool.state {
+                state.credit(token_in==e.pool.token0,amount).filter(|v|!v.is_zero())
+                    .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Empire: собственный вход не покрывает дефицит"))?
+            }else{amount};
             let c = IV2Router::getAmountsOutCall {
-                amountIn: amount,
+                amountIn: priced,
                 path,
             };
             let router = super::super::pools::deltaswap::router(ctx, e)?;
@@ -595,8 +599,9 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
         };
         let data = super::super::pools::base_native_v3::checked_data(pool, out).ok()?;
         let amounts = IV2Router::getAmountsOutCall::abi_decode_returns(&data).ok()?;
+        let priced=if let PoolState::Empire(state)=&e.pool.state {state.credit(token_in==e.pool.token0,amount)?}else{amount};
         return match amounts.as_slice() {
-            [input, output] if *input == amount => Some(*output),
+            [input, output] if *input == priced => Some(*output),
             _ => None,
         };
     }

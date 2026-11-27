@@ -99,7 +99,7 @@ impl Selection {
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
-            _ if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride|Variant::V2ExactRouter) => Some(Self::SolidlyRouter),
+            _ if matches!(e.family.variant,Variant::EmpireNominal|Variant::SolidlyProxy|Variant::SolidlyPairOverride|Variant::V2ExactRouter) => Some(Self::SolidlyRouter),
             _ if e.family.variant==Variant::PuzzleRanges=>Some(Self::Ranges),
             _ if matches!(e.family.variant, Variant::RegisteredUniV3 | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::CypherIntegral | Variant::SlipstreamUniversal | Variant::MaverickTwoRouter) => Some(Self::RegisteredV3),
             _ if super::o1_wallet::enabled(e) => Some(Self::O1),

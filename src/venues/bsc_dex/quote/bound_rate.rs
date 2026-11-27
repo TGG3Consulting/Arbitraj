@@ -99,6 +99,7 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             let i=usize::from(!zfo);
             pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)
         }
+        (PoolState::Empire(s), PoolKind::V2) => {let i=usize::from(!zfo);pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)}
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)

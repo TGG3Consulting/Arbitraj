@@ -121,6 +121,9 @@ pub enum Variant {
     /// Пара CREATE2 с изменяемой ставкой. Резервы и комиссия сверяются вместе.
     V2Create2LiveFee,
     CandySwap,
+    EmpireRaw,
+    EmpireModule,
+    EmpireNominal,
     /// Direct Vault.swap with wallet debit and payout checked on the approval and signing path.
     BalancerVaultWallet,
     PuzzleRanges,
@@ -231,8 +234,9 @@ impl Variant {
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
+    pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -246,17 +250,17 @@ impl Variant {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn dual_v2_execution(self) -> bool {
-        matches!(self,Self::Gemswap | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee) || self.diamond_router()
+        matches!(self,Self::EmpireRaw | Self::Gemswap | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee) || self.diamond_router()
     }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
+        matches!(self, Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -356,6 +360,9 @@ pub fn of(kind: &str) -> Variant {
         "virtuals_bonding" | "virtuals_bonding_module" | "virtuals_unicorn" | "virtuals_unicorn_module" => Variant::Virtuals,
         "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,
         "memebox" | "memebox_v5" => Variant::Memebox,
+        "empire_v2" => Variant::EmpireRaw,
+        "empire_module" => Variant::EmpireModule,
+        "empire_nominal" => Variant::EmpireNominal,
         "candyswap_v2" | "candyswap_module" => Variant::CandySwap,
         "puzzle_ranges" => Variant::PuzzleRanges,
         "balancer_v2_wallet" => Variant::BalancerVaultWallet,

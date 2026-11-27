@@ -103,6 +103,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant.empire() {
+        return Box::pin(async move {
+            let at = super::nami::block(ctx, &block_tag(block)).await?;
+            let state = Box::pin(super::empire::read(ctx, f, reference.address(), pair, &at)).await?;
+            Ok(Loaded {state: PoolState::Empire(Box::new(state)),ticks:None,bins:None,fee_pips:Some(3000)})
+        });
+    }
     if f.variant == Variant::Stabull {
         return Box::pin(async move {
             let tag = block_tag(block);

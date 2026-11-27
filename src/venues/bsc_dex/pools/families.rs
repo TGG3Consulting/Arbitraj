@@ -452,13 +452,13 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "rubicon_classic" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "stabull" | "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
-        "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "empire_module" | "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
         "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "safeswap_v2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
+        "empire_v2" | "empire_nominal" | "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "safeswap_v2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
@@ -908,6 +908,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if matches!(
                 f.variant,
                 Variant::V2Create2
+                    | Variant::EmpireRaw | Variant::EmpireModule | Variant::EmpireNominal
                     | Variant::CandySwap
             | Variant::V2Create2LiveFee
                     | Variant::DiamondV2
@@ -927,6 +928,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
             if matches!(f.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash"]); }
+            if f.variant.empire() { list.push("dex.factory_runtime_hash"); }
+            if f.variant==Variant::EmpireModule {list.extend(["dex.quoter","dex.module_runtime_hashes"]);} else if f.variant.empire() {list.push("dex.router_runtime_hash");}
             if f.variant == Variant::ToonSwap { list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]); }
             if f.variant == Variant::CandySwap && f.tradable {list.push("dex.module_runtime_hashes");}
             if f.variant == Variant::KewlV2 { list.push("dex.pair_runtime_hash"); }

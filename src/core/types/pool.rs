@@ -329,6 +329,18 @@ pub struct MemeboxState {
     pub protocol_bps: u16,
 }
 
+/// Логические резервы EmpirePair включают долг одного токена. Балансы ERC20 — физическая выплата.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EmpireState {
+    pub reserves: [U256; 2],
+    pub balances: [U256; 2],
+    pub debt: [U256; 2],
+    /// Модуль учитывает возмещаемый долг. У стандартного шага V5 и Router02 FOT формула опирается на balanceOf.
+    pub debt_aware: bool,
+    #[serde(default)]
+    pub exact_tokens: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandySwapState {
     pub reserves: [U256; 2],
@@ -526,6 +538,7 @@ pub enum PoolState {
     CandySwap(Box<CandySwapState>),
     ToonSwap(Box<ToonState>),
     Memebox(Box<MemeboxState>),
+    Empire(Box<EmpireState>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

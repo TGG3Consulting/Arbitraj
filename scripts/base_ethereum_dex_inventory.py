@@ -106,6 +106,15 @@ def tables(network, snapshots, profiles):
                     out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
         out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
 
+    if not base and "wagmi-ethereum" in configured:
+        registry=read(Path("tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"))
+        out.extend(["", "#### WAGMI V3 на Ethereum", "",
+                    f"Официальная фабрика зарегистрировала {len(registry['markets'])} пулов на блоке {registry['height']}. "
+                    "Для каждого проверяются PoolCreated, CREATE2 исходной фабрики, неизменяемая комиссия, оба порядка getPool и шаг тика. "
+                    "QuoterV2 связан с той же фабрикой. Для платежа через развёрнутый исполнитель кошелька применяется шаг V5 с обратным вызовом Uniswap V3. "
+                    "При исчерпании диапазона вход может остаться неиспользованным. Публичные Router и Router02 проверяют номинальный минимум выхода.",
+                    f"[Исходные адреса]({registry['source']}) · [Реестр и хеш создания](../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json) · "
+                    "[Сообщение о слиянии с Anon](https://docs.wagmi.com/wagmi/wagmi-has-merged-with-anon.md)."])
     if not base and "concave" in configured:
         cv_path=Path("tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz")
         with gzip.open(cv_path,"rt",encoding="utf8") as stream:

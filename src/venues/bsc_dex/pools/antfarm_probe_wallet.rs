@@ -24,6 +24,7 @@ sol! {interface IERC {
 pub(in crate::venues::bsc_dex) const VAULT: Address =
     address!("ba12222222228d8ba445958a75a0704d566bf2c8");
 type Parts = (Vec<Approval>, Address, Bytes);
+type OrderData = (Address, Bytes, Option<(Address, U256)>);
 pub(in crate::venues::bsc_dex) struct Choice {
     pub entry: Box<Entry>,
     pub call: Parts,
@@ -55,7 +56,7 @@ fn order_data(
     e: &Entry,
     o: &Order,
     now: u64,
-) -> GatewayResult<(Address, Bytes, Option<(Address, U256)>)> {
+) -> GatewayResult<OrderData> {
     let b = book(e).ok_or_else(|| bad(ctx))?;
     let deadline = U256::from(
         now.checked_add(ctx.int("dex.deadline_s")?)

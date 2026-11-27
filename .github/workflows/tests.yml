@@ -459,7 +459,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","integral-size-ethereum","antfarm-output-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","integral-size-ethereum","antfarm-output-ethereum"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -479,6 +479,10 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/umbrae" UmbraeAdapter
           python scripts/record_umbrae_wallets.py "${MARKET#umbrae-}" "$RUNNER_TEMP/umbrae/UmbraeAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'launch-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: python scripts/record_base_launch_wallets.py "${MARKET#launch-}" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'integral-size-ethereum'
         run: python scripts/record_integral_size_wallets.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'hello-')

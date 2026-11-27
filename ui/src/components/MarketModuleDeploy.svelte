@@ -8,6 +8,7 @@
   let {id, kind, venue} = $props();
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
+    algebra_integral_theorem:{file:'theorem-ethereum',key:'algebra-router-wallet:theorem:1',name:'AlgebraRouterWallet в Ethereum',load:()=>import('../assets/theorem-ethereum.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
     empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},
@@ -28,7 +29,7 @@
     'wagmi-base':{file:'wagmi-community-base',key:'wagmi-community-create:8453',name:'CommunityV3Adapter для WAGMI',load:()=>import('../assets/wagmi-community-base.json')},
     'thick-base':{file:'thick-community-base',key:'thick-community-create:8453',name:'CommunityV3Adapter для Thick',load:()=>import('../assets/thick-community-base.json')},
   };
-  const target = $derived(kind==='registered_uni_v3' ? 'dex.v3_wallet_module' : 'dex.router');
+  const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
@@ -40,6 +41,7 @@
   const value = (name) => store.values[name+'|Dex|'+id];
   const atVenue = (name) => store.values[name+'|Venue|'+venue];
   const current = () => ({chainId:atVenue('dex.evm_chain_id'), wrapped:atVenue('dex.native_wrapped'),
+    officialRouter:value('dex.router'), routerHash:value('dex.router_runtime_hash'),deployer:value('dex.algebra_pool_deployer'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
     poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
@@ -182,6 +184,8 @@
   {#if manifest}
     {#if kind === 'balancer_v1' || kind === 'yield_basis'}
       <p>Фабрика {kind === 'yield_basis' ? 'YieldBasis' : 'BPool'} <code>{manifest.factory}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
+    {:else if kind === 'algebra_integral_theorem'}
+      <p>Фабрика <code>{manifest.factory}</code>, официальный Router <code>{manifest.router}</code>. После подтверждения адрес кошелька будет сохранён в <code>dex.v3_wallet_module</code>.</p>
     {:else if kind === 'registered_uni_v3'}
       <p>Фабрика Base <code>{manifest.factory}</code>. Подтверждённый адрес будет сохранён в <code>dex.v3_wallet_module</code>.</p>
     {:else if kind === 'empire_module'}

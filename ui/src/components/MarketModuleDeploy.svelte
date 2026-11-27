@@ -12,6 +12,10 @@
     '8453':{file:'aqua-base',key:'aqua-wallet:8453',name:'AquaStrategyWallet на Base',load:()=>import('../assets/aqua-base-create.json')},
     '1':{file:'aqua-ethereum',key:'aqua-wallet:1',name:'AquaStrategyWallet в Ethereum',load:()=>import('../assets/aqua-ethereum-create.json')},
   };
+  const eulerByChain = {
+    '1':{file:'eulerswap-ethereum',key:'eulerswap-create:1',name:'EulerSwapWallet в Ethereum',load:()=>import('../assets/eulerswap-ethereum.json')},
+    '8453':{file:'eulerswap-base',key:'eulerswap-create:8453',name:'EulerSwapWallet на Base',load:()=>import('../assets/eulerswap-base.json')},
+  };
   const stabullByChain = {
     '8453':{file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')},
     '1':{file:'stabull-ethereum',key:'stabull-create:1',name:'StabullAdapter в Ethereum',load:()=>import('../assets/stabull-ethereum.json')},
@@ -50,6 +54,7 @@
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
+    : /^eulerswap_v[12](?:_module)?$/.test(kind) ? eulerByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
     : ['stabull','stabull_module'].includes(kind)
       ? stabullByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
       : kind==='aqua_swapvm' ? aquaByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
@@ -203,7 +208,7 @@
       action.save(null);
       if (!action.active()) return;
       refreshPending(action);
-      result=kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в '+target+'.';
+      result=/^eulerswap_v[12]$/.test(kind) ? 'Адрес сохранён. Для защищённых обменов выберите '+kind+'_module и сохраните настройки DEX.' : kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в '+target+'.';
     });
   }
 
@@ -227,6 +232,9 @@
       {#each ['adapter','hook','manager'] as role}<div>{role} <code>{manifest.roles[role].address}</code></div>{/each}
     {:else if kind === 'carbon_v1'}
       <p>Контроллер Carbon <code>{manifest.market}</code>. Реализация <code>{manifest.implementation}</code>. Сумма перевода при создании — 0 ETH.</p>
+    {:else if /^eulerswap_v[12](?:_module)?$/.test(kind)}
+      <p>Этот модуль принимает обе фабрики EulerSwap выбранной сети.</p>
+      {#each manifest.factories as f, i}<div>Фабрика V{i+1} <code>{f.address}</code></div>{/each}
     {:else if ['stabull','stabull_module'].includes(kind)}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
     {:else if kind === 'aktionariat'}

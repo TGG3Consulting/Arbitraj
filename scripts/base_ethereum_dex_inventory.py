@@ -2065,6 +2065,17 @@ def tables(network, snapshots, profiles):
                 task = (f"SharkSwap Router02 и V5 · {scope['registered']} CREATE2-пары; на двух рынках {scope['paid_legs']} "
                         "платежей исходного и обратного направления, точный вход, min+1 и истечение срока. "
                         "Штатный путь сравнивает ERC20, включая WETH. Форма выплаты ETH использует весь WETH роутера и в эти измерения не входит. DefiLlama учитывает только объём, историческое распределение комиссии не установлено")
+        if str(row["id"])=="6358":
+            network="base" if base else "ethereum"
+            directory=base_launch_inventory.evidence(f"eulerswap_{network}_registry.json.gz")
+            wallet=base_launch_inventory.evidence(f"eulerswap_{network}_wallets.json.gz")
+            listed=[g["registered"] for g in directory["generations"]]
+            physical=directory["generations"][1]["nonce"]-1
+            candidates=[g["factory"] for g in directory["generations"]]
+            task=(f"EulerSwap V1/V2 · официальный реестр {listed[0]}/{listed[1]} пулов; фабрика V2 развернула {physical}. "
+                  f"Кошелёк получил выплату в {len(wallet['cases'])} проверках, ещё {len(wallet['refusals'])} попыток при положительной котировке отклонил EVault (E_AccountLiquidity). "
+                  "Periphery поддерживает точный вход и выход. Защищённый модуль проверяет конечный приход и исходный расход; V5 принимает адрес выбранного пула в шаге 17. "
+                  "Один счёт LP или хранилище в разных пулах ограничивает совместный объём. Ставка V2 зависит от направления и хука; протокольная доля удерживается внутри неё.")
         if not base and str(row["id"]) == "7077":
             book = base_launch_inventory.evidence("stabull_ethereum_directory.json.gz")
             assert book["factory"]["address"] in [addr.lower() for addr in candidates]

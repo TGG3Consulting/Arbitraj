@@ -15,11 +15,12 @@ import {loadCarbon,checkCarbon} from './carbonDeploy.js';
 import {loadFactoryWallet, checkFactoryWallet, supportsFactoryWallet} from './balancerV1Deploy.js';
 import {singleFactory, loadSingleFactory, checkSingleFactory} from "./singleFactoryDeploy.js";
 import {loadAngstrom, checkAngstrom} from "./angstromDeploy.js";
+import {eulerSwap,loadEulerSwap,checkEulerSwap} from './eulerSwapDeploy.js';
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq';
-const bindsWallet = kind => kind==='aqua_swapvm' || ownedModule(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
+const bindsWallet = kind => kind==='eulerswap' || kind==='aqua_swapvm' || ownedModule(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -35,6 +36,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (eulerSwap(settings.kind) || plan.kind==='eulerswap') return loadEulerSwap(settings,plan,hashCode);
   if (settings.kind==='aqua_swapvm' || plan.kind==='aqua_swapvm') return loadAqua(settings,plan,hashCode);
   if (settings.kind==='dexalot_rfq' || plan.kind==='dexalot_rfq') return loadDexalot(settings,plan,hashCode);
   if (isAirSwap(settings.kind) || isAirSwap(plan.kind)) return loadAirSwap(settings,plan,hashCode);
@@ -84,6 +86,7 @@ export async function checkMarket(provider, p, at) {
   if (p.kind==='angstrom_l1') return checkAngstrom(provider,p,at);
   if (p.kind==='carbon_v1') return checkCarbon(provider,p,at);
   if (supportsFactoryWallet(p.kind)) return checkFactoryWallet(provider,p,at);
+  if (p.kind==='eulerswap') return checkEulerSwap(provider,p,at);
   if (p.kind === 'stabull') return checkStabull(provider, p, at);
   if (p.kind === "bancor_v3") return checkBancor(provider,p,at);
   if (p.kind === "uniswap_v1") return checkV1(provider,p,at,hashCode);

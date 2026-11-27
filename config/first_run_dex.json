@@ -5604,5 +5604,47 @@
         "0xbe045709856eeecf6343d2810aa177226b9fd4bb1d218aa2130016da1b948e1a"
       ]
     }
+  },
+  {
+    "network": "base",
+    "id": "sectorone-v2-base",
+    "chain_id": 8453,
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone_v2_base.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2_live_fee",
+      "dex.factory": "0xcf0685f37a139de56afc4a89aa343849358c05cb",
+      "dex.router": "0xddf9025cf1fc3a7945ea54a53d856c81b9284c38",
+      "dex.factory_runtime_hash": "0xcae1a0b1b3cd8bd8519a805cd93dba36177520fec46f44e96e03b990c8b1b87d",
+      "dex.router_runtime_hash": "0x8b2ea62344584db9621d9b8def07278ad7f1aab9c63a219d4a0a6702b30ef358",
+      "dex.pair_runtime_hash": "0xecd69e3cea5053af228a8dd2409210366931a5529c3aa08ae9ab8ff22d4feab5",
+      "dex.pool_code_hashes": [
+        "0x07dfaef371a973f003dc4c74454e25c843913358a827acc444fa92626e886a4a"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "feeAmount()",
+      "dex.v2_fee_denominator": 100000,
+      "dex.v2_fee_rule_hash": "0xcba44022708eb84e2fb4af2cc6ea9942d0e280e87960e04ced35cb8f3514146d"
+    }
+  },
+  {
+    "network": "ethereum",
+    "id": "sectorone-v2-ethereum",
+    "chain_id": 1,
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone_v2_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2_live_fee",
+      "dex.factory": "0x96559af835e5a3e9bb68c17eba8520295370698f",
+      "dex.router": "0xf5e5eae03c5ccde623a19117c8b7f788c8812667",
+      "dex.factory_runtime_hash": "0xe09a71f3bd9bcb1186976477cdbd776d4d399fedb5f8c41874e3bb6da3965182",
+      "dex.router_runtime_hash": "0xe485033c01fb563d5322c763f9c7fc96d5216013b984daf67dc16d6b01539121",
+      "dex.pair_runtime_hash": "0x4e6d18f06273052f97068945772f842ec2424b9972dd009c473bcb8f04d3fae6",
+      "dex.pool_code_hashes": [
+        "0xb3568586d7d5bd4d7928fe5dc4224e31489f805d8e7eb5cd818927e9eaee13fc"
+      ],
+      "dex.v2_fee_source": "pool",
+      "dex.v2_fee_method": "feeAmount()",
+      "dex.v2_fee_denominator": 100000,
+      "dex.v2_fee_rule_hash": "0xdc0d3cd0caa2f604d693501af18da94714c9e4a38ad8ca7a160bd0353289a233"
+    }
   }
 ]

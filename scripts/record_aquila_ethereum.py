@@ -13,8 +13,10 @@ from record_bitswap_ethereum import balance, tx
 from record_ethereum_v2_factories import FUNDING, STABLES, WETH, digest, raw, registry
 from record_omni_v2_base import role
 from record_v2_chain_pools import minimum, swap
+from record_ranges_ethereum import ENDPOINT
 
 FACTORY = "0x7bad585c3ae4ae266f92a4af13b388bc7b26067c"
+ROUTER = "0x70d2473f911683fef696fb23ed25540e46d70734"
 PAIR = "0x92356b1ca721ae1cf5bbed88a2528d87f311dff1"
 
 
@@ -22,6 +24,11 @@ def capture(endpoint):
     snap = json.loads((ROOT / "tests/data/first_run_dex_2026-11-26/ethereum.json").read_bytes())
     c = Capture(dict(snap, endpoint=endpoint))
     spec, factory = role(c, FACTORY, 1)
+    router_source, router_binding = role(c, ROUTER, 1)
+    router_factory, = c.one(ROUTER,"factory()",returns=["address"])
+    router_wrapped, = c.one(ROUTER,"WETH()",returns=["address"])
+    if (router_source["compilation"]["name"], router_factory, router_wrapped) != ("AquilaRouter", FACTORY, WETH):
+        raise ValueError("router deployment does not bind this pair family")
     pair_source = next(s["content"] for f, s in spec["sources"].items() if f.endswith("/AquilaPair.sol"))
     for side in (0, 1):
         if f"balance{side}.mul(1000).sub(amount{side}In.mul(3))" not in pair_source:
@@ -66,19 +73,26 @@ def capture(endpoint):
         a,b = assets[side],assets[1-side]
         for amount in (reserves[side]//10_000,reserves[side]//100):
             payout = minimum(amount,reserves[side],reserves[1-side],3000)
-            approved = tx(a,"approve(address,uint256)",["address","uint256"],[EXEC,amount])
-            balances = [balance(token,wallet) for wallet in (OWNER,EXEC) for token in (a,b)]
-            def order(out,when):
-                return swap(PAIR,a,b,amount,out,when,3000)
-            attempts = run(prefix + [approved] + balances + [order(payout+1,end),order(payout,0),order(payout,end)] + balances)
-            before, ops, after = attempts[-11:-7], attempts[-7:-4], attempts[-4:]
-            if [op["status"] for op in ops] != ["0x0","0x0","0x1"] or any(x["status"]!="0x1" for x in attempts[:-7]+after):
-                raise ValueError(("settlement/protection", [op.get("error") for op in ops]))
-            old,new=([int(k["returnData"],16) for k in row] for row in (before,after))
-            if (old[0]-new[0],new[1]-old[1]) != (amount,payout) or old[2:] != new[2:]:
-                raise ValueError("wallet deltas disagree with V5 quote")
-            cases.append(dict(token_in=a,token_out=b,amount=amount,payout=payout,gas=int(ops[-1]["gasUsed"],16),logs=ops[-1]["logs"]))
-    return dict(selector=c.selector,block=snap["block"],state_root=head["stateRoot"],factory=factory,init_hash=init,
+            quoted=run(prefix+[tx(ROUTER,"getAmountsOut(uint256,address[])",["uint256","address[]"],[amount,[a,b]])])[-1]
+            if quoted["status"] != "0x1" or tuple(decode(["uint256[]"],raw(quoted["returnData"]))[0]) != (amount,payout):
+                raise ValueError("Aquila router quote differs from pair invariant")
+            for mode,spender in (("v5",EXEC),("router",ROUTER)):
+                approved = tx(a,"approve(address,uint256)",["address","uint256"],[spender,amount])
+                balances = [balance(token,wallet) for wallet in (OWNER,EXEC) for token in (a,b)]
+                def order(out,when):
+                    if mode == "v5":
+                        return swap(PAIR,a,b,amount,out,when,3000)
+                    return tx(ROUTER,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+                              ["uint256","uint256","address[]","address","uint256"],[amount,out,[a,b],OWNER,when])
+                attempts = run(prefix + [approved] + balances + [order(payout+1,end),order(payout,0),order(payout,end)] + balances)
+                before, ops, after = attempts[-11:-7], attempts[-7:-4], attempts[-4:]
+                if [op["status"] for op in ops] != ["0x0","0x0","0x1"] or any(x["status"]!="0x1" for x in attempts[:-7]+after):
+                    raise ValueError(("settlement/protection", [op.get("error") for op in ops]))
+                old,new=([int(k["returnData"],16) for k in row] for row in (before,after))
+                if (old[0]-new[0],new[1]-old[1]) != (amount,payout) or old[2:] != new[2:]:
+                    raise ValueError("wallet deltas disagree with V5 quote")
+                cases.append(dict(mode=mode,token_in=a,token_out=b,amount=amount,payout=payout,gas=int(ops[-1]["gasUsed"],16),logs=ops[-1]["logs"]))
+    return dict(selector=c.selector,block=snap["block"],state_root=head["stateRoot"],factory=factory,router=router_binding,init_hash=init,
                 pair_runtime=digest(raw(code)),pair_source=url,live_rows=rows,isolated_reserves=reserves,cases=cases)
 
 
@@ -86,5 +100,12 @@ if __name__ == "__main__":
     cli=argparse.ArgumentParser(description=__doc__)
     cli.add_argument("output",type=Path)
     path=cli.parse_args().output
-    data=capture("https://ethereum.gateway.tenderly.co")
+    for endpoint in (ENDPOINT,"https://ethereum-rpc.publicnode.com","https://eth.drpc.org"):
+        try:
+            data=capture(endpoint)
+            break
+        except (requests.RequestException,RuntimeError) as error:
+            print(endpoint, str(error)[:180], flush=True)
+    else:
+        raise RuntimeError("no canonical archive available")
     path.write_text(json.dumps(data,separators=(",",":")),encoding="utf-8")

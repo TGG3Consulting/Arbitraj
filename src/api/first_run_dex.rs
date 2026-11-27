@@ -166,6 +166,27 @@ mod tests {
             pairs.push(serde_json::json!({"network":network,"dex":format!("dex-on-crypto-{network}"),
                 "creation_code_hash":data["init_hash"]}));
         }
+        for (network, bytes, parent) in [
+            ("base", include_bytes!("../../tests/data/first_run_dex_2026-11-26/sectorone_v2_base.json.gz").as_slice(), &base),
+            ("ethereum", include_bytes!("../../tests/data/first_run_dex_2026-11-26/sectorone_v2_ethereum.json.gz").as_slice(), &eth),
+        ] {
+            let recorded: Value = serde_json::from_reader(flate2::read::GzDecoder::new(bytes)).unwrap();
+            let id = format!("sectorone-v2-{network}");
+            assert_eq!(recorded["selector"], parent["selector"]);
+            let changed = &recorded["changed_fee"];
+            assert_eq!(recorded["pair"], changed["pair"]);
+            assert_eq!(recorded["original_count"], 0);
+            assert_eq!((recorded["fee"].as_u64(), changed["fee"].as_u64()), (Some(300), Some(400)));
+            for (old, new) in recorded["cases"].as_array().unwrap().iter().zip(changed["cases"].as_array().unwrap()) {
+                for key in ["mode", "source", "target", "input"] {
+                    assert_eq!(old[key], new[key]);
+                }
+                assert!(old["output"].as_u64().unwrap() > new["output"].as_u64().unwrap());
+            }
+            assert_eq!(recorded["cases"].as_array().unwrap().len(), 8);
+            assert_eq!(changed["cases"].as_array().unwrap().len(), 8);
+            pairs.push(serde_json::json!({"network":network,"dex":id,"creation_code_hash":recorded["init_hash"]}));
+        }
         let base_mars: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/marswap_base_simulated.json.gz").as_slice(),
         )).unwrap();

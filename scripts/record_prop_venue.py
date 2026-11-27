@@ -22,7 +22,7 @@ HEADS=[(26480795,GOLIATH,USDC),(26487844,TEMPEST,USDT),(26494988,GOLIATH,USDC),(
 ANCHORS={26480795: '0xa76d204538aac92e1c8c12654bfcec22895375a8cf58be25a4bbed0868728a60', 26487844: '0x6a562bc5d13551d7272f0395a9a89298c104bdd252143d9283e2283495b7c03a', 26494988: '0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a'}
 
 def rpc(c,method,params):
-    if method not in {"eth_chainId","eth_getBlockByNumber","eth_getCode","eth_call","eth_simulateV1"}:
+    if method not in {"eth_chainId","eth_getBlockByNumber","eth_getCode","eth_call","eth_simulateV1","eth_getTransactionReceipt","eth_getStorageAt"}:
         raise ValueError(method)
     res=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=60)
     res.raise_for_status()
@@ -92,13 +92,19 @@ def capture(endpoint,art,kipseli=False,market_name=None):
         deadline=int(header["timestamp"],16)+180
         rhs=tx(ROUTER,"fallbackSwapRouter()")
         fallback=decode(["address"],bytes.fromhex(rpc(c,"eth_call",[rhs,c.selector])["result"][2:]))[0]
-        for inp,out,n in [(WETH,stable,10**16),(WETH,stable,2*10**16),(stable,WETH,5_000_000),(stable,WETH,10_000_000)]:
+        sizes = {WETH:(10**16,2*10**16), USDC:(5_000_000,10_000_000), USDT:(5_000_000,10_000_000)}
+        pairs = [(WETH,stable)]
+        if market_name == "taurus":
+            per_block = {26492615:[(WETH,USDT)], 26492655:[(USDC,USDT)], 26494725:[(WETH,USDC)]}
+            pairs = per_block.get(height, [(WETH,USDT),(USDC,USDT),(WETH,USDC)])
+        orders = [(inp,out,amount) for a,b in pairs for inp,out in ((a,b),(b,a)) for amount in sizes[inp]]
+        for inp,out,n in orders:
             prefix=[tx(WETH,"deposit()",value=3*10**17)]
-            if inp==stable:
+            if inp!=WETH:
                 # Buy the initial stablecoin using only this wallet's WETH at the published Uni fallback.
                 prefix += [tx(WETH,"approve(address,uint256)",["address","uint256"],[ROUTER,10**17]),
                            tx(ROUTER,"swapViaVenueV1(address,address,address,uint256,uint256,address,uint256)",
-                            ["address","address","address","uint256","uint256","address","uint256"],[fallback,WETH,stable,10**17,1,OWNER,deadline])]
+                            ["address","address","address","uint256","uint256","address","uint256"],[fallback,WETH,inp,10**17,1,OWNER,deadline])]
             quote=tx(ROUTER,"quoteVenueV1(address,address,address,uint256)",["address","address","address","uint256"],[venue,inp,out,n])
             q=rpc(c,"eth_call",[quote,c.selector]);raw=q.get("result")
             if raw:
@@ -114,7 +120,11 @@ def capture(endpoint,art,kipseli=False,market_name=None):
                     observed.update(tighter=tighter,expired=expired)
                 result.append({"height":height,"selector":c.selector,"venue":venue,"fallback":fallback,"input":inp,"output":out,
                                "amount":n,"strict":strict is True,"form":("guarded-fallback" if strict=="guarded-fallback" else ("strict" if strict else "router")),"quote":q,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),**observed})
-    return {"owner":OWNER,"module":MODULE,"rows":result}
+    evidence={"owner":OWNER,"module":MODULE,"rows":result}
+    if market_name:
+        from record_prop_cash_receipts import receipt_evidence
+        evidence["historicalSettlement"]=receipt_evidence(c,market_name,rpc)
+    return evidence
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser();ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--kipseli",action="store_true");ap.add_argument("--source",choices=["kaliber","taurus"]);args=ap.parse_args()

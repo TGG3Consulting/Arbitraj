@@ -135,6 +135,29 @@ mod tests {
     use super::*;
     use std::io::Read;
     #[test]
+    fn rounded_fee_can_lower_the_payout_when_input_increases_by_one() {
+        // Both calls recorded from computeExpectedSwapAmountOut on Ethereum. The reserve
+        // arrangement fits the deployed ABI and deliberately lands on a Q64 fee step.
+        let reserve = U256::ONE << 110;
+        let state = AmmalgamState {
+            reserves: [reserve; 2],
+            reference: [reserve; 2],
+            missing: [U256::ZERO; 2],
+            cash: [reserve; 2],
+        };
+        let breakpoint = U256::ONE << 109;
+        let target = U256::from(370878347038201973466465818636745u128);
+        assert_eq!(state.payout(0, breakpoint - U256::ONE), Some(target));
+        assert_eq!(
+            state.payout(0, breakpoint),
+            Some(U256::from(370878347038201973466464023515720u128))
+        );
+        let minimum = state.swap(true, false, target).unwrap().amount_in;
+        assert!(minimum < breakpoint && state.payout(0, minimum).unwrap() >= target);
+        assert!(state.payout(0, minimum - U256::ONE).unwrap() < target);
+    }
+
+    #[test]
     fn integer_cash_curve_matches_the_verified_helper_on_all_ten_mainnet_markets() {
         let mut tape = Vec::new();
         flate2::read::GzDecoder::new(

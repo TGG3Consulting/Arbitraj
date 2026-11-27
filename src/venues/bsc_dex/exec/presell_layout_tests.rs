@@ -80,6 +80,19 @@ fn replay_capture(name: &str, v: &Value) -> Result<(), String> {
             assert_eq!(max, (U256::from(1) << 96) - U256::from(1));
             assert!(field.credit(max + U256::from(1)).is_none());
         }
+        if i == 0
+            && let Some(prior) = v["prior"].as_array()
+        {
+            for case in prior {
+                let amount =
+                    U256::from_str_radix(case["amount_units"].as_str().unwrap(), 10).unwrap();
+                if field.credit(amount).is_none() {
+                    return Err(format!(
+                        "{name}: объём {amount} превышает максимум поля {max}"
+                    ));
+                }
+            }
+        }
         if let Some(raw) = sample.get("storage") {
             assert_eq!(
                 parse::<Address>(&raw["request"]["params"][0]),
@@ -139,6 +152,8 @@ fn getter_coverage_for_previously_verified_bsc_sales() {
     let rows = capture.as_array().unwrap();
     let mut misses = Vec::new();
     let mut evidence = std::collections::BTreeSet::new();
+    let mut reasons = 0;
+    let mut observations = 0;
     for row in rows {
         let ticker = row["symbol"].as_str().unwrap();
         let cases = row["prior"].as_array().unwrap();
@@ -151,15 +166,21 @@ fn getter_coverage_for_previously_verified_bsc_sales() {
                     .unwrap()
                     .contains("слот проверен balanceOf")
             );
-            assert!(evidence.insert((
+            reasons += 1;
+            observations += case["observations"].as_u64().unwrap();
+            assert_eq!(case["holder"], row["samples"][0]["holder"]);
+            evidence.insert((
                 case["source"].as_str().unwrap(),
-                case["id"].as_str().unwrap()
-            )));
+                case["id"].as_str().unwrap(),
+            ));
         }
         if let Err(why) = replay_capture(ticker, row) {
             misses.push(format!("{ticker} ({}): {why}", cases[0]["id"]));
         }
     }
-    assert_eq!((rows.len(), evidence.len()), (12, 27));
+    assert_eq!(
+        (rows.len(), evidence.len(), reasons, observations),
+        (12, 18, 27, 185)
+    );
     assert!(misses.is_empty(), "{}", misses.join(", "));
 }

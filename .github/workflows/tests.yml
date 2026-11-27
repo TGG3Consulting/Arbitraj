@@ -635,7 +635,10 @@ jobs:
           python -m pip install --quiet eth-account==0.13.7 websocket-client==1.8.0
           python scripts/record_tokenlon_quote.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'theorem-ethereum'
-        run: python scripts/record_theorem_wallets.py "$RUNNER_TEMP/market.json"
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/theorem" AlgebraRouterWallet
+          python scripts/record_theorem_wallets.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/theorem/AlgebraRouterWallet.json"
       - if: matrix.market == 'goblins-base-directory'
         run: |
           python -m pip install --quiet rlp==4.1.0
@@ -928,6 +931,8 @@ jobs:
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/shiba" ShibaswapV2Adapter
           python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json" --venue shibaswap-v2 --module "$RUNNER_TEMP/shiba/ShibaswapV2Adapter.json"
+      - if: matrix.market == 'aktionariat-ethereum-wallet'
+        run: python scripts/record_aktionariat_wallet.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'aktionariat-ethereum-directory'
         run: |
           python -m pip install --quiet rlp==4.1.0

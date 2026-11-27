@@ -20,7 +20,7 @@ pub(crate) fn terms(ctx:&Ctx,e:&Entry,s:&UniswapV1State,src:Address,module:bool,
     let wrapped=ctx.addr("dex.native_wrapped")?;
     let exchange_hash=ctx.dex_text("dex.pair_runtime_hash",id)?.parse().map_err(|_|bad(ctx))?;
     let (target,module_hash)=if module {
-        if native{return Err(bad(ctx));}
+        if native && s.dual(){return Err(bad(ctx));}
         let target=ctx.dex_addr("dex.router",id)?;
         let hashes=direct_module::configured(ctx,id)?;
         let [pin]=hashes.as_slice() else{return Err(bad(ctx));};
@@ -31,7 +31,7 @@ pub(crate) fn terms(ctx:&Ctx,e:&Entry,s:&UniswapV1State,src:Address,module:bool,
             .all(|(exchange,token)|exchange.is_none() || exact_wallet_tokens::eligible_input(ctx,id,token)){return Err(bad(ctx));}
         (first,None)
     };
-    Ok(Terms{target,wrapped,input_pool,output_pool,exchange_hash,module_hash})
+    Ok(Terms{target,wrapped,input_pool,output_pool,exchange_hash,module_hash,physical_module:module && native})
 }
 
 pub(crate) async fn check(ctx:&Ctx,e:&Entry,s:&UniswapV1State,t:&Terms,src:Address,at:&Value)->GatewayResult<()>{

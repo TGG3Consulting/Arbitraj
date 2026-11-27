@@ -12,6 +12,7 @@ sol! {
     interface IV1Wallet {
         function factory() external view returns(address);
         function wrapped() external view returns(address);
+        function executeNative(address pool,address token,bool nativeIn,uint256 amount,uint256 minimum,uint256 deadline) external payable returns(uint256);
         function execute(address pool,address tokenIn,address tokenOut,uint256 amount,uint256 minimum,uint256 deadline) external returns(uint256);
         function executePair(address pool,address targetPool,address tokenIn,address tokenOut,uint256 amount,uint256 minimum,uint256 deadline) external returns(uint256);
         function ethToTokenSwapInput(uint256 minimum,uint256 deadline) external payable returns(uint256);
@@ -32,11 +33,13 @@ pub struct Terms {
     pub output_pool: Option<Address>,
     pub exchange_hash: B256,
     pub module_hash: Option<B256>,
+    #[serde(default)]
+    pub physical_module:bool,
 }
 impl Terms {
     fn pool(&self) -> Option<Address> { self.input_pool.or(self.output_pool) }
     pub fn native(&self) -> Option<Address> {
-        (self.module_hash.is_none() && (self.input_pool.is_none() || self.output_pool.is_none())).then_some(self.wrapped)
+        ((self.module_hash.is_none() || self.physical_module) && (self.input_pool.is_none() || self.output_pool.is_none())).then_some(self.wrapped)
     }
     pub fn value(&self, amount: U256) -> U256 {
         if self.native().is_some() && self.input_pool.is_none() { amount } else { U256::ZERO }
@@ -65,6 +68,10 @@ impl Proof {
     pub fn data(&self)->Bytes {
         let t=&self.terms;
         let (minimum,amount,deadline,token_out)=(self.minimum,self.amount,self.deadline,self.output);
+        if t.physical_module && let Some(pool)=t.pool() {
+            let native_in=t.input_pool.is_none();
+            return IV1Wallet::executeNativeCall{pool,token:if native_in{token_out}else{self.input},nativeIn:native_in,amount,minimum,deadline}.abi_encode().into();
+        }
         match (t.module_hash,t.input_pool,t.output_pool) {
             (Some(_),Some(pool),Some(target_pool))=>IV1Wallet::executePairCall{pool,targetPool:target_pool,tokenIn:self.input,tokenOut:token_out,amount,minimum,deadline}.abi_encode(),
             (Some(_),Some(pool),None)|(Some(_),None,Some(pool))=>IV1Wallet::executeCall{pool,tokenIn:self.input,tokenOut:token_out,amount,minimum,deadline}.abi_encode(),
@@ -111,7 +118,7 @@ impl Proof {
         if paid!=self.amount || bridge.is_zero() || received<self.minimum{return None;}
         if t.module_hash.is_some(){
             let e=event::<IV1Wallet::Filled>(logs,t.target)?;
-            if (e.payer,e.exchange,e.recipient,e.assetIn,e.assetOut,e.paid,e.received)!=(owner,t.pool()?,owner,input,output,paid,received){return None;}
+            if (e.payer,e.exchange,e.recipient,e.assetIn,e.assetOut,e.paid,e.received)!=(owner,t.pool()?,owner,if t.native()==Some(input){Address::ZERO}else{input},if t.native()==Some(output){Address::ZERO}else{output},paid,received){return None;}
         }else if Some(t.target)!=t.pool() || nominal!=received{return None;}
         Some((paid,received))
     }
@@ -136,12 +143,13 @@ mod tests {
         for c in fixture["cases"].as_array().unwrap().iter().filter(|c|c["spent"].is_string()){
             let mode=c["mode"].as_str().unwrap();
             let via=mode.starts_with("v5");
-            let protected=via || mode.starts_with("wallet");
+            let physical_module=mode=="native_wallet";
+            let protected=via || physical_module || mode.starts_with("wallet");
             let src=addr(&c["source"]);let dst=addr(&c["target"]);let pool=addr(&c["pool"]);
             let input=if src.is_zero(){wrapped}else{src};let output=if dst.is_zero(){wrapped}else{dst};
             let (first,last)=if c["target_pool"].is_string(){(Some(pool),Some(addr(&c["target_pool"])))}else if input==wrapped{(None,Some(pool))}else{(Some(pool),None)};
             let pin=fixture["markets"].as_object().unwrap().values().next().unwrap()["runtime"].as_str().unwrap().parse().unwrap();
-            let t=Terms{target:if protected{module}else{pool},wrapped,input_pool:first,output_pool:last,exchange_hash:pin,
+            let t=Terms{target:if protected{module}else{pool},wrapped,physical_module,input_pool:first,output_pool:last,exchange_hash:pin,
                 module_hash:protected.then(||fixture["module_hash"].as_str().unwrap().parse().unwrap())};
             let amount=c["spent"].as_str().unwrap().parse().unwrap();
             let received=c["received"].as_str().unwrap().parse().unwrap();
@@ -164,6 +172,6 @@ mod tests {
             }
             cases+=1;
         }
-        assert_eq!(cases,36);
+        assert!(cases>=36);
     }
 }

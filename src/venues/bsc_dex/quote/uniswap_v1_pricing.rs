@@ -21,7 +21,7 @@ pub(super) async fn options(q:&Quoting,i:&Input,e:&Entry,payer:Address,native:bo
         let target=t.target;
         let direct=Execution{mode:RouteMode::Direct,target,wire:Wire::UniswapV1(Box::new(t))};
         if let Ok(v)=v2_execution::option(q,i,entry.clone(),payer,direct,head).await{quotes.push(v);}
-        if module && graph && let Ok(Some(v5))=executor::address(ctx){
+        if module && !native && graph && let Ok(Some(v5))=executor::address(ctx){
             let key=entry.pool.reference.address().into_word();
             let via=Execution{mode:RouteMode::Graph,target:v5,wire:Wire::V5(V5Step{native:None,kind:17,pool:target,data:Bytes::copy_from_slice(key.as_slice())})};
             if let Ok(v)=v2_execution::option(q,i,entry.clone(),payer,via,head).await{quotes.push(v);}

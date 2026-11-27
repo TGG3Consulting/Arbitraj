@@ -10,6 +10,7 @@ interface IUniV1Factory {
 interface IUniV1Exchange {
     function ethToTokenTransferInput(uint256 minimum, uint256 deadline, address recipient) external payable returns (uint256);
     function tokenToTokenTransferInput(uint256 amount,uint256 minTokens,uint256 minETH,uint256 deadline,address recipient,address token) external returns(uint256);
+    function tokenToEthTransferInput(uint256 amount,uint256 minimum,uint256 deadline,address recipient) external returns(uint256);
     function tokenToEthSwapInput(uint256 amount, uint256 minimum, uint256 deadline) external returns (uint256);
 }
 interface IUniV1Asset {
@@ -64,6 +65,45 @@ contract UniswapV1Adapter {
         return settle(market, order.assetIn, order.assetOut, order.amount, minimum, deadline, funds.recipient, second);
     }
 
+    /// Settle the original single exchange in physical ETH and enforce the owner's final token delta.
+    /// Exchange registry and ABI identify which ERC20 is actually held by the source contract.
+    function executeNative(address pool, address token, bool nativeIn, uint256 amount, uint256 minimum, uint256 deadline)
+        external payable returns (uint256 received) {
+        require(!entered && amount != 0 && minimum != 0 && deadline >= block.timestamp &&
+                msg.sender != pool && token != address(0) &&
+                msg.value == (nativeIn ? amount : 0), "native order");
+        require(factory.getToken(pool) == token && factory.getExchange(token) == pool, "native market");
+        entered = true;
+        IUniV1Asset asset = IUniV1Asset(token);
+        uint256 ownerToken = asset.balanceOf(msg.sender);
+        uint256 moduleToken = asset.balanceOf(address(this));
+        uint256 moduleETH = address(this).balance - msg.value;
+        if (nativeIn) {
+            IUniV1Exchange(pool).ethToTokenTransferInput{value:amount}(minimum,deadline,msg.sender);
+            received = asset.balanceOf(msg.sender) - ownerToken;
+        } else {
+            uint256 beforeETH = msg.sender.balance;
+            callToken(asset,abi.encodeCall(asset.transferFrom,(msg.sender,address(this),amount)));
+            require(asset.balanceOf(address(this)) == moduleToken + amount, "partial input");
+            callToken(asset,abi.encodeCall(asset.approve,(pool,amount)));
+            uint256 gross = IUniV1Exchange(pool).tokenToEthTransferInput(amount,minimum,deadline,msg.sender);
+            received = msg.sender.balance - beforeETH;
+            clearAllowance(asset,pool);
+            require(received == gross && ownerToken - asset.balanceOf(msg.sender) == amount, "native payout");
+        }
+        require(received >= minimum && asset.balanceOf(address(this)) == moduleToken &&
+                address(this).balance == moduleETH, "native wallet bounds");
+        emit Filled(msg.sender,pool,msg.sender,nativeIn ? address(0) : token,nativeIn ? token : address(0),amount,received);
+        entered = false;
+    }
+
+    function clearAllowance(IUniV1Asset source,address pool) private {
+        if (source.allowance(address(this),pool) != 0) {
+            callToken(source, abi.encodeCall(source.approve,(pool,0)));
+            require(source.allowance(address(this),pool) == 0, "allowance");
+        }
+    }
+
     function callToken(IUniV1Asset asset, bytes memory data) private {
         (bool ok, bytes memory result) = address(asset).call(data);
         require(ok && (result.length == 0 || abi.decode(result,(bool))), "token");
@@ -89,10 +129,7 @@ contract UniswapV1Adapter {
         } else {
             IUniV1Exchange(pool).tokenToTokenTransferInput(amount,minimum,1,deadline,recipient,tokenOut);
         }
-        if (source.allowance(address(this),pool) != 0) {
-            callToken(source, abi.encodeCall(source.approve,(pool,0)));
-            require(source.allowance(address(this),pool) == 0, "allowance");
-        }
+        clearAllowance(source,pool);
         require(wrapped.balanceOf(address(this)) == initialWrapped - (source == wrapped ? amount : 0), "wrapped residue");
     }
 

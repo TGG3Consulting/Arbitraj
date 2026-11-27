@@ -68,9 +68,13 @@ def capture(url,artifact):
             return [tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                        ["uint256","address[]","address","uint256"],[n,[WETH,source],OWNER,deadline],value=10**18)]
         prefix=fund()
-        if mode in ("wallet","wallet_pair","v5","v5_pair") or source!=ETH:
-            prefix.append(approve(source,EXEC if mode in ("v5","v5_pair") else MODULE if mode in ("wallet","wallet_pair") else pool,n))
+        if source!=ETH:
+            prefix.append(approve(source,EXEC if mode in ("v5","v5_pair") else MODULE if mode in ("wallet","wallet_pair","native_wallet") else pool,n))
         def order(out,end):
+            if mode=="native_wallet":
+                native_in=source==ETH
+                return tx(MODULE,"executeNative(address,address,bool,uint256,uint256,uint256)",
+                          ["address","address","bool"]+["uint256"]*3,[pool,target if native_in else source,native_in,n,out,end],value=n if native_in else 0)
             if mode=="direct" and source==ETH:
                 return tx(pool,"ethToTokenSwapInput(uint256,uint256)",["uint256"]*2,[out,end],value=n)
             if mode=="direct":
@@ -110,8 +114,8 @@ def capture(url,artifact):
                 fn="getEthToTokenInputPrice" if buy else "getTokenToEthInputPrice"
                 if view(pool,fn+"(uint256)","uint256",["uint256"],[n])!=ref:raise ValueError("official quote mismatch")
                 if not ref:continue
-                for mode in ("direct","wallet","v5"):
-                    cash=ETH if mode=="direct" else WETH
+                for mode in ("direct","native_wallet","wallet","v5"):
+                    cash=ETH if mode in ("direct","native_wallet") else WETH
                     capture_leg(cash if buy else coin,coin if buy else cash,n,ref,mode)
     for source,target in [(DAI,STABLES[0]),(STABLES[0],DAI),(DAI,WETH),(WETH,DAI)]:
         first,last=markets[source],markets[target]
@@ -121,7 +125,7 @@ def capture(url,artifact):
         if not out:continue
         for mode in ("direct_pair","wallet_pair","v5_pair"):
             capture_leg(source,target,n,out,mode)
-    if not all(any(i["mode"]==m and "spent" in i for i in cases) for m in ("direct","wallet","v5","direct_pair","wallet_pair","v5_pair")):
+    if not all(any(i["mode"]==m and "spent" in i for i in cases) for m in ("direct","native_wallet","wallet","v5","direct_pair","wallet_pair","v5_pair")):
         raise ValueError("uncovered payment form")
     return dict(selector=at,block=snap["block"],factory=role(FACTORY),template=role(template),count=count,markets=markets,module=MODULE,
                 module_hash="0x"+keccak(hexstr=deployed).hex(),cases=cases)

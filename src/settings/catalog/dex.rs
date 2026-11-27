@@ -483,6 +483,7 @@ pub static DEX: &[SettingDef] = &[
     d("Ambient", "dex.ambient_roles", K::TextList, L::None, "контракты", DX, "Пять строк роль адрес хеш кода: dex, query, impact, hot, knockout. Код ролей и привязка прокси сверяются на каноническом блоке.").optional(),
     d("Ambient", "dex.ambient_pool_indices", K::TextList, L::None, "индексы", DX, "Десятичные индексы uint256 для независимой проверки пары через CrocQuery. Каталог может сообщать дополнительные индексы.").optional(),
     d("Ambient", "dex.ambient_index_url", K::Url, L::None, "URL", DX, "Базовый HTTPS URL источника пар Ambient. Для каталога добавляется pool_list. Адреса и состояние пулов проверяет узел Ethereum.").optional(),
+    d("Контракты DEX", "dex.euler_markets", K::TextList, L::None, "контракты", DX, "Размещённые пулы EulerSwap V2 вне публичного реестра: pool token0 token1. Фабрика подтверждает происхождение каждого пула.").optional(),
     d("Контракты DEX", "dex.euler_registry", K::Address, L::None, "адрес", DX, "EulerSwap V2: официальный EulerSwapRegistry для поиска poolsByPair. Принадлежность любого найденного пула проверяет фабрика по deployedPools.").optional(),
     d("Контракты DEX", "dex.bancor_roles", K::TextList, L::None, "контракты", DX, "Bancor V3: адрес прокси, хеш прокси, адрес реализации, хеш реализации. Роли сверяются с официальным NetworkInfo на одном блоке."),
     d("Контракты DEX", "dex.bancor_collections", K::TextList, L::None, "коллекции", DX, "Bancor V3: адрес и хеш кода принятой PoolCollection. По каждой стороне проверяется назначение в реестре сети."),

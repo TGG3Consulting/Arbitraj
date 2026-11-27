@@ -112,6 +112,7 @@ async fn pass(
     // Решение 292: пулы StableSwap из dex.stable_pools (Saddle, Curve 2020) — кандидаты по монетам самого пула.
     let mut extra = stable_list::scan(ctx, coins, &quote_list, size).await;
     Box::pin(super::ambient_directory::scan(ctx,coins,&quote_list,&mut extra)).await;
+    super::euler_directory::extend(ctx,coins,&quote_list,&mut extra);
     super::infinity_seeds::extend(ctx, coins, &quote_list, &mut extra);
     for (coin, list) in extra.found {
         found.entry(coin).or_default().extend(list);

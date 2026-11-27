@@ -29,8 +29,8 @@ def tx(address,name,types,args):
     return call(address,calldata(name+"("+",".join(types)+")",types,args),gas=4_000_000)
 
 
-def capture(network, artifact):
-    registry = json.loads(gzip.decompress((DATA/f"eulerswap_{network}_registry.json.gz").read_bytes()))
+def capture(network, artifact, unlisted=False):
+    registry = json.loads(gzip.decompress((DATA/f"eulerswap_{network}_{'directory' if unlisted else 'registry'}.json.gz").read_bytes()))
     url = json.loads((DATA/f"{network}.json").read_bytes())["endpoint"]
     tag = registry["selector"]
     roles = registry["roles"]
@@ -87,7 +87,11 @@ def capture(network, artifact):
                                       [15_000_000,[weth,asset],OWNER,expiry]),10**17)
     cases=[]
     refusals=[]
-    for version,pool in CASES[network]:
+    markets=CASES[network]
+    if unlisted:
+        markets=[(2,p["address"]) for p in registry["generations"][1]["pools"] if not p["registered"] and p["installed"]
+                 and any(q["result"] for q in p["quotes"]) and (STABLE in p["tokens"] or weth in p["tokens"])]
+    for version,pool in markets:
         p=next(p for p in registry["generations"][version-1]["pools"] if p["address"]==pool)
         router=roles[f"V{version}Periphery"]["address"]
         assert p["installed"]
@@ -164,6 +168,7 @@ if __name__=="__main__":
     ap.add_argument("network",choices=CASES)
     ap.add_argument("artifact",type=Path)
     ap.add_argument("output",type=Path)
+    ap.add_argument("--unlisted",action="store_true")
     args=ap.parse_args()
-    args.output.write_text(json.dumps(capture(args.network,json.loads(args.artifact.read_bytes())),separators=(",",":")))
+    args.output.write_text(json.dumps(capture(args.network,json.loads(args.artifact.read_bytes()),args.unlisted),separators=(",",":")))
 

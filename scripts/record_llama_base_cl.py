@@ -49,7 +49,7 @@ class CanonicalCalls:
 
 def registry(reader, cap, name, head):
     start, factory, router, quoter, origins = VENUES[name]
-    lens = {"thick":"0xb80a72281c76464cc0e1fbf2431a897393e0d757",
+    lens = {"goblins":"0xdea74cd879a3b11cb849a07bbe76b68f50d531f8","thick":"0xb80a72281c76464cc0e1fbf2431a897393e0d757",
             "2thick":"0x547db6759b0af9e050855106993e3cefc16e937e"}.get(name,"0x0cdee061c75d43c82520ed998c23ac2991c9ac6d")
     roles = {"factory":factory, "router":router, "quoter":quoter, "lens":lens}
     code = reader.many(("eth_getCode", [a,cap.selector]) for a in roles.values())
@@ -133,16 +133,16 @@ VVV = "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf"
 DIEM = "0xf4d97f2da56e8c3098f3a8d538db630a2606a024"
 
 
-def fund_venice(cap, run, seed, deadline):
-    # The taker buys VVV using its own wrapped ETH before entering the VVV/DIEM market.
+def fund_quote_asset(cap, run, seed, deadline, asset):
+    # Acquire the measured input using only ETH belonging to the payer.
     factory = "0x33128a8fc17869897dce68ed026d694621f6fdfd"
-    pool, = cap.one(factory,"getPool(address,address,uint24)",["address","address","uint24"],[WETH,VVV,500],["address"])
+    pool, = cap.one(factory,"getPool(address,address,uint24)",["address","address","uint24"],[WETH,asset,500],["address"])
     assert cap.one(pool,"factory()",returns=["address"]) == (factory,)
     prefix = [tx(WETH,"deposit()",value=seed), approval(WETH,EXEC,seed)]
-    step=(1,pool,WETH,VVV,10000,b"")
+    step=(1,pool,WETH,asset,10000,b"")
     swap=tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
-            ["address","uint256","address","uint256","uint256",STEP+"[]"],[WETH,seed,VVV,1,deadline,[step]])
-    balances=[balance(t,OWNER) for t in (WETH,VVV)]
+            ["address","uint256","address","uint256","uint256",STEP+"[]"],[WETH,seed,asset,1,deadline,[step]])
+    balances=[balance(t,OWNER) for t in (WETH,asset)]
     rows=run(prefix+balances+[swap]+balances)
     assert all(row["status"]=="0x1" for row in rows)
     before=[int(r["returnData"],16) for r in rows[2:4]]
@@ -152,12 +152,12 @@ def fund_venice(cap, run, seed, deadline):
     return prefix+[swap],received,dict(source=pool,spent=str(seed),received=str(received),gas=int(rows[4]["gasUsed"],16))
 
 
-def wallet(reader,cap,book,artifact=None):
+def wallet(reader,cap,book,artifact=None,*,selected_targets=None,funding_source=None):
     assert reader.many(("eth_getCode",[a,cap.selector]) for a in (EXEC,OWNER)) == ["0x","0x"]
     word=lambda x:"0x"+format(x,"064x")
     overrides={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
-    wires = ("router02", "v5")
+    wires = (book.get("native_wire","router02"), "v5")
     constructor = []
     if artifact:
         import hashlib
@@ -195,16 +195,22 @@ def wallet(reader,cap,book,artifact=None):
     targets=[(m,WETH) for m in funded[:4]]
     if book["name"]=="2thick":
         targets.extend((m,VVV) for m in book["markets"] if set(m["tokens"])=={VVV,DIEM} and m["liquidity"]>0)
+    if book.get("native_wire")=="slipstream":
+        targets=[(m,WETH if WETH in m["tokens"] else book["counter"]) for m in book["markets"]
+                 if WETH in m["tokens"] or book["counter"] in m["tokens"]]
+    if selected_targets is not None:
+        targets = selected_targets
     for market,base_token in targets:
         other=next(t for t in market["tokens"] if t!=base_token)
         for seed in (10**12,10**14):
             if base_token==WETH:
                 initial=[tx(WETH,"deposit()",value=seed)];available=seed
             else:
-                initial,available,funding=fund_venice(cap,run,seed,deadline)
+                initial,available,funding=(funding_source(cap,run,seed,deadline) if funding_source is not None
+                                          else fund_quote_asset(cap,run,seed,deadline,base_token))
                 book.setdefault("funding",[]).append(funding)
             for wire in wires:
-                target = ADAPTER if wire == "module" else (router if wire == "router02" else EXEC)
+                target = ADAPTER if wire == "module" else (router if wire in ("router02","slipstream") else EXEC)
                 prefix=initial.copy();amount=available
                 for a,b in ((base_token,other),(other,base_token)):
                     quotesig="(address,address,uint256,"+kind+",uint160)"
@@ -217,6 +223,9 @@ def wallet(reader,cap,book,artifact=None):
                         if wire=="v5":
                             step=(1,market["pool"],a,b,10000,b"")
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,expiry,[step]])
+                        if wire=="slipstream":
+                            shape="(address,address,int24,address,uint256,uint256,uint256,uint160)"
+                            return tx(router,"exactInputSingle("+shape+")",[shape],[(a,b,market["key"],OWNER,expiry,amount,minimum,0)])
                         shape="(address,address,"+kind+",address,uint256,uint256,uint160)"
                         inner=tx(router,"exactInputSingle("+shape+")",[shape],[(a,b,market["key"],OWNER,amount,minimum,0)])
                         return tx(router,"multicall(uint256,bytes[])",["uint256","bytes[]"],[expiry,[bytes.fromhex(inner["data"][2:])]])

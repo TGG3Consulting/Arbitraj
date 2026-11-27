@@ -14,6 +14,7 @@ pub(super) struct Query {
     pub amount: U256,
     pub exact_out: bool,
 }
+#[derive(Clone)]
 pub(super) struct Maker {
     client: Client,
     url: Url,
@@ -53,13 +54,17 @@ impl Maker {
                 "AirSwap: сервер maker не вернул ожидаемый ответ JSON-RPC",
             )
         };
+        let endpoint = crate::venues::bsc_dex::quote::rfq_feed::Endpoint::available(&self.url, ctx)
+            .ok_or_else(|| no(ctx, "AirSwap: недоступна сеть или действует Retry-After"))?;
         let request = self
             .client
             .post(self.url.clone())
             .json(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":params}));
-        let (status, body) = http::exchange(request, ctx.limits()?)
+        let reply = http::exchange_full(request, ctx.limits()?)
             .await
             .map_err(|_| bad())?;
+        endpoint.record(&reply);
+        let (status, body) = (reply.status, reply.text);
         if !status.is_success() {
             return Err(no(ctx, &format!("AirSwap: HTTP {}", status.as_u16())));
         }

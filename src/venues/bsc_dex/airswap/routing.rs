@@ -1,4 +1,4 @@
-use super::{LABEL, Limits, client::Query, enabled, options, receipt::Saved, timely};
+use super::{LABEL, Limits, enabled, receipt::Saved, timely};
 use crate::{
     core::types::{Asset, Quote, Side},
     gateway::{
@@ -8,7 +8,7 @@ use crate::{
     venues::bsc_dex::{
         hashflow, num,
         parts::Parts,
-        quote::{direct, wallet_rfq, white_state},
+        quote::{rfq_feed, wallet_rfq, white_state},
         send, wallet,
     },
 };
@@ -20,6 +20,7 @@ use std::{
 };
 pub(in crate::venues::bsc_dex) struct Ticket {
     pub(super) proof: Saved,
+    pub(super) signatory: Address,
     pub(super) data: Bytes,
     pub(super) spent: U256,
     pub(super) received: U256,
@@ -30,16 +31,35 @@ pub(in crate::venues::bsc_dex) struct Ticket {
 }
 type Tickets = HashMap<(Address, B256), Arc<Ticket>>;
 #[derive(Clone, Default)]
-pub(in crate::venues::bsc_dex) struct Book(Arc<Mutex<Tickets>>);
+pub(in crate::venues::bsc_dex) struct Book {
+    tickets: Arc<Mutex<Tickets>>,
+    pub(super) prices: rfq_feed::PricesAt<super::indicative::Level>,
+    reservations: rfq_feed::Pending,
+}
 impl Book {
     pub(super) fn put(&self, t: Ticket) {
-        let mut rows = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = self.tickets.lock().unwrap_or_else(|e| e.into_inner());
         let now = chrono::Utc::now().timestamp().max(0) as u64;
         rows.retain(|_, v| v.proof.expiry > now);
         rows.insert((t.proof.call.payer, t.proof.call.calldata), Arc::new(t));
     }
     pub(in crate::venues::bsc_dex) fn take(&self, who: Address, id: B256) -> Option<Arc<Ticket>> {
-        self.0.lock().ok()?.remove(&(who, id))
+        let mut rows = self.tickets.lock().ok()?;
+        let ticket = rows.remove(&(who, id))?;
+        rows.retain(|_, t| {
+            (
+                t.proof.call.chain,
+                t.proof.profile.exchange.address,
+                t.signatory,
+                t.proof.nonce,
+            ) != (
+                ticket.proof.call.chain,
+                ticket.proof.profile.exchange.address,
+                ticket.signatory,
+                ticket.proof.nonce,
+            )
+        });
+        Some(ticket)
     }
     fn pair(&self, p: &Parts, a: &Asset, s: Side) -> Option<(Address, Address)> {
         let coin = a.contract?;
@@ -55,7 +75,7 @@ impl Book {
         let ctx = &p.ctx;
         let who = wallet::signer::address(ctx).ok()?;
         Some(
-            self.0
+            self.tickets
                 .lock()
                 .ok()?
                 .values()
@@ -136,62 +156,108 @@ pub(in crate::venues::bsc_dex) async fn consider(
         };
         num::to_decimal(v, d) == Some(qty)
     });
-    if candidates.is_empty() && !quote_stage::is_final() {
-        return super::indicative::compare(p, a, s, qty, pair, old).await;
+    if candidates.is_empty() {
+        let Ok(timeout) = c.timeout() else { return old };
+        let discover = async {
+            let l = super::indicative::observe(p, s, qty, pair, old.is_err()).await?;
+            let id = rfq_feed::identity(c)?;
+            let key = ((id, pair.0, pair.1), who);
+            let ms = c.int("airswap.min_validity_ms").ok()?;
+            for offer in &l.offers {
+                let Some(price) =
+                    super::indicative::priced(p, a, s, qty, &l, offer, old.as_ref().ok()).await
+                else {
+                    continue;
+                };
+                let max = if buy {
+                    match quote_stage::buy_budget(c.place.id, pair.0) {
+                        Some(v) => num::to_units(v, l.decimals.0)?,
+                        None => offer.paid,
+                    }
+                } else {
+                    l.query.amount
+                };
+                if offer.paid > max {
+                    continue;
+                }
+                if !quote_stage::is_final() {
+                    if old
+                        .as_ref()
+                        .is_ok_and(|v| v.route.as_ref().is_some_and(|r| r.executable))
+                    {
+                        return None;
+                    }
+                    return Some(Some(price));
+                }
+                let h = white_state::head(c, "latest").await.ok()?;
+                let limits = Limits {
+                    minimum: if buy { l.query.amount } else { U256::ONE },
+                    maximum: max,
+                };
+                for scope in super::profile::Profile::candidates(c) {
+                    let Some(prepared) =
+                        super::prepare(c, l.query, scope, &offer.maker, who, h, Some(offer.paid))
+                            .await
+                            .ok()
+                            .flatten()
+                    else {
+                        continue;
+                    };
+                    if c.settings.generation() != id.1
+                        || crate::secrets::vault::generation() != id.2
+                        || !enabled(c)
+                    {
+                        return None;
+                    }
+                    if !p.airswap.reservations.acquire(
+                        key,
+                        tokio::time::Instant::now(),
+                        timeout.max(std::time::Duration::from_millis(ms)),
+                    ) {
+                        return None;
+                    }
+                    let rows = super::signed(
+                        c,
+                        l.query,
+                        limits,
+                        h,
+                        l.decimals,
+                        scope,
+                        &offer.maker,
+                        (id.1, who, ms),
+                        prepared,
+                    )
+                    .await
+                    .ok()?;
+                    for t in rows {
+                        p.airswap.reservations.hold(key, t.proof.expiry);
+                        p.airswap.put(t)
+                    }
+                    return Some(None);
+                }
+            }
+            None
+        };
+        match tokio::time::timeout(timeout, Box::pin(discover)).await {
+            Ok(Some(Some(q))) => return Ok(q),
+            Ok(Some(None)) => candidates = p.airswap.candidates(p, a, s).unwrap_or_default(),
+            _ => return old,
+        }
+    }
+    if candidates.is_empty() {
+        return old;
     }
     let Ok(h) = white_state::head(c, "latest").await else {
         return old;
     };
-    if candidates.is_empty() {
-        let Ok(dec) = p
-            .tokens
-            .decimals(c, if buy { pair.1 } else { pair.0 })
-            .await
-        else {
-            return old;
-        };
-        let Some(raw) = direct::ceil_units(qty, dec) else {
-            return old;
-        };
-        let maximum = if buy {
-            match quote_stage::buy_budget(c.place.id, pair.0) {
-                Some(b) => {
-                    let Ok(d) = p.tokens.decimals(c, pair.0).await else {
-                        return old;
-                    };
-                    let Some(cap) = num::to_units(b, d) else {
-                        return old;
-                    };
-                    cap
-                }
-                None => U256::MAX,
-            }
-        } else {
-            raw
-        };
-        let query = Query {
-            input: pair.0,
-            output: pair.1,
-            amount: raw,
-            exact_out: buy,
-        };
-        let limits = Limits {
-            minimum: if buy { raw } else { U256::ONE },
-            maximum,
-        };
-        let Ok(rows) = options(p, query, limits, who, h).await else {
-            return old;
-        };
-        for t in rows {
-            p.airswap.put(t)
-        }
-        candidates = p.airswap.candidates(p, a, s).unwrap_or_default();
-    }
     let mut cutoff = if let Ok(q) = &old
         && q.fillable_qty == qty
         && (!quote_stage::is_final() || q.route.as_ref().is_some_and(|r| r.executable))
     {
-        hashflow::routing::total(p, q).await
+        let Some(value) = hashflow::routing::total(p, q).await else {
+            return old;
+        };
+        Some(value)
     } else {
         None
     };

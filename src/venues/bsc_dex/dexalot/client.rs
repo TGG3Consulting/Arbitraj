@@ -1,6 +1,7 @@
 //! Dexalot Simple Swap v2. pairprice uses token quantities; firm uses raw integer strings.
 //! https://github.com/Dexalot/dexalot-docs/blob/a2a1ec62007cc2513a9099a8cec59a7da5487712/docs/en/apiv2/SimpleSwap.md
 use super::fail;
+use crate::venues::bsc_dex::quote::rfq_feed::Endpoint;
 use crate::{
     gateway::{errors::GatewayResult, http},
     venues::bsc_dex::ctx::Ctx,
@@ -8,14 +9,7 @@ use crate::{
 use reqwest::{Client, Url, header::HeaderValue};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
-use std::{
-    collections::HashMap,
-    sync::{Mutex, OnceLock},
-    time::{Duration, Instant},
-};
-type Backoff = Mutex<HashMap<(String, u64), Instant>>;
-static BACKOFF: OnceLock<Backoff> = OnceLock::new();
-
+use std::sync::OnceLock;
 pub(super) async fn request<T: DeserializeOwned>(
     ctx: &Ctx,
     method: &str,
@@ -36,20 +30,8 @@ pub(super) async fn request<T: DeserializeOwned>(
             "Dexalot: требуется HTTPS URL без пароля и параметров",
         ));
     }
-    let backoff = BACKOFF.get_or_init(Default::default);
-    let key = (
-        url.as_str().trim_end_matches('/').to_string(),
-        ctx.chain_id()
-            .ok_or_else(|| fail(ctx, "Dexalot: отсутствует сеть"))?,
-    );
-    {
-        let mut waits = backoff.lock().unwrap_or_else(|e| e.into_inner());
-        let now = Instant::now();
-        waits.retain(|_, end| *end > now);
-        if waits.contains_key(&key) {
-            return Err(fail(ctx, "Dexalot: действует срок ожидания Retry-After"));
-        }
-    }
+    let endpoint = Endpoint::available(&url, ctx)
+        .ok_or_else(|| fail(ctx, "Dexalot: недоступна сеть или действует Retry-After"))?;
     let original = url.as_str().trim_end_matches('/') == "https://api.dexalot.com/api/rfq";
     if firm.is_some() && (!original || !ctx.vault.has_secret("dexalot.api_key")) {
         return Err(fail(ctx, "Dexalot: заявка требует ключ и официальный API"));
@@ -86,20 +68,7 @@ pub(super) async fn request<T: DeserializeOwned>(
         .await
         .map_err(|_| fail(ctx, "Dexalot: полный ответ не получен"))?;
     let status = reply.status;
-    if status.as_u16() == 429 || (status.as_u16() == 503 && reply.retry_after_s.is_some()) {
-        let delay = reply
-            .retry_after_s
-            .map(Duration::from_secs)
-            .unwrap_or(ctx.timeout()?);
-        if let Some(end) = Instant::now().checked_add(delay) {
-            backoff
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .entry(key)
-                .and_modify(|v| *v = (*v).max(end))
-                .or_insert(end);
-        }
-    }
+    endpoint.record(&reply);
     let body = reply.text;
     let data: Value = serde_json::from_str(&body).map_err(|_| {
         fail(

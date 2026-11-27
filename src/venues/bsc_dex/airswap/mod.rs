@@ -111,15 +111,65 @@ async fn option(
     maker: &Maker,
     (generation, who, ms): (u64, Address, u64),
 ) -> GatewayResult<Vec<routing::Ticket>> {
-    let mut out = Vec::new();
-    let sender = scope.sender(who);
+    let Some(prepared) = prepare(c, q, scope, maker, who, head, None).await? else {
+        return Ok(vec![]);
+    };
+    signed(
+        c,
+        q,
+        limits,
+        head,
+        (di, dout),
+        scope,
+        maker,
+        (generation, who, ms),
+        prepared,
+    )
+    .await
+}
+async fn prepare(
+    c: &Ctx,
+    q: Query,
+    scope: profile::Profile,
+    maker: &Maker,
+    who: Address,
+    head: white_state::Head,
+    required: Option<U256>,
+) -> GatewayResult<Option<(alloy_primitives::B256, U256)>> {
     if scope.module.is_none() {
         exact_wallet_tokens::check(c, "airswap", q.input, q.output, &head.selector()).await?;
     }
-    let (domain, fee) = scope.check(c, head, who).await?;
-    if !maker.supports(c, q, scope).await? {
-        return Ok(out);
+    let terms = scope.check(c, head, who).await?;
+    if let Some(spend) = required {
+        use super::pools::dagrow;
+        let at = head.selector();
+        let (balance, grant) = tokio::try_join!(
+            dagrow::balance(c, q.input, who, &at),
+            dagrow::allowance(c, q.input, who, scope.target(), &at)
+        )?;
+        if spend.is_zero() || spend > balance || spend > grant {
+            return Ok(None);
+        }
     }
+    if !maker.supports(c, q, scope).await? {
+        return Ok(None);
+    }
+    Ok(Some(terms))
+}
+#[allow(clippy::too_many_arguments)]
+async fn signed(
+    c: &Ctx,
+    q: Query,
+    limits: Limits,
+    head: white_state::Head,
+    (di, dout): (u8, u8),
+    scope: profile::Profile,
+    maker: &Maker,
+    (generation, who, ms): (u64, Address, u64),
+    (domain, fee): (alloy_primitives::B256, U256),
+) -> GatewayResult<Vec<routing::Ticket>> {
+    let mut out = Vec::new();
+    let sender = scope.sender(who);
     let order = maker.order(c, q, scope, sender, ms).await?;
     if !timely(c, order.expiry)
         || order.amount > limits.maximum
@@ -215,6 +265,7 @@ async fn option(
                 gas
             };
             out.push(routing::Ticket {
+                signatory,
                 proof,
                 data,
                 spent,

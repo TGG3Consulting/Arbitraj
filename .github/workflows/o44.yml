@@ -1,0 +1,20 @@
+name: Fluid Dex Lite Ethereum constructor equivalence
+on: push
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix contracts --no-audit --no-fund
+      - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fluid" FluidDexLiteWallet
+      - run: python -m pip install requests eth-abi eth-utils pycryptodome
+      - run: python scripts/verify_fluid_lite_creation.py "$RUNNER_TEMP/fluid/FluidDexLiteWallet.json" artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fluid-ethereum-creation
+          path: artifacts

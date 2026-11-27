@@ -27,6 +27,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     SafeSwap,
     Aktionariat,
     BancorLegacy,
+    Ambient,
     Llamma,
     Mooniswap,
     DefiPlaza,
@@ -130,6 +131,7 @@ impl Market {
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             _ if e.family.variant.issuer_shares()=>Some(Self::Aktionariat),
             _ if e.family.variant==Variant::BancorLegacy=>Some(Self::BancorLegacy),
+            _ if e.family.variant==Variant::Ambient=>Some(Self::Ambient),
             _ if e.family.variant.llamma()=>Some(Self::Llamma),
             _ if e.family.variant.mooniswap()=>Some(Self::Mooniswap),
             _ if e.family.variant.defiplaza()=>Some(Self::DefiPlaza),
@@ -174,6 +176,7 @@ impl Market {
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
             Self::Aktionariat=>"Aktionariat: требуется подтверждённое поручение на целые акции",
             Self::BancorLegacy=>"BancorLegacy: отсутствует исходное поручение кошелька",
+            Self::Ambient=>"Ambient: нет сохранённого поручения",
             Self::Llamma=>"LLAMMA: нет сохранённого поручения",
             Self::Mooniswap=>"Mooniswap: отсутствует исходное поручение кошелька",
             Self::DefiPlaza=>"DefiPlaza: отсутствует исходное поручение кошелька",
@@ -211,6 +214,7 @@ impl Market {
             Self::SafeSwap => "SafeSwap",
             Self::Aktionariat=>"Aktionariat",
             Self::BancorLegacy=>"BancorLegacy",
+            Self::Ambient=>"Ambient",
             Self::Llamma=>"LLAMMA",
             Self::Mooniswap=>"Mooniswap",
             Self::DefiPlaza=>"DefiPlaza",
@@ -285,6 +289,7 @@ impl Market {
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Aktionariat=>Box::pin(super::aktionariat_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::BancorLegacy=>Box::pin(super::bancor_legacy_plan::plan(ctx,s,wallet,height,selected.bancor_legacy)).await,
+            Self::Ambient=>Box::pin(super::ambient_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
             Self::Llamma=>Box::pin(super::llamma_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
             Self::Mooniswap=>Box::pin(super::mooniswap_plan::plan(ctx,s,wallet,height,selected.mooniswap)).await,
             Self::DefiPlaza=>Box::pin(super::defiplaza_plan::plan(ctx,s,wallet,height,selected.defiplaza)).await,
@@ -404,7 +409,7 @@ pub(super) fn router_shape(
     }
     let native_flat=leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..})));
     let needs_wallet=native_flat||leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && (e.family.variant.llamma() || matches!(e.family.variant,Variant::Brokerbot|Variant::Aqua|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (e.family.variant.llamma() || matches!(e.family.variant,Variant::Ambient|Variant::Brokerbot|Variant::Aqua|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));

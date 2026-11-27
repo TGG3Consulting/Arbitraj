@@ -50,6 +50,7 @@ pub struct TokenEntry {
 /// Состояние справочника (под замком).
 #[derive(Debug, Default)]
 pub struct Snap {
+    pub(crate) ambient: super::pools::ambient_directory::Keys,
     pub(crate) indexer_ids: crate::settings::indexer_id::Bindings,
     pub dexes: Vec<IndexerDex>,
     pub dexes_at: Option<DateTime<Utc>>,

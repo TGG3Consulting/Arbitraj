@@ -62,6 +62,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             }
         }
         PoolState::BancorLegacy(s)=>{let p=s.points(e.usdt)?.first()?;mul_div(amount,p.amount_out,p.amount_in)},
+        PoolState::Ambient(s)=>{let p=s.points(e.usdt)?.first()?;mul_div(amount,p.amount_out,p.amount_in)},
         PoolState::Llamma(s)=>{let p=s.points(e.usdt)?.first()?;mul_div(amount,p.amount_out,p.amount_in)},
         PoolState::YieldBasisPool(s)=>{let p=s.points(e.usdt)?.first()?;mul_div(amount,p.amount_out,p.amount_in)},
         PoolState::YieldBasisLev(s)=>{let (x,y)=s.reserves(e.usdt)?;mul_div(amount,y,x)},

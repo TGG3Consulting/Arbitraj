@@ -38,6 +38,10 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if e.family.variant==super::super::pools::family_variant::Variant::Ambient{
+        use super::super::{pools::ambient,exec::ambient_wallet::abi::IWallet};
+        return ambient::shape(e).is_some_and(|s|s.module==Some(log.address)&&IWallet::Filled::decode_raw_log(log.topics.iter().copied(),&log.data).is_ok_and(|ev|ev.market==s.market.id() && s.side(ev.input).is_some() && s.side(ev.output).is_some() && ev.input!=ev.output && !ev.spent.is_zero() && !ev.received.is_zero()));
+    }
     if e.family.variant.llamma(){
         use super::super::pools::llamma::{self,ILlama};
         return llamma::shape(e).is_some_and(|s|s.amm==log.address) &&

@@ -11,7 +11,7 @@ use alloy_primitives::Address;
 
 pub(super) fn needs(e:&Entry)->bool{
     use crate::venues::bsc_dex::pools::family_variant::Variant;
-    e.family.variant.aqua() || e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
+    e.family.variant.aqua() || e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Ambient|Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
 }
 pub(super) async fn check(
     ctx: &Ctx,
@@ -28,6 +28,7 @@ pub(super) async fn check(
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
     for (e, input) in steps {
+        if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient{Box::pin(super::ambient_plan::graph(ctx,e,input,&head.selector())).await?;continue;}
         if e.family.variant.llamma(){Box::pin(super::super::pools::llamma::check(ctx,e,&head.selector())).await?;continue;}
         if e.family.variant.ammalgam() {
             Box::pin(super::super::pools::ammalgam::check_step(ctx,e,input,&head.selector())).await?;

@@ -279,6 +279,9 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant==Variant::Ambient{return Box::pin(async move{let at=super::nami::block(ctx,&block_tag(block)).await?;
+        let state=super::ambient_levels::load(ctx,tokens,reg,f,reference,pair,usdt,&at).await?;
+        Ok(Loaded{state,ticks:None,bins:None,fee_pips:None})});}
     if f.variant.llamma(){return Box::pin(async move {let at=super::nami::block(ctx,&block_tag(block)).await?;
         let state=Box::pin(super::llamma_quotes::load(ctx,tokens,reg,f,reference,pair,usdt,&at)).await?;
         Ok(Loaded{state,ticks:None,bins:None,fee_pips:None}) });}

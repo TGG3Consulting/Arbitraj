@@ -55,6 +55,7 @@ pub(super) fn order_book_quoter(variant:Variant)->Option<BookQuoter>{
     use super::super::pools::{carbon_quote,rubicon};
     match variant {
         Variant::Ammalgam=>Some(BookQuoter{request:super::super::pools::ammalgam::request,payout:super::super::pools::ammalgam::payout}),
+        Variant::Ambient=>Some(BookQuoter{request:super::super::pools::ambient::request,payout:super::super::pools::ambient::payout}),
         Variant::Llamma(_)=>Some(BookQuoter{request:super::super::pools::llamma_quotes::request,payout:super::super::pools::llamma_quotes::payout}),
         Variant::Mooniswap=>Some(BookQuoter{request:super::super::pools::mooniswap::request,payout:super::super::pools::mooniswap::payout}),
         Variant::Brokerbot=>Some(BookQuoter{request:super::super::pools::brokerbot_quotes::request,payout:super::super::pools::brokerbot_quotes::payout}),

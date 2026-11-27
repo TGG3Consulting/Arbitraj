@@ -84,7 +84,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
         if k==ExecKind::Basin && let PoolRef::Multi{contract,token0,token1}=pool && !contract.is_zero() && token0<token1{return Ok((k,*contract));}
         return Err("DefiPlaza: нужен зарегистрированный рынок кассы".into());
     }
-    if f.variant.aqua(){
+    if f.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient || f.variant.aqua(){
         if k==ExecKind::Balancer && let PoolRef::Singleton{manager,id}=pool && !manager.is_zero() && !id.is_zero(){return Ok((k,*manager));}
         return Err("Aqua: нет ключа программы SwapVM".into());
     }
@@ -180,6 +180,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     }
     if e.family.variant.aqua(){return k==ExecKind::Balancer && super::super::aqua_plan::graph(ctx,e).is_some();}
     if e.family.variant.mooniswap(){return k==ExecKind::Balancer && super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).is_some();}
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient{return k==ExecKind::Balancer && super::super::super::pools::ambient::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {
         // Решение 441 (ревью, п. 2): BALANCER_V3 — то же правило, что в fits.
@@ -227,6 +228,7 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
         (k!=ExecKind::Balancer || super::super::bancor_legacy_plan::state(e).is_none()) {
         return Err("Bancor V2.1: конвертер или валюты не совпадают с реестром".into());
     }
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient && super::super::super::pools::ambient::shape(e).is_none(){return Err("Ambient: физический ключ или касса не совпадают".into());}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis && super::super::super::pools::yield_basis_quotes::shape(e).is_none(){return Err("YieldBasis: состояние не соответствует зарегистрированному рынку и валютам".into());}
     if !k.singleton() {
         return Ok((k, a, Address::ZERO));
@@ -305,6 +307,11 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         };
         if k!=ExecKind::Balancer || !valid || s.side(token_in).is_none(){return Err(ctx.err(ErrorCode::NoRoute,"Uniswap V1: исходный рынок не подтверждён"));}
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
+    }
+    if e.family.variant==super::super::super::pools::family_variant::Variant::Ambient{
+        let market=super::super::super::pools::ambient::shape(e).filter(|s|k==ExecKind::Balancer && s.side(token_in).is_some())
+            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Ambient: сумма относится к другой физической паре"))?;
+        return Ok((Params::Balancer{pool_id:market.market.id()},ctx.dex_addr("dex.router",e.family.id)?));
     }
     if let PoolState::Bundles(book)=&e.pool.state {
         if k!=ExecKind::Balancer || pool!=book.market.pool || !book.market.tokens.contains(&token_in){return Err(ctx.err(ErrorCode::NoRoute,"Bundles Swap: форма шага не соответствует рынку"))}

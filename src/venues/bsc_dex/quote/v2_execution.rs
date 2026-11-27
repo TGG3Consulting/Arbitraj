@@ -76,7 +76,8 @@ pub(super) async fn option(
     use alloy_primitives::U256;
     let ctx = &q.ctx;
     let decimals = (i.coin_dec, i.usdt_dec);
-    let measured=if let Some(head)=h && e.family.variant.llamma(){Some(Box::pin(super::llamma_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
+    let measured=if let Some(head)=h && e.family.variant==super::super::pools::family_variant::Variant::Ambient{Some(Box::pin(super::ambient_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
+    else if let Some(head)=h && e.family.variant.llamma(){Some(Box::pin(super::llamma_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && matches!(&e.pool.state,crate::core::types::PoolState::YieldBasisPool(_)|crate::core::types::PoolState::BancorLegacy(_)){
         let fill=Box::pin(super::yield_basis_sizing::paid(q,i,&e,payer,&execution,head)).await?;
         Some(fill)
@@ -145,6 +146,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Aktionariat(m)=>Some(RouterFeeMode::ProtectedWallet{target:m.module}),
         super::v2_wallet_sim::Wire::Aqua(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
         super::v2_wallet_sim::Wire::Angstrom(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
+        super::v2_wallet_sim::Wire::Ambient(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Stabull(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Integral(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Dagrow(t)=>Some(RouterFeeMode::Dagrow{target:t.target,desired:t.desired}),
@@ -178,8 +180,8 @@ pub(super) async fn option(
             "Не подтверждены полнота объёма или способ исполнения V2",
         )
     };
-    let llamma=c.entry.family.variant.llamma();
-    if c.coins != i.qty && !(llamma && i.side==Side::Sell && c.coins>Decimal::ZERO && c.coins<i.qty) {
+    let partial_input=c.entry.family.variant.llamma() || c.entry.family.variant==super::super::pools::family_variant::Variant::Ambient;
+    if c.coins != i.qty && !(partial_input && i.side==Side::Sell && c.coins>Decimal::ZERO && c.coins<i.qty) {
         return Err(bad());
     }
     if let crate::core::types::PoolState::BancorV3(state)=&c.entry.pool.state && i.side==Side::Buy {
@@ -301,8 +303,8 @@ pub(super) async fn option(
         }
         if i.side == Side::Sell {
             c.usdt = num::to_decimal(fill.received, i.usdt_dec).ok_or_else(bad)?;
-            if algebra_wallet || llamma {c.coins=num::to_decimal(fill.charged,i.coin_dec).ok_or_else(bad)?.min(i.qty);}
-        } else if algebra_wallet || llamma {
+            if algebra_wallet || partial_input {c.coins=num::to_decimal(fill.charged,i.coin_dec).ok_or_else(bad)?.min(i.qty);}
+        } else if algebra_wallet || partial_input {
             c.usdt=num::to_decimal(fill.charged,i.usdt_dec).ok_or_else(bad)?;
         }
         c.usable.gas = fill.swap_gas;

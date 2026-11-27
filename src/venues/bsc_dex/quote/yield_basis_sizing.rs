@@ -106,6 +106,7 @@ pub(super) async fn paid(
         return Err(fail());
     }
     let points = match &e.pool.state {
+        PoolState::Ambient(s)=>s.points(input),
         PoolState::Llamma(s)=>s.points(input),
         PoolState::YieldBasisPool(s) => s.points(input),
         PoolState::BancorLegacy(s) => s.points(input),

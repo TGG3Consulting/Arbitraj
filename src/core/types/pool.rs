@@ -573,6 +573,7 @@ pub enum PoolState {
     YieldBasisLev(Box<super::yield_basis::LevState>),
     YieldBasisPool(Box<super::yield_basis::Preview>),
     Llamma(Box<super::llamma::State>),
+    Ambient(Box<super::ambient::State>),
     BalancerV1(Box<super::balancer_v1::State>),
     BancorLegacy(Box<super::bancor_legacy::BancorLegacyState>),
     BancorV3(Box<super::bancor_v3::BancorState>),

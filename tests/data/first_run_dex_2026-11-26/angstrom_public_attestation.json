@@ -1,0 +1,18 @@
+{
+  "url": "wss://ws.mainnet.node2.angstrom.xyz",
+  "messages": [
+    {
+      "data": "0x5875db54cd9ae2b2a875e09bb731772297ae9d92f9cf88f24f935ef6fb8a3663290ab3714ba0b6292711f9d8cc479aeca4fb59833b53c31a8324861cc7cd4c1a556297314d34afe76e450c25af8301980eef94e71b",
+      "block": 26505918,
+      "header": {
+        "number": "0x19472be",
+        "hash": "0x94af4d2375c16c5bcaeab0315ec5754b85199aba445dd09dddad9ba916a59b85",
+        "parentHash": "0x221fc3c5f8f6579a6ddc1a1d884e638799304f61fb2509b7b401fbb0e6d274d6",
+        "stateRoot": "0xdee099c464d1110a5ac0e549ab4379974af7ef37ff8d4c82631e5ca7cc21e210",
+        "timestamp": "0x6b095a1b"
+      }
+    }
+  ],
+  "method": "consensus_subscribeEmptyBlockAttestations",
+  "observed": "2026-11-27"
+}

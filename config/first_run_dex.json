@@ -1128,12 +1128,17 @@
     "chain_id": 8453,
     "network": "base",
     "id": "sharkswap-base",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0x57592d44eb60011500961ef177bff8d8691d5a8b · https://sourcify.dev/server/v2/contract/8453/0xae45f7eb428eb6403f2567c3a3ec47e9230bc823 · tests/data/base_ethereum_v2_probes.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x57592d44eb60011500961ef177bff8d8691d5a8b · https://sourcify.dev/server/v2/contract/8453/0xae45f7eb428eb6403f2567c3a3ec47e9230bc823 · tests/data/base_ethereum_v2_probes.json · https://sourcify.dev/server/v2/contract/8453/0x0573b0ce977bba12e31ad7a3ccc02d0db004d57a?fields=all · tests/data/first_run_dex_2026-11-26/sharkswap_base_wallets.json.gz",
     "settings": {
-      "dex.kind": "v2_fork_executor",
+      "dex.kind": "v2_fork_dual_create2",
       "dex.factory": "0x57592d44eb60011500961ef177bff8d8691d5a8b",
       "dex.v2_fee_source": "fixed",
-      "dex.v2_fee_pct": "0.3"
+      "dex.v2_fee_pct": "0.3",
+      "dex.router": "0x0573b0ce977bba12e31ad7a3ccc02d0db004d57a",
+      "dex.router_runtime_hash": "0xfdeb9359d5513ae3d7277503cb94830f2c52c45baaac486ab1be1d7fca640f27",
+      "dex.pool_code_hashes": [
+        "0x5ff8b9f25d00b07f6e6ab305b68d790a8eb66bd72f2387d791cd9f7c4638cfe1"
+      ]
     }
   },
   {

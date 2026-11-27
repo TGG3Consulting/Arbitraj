@@ -1,0 +1,88 @@
+[
+  {
+    "network": "base",
+    "id": "7304",
+    "slug": "sectorone-dlmm-v2",
+    "source": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/sectorone-dlmm-v2/index.ts",
+    "source_sha256": "04c4de7e9a333a395068103b438d115519edc07fce572b91a61ce98aaf43ea3f",
+    "stanza": "chainConfig[CHAIN.BASE]",
+    "scopes": [
+      {
+        "generation": "V2",
+        "profile": "sectorone-v2-base",
+        "factory": "0xcf0685f37a139de56afc4a89aa343849358c05cb",
+        "registered": 0,
+        "paid_legs": 0,
+        "evidence": "sectorone_v2_base.json.gz"
+      },
+      {
+        "generation": "LB2.0",
+        "profile": "sectorone-v2-0-base",
+        "factory": "0x217da3e53f221d1f36e8b09bc7d55d4012c0aa70",
+        "registered": 211,
+        "paid_legs": 8,
+        "evidence": "sectorone-20-base.json.gz"
+      },
+      {
+        "generation": "LB2.2",
+        "profile": "sectorone-base",
+        "factory": "0x3357f02fb3aa78fc86d3bccdc5edf039d4b952b5",
+        "registered": 43,
+        "paid_legs": 8,
+        "evidence": "sectorone-22-base.json.gz"
+      }
+    ]
+  },
+  {
+    "network": "ethereum",
+    "id": "7304",
+    "slug": "sectorone-dlmm-v2",
+    "source": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/sectorone-dlmm-v2/index.ts",
+    "source_sha256": "04c4de7e9a333a395068103b438d115519edc07fce572b91a61ce98aaf43ea3f",
+    "stanza": "chainConfig[CHAIN.ETHEREUM]",
+    "scopes": [
+      {
+        "generation": "V2",
+        "profile": "sectorone-v2-ethereum",
+        "factory": "0x96559af835e5a3e9bb68c17eba8520295370698f",
+        "registered": 0,
+        "paid_legs": 0,
+        "evidence": "sectorone_v2_ethereum.json.gz"
+      },
+      {
+        "generation": "LB2.0",
+        "profile": "sectorone-v2-0-ethereum",
+        "factory": "0x98501d0bb98d92a3234bae0f2a42befb5075224a",
+        "registered": 8,
+        "paid_legs": 8,
+        "evidence": "sectorone-20-ethereum.json.gz"
+      },
+      {
+        "generation": "LB2.2",
+        "profile": "sectorone-v2-2-ethereum",
+        "factory": "0x9d8688043150c2b2a4cdce2ed03eb40b6ccd2c57",
+        "registered": 11,
+        "paid_legs": 6,
+        "evidence": "sectorone-22-ethereum.json.gz"
+      }
+    ]
+  },
+  {
+    "network": "base",
+    "id": "3714",
+    "slug": "sharkswap-finance",
+    "source": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/factory/uniV2.ts",
+    "source_sha256": "f9b1ac7c482afce20306ed00fc6e2bd8f995bf645b85b5e51efa9c7dd1e0ae3f",
+    "stanza": "sharkswap-finance[CHAIN.BASE]",
+    "scopes": [
+      {
+        "generation": "V2",
+        "profile": "sharkswap-base",
+        "factory": "0x57592d44eb60011500961ef177bff8d8691d5a8b",
+        "registered": 52,
+        "paid_legs": 16,
+        "evidence": "sharkswap_base_wallets.json.gz"
+      }
+    ]
+  }
+]

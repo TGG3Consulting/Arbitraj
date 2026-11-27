@@ -1681,11 +1681,25 @@ def tables(network, snapshots, profiles):
             task = "RYZE-RECON · адаптер объёма читает Swap двух пулов этой фабрики; 9 подписанных сделок сопоставлены с движениями кошельков"
         if str(row["id"]) in {"2644","7882"}:
             kind,role=("maverick","Factory") if str(row["id"])=="2644" else ("topaz","CLFactory")
+    king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
+                  if s["network"] == network}
             snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
             candidates=[snapshot["roles"][role]["address"]]
             task=f"DEX-46 · {len(snapshot['markets'])} зарегистрированных рынков, см. кошельковые результаты выше"
         if not base and str(row["id"]) in {"7037","7038"} and "degenswap-ethereum" in configured:
             snapshot=cypher if str(row["id"])=="7037" else cl
+        if match := king_shark.get(str(row["id"])):
+            ref = match["source"]
+            candidates = [scope["factory"] for scope in match["scopes"]]
+            if match["id"] == "7304":
+                task = "Те же три реестра SectorOne · " + ", ".join(
+                    f"{scope['generation']}: {scope['registered']} пар, {scope['paid_legs']} подтверждённых выплат на выборке"
+                    for scope in match["scopes"]) + ". Отдельного пула от имени KING не найдено"
+            else:
+                scope = match["scopes"][0]
+                task = (f"SharkSwap Router02 и V5 · {scope['registered']} CREATE2-пары; на двух рынках {scope['paid_legs']} "
+                        "платежей исходного и обратного направления, точный вход, min+1 и истечение срока. "
+                        "Штатный путь сравнивает ERC20, включая WETH. Форма выплаты ETH использует весь WETH роутера и в эти измерения не входит. DefiLlama учитывает только объём, историческое распределение комиссии не установлено")
             candidates=[snapshot["factory"]["address"]]
             task=f"Cypher · {len(snapshot['markets'])} действительных регистраций, испытания и границы выше"
         if not base and str(row["id"])=="7520":

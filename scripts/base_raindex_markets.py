@@ -26,5 +26,13 @@ def raindex_markets():
         gas = [int(r["gas"]) for r in b]
         out.append(f"| {network} {m['height']}, V{version} | `{book['book']}` · `{book['runtime']}` | `{roles['runtime']}` | {len(a)} | {len(b)} | {min(gas):,}–{max(gas):,} |")
     out.extend(["", "Для `raindex.books` запишите chainId, номер версии, адрес книги, хеш её runtime, адрес собственного модуля, хеш его runtime, тип источника и URL. На Base источник graphql указан в [официальных стратегиях](https://github.com/rainlanguage/rain.strategies/blob/d58fd9d89a040c0ace494f12abf5452776b106d5/settings.yaml). На Ethereum используйте тип blockscout и [публичные журналы V4](https://eth.blockscout.com/api/v2/addresses/0x0ea6d458488d1cf51695e1d6e4744e6fb715d37c/logs). Адрес из симуляции не является размещением. Для работы требуются выбранный владельцем модуль, разрешение на расход, ETH для газа, индивидуальные пределы возраста книги, времени запроса и газа. Торговля изначально выключена. [Реестр размещений](https://github.com/rainlanguage/raindex/blob/0352173773372ab0b8f3f779586bec446d4eca99/deployments/raindex.json).", "",
-                "На Base для обратной продажи полученного wtSPYM все 18 проверенных попыток отклонил минимум ордера. На Ethereum защищённая покупка 5 токенов V4 при заданном архивном пределе откатилась. По V3, V5 и V7 положительная выплата модуля не подтверждена. Для торговли каждая сумма и направление требуют отдельной успешной симуляции с актуальным плательщиком, включающей handleIO и чистый прирост баланса. Положительная quote2 может предшествовать отказу в расчёте.", ""])
+                "На Base для обратной продажи полученного wtSPYM все 18 проверенных попыток отклонил минимум ордера. На Ethereum подписанный предел 0,5 WETH превышал доступные 0,1 WETH. При ограничении расчётной стоимостью те же 5 токенов V4 получены за 0,00103953273698 WETH. Этот ETH-рынок требует WETH как платёжную валюту. При стандартной настройке USDT прямой поиск пропускает пару. Доход в USDT требует исполнимого дополнительного обмена и учёта его расходов. По V3, V5 и V7 положительная выплата модуля не подтверждена. Для торговли каждая сумма и направление требуют отдельной успешной симуляции с актуальным плательщиком, включающей handleIO и чистый прирост баланса. Положительная quote2 может предшествовать отказу в расчёте.", ""])
     return out
+
+def inventory(network):
+    file = Path("tests/data/first_run_dex_2026-11-26") / f"raindex_{network}_protected_wallets.json.gz"
+    with gzip.open(file, "rt", encoding="utf8") as stream:
+        data = json.load(stream)
+    paid = [r for pair in data["pairs"] for case in pair["cases"] for r in case.values()
+            if isinstance(r, dict) and r.get("stage") == "paid"]
+    return sorted({r["book"] for r in paid}), f"Raindex · {len(paid)} выплат своего кошелька через модуль; версии и состав валют в разделе Raindex"

@@ -1688,6 +1688,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if str(row["id"]) == "5221":
+            import base_raindex_markets
+            candidates, task = base_raindex_markets.inventory(network)
         if match := king_shark.get(str(row["id"])):
             ref = match["source"]
             candidates = [scope["factory"] for scope in match["scopes"]]

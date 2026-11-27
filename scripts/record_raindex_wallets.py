@@ -3,7 +3,7 @@
 Имеющиеся у maker vault и внешние оракулы не подменяются. Подписи maker не изготавливаются.
 """
 import argparse
-from decimal import Decimal
+from decimal import Decimal, localcontext
 import gzip
 import json
 from pathlib import Path
@@ -142,6 +142,18 @@ def capture(network,url,artifact):
                     if sell["stage"]=="paid":
                         case[key+"_reverse"]=sell;break
                     case.setdefault(key+"_reverse_attempts",[]).append({f:sell[f] for f in ("order","stage","error") if f in sell})
+        if both and any(v.get("stage")=="paid" for c in record["cases"] for v in c.values() if isinstance(v,dict)):
+            # Больше текущего outputMax одного maker. Оплачиваем только достигнутую часть и возвращаем остаток своего cap.
+            with localcontext() as precision:
+                precision.prec=100
+                capacity=int(decimal(l["cap"])*Decimal(10**dt))
+                cost=int((decimal(l["cap"])*decimal(l["ratio"])*Decimal(10**df)).to_integral_value(rounding="ROUND_CEILING"))
+            bound=cost+max(2,cost//10)
+            maximum=capacity+max(2,capacity//2)
+            _,limited=money(seed,b,o,l,bound,maximum,True,df,dt,partial=True)
+            if limited["stage"]=="paid" and not (0<int(limited["net"])<maximum and int(limited["paid"])<bound):
+                raise ValueError("expected a partial payment and change")
+            record["partial_capacity"]=limited
     return {"chain":chain,"selector":tag,"height":int(head["number"],16),"stamp":stamp,"payer":OWNER,"seed":seed,"modules":identities,"pairs":pairs}
 
 

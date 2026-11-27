@@ -8,7 +8,7 @@ use serde_json::{Value, from_value};
 fn original_order_and_one_payment_match_own_wallet_on_both_networks() {
     for (archive,count) in [
         (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz").as_slice(),42),
-        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz").as_slice(),2)
+        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz").as_slice(),3)
     ]{
         let j:Value=serde_json::from_reader(GzDecoder::new(archive)).unwrap();
         let owner=from_value(j["payer"].clone()).unwrap();let mut filled=0;

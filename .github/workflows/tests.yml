@@ -60,7 +60,7 @@ on:
       stack_check_target:
         description: BSC regression to measure in the isolated stack check
         type: choice
-        options: [startup, load, pancakex]
+        options: [startup, load, pancakex, shard0]
         default: startup
       native_v3_only:
         description: Run only the read-only replay of the three Base fork routers

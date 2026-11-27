@@ -138,7 +138,7 @@ mod tests {
     /// непустой runtime на том же chainId и контрольном блоке.
     #[test]
     fn deferred_markets_are_absent_from_the_first_run_network() {
-        let rows = profiles().unwrap();
+        let rows = profiles().unwrap_or_else(|e| panic!("{}", e.1));
         for (chain, id) in [
             (1, "basin-wells-ethereum"),
             (8453, "pinto-exchange-base"),

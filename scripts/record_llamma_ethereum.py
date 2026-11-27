@@ -41,7 +41,11 @@ def markets(cap, kind, factory):
         raw = iter(aggregate(cap,[(factory,f"{g}(uint256)",[UINT],[i]) for i in range(count) for _,g in getters]))
         rows = [{key:decode(["address"],next(raw))[0] for key,_ in getters} for _ in range(count)]
     coins = iter(aggregate(cap,[(m["amm"],"coins(uint256)",[UINT],[i]) for m in rows for i in (0,1)]))
+    relations=iter(aggregate(cap,[(addr,method,[],[]) for m in rows for addr,method in ((m["amm"],"admin()"),(m["controller"],"amm()"))]))
     for i, m in enumerate(rows):
+        admin,reverse=(decode(["address"],next(relations))[0] for _ in range(2))
+        if admin!=m["controller"] or reverse!=m["amm"]:raise ValueError(("foreign controller",kind,i))
+        m.update(poolAdmin=admin,controllerAmm=reverse)
         borrowed,collateral = [decode(["address"],next(coins))[0] for _ in (0,1)]
         if borrowed==collateral or m["collateral"]!=collateral or m.get("borrowed",borrowed)!=borrowed:
             raise ValueError(("foreign AMM currencies",kind,i))

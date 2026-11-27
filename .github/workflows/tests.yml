@@ -663,6 +663,15 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'llamma-module-ethereum'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - if: matrix.market == 'llamma-module-ethereum'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/llamma" LlammaWallet
+          python scripts/record_llamma_module.py "$RUNNER_TEMP/llamma/LlammaWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'llamma-wallets-ethereum'
         run: python scripts/record_llamma_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'llamma-ethereum'

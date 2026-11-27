@@ -65,6 +65,7 @@ def capture(reader, book, factories):
                 remaining=[m for m in remaining if m["amm"] not in confirmed]
                 profiles.append(dict(executable=prefix,immutableBytes=imm,runtimeBytes=size,bodyKeccak=code_hash,
                                      source=url,verified=bool(j.get("is_verified")),markets=proved))
-        result[kind]=dict(blueprint=blueprint,blueprintKeccak="0x"+keccak(hexstr=blueprint_code).hex(),classes=profiles)
+        result[kind]=dict(factoryKeccak="0x"+keccak(hexstr=reader.one("eth_getCode",[factories[kind],reader.tag])).hex(),
+                          blueprint=blueprint,blueprintKeccak="0x"+keccak(hexstr=blueprint_code).hex(),classes=profiles)
     return result
 

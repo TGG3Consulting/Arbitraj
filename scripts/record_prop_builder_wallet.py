@@ -81,6 +81,11 @@ def capture(endpoint, frame, snapshot, art, guarded_slot=False):
                             verdict=leg(c,module,venue,inp,out,amount,deadline,guard,1,prefix,fallback,block,diff,wrong)
                             assert verdict["status"]=="reverted" and verdict["paid"]==verdict["net"]==0
                             info[label]=compact(verdict)
+                        reuse_prefix=prefix+[approve(inp,MODULE,amount),paid["order"]]
+                        again=leg(c,module,venue,inp,out,amount,deadline,True,1,reuse_prefix,fallback,block,diff,order)
+                        assert again["status"]=="reverted" and again["paid"]==again["net"]==0
+                        assert again["error"].get("data")=="0x"+keccak(text="AlreadyFilled()")[:4].hex()
+                        info["reusedLeg"]=compact(again)
                 result.append(info)
     return {"builder":frame["builder"],"market":venue,"oracle":frame["oracle"],"parent":tag,"timestamp":deadline,"runtime":runtime,"rows":result}
 

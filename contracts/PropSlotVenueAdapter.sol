@@ -17,17 +17,21 @@ contract PropSlotVenueAdapter is PropVenueAdapter {
     }
 
     error WrongSlot();
+    error AlreadyFilled();
+    mapping(address => mapping(bytes32 => bool)) public completed;
     event SlotFilled(bytes32 indexed leg, address indexed payer, address indexed venue, uint256 spent, uint256 received);
 
     constructor(IPublicPropRouter publicRouter, address selected, address cashVault, bytes32 shell, bytes32 venueCode, bytes32 cashCode)
         PropVenueAdapter(publicRouter, selected, cashVault, shell, venueCode, cashCode) {}
 
-    function slotVersion() external pure returns (uint256) { return 1; }
+    function slotVersion() external pure returns (uint256) { return 2; }
 
     function executeAtSlot(SlotOrder calldata order) external returns (uint256 spent, uint256 received) {
         if (order.leg==bytes32(0) || order.parent==bytes32(0) || block.chainid!=1 ||
             block.number!=order.height || block.timestamp!=order.timestamp ||
             blockhash(block.number-1)!=order.parent) revert WrongSlot();
+        if (completed[msg.sender][order.leg]) revert AlreadyFilled();
+        completed[msg.sender][order.leg]=true;
         // The legacy entry point is external. Self-delegation preserves the original wallet and allowance.
         // Both the target and the single selector are fixed; the caller supplies only swap amounts and currencies.
         (bool ok, bytes memory result)=address(this).delegatecall(abi.encodeCall(

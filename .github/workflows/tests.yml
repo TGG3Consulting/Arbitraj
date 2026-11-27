@@ -576,6 +576,13 @@ jobs:
         env:
           MATRIX_MARKET: ${{ matrix.market }}
         run: python scripts/record_aqua_wallet.py "${MATRIX_MARKET#aqua-wallet-}" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'aqua-protected-')
+        env:
+          MATRIX_MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/aqua" AquaStrategyWallet
+          python scripts/record_aqua_wallet.py "${MATRIX_MARKET#aqua-protected-}" "$RUNNER_TEMP/market.json" --compiled "$RUNNER_TEMP/aqua/AquaStrategyWallet.json"
       - if: startsWith(matrix.market, 'airswap-markets-')
         env:
           MARKET: ${{ matrix.market }}

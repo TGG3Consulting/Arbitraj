@@ -24,7 +24,7 @@ def traits(flags, minimum, deadline):
     return offsets.to_bytes(20, "big") + flags.to_bytes(2, "big") + minimum.to_bytes(32, "big") + deadline.to_bytes(5, "big")
 
 
-def measure_order(url, book, cash, stock, sizes, fund):
+def measure_order(url, book, cash, stock, sizes, fund, compiled=None, mode="original", wrapped=WETH):
     at = book["parent"]
     hdr = rpc(url, "eth_getBlockByHash", [at["blockHash"], False])
     assert rpc(url, "eth_getCode", [OWNER, at]) == "0x"
@@ -32,15 +32,25 @@ def measure_order(url, book, cash, stock, sizes, fund):
     assert "0x" + keccak(encode([ORDER], [order])).hex() == book["order_hash"]
     end = int(hdr["timestamp"], 16) + 900
     env = {OWNER: {"balance": hex(10**20)}}
+    guard = None
+    endpoint = ROUTER
+    if compiled:
+        from aqua_guard_replay import Guard
+        guard = Guard(url,at,compiled,wrapped,order,mode)
+        endpoint = guard.endpoint
+        fund = guard.prefix + fund
+        env = guard.env
     rows = []
     for qty in sizes:
         for flags in (0x41, 0x61):
-            prep = fund + [approve(cash, ROUTER, qty)]
+            prep = fund + [approve(cash, endpoint, qty)]
             for src, dst in [(cash, stock), (stock, cash)]:
                 now_qty = qty if src == cash else buy
                 if src == stock:
-                    prep += [approve(stock, ROUTER, now_qty)]
+                    prep += [approve(stock, endpoint, now_qty)]
                 def wire(name, limit, expiry=end):
+                    if guard and name=="swap":
+                        return guard.wire(src,dst,now_qty,limit,expiry,flags)
                     return tx(ROUTER, name+"("+",".join(INPUTS)+")", INPUTS,
                               [order, src, dst, now_qty, traits(flags, limit, expiry)])
                 probes = [balance(src, OWNER), balance(dst, OWNER)]
@@ -51,18 +61,35 @@ def measure_order(url, book, cash, stock, sizes, fund):
                 row = dict(input=src, output=dst, qty=now_qty, flags=flags, seed=qty)
                 rows.append(row)
                 trial = run([wire("quote", 1), wire("swap", 1)])
-                if trial[2]["status"] != "0x1" or trial[3]["status"] != "0x1":
+                if trial[3]["status"] != "0x1":
                     row["refusal"] = trial[2:4]
                     assert [v["returnData"] for v in trial[:2]] == [v["returnData"] for v in trial[-2:]]
                     break
                 paid = int(trial[0]["returnData"],16)-int(trial[-2]["returnData"],16)
                 got = int(trial[-1]["returnData"],16)-int(trial[1]["returnData"],16)
                 assert paid == now_qty and got > 0
-                quoted, amt, h = decode(["uint256","uint256","bytes32"], bytes.fromhex(trial[2]["returnData"][2:]))
-                assert quoted == paid and "0x"+h.hex() == book["order_hash"]
+                amt = None
+                if trial[2]["status"] == "0x1":
+                    quoted, amt, h = decode(["uint256","uint256","bytes32"], bytes.fromhex(trial[2]["returnData"][2:]))
+                    assert quoted == paid and "0x"+h.hex() == book["order_hash"]
+                elif not guard:
+                    raise ValueError("original swap succeeded despite a rejected original quote")
+
                 controls = run([wire("swap", got+1), wire("swap", got, 1), wire("swap", got)])
                 assert [c["status"] for c in controls[2:5]] == ["0x0","0x0","0x1"]
                 logs = controls[4]["logs"]
+                if guard:
+                    guard.evidence(logs,src,dst,paid,got,flags)
+                    before = guard.marks(src,dst)
+                    extra = [guard.wire(src,dst,now_qty,1,end,flags,unknown=True)] if mode=="v5" else []
+                    check = simulate_block(url,at,env,prep+before+extra+[wire("swap",got)]+before)[len(prep):]
+                    if extra and check[len(before)]["status"]!="0x0":
+                        raise ValueError("unknown V5 order key accepted")
+                    if not all(v["status"]=="0x1" for v in check[:len(before)]+check[-len(before)-1:]):
+                        raise ValueError("protected payment or balance read failed")
+                    if any(int(v["returnData"],16) for v in check[:len(before)]+check[-len(before):]):
+                        raise ValueError("unexpected leftover or approval")
+
                 assert token_flow(logs,src,OWNER) == -paid and token_flow(logs,dst,OWNER) == got
                 assert [v["returnData"] for v in controls[-2:]] == [v["returnData"] for v in trial[-2:]]
                 row.update(paid=paid, net=got, quote=amt, gas=int(controls[4]["gasUsed"],16),
@@ -70,10 +97,10 @@ def measure_order(url, book, cash, stock, sizes, fund):
                 if src == cash:
                     buy = got
                     prep += [wire("swap", got)]
-    return dict(selector=at, order=book["order_hash"], wallet=OWNER, router=ROUTER, rows=rows)
+    return dict(selector=at, order=book["order_hash"], wallet=OWNER, router=ROUTER, mode=mode, protected=guard.manifest if guard else None,rows=rows)
 
 
-def measure(network, url):
+def measure(network, url, compiled=None):
     folder = ROOT / "tests/data/first_run_dex_2026-11-26"
     if network == "base":
         assert rpc(url,"eth_chainId",[]) == "0x2105"
@@ -81,7 +108,10 @@ def measure(network, url):
         seed=10**16
         fund=[tx(WETH,"deposit()",value=seed), approve(WETH,FUND,seed),
               tx(FUND,"exactInputSingle("+FUND_ARGS+")",[FUND_ARGS],[(WETH,BASE_CASH,500,OWNER,seed,1800000,0)])]
-        return measure_order(url,book,BASE_CASH,book["source"]["tokenOut"],[900000,1800000],fund)
+        params=(url,book,BASE_CASH,book["source"]["tokenOut"],[900000,1800000],fund)
+        if compiled:
+            return dict(selector=book["parent"],strategies=[measure_order(*params,compiled,mode,WETH) for mode in ("wallet","v5")])
+        return measure_order(*params)
 
     from record_aktionariat_wallet import FUND as ROUTER_V3, SWAP, WETH as ETH_WETH
     from record_balancer_markets import Capture
@@ -120,20 +150,22 @@ def measure(network, url):
                     break
             else:
                 paid.append(dict(order=h,funding="no funded WETH bridge to "+cash));continue
-        paid.append(measure_order(url,book,cash,stock,quantities,fund))
+        for mode in (("wallet","v5") if compiled else ("original",)):
+            paid.append(measure_order(url,book,cash,stock,quantities,fund,compiled,mode,ETH_WETH))
     return dict(selector=day["selector"],strategies=paid)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("network", choices=("base","ethereum"))
     parser.add_argument("output", type=Path)
+    parser.add_argument("--compiled", type=Path)
     args = parser.parse_args()
     endpoints = (["https://mainnet.base.org","https://base.gateway.tenderly.co"] if args.network=="base"
                  else ["https://rpc.mevblocker.io","https://eth.drpc.org"])
     import requests
     for endpoint in endpoints:
         try:
-            output=measure(args.network,endpoint)
+            output=measure(args.network,endpoint,json.loads(args.compiled.read_bytes()) if args.compiled else None)
             break
         except (requests.RequestException, ValueError, RuntimeError) as error:
             last=error

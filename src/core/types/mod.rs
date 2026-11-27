@@ -8,6 +8,7 @@
 
 pub mod rubicon;
 pub mod bancor_v3;
+pub mod balancer_v1;
 pub mod uniswap_v1;
 pub mod bundles;
 pub mod surge;

@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import subprocess
+import re
 from pathlib import Path
 
 p = argparse.ArgumentParser(description=__doc__)
@@ -25,6 +26,32 @@ if not args.candidate:
     measure_env["ARB_HISTORICAL_CHECK_SIZES"]="1"
 subprocess.run([exe,"--exact",size_test],env=measure_env,check=True)
 result = {"sha":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),"sizes":json.loads(sizes_file.read_bytes()),"runs":[]}
+# Linux x86_64: record the actual default-stack frames emitted for polling and constructing
+# the relevant futures. Keeping the prologue lets the reader verify any stack-probe loops.
+if args.load:
+    nm = subprocess.check_output(["nm","-SC","--defined-only",exe],text=True)
+    prefixes = ("arb::venues::bsc_dex::pools::load::state", "arb::venues::bsc_dex::pools::load::read",
+                "arb::venues::bsc_dex::pools::load_batch::states", "arb::venues::bsc_dex::pools::load_site::states",
+                "arb::venues::bsc_dex::pools::load_batch_par::states",
+                "bsc_dex_review_t153::parallel_read_equals_sequential_on_recorded_answers")
+    frames = []
+    for line in nm.splitlines():
+        fields = line.split(maxsplit=3)
+        if len(fields)!=4 or fields[2] not in ("t","T"):
+            continue
+        address, size, _, symbol = fields
+        # Legacy and v0 Rust symbols (GNU binutils may put a crate disambiguator inside []).
+        name = re.sub(r"\[[0-9a-f]+\]", "",symbol)
+        if not name.startswith(prefixes) or name.count("closure") > 1:
+            continue
+        start=int(address,16)
+        dump=subprocess.check_output(["objdump","-d","-M","intel","--no-show-raw-insn",
+              f"--start-address={start}",f"--stop-address={start+min(int(size,16),192)}",exe],text=True)
+        prologue=[m[1] for row in dump.splitlines() if (m:=re.match(r"^\s*[0-9a-f]+:\s+(.+)$",row))]
+        frames.append(dict(symbol=name,bytes=int(size,16),prologue=prologue[:22]))
+    if not frames:
+        raise ValueError("could not find BSC pool loader symbols")
+    result["elf_x86_64"] = frames
 normal_env=os.environ.copy()
 normal_env.pop("RUST_MIN_STACK",None)
 for _ in range(20):

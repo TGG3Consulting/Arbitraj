@@ -6694,5 +6694,29 @@
         "0x3345d0a0385b2214c27dcecb9b84b5cfc9af8c968bfc3e9246361d85458d7cca"
       ]
     }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "mooniswap",
+    "source": "https://github.com/1inch/mooniswap/tree/02dccfab2ddbb8a409400288cb13441763370350 · tests/data/first_run_dex_2026-11-26/mooniswap_original_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "mooniswap_v1",
+      "dex.factory": "0x71cd6666064c3a1354a3b4dca5fa1e2d3ee7d303",
+      "dex.factory_runtime_hash": "0xe758f5a1019d8d7453e5d2600dbd0ea2408eeb2fc415fc3cc502d0e1b4754000",
+      "dex.module_runtime_hashes": ["0x3bee678ebf448d4ce1c73182cfafbd9ad6c3220f365e0a55bef524fa03bc6023"]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "oneinch-liquidity-protocol",
+    "source": "https://github.com/1inch/liquidity-protocol/tree/48d3db12262f43139946fb9c3660c418b8b41778 · tests/data/first_run_dex_2026-11-26/mooniswap_successor_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "mooniswap_v2",
+      "dex.factory": "0xbaf9a5d4b0052359326a6cdab54babaa3a3a9643",
+      "dex.factory_runtime_hash": "0x42fbc41dde2a7e8d817822abc14c60eeed5d29b1aeea9368532406d64f6aaa77",
+      "dex.module_runtime_hashes": ["0x4c5ee9ac11b967a03bd8ae533e7f9370f2b1b4735c9bfb1c189548e51f315782"]
+    }
   }
 ]

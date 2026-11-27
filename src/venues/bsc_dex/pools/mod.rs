@@ -503,6 +503,8 @@ pub mod verify_woo;
 pub mod woo_quote;
 pub mod wrapped;
 
+pub(crate) mod mooniswap;
+mod mooniswap_state;
 pub(crate) mod brokerbot;
 pub(crate) mod brokerbot_quotes;
 mod brokerbot_profile;

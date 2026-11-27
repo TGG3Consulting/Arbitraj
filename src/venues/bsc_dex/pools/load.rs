@@ -447,6 +447,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant == Variant::Mooniswap {
+        return Box::pin(async move {
+            let at = super::nami::block(ctx,&block_tag(block)).await?;
+            let state=super::mooniswap::state(ctx,f,reference.address(),pair,&at).await?;
+            Ok(Loaded{state:PoolState::Mooniswap(Box::new(state)),ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::Brokerbot {
         return Box::pin(async move {
             let at = super::nami::block(ctx,&block_tag(block)).await?;

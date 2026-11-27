@@ -307,6 +307,21 @@ pub struct VirtualsState {
     pub external_swap: bool,
 }
 
+/// Физические и виртуальные остатки Mooniswap в порядке getTokens. Метка блока общая для состояния и тарифов.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MooniswapState {
+    pub physical: [Address;2],
+    pub tokens: [Address;2],
+    pub balances: [U256;2],
+    pub addition: [(U256,u64);2],
+    pub removal: [(U256,u64);2],
+    pub timestamp:u64,
+    pub decay:u64,
+    pub fee:U256,
+    pub slippage_fee:U256,
+    pub successor:bool,
+}
+
 /// Оба резерва и обе фиксированные платы EtherVista на одном состоянии сети.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EtherVistaState {
@@ -539,6 +554,7 @@ pub enum PoolState {
     Oasis { reserve0:U256,reserve1:U256,share:u32,repeatable:bool },
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
+    Mooniswap(Box<MooniswapState>),
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),
     UmbraeDamm(Box<UmbraeDammState>),

@@ -59,6 +59,7 @@ use super::verify_solidly::registry_call;
 /// Вид вопроса к реестру фабрики.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Q {
+    Mooniswap,
     UniswapV1 {token:Address,registry:Option<Address>},
     Rubicon(Address, bool),
     /// V2 и форки V2: getPair(a, b).
@@ -116,6 +117,7 @@ impl Q {
             Q::MintClub{..} => "tokenBond",
             Q::UniswapV1{..} => "getExchange",
             Q::Rubicon(..) => "getBestOffer",
+            Q::Mooniswap => "pools",
             Q::V2 => "getPair",
             Q::UmbraeBins => "getAllPairs(tokenA,tokenB)",
             Q::Stabull(_) => "getCurve(base,quote)",
@@ -147,6 +149,7 @@ impl Q {
 pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
     match q {
         Q::MintClub{token,..} => super::mint_club::IBond::tokenBondCall{token}.abi_encode().into(),
+        Q::Mooniswap=>super::mooniswap::IMoon::poolsCall{a:coin,b:quote}.abi_encode().into(),
         Q::UniswapV1{token,..}=> super::uniswap_v1::IFactory::getExchangeCall{token}.abi_encode().into(),
         Q::Rubicon(_,reverse) => {
             let (sell_token,buy_token)=if reverse{(quote,coin)}else{(coin,quote)};
@@ -260,6 +263,7 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
 /// пула нет) или текст «ответ не по ABI». Ошибок нет.
 pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
     let list = match q {
+        Q::Mooniswap=>vec![super::mooniswap::IMoon::poolsCall::abi_decode_returns_validate(out).map_err(|e|e.to_string())?],
         Q::UniswapV1{registry,..}=>{
             let a=super::uniswap_v1::IFactory::getExchangeCall::abi_decode_returns_validate(out).map_err(|e|e.to_string())?;
             if a.is_zero(){vec![]}else{vec![registry.unwrap_or(a)]}

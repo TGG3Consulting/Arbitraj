@@ -178,6 +178,12 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Mooniswap(s), PoolKind::V2) => {
+            let (x,y)=s.reserves(token_in).ok_or("Mooniswap: виртуальные резервы недоступны")?;
+            let (input,_)=xy_band(x,y,b,true)?;
+            let value=s.swap(token_in,true,input).map_or(U256::ZERO,|f|pick(f.amount_in,f.amount_out));
+            Ok((value,false))
+        }
         (PoolState::UmbraeDamm(s), PoolKind::V2) => {
             let i = s.tokens.iter().position(|&t| t == token_in).ok_or("Umbrae DAMM: неизвестный токен")?;
             let (budget, _) = xy_band(s.reserves[i], s.reserves[1-i], b, buy)?;

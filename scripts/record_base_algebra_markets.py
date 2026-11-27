@@ -87,6 +87,12 @@ def capture(dex,endpoint,market=None,holders=None,keep_refusals=False):
                 cases.append(dict(amount=str(size),stage=details[1],reason=details[-1]))
             else:
                 raise
+    if dex=="treble-spot":
+        from record_treble_spot_router import ROUTER, record
+        if addr(ROUTER,"factory()")!=fac or addr(ROUTER,"poolDeployer()")!=roles["deployer"]:
+            raise ValueError("роутер Treble не соответствует размещению")
+        for case in cases:
+            if "calls" in case:case["official"]=record(endpoint,tag,header,case,ROUTER)
     return dict(id=dex,oracle=oracle,chain_id=8453,selector=tag,state_root=header["stateRoot"],roles=verified,reads=reads,raw=c.calls,
                 tokens=[a,b],global_state=list(gs),liquidity=str(liquidity),tick_spacing=spacing,cases=cases,
                 v5="0x"+keccak(hexstr=runtime).hex(),virtual="0x"+keccak(hexstr=virt).hex())

@@ -344,6 +344,7 @@ impl Quoting {
         // Выбор маршрута — счёт CPU: вне рабочих потоков tokio (quote/cpu.rs, решение 129 часть 2), срок расчёта
         // ядра срабатывает вовремя. Логика выбора — quote/routing.rs (перенесена без изменений).
         let input = routing::Input {
+        let ambient_stamp=self.heads.ambient_stamp();
             asset: asset.clone(),
             side,
             qty,
@@ -479,6 +480,9 @@ impl Quoting {
         }
         tm.add(Part::Tip, t);
         Ok(q)
+        if q.route.as_ref().is_some_and(|r|!self.reg.route_was_current(r,ambient_stamp.as_ref())) {
+            return Err(ctx.err(ErrorCode::StaleData,"Ambient: каноническая голова сменилась за время расчёта"));
+        }
     }
 }
 

@@ -83,7 +83,7 @@ impl Parts {
             ryze: Default::default(),
             slot_markets: Default::default(),
             hanji: Default::default(),
-            heads: Heads::default(),
+            heads: Heads::with_registry(registry.clone()),
             tokens: Tokens::default(),
             scaled_units: Default::default(),
             nonces: Nonces::default(),

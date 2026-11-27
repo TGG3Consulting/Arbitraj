@@ -438,6 +438,7 @@ pub mod refresh_event;
 pub mod refresh_timing;
 pub mod refresh_urgency;
 pub(crate) mod puzzle_ranges;
+pub(super) mod ambient_head;
 pub mod registry;
 pub mod registry_frozen;
 pub mod registry_index;

@@ -72,11 +72,13 @@ pub(super) async fn load(
     reference: &PoolRef,
     pair: (Address, Address),
     counter: Address,
-    at: &Value,
+    head: crate::venues::bsc_dex::quote::white_state::Head,
 ) -> GatewayResult<PoolState> {
     let PoolRef::Singleton { manager, id } = reference else {
         return Err(bad(ctx));
     };
+    let stamp = reg.ambient_stamp(head.number.to(), head.hash);
+    let at = &head.selector();
     let r = ambient::bind(ctx, f, at).await?;
     let wrapped = ctx.addr("dex.native_wrapped")?;
     if r.dex != *manager {
@@ -100,6 +102,7 @@ pub(super) async fn load(
     let sell = levels(ctx, r.impact, m, pos != 0, &sells, at).await?;
     let [(a, pa), (b, pb)] = if pos == 0 { [buy, sell] } else { [sell, buy] };
     Ok(PoolState::Ambient(Box::new(State {
+        stamp,
         module: ctx
             .dex_addr("dex.router", f.id)
             .ok()

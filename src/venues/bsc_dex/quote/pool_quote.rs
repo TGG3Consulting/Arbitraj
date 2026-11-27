@@ -534,7 +534,7 @@ pub fn swap(
         }
         (PoolState::Ambient(s),PoolKind::V2)=>{
             let side=s.side(token_in).ok_or_else(none)?;
-            let points=&s.levels[side];
+            let points=s.points(token_in).ok_or_else(none)?;
             if exact_in && let Some(last)=points.last() && amount>last.amount_in && s.partial_cap[side].is_some_and(|cap|amount<=cap){
                 return Ok(Swapped{amount_in:last.amount_in,amount_out:last.amount_out,complete:false});
             }

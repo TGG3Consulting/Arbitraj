@@ -20,6 +20,8 @@ use super::registry::Entry;
 /// Записи реестра и индексы по ним.
 #[derive(Default)]
 pub struct Pools {
+    pub(super) ambient_clock: crate::core::types::ambient::Clock,
+    pub(super) ambient_refs: Arc<HashSet<PoolRef>>,
     /// Записи пулов. За `Arc`: снимок всех записей (граф маршрутов) не копирует их, запись меняется на месте
     /// (`Arc::make_mut` копирует запись, только если снимок с ней ещё жив).
     map: HashMap<PoolRef, Arc<Entry>>,
@@ -89,6 +91,13 @@ impl Pools {
     pub fn insert(&mut self, e: Entry) {
         let r = e.pool.reference.clone();
         if let Some(old) = self.map.get(&r).cloned() {
+            if keys(&old) == keys(&e)
+                && matches!(old.pool.state, crate::core::types::PoolState::Ambient(_))
+                && matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))
+            {
+                self.map.insert(r, Arc::new(e));
+                return;
+            }
             self.unindex(&r, &old);
         }
         self.index(&r, &e);
@@ -131,6 +140,11 @@ impl Pools {
 
     /// Ставит пул в индексы. Ошибок нет.
     fn index(&mut self, r: &PoolRef, e: &Entry) {
+        if matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))
+            && !self.ambient_refs.contains(r)
+        {
+            Arc::make_mut(&mut self.ambient_refs).insert(r.clone());
+        }
         let (pair, coin) = keys(e);
         self.pairs.entry(pair).or_default().insert(r.clone());
         self.coins.entry(coin).or_default().insert(r.clone());
@@ -138,6 +152,9 @@ impl Pools {
 
     /// Снимает пул из индексов по записи. Ошибок нет.
     fn unindex(&mut self, r: &PoolRef, e: &Entry) {
+        if matches!(e.pool.state, crate::core::types::PoolState::Ambient(_)) {
+            Arc::make_mut(&mut self.ambient_refs).remove(r);
+        }
         let k = keys(e);
         self.unkeys(r, &k);
     }

@@ -231,12 +231,11 @@ pub fn skip_same(p: &Pools) -> bool {
 /// Принимает: окружение пачки, запись, skip. Возвращает: слать ли пул ядру. Ошибок нет.
 pub fn put_new(p: &Pools, e: Entry, skip: bool) -> bool {
     if !skip {
-        p.reg.put(e);
-        return true;
+        return p.reg.put_observed(e);
     }
     let r = e.pool.reference.clone();
     let before = p.reg.entry(&r).map(|x| x.state_gen);
-    p.reg.put(e);
+    if !p.reg.put_observed(e) {return false;}
     let after = p.reg.entry(&r).map(|x| x.state_gen);
     !matches!((before, after), (Some(b), Some(a)) if a == b && a != 0)
 }

@@ -4,6 +4,8 @@
 //! по байтам (0,04 CU/байт), поток заголовков newHeads ≈ 5,2 КБ/с ≈ до 200 CU/с — больше половины бесплатных
 //! 150 CU/с; eth_blockNumber — 5 CU за вызов. Опрос идёт мимо общей очереди темпа узла (rpc::call_unpaced): проверки
 //! не отодвигают его, от него зависит свежесть.
+//! Для площадки с подписанными Ambient-рынками тот же опрос читает хеш и время latest одним вызовом.
+//! Перед пробуждением читателей закрываются все лестницы прежнего хеша, включая сохранённые снимки.
 //! Свежесть: голова «получена» в момент, когда номер блока вырос; номер стоит дольше feed.stale_after_ms (узел
 //! встал или опрос не проходит) — данные устарели, сделок нет. Слушатели получают только новые номера.
 //! Время блока (deadline, проба) — eth_getBlockByNumber (15 CU) по запросу, раз на блок на всех (кэш по номеру,
@@ -48,6 +50,7 @@ pub struct Head {
 /// Последняя голова; дешёво клонируется, слушателей сколько угодно.
 #[derive(Clone)]
 pub struct Heads {
+    registry: Option<super::super::pools::registry::Registry>,
     tx: watch::Sender<Option<Head>>,
     /// Время последнего запрошенного блока: номер и время (секунды — deadline; миллисекунды — возраст, решение 259).
     time: Arc<Mutex<Option<(u64, super::head_age::BlockTime)>>>,
@@ -60,6 +63,7 @@ pub struct Heads {
 impl Default for Heads {
     fn default() -> Self {
         Self {
+            registry: None,
             tx: watch::channel(None).0,
             time: Arc::default(),
             flight: Arc::default(),
@@ -69,6 +73,59 @@ impl Default for Heads {
 }
 
 impl Heads {
+    pub(crate) fn with_registry(registry: super::super::pools::registry::Registry) -> Self {
+        Self {
+            registry: Some(registry),
+            ..Self::default()
+        }
+    }
+    pub(crate) fn ambient_stamp(&self) -> Option<super::super::pools::ambient_head::QuoteStamp> {
+        self.registry.as_ref()?.observed_ambient()
+    }
+    async fn poll(&self, ctx: &Ctx) -> GatewayResult<()> {
+        if let Some(reg) = self.registry.as_ref().filter(|r| r.watches_ambient()) {
+            let response = rpc::call_unpaced::<super::super::quote::white_state::Head>(
+                ctx,
+                "eth_getBlockByNumber",
+                json!(["latest", false]),
+            )
+            .await;
+            let head = match response {
+                Ok(h) => h,
+                Err(e) => {
+                    reg.ambient_head(None);
+                    return Err(e);
+                }
+            };
+            let number = head.number.to();
+            let changed = reg.ambient_head(Some((number, head.hash)));
+            let secs = head.timestamp.to();
+            if changed {
+                *self.time.lock().unwrap_or_else(|p| p.into_inner()) = Some((
+                    number,
+                    super::head_age::BlockTime {
+                        secs,
+                        millis: secs.saturating_mul(1000),
+                    },
+                ));
+                let received_at = self
+                    .latest()
+                    .filter(|h| h.number >= number)
+                    .map_or_else(Utc::now, |h| h.received_at);
+                self.tx.send_replace(Some(Head {
+                    number,
+                    received_at,
+                }));
+            }
+            return Ok(());
+        }
+        let n = rpc::call_unpaced::<U64>(ctx, "eth_blockNumber", json!([])).await?;
+        if self.observe(n.to()) {
+            super::head_age::time_of_new_head(self, ctx, n.to()).await;
+        }
+        Ok(())
+    }
+
     /// Приёмник новых номеров блока (трекер транзакций, пулы). Ошибок нет.
     pub fn watch(&self) -> watch::Receiver<Option<Head>> {
         self.tx.subscribe()
@@ -217,11 +274,8 @@ impl Heads {
             };
             // Решение 368: период считается от начала круга (работа круга входит в него).
             let started = std::time::Instant::now();
-            match rpc::call_unpaced::<U64>(&ctx, "eth_blockNumber", json!([])).await {
-                Ok(n) => {
-                    if self.observe(n.to()) {
-                        super::head_age::time_of_new_head(&self, &ctx, n.to()).await;
-                    }
+            match self.poll(&ctx).await {
+                Ok(()) => {
                     if last_err.take().is_some() {
                         let msg = "Опрос блоков снова работает".to_string();
                         ctx.log(Level::Info, "venue.heads", msg, None).await;

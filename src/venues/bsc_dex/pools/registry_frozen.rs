@@ -90,6 +90,11 @@ impl Registry {
     pub fn frozen_from(snap: &Snap, pinned: Option<(PathsKey, Arc<Vec<Skeleton>>)>) -> Registry {
         Registry {
             venue: None,
+            has_ambient: Arc::new(std::sync::atomic::AtomicBool::new(
+                snap.entries
+                    .iter()
+                    .any(|e| matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))),
+            )),
             inner: Arc::new(std::sync::RwLock::new(Pools::from_arcs(
                 snap.entries.clone(),
             ))),

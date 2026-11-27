@@ -79,6 +79,7 @@ pub struct Registry {
     pub(super) venue: Option<&'static str>,
     /// Записи за `Arc` и индексы по паре и тикеру (registry_index.rs, решение 129).
     pub(super) inner: Arc<RwLock<Pools>>,
+    pub(super) has_ambient: Arc<std::sync::atomic::AtomicBool>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
     pub(super) depth: super::depth_book::Book,
     /// Версия: растёт при любой записи (решение 129).
@@ -227,10 +228,12 @@ impl Registry {
 
     /// Добавляет или заменяет запись. Поколение (решение 301 е2): прежнее, если состояние фактически то же, иначе новое.
     /// Ошибок нет.
-    pub fn put(&self, mut e: Entry) {
+    pub fn put(&self, e: Entry) {self.put_observed(e);}
+    pub(super) fn put_observed(&self, mut e: Entry)->bool {
         // Решение 339: достоверная запись — пул прочитан, отметка неудачи (pool_fail.rs) снимается; ревью t153 (Н5):
         // отметок нет (339 выключено) — без замка карты отметок (атомарный счётчик в Fails::clear).
-        if e.valid {
+        let ambient=matches!(e.pool.state,crate::core::types::PoolState::Ambient(_));
+        if e.valid && !ambient {
             self.fails.clear(&e.pool.reference);
             // Решение 357 (ревью слияния, Б1): достоверная запись кладётся только полным чтением (lb_head.rs и
             // settle.rs достоверность так не поднимают) — отметки «в обновлении» / «нужно полное чтение» долой.
@@ -239,6 +242,13 @@ impl Registry {
         // Пул записан в реестр — экран видит его записью; отметка «ни разу не прочитан» (pool_unread.rs) долой.
         self.unread.clear(&e.pool.reference);
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
+        if let crate::core::types::PoolState::Ambient(s) = &e.pool.state && !s.stamp.current() {
+            if m.contains(&e.pool.reference) {return false;}
+            // Первое чтение до первой наблюдаемой головы нужно для следующей подписки.
+            e.valid=false;
+        }
+        let usable = e.valid || !ambient;
+        let accepted_ambient=(e.valid && ambient).then(||e.pool.reference.clone());
         e.state_gen = match m.get(&e.pool.reference) {
             Some(old) if old.state_gen != 0 && super::state_gen::same(old, &e) => old.state_gen,
             _ => self.next_gen(),
@@ -246,12 +256,16 @@ impl Registry {
         // Решение 308: отметка для фонового графа — под замком записи и до роста версии (graph_changes.rs, И4).
         self.graph.bg().changes.mark(&e.pool.reference);
         let pair = (e.coin, e.usdt);
+        let may_change_ambient=ambient || self.has_ambient.load(Ordering::Relaxed);
         m.insert(e);
+        if may_change_ambient {self.sync_ambient(&m);}
         self.version.fetch_add(1, Ordering::AcqRel);
         drop(m);
+        if let Some(r)=accepted_ambient{self.fails.clear(&r);self.holds.forget(&r);}
         // Решение 403: отметка пары построителю отбора мелких пулов (quote/shallow_build.rs) — после записи; предел не
         // задан — одно атомарное чтение.
         self.shallow.wrote(&[pair]);
+        usable
     }
 
     /// Копия записи. None — пула нет.
@@ -300,7 +314,7 @@ impl Registry {
     }
 
     /// Новое поколение состояния (решение 301 е2): не 0, растёт. Ошибок нет.
-    fn next_gen(&self) -> u64 {
+    pub(super) fn next_gen(&self) -> u64 {
         self.gens.fetch_add(1, Ordering::AcqRel) + 1
     }
 
@@ -367,6 +381,7 @@ impl Registry {
     pub fn retain(&self, keep: impl Fn(&Entry) -> bool) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         let gone = m.retain(keep);
+        if self.has_ambient.load(Ordering::Relaxed) {self.sync_ambient(&m);}
         // Решение 308: удалённые пулы — отметка для фонового графа под замком записи и до роста версии (И4).
         self.graph.bg().changes.mark_all(&gone);
         self.version.fetch_add(1, Ordering::AcqRel);

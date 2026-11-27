@@ -83,8 +83,9 @@ contract AquaStrategyWallet {
         for (uint256 i = DEADLINE_INDEX; i < OFFSET_COUNT; ++i) {
             stops |= DEADLINE_END << (OFFSET_BITS * i);
         }
-        uint16 flags = EXACT_IN | TRANSFER_FROM_AND_AQUA_PUSH;
-        if (t.inputFirst) flags |= FIRST_TRANSFER_FROM_TAKER;
+        uint16 flags = t.inputFirst
+            ? (EXACT_IN | TRANSFER_FROM_AND_AQUA_PUSH | FIRST_TRANSFER_FROM_TAKER)
+            : (EXACT_IN | TRANSFER_FROM_AND_AQUA_PUSH);
         return abi.encodePacked(stops,flags,t.minimum,recipient,uint40(t.deadline));
     }
     // В вызове от кошелька SwapVM видит тот же tx.origin и того же taker, что при оплате модулем.

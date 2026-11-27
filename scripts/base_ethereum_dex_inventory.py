@@ -1948,14 +1948,26 @@ def tables(network, snapshots, profiles):
             paid = [c["after"] for c in trials if c["after"]["status"] == "0x1"]
             before = sum(c["before"]["status"] == "0x1" for c in trials)
             split = sum(len({f["maker"] for f in c["fills"]}) > 1 for c in paid)
+            public = base_launch_inventory.evidence("bopamm_ethereum_published.json.gz")
+            legs = [c for builder in public for f in builder["frames"] for c in f["cases"]]
+            named = [c for c in legs if c["after"]["status"] == "0x1"]
+            alternate = sum(c["public_router"]["venue"] != market for c in legs)
+            gas_gap = [c["after"]["gas"] - c["public_router"]["gas"] for c in named]
+            assert all(c["after"]["net"] == c["public_router"]["net"] for c in named)
+
             task = (f"bopAMM · {len(registry['roles'][market]['pairs'])} пар текущего рынка. "
                     f"На блоках {registry['start']}–{registry['height']} записано {len(registry['logs'])} обменов. "
                     f"Собственный кошелёк получил WETH или USDC в {len(paid)}/{len(trials)} симуляциях "
                     f"после исходного подписанного обновления и в {before}/{len(trials)} до него. "
                     f"В {split} случаях за одну сделку заплатили два маркетмейкера. "
                     f"Расход защищённого вызова {min(x['gas'] for x in paid)}–{max(x['gas'] for x in paid)} gas. "
-                    "LambdaClass также может направить платёж через Uniswap V3. Для котировки bopAMM нужен "
-                    "свежий кадр конкретного строителя на следующем каноническом блоке. "
+                    f"На кадрах Titan и BuilderNet, опубликованных до двух целевых блоков, кошелёк получил выплату в "
+                    f"{len(named)} из {len(legs)} проверенных обменов через bopAMM, все WETH↔USDC. "
+                    f"LambdaClass дал тот же результат на {min(gas_gap)}–{max(gas_gap)} gas дешевле. "
+                    f"Во всех {alternate} проверках с физическим USDT платёж прошёл у LambdaClass через Uniswap V3. "
+                    "В маппинге кошелька кнопка «Проверить цену bopAMM» сверяет выбранного строителя, слот и "
+                    "актуальный канонический блок. Для проверки чистого минимума нужен собственный BopAmmWallet. "
+                    "[Результаты на публичных кадрах](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_published.json.gz) · "
                     "[Реестр и контроль Uniswap](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum.json.gz) · "
                     "[Оплаты и границы слота](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_wallets.json.gz).")
         if not base and str(row["id"]) == "405":

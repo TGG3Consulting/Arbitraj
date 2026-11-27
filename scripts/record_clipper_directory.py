@@ -87,13 +87,21 @@ def unsigned(reader,cap):
 
 def capture(network,extra):
     head=json.loads((ROOT/f"tests/data/first_run_dex_2026-11-26/{network}.json").read_bytes());reader=Reader(network,head);cap=CanonicalCalls(reader)
-    observed=[]; registry=REGISTRY[network]; candidates=set(DIRECT[network]); candidates.update(extra)
+    observed=[]; helpers=set(); registry=REGISTRY[network]; candidates=set(DIRECT[network]); candidates.update(extra)
     if network=="ethereum":
         for topic in CREATED:
             observed.extend(original_logs(reader,head["block"],topic,23600491,registry))
         candidates.update("0x"+e["topics"][1][-40:] for e in observed)
-    directory=root_check(reader,cap,registry,sorted(candidates))
-    pools=[describe(reader,cap,a) for a in sorted(set(DIRECT[network])|set(directory["registered"]))]
+        for signature,index in (("BladePermitRouterCreated(address,address)",1),("BladeLPTransferCreated(address,address,address)",3)):
+            rows=original_logs(reader,head["block"],"0x"+keccak(text=signature).hex(),23600491,registry)
+            helpers.update("0x"+e["topics"][index][-40:] for e in rows)
+            observed.extend(rows)
+    directory=root_check(reader,cap,registry,sorted(candidates|helpers))
+    if not directory["complete"]:
+        raise ValueError("registered addresses do not reproduce the canonical storage root")
+    directory["helpers"]=sorted(set(directory["registered"]) & helpers)
+    markets=set(directory["registered"]) - helpers
+    pools=[describe(reader,cap,a) for a in sorted(set(DIRECT[network])|markets)]
     data=dict(network=network,height=head["block"],selector=reader.tag,state_root=reader.header["stateRoot"],registry=directory,pools=pools,
               source="https://github.com/sushi-labs/clipper-rfq-subgraph/tree/"+REVISION,registration_events=observed)
     if network=="ethereum":

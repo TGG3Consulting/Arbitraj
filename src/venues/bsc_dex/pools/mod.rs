@@ -505,6 +505,8 @@ pub mod woo_quote;
 pub mod wrapped;
 
 pub(crate) mod ammalgam;
+mod ammalgam_state;
+mod ammalgam_step;
 pub(crate) mod mooniswap;
 mod mooniswap_state;
 pub(crate) mod brokerbot;

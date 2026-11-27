@@ -143,12 +143,19 @@ jobs:
       - name: Тесты части
         env:
           ARB_MOONISWAP_INVERSE_EXPORT: ${{ runner.temp }}/mooniswap-inverse.json
+          ARB_AMMALGAM_INVERSE_EXPORT: ${{ runner.temp }}/ammalgam-inverse.json
           ARB_RANGES_BOUNDARIES: ${{ runner.temp }}/ranges-boundaries.json
           ARB_CARBON_ALLOCATION_EXPORT: ${{ runner.temp }}/carbon-order-vectors.json
         run: |
           extra=""
           if [ "${{ matrix.shard }}" = "0" ]; then extra="--lib --bins"; fi
           cargo test --locked --no-fail-fast $extra ${{ steps.pick.outputs.args }}
+      - if: matrix.shard == 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: ammalgam-inverse-evaluations
+          path: ${{ runner.temp }}/ammalgam-inverse.json
+          if-no-files-found: error
       - if: matrix.shard == 0
         uses: actions/upload-artifact@v4
         with:

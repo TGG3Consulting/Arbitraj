@@ -5,12 +5,11 @@ use super::{
     verify::{Candidate, Verdict},
 };
 use crate::{
-    core::types::{AmmalgamState, PoolRef},
+    core::types::PoolRef,
     gateway::errors::{ErrorCode, GatewayError, GatewayResult},
-    venues::bsc_dex::{ctx::Ctx, node::abi::IERC20, quote::white_state},
+    venues::bsc_dex::{ctx::Ctx, quote::white_state},
 };
-use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, B256, Bytes, U256, b256, keccak256};
+use alloy_primitives::{Address, B256, b256, keccak256};
 use serde_json::{Value, json};
 
 alloy::sol! {interface IAmmalgam {
@@ -25,10 +24,9 @@ alloy::sol! {interface IAmmalgam {
     function referenceReserves() external view returns(uint112 x,uint112 y);
     function totalAssetsAndShares(bool withInterest) external view returns(uint112[6] assets,uint112[6] shares);
 }}
-/// TokenController.INTEREST_PERIOD_FOR_SWAP.
-const SWAP_INTEREST_PERIOD: u32 = 24 * 60 * 60 - 1;
+/// ERC-1967 beacon storage slot: https://eips.ethereum.org/EIPS/eip-1967#beacon-contract-address
 const BEACON_SLOT: B256 = b256!("a3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50");
-fn bad(ctx: &Ctx) -> GatewayError {
+pub(super) fn bad(ctx: &Ctx) -> GatewayError {
     ctx.err(
         ErrorCode::NotApplicable,
         "Ammalgam: состав пары, код или реализация в регистре не совпали с профилем",
@@ -155,138 +153,7 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
         Err(e) => Verdict::Failed(e.message),
     }
 }
-pub(super) async fn state(
-    ctx: &Ctx,
-    f: &Family,
-    pool: Address,
-    pair: (Address, Address),
-    tag: &str,
-) -> GatewayResult<AmmalgamState> {
-    let generation = ctx.settings.generation();
-    let head = white_state::head(ctx, tag).await?;
-    let at = head.selector();
-    let bal = IERC20::balanceOfCall { owner: pool };
-    let req = [
-        batch::view(&at, pool, IAmmalgam::getReservesCall {}),
-        batch::view(&at, pool, IAmmalgam::referenceReservesCall {}),
-        batch::view(&at, pair.0, bal.clone()),
-        batch::view(&at, pair.1, bal.clone()),
-    ];
-    let (coins, [raw, refs, cash0, cash1]) =
-        tokio::try_join!(market(ctx, f, pool, pair, &at), batch::read(ctx, req))?;
-    let reserves = batch::decode(&raw, IAmmalgam::getReservesCall {})?;
-    let reference = batch::decode(&refs, IAmmalgam::referenceReservesCall {})?;
-    // TokenController.getReserves and AmmalgamPair.swap apply the same interest window.
-    let timestamp = head.timestamp.to::<u64>() as u32;
-    let interest = timestamp.wrapping_sub(reserves.lastLending) >= SWAP_INTEREST_PERIOD;
-    let q = IAmmalgam::totalAssetsAndSharesCall {
-        withInterest: interest,
-    };
-    let [raw] = batch::read(ctx, [batch::view(&at, pool, q.clone())]).await?;
-    let assets = batch::decode(&raw, q)?.assets;
-    let order = |vals: [U256; 2]| {
-        if coins[0] == pair.0 {
-            vals
-        } else {
-            [vals[1], vals[0]]
-        }
-    };
-    if generation != ctx.settings.generation() {
-        return Err(bad(ctx));
-    }
-    Ok(AmmalgamState {
-        reserves: order([reserves.x.to::<U256>(), reserves.y.to::<U256>()]),
-        reference: order([reference.x.to::<U256>(), reference.y.to::<U256>()]),
-        missing: order([
-            assets[4].saturating_sub(assets[1]).to::<U256>(),
-            assets[5].saturating_sub(assets[2]).to::<U256>(),
-        ]),
-        cash: [
-            batch::decode(&cash0, bal.clone())?,
-            batch::decode(&cash1, bal)?,
-        ],
-    })
-}
+pub(super) use super::ammalgam_state::state;
+pub(crate) use super::ammalgam_state::{payout, request};
 
-/// Только запрос контрольному квотеру. Объём планировщика считается локально по тому же блоку.
-pub(crate) fn request(
-    ctx: &Ctx,
-    e: &super::registry::Entry,
-    input: Address,
-    amount: U256,
-) -> GatewayResult<(Address, Bytes)> {
-    let crate::core::types::PoolState::Ammalgam(s) = &e.pool.state else {
-        return Err(bad(ctx));
-    };
-    let i = if input == e.pool.token0 {
-        0
-    } else if input == e.pool.token1 {
-        1
-    } else {
-        return Err(bad(ctx));
-    };
-    let call = IAmmalgam::computeExpectedSwapAmountOutCall {
-        input: amount,
-        reserveIn: s.reserves[i],
-        referenceIn: s.reference[i],
-        reserveOut: s.reserves[1 - i],
-        missingIn: s.missing[i],
-        missingOut: s.missing[1 - i],
-    };
-    Ok((
-        ctx.dex_addr("dex.quoter", e.family.id)?,
-        call.abi_encode().into(),
-    ))
-}
-pub(crate) fn payout(_: &super::registry::Entry, _: Address, _: U256, raw: &[u8]) -> Option<U256> {
-    IAmmalgam::computeExpectedSwapAmountOutCall::abi_decode_returns_validate(raw).ok()
-}
-
-pub(crate) fn graph_target(ctx: &Ctx, e: &super::registry::Entry) -> Option<Address> {
-    if !e.family.variant.ammalgam()
-        || !matches!(e.pool.state, crate::core::types::PoolState::Ammalgam(_))
-        || !matches!(&e.pool.reference,PoolRef::Contract(p) if !p.is_zero())
-        || e.family.executor_kind != Some(super::exec_kind::ExecKind::Basin)
-        || ctx.chain_id() != Some(crate::settings::evm_profiles::ETHEREUM_MAINNET)
-    {
-        return None;
-    }
-    let module = ctx.dex_addr("dex.router", e.family.id).ok()?;
-    (!module.is_zero()
-        && super::direct_module::configured(ctx, e.family.id).is_ok_and(|h| h.len() == 1))
-    .then_some(module)
-}
-pub(crate) async fn check_step(
-    ctx: &Ctx,
-    e: &super::registry::Entry,
-    input: Address,
-    at: &Value,
-) -> GatewayResult<()> {
-    let module = graph_target(ctx, e)
-        .filter(|_| [e.pool.token0, e.pool.token1].contains(&input))
-        .ok_or_else(|| bad(ctx))?;
-    let id = e.family.id;
-    let generation = ctx.settings.generation();
-    let q = [
-        batch::view(at, module, IAmmalgam::factoryCall {}),
-        batch::view(at, module, IAmmalgam::helperCall {}),
-    ];
-    let (_, (), [factory, helper]) = tokio::try_join!(
-        market(
-            ctx,
-            e.family,
-            e.pool.reference.address(),
-            (e.pool.token0, e.pool.token1),
-            at
-        ),
-        super::direct_module::verify_code(ctx, id, module, at),
-        batch::read(ctx, q)
-    )?;
-    if batch::decode(&factory, IAmmalgam::factoryCall {})? != ctx.dex_addr("dex.factory", id)?
-        || batch::decode(&helper, IAmmalgam::helperCall {})? != ctx.dex_addr("dex.quoter", id)?
-        || generation != ctx.settings.generation()
-    {
-        return Err(bad(ctx));
-    }
-    Ok(())
-}
+pub(crate) use super::ammalgam_step::{check_step, graph_target};

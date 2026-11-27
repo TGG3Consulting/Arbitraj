@@ -56,14 +56,51 @@ impl AmmalgamState {
         let invariant =
             adjusted(r[i], self.missing[i])?.checked_mul(adjusted(r[o], self.missing[o])?)?;
         let scaled = invariant.div_ceil(after_in);
-        let remaining =
-            scaled.max(self.missing[o].checked_add(scaled.div_ceil(U256::from(BUFFER_NUMERATOR)))?);
+        let remaining = Self::reserve_for(scaled, self.missing[o])?;
         r[o].checked_sub(remaining)
+    }
+
+    /// A reserve must satisfy both straight branches of the adjusted-reserve function.
+    fn reserve_for(adjusted: U256, missing: U256) -> Option<U256> {
+        Some(adjusted.max(missing.checked_add(adjusted.div_ceil(U256::from(BUFFER_NUMERATOR)))?))
+    }
+    fn input_for(&self, i: usize, wanted: U256, max: U256) -> Option<U256> {
+        let o = 1 - i;
+        let cash_out = self.reserves[o].checked_sub(self.missing[o])?;
+        if wanted >= cash_out || wanted > self.cash[o] {
+            return None;
+        }
+        let right = adjusted(self.reserves[o] - wanted, self.missing[o])?;
+        if right.is_zero() {
+            return None;
+        }
+        let k = adjusted(self.reserves[i], self.missing[i])?
+            .checked_mul(adjusted(self.reserves[o], self.missing[o])?)?;
+        let net =
+            Self::reserve_for(k.div_ceil(right), self.missing[i])?.checked_sub(self.reserves[i])?;
+        if net.is_zero() {
+            return None;
+        }
+        let unit = U256::from(BIPS * Q64);
+        let numerator = net.checked_mul(unit)?;
+        let mut gross = net;
+        // fee_bips never decreases. At this candidate the minimum gross covering net at its
+        // current rate is a lower bound for every feasible input. Jump directly to that bound.
+        // Equal bounds are an executable fixed point, including integer rounding on the fee.
+        while gross <= max {
+            let rate = fee_bips(gross, self.reserves[i], self.reference[i])?;
+            let next = numerator.div_ceil(unit.checked_sub(rate)?);
+            if next <= gross {
+                return Some(gross);
+            }
+            gross = next;
+        }
+        None
     }
 
     pub(crate) fn swap(&self, zero_in: bool, exact_in: bool, amount: U256) -> Option<Swapped> {
         let i = usize::from(!zero_in);
-        if amount.is_zero() {
+        if amount.is_zero() || self.reserves[i] <= self.missing[i] {
             return None;
         }
         // The original pair stores its updated reserves in uint112.
@@ -71,19 +108,7 @@ impl AmmalgamState {
         let input = if exact_in {
             amount
         } else {
-            if amount > self.cash[1 - i] || self.payout(i, max)? < amount {
-                return None;
-            }
-            let (mut low, mut high) = (U256::ONE, max);
-            while low < high {
-                let mid = low + (high - low) / U256::from(2);
-                if self.payout(i, mid)? >= amount {
-                    high = mid;
-                } else {
-                    low = mid + U256::ONE;
-                }
-            }
-            low
+            self.input_for(i, amount, max)?
         };
         if input > max {
             return None;
@@ -121,6 +146,7 @@ mod tests {
         let data: serde_json::Value = serde_json::from_slice(&tape).unwrap();
         let number = |v: &serde_json::Value| v.as_str().unwrap().parse::<U256>().unwrap();
         let mut mismatches = Vec::new();
+        let (mut equal, mut over, mut short) = (0, 0, 0);
         for row in data["rows"].as_array().unwrap() {
             let s = &row["state"];
             let market = AmmalgamState {
@@ -129,6 +155,28 @@ mod tests {
                 missing: [number(&s[3]), number(&s[4])],
                 cash: [U256::ZERO, number(&row["output_cash"])],
             };
+            for saved in row["inverse"].as_array().unwrap() {
+                let target = number(&saved["target"]);
+                let suggestion = number(&saved["suggested_input"]);
+                let fill = market
+                    .swap(true, false, target)
+                    .expect("funded reverse quote");
+                let paid = fill.amount_in;
+                assert!(
+                    market.payout(0, paid).unwrap() >= target
+                        && market.payout(0, paid - U256::ONE).unwrap() < target
+                );
+                match suggestion.cmp(&paid) {
+                    std::cmp::Ordering::Equal => equal += 1,
+                    std::cmp::Ordering::Greater => {
+                        over += 1;
+                    }
+                    std::cmp::Ordering::Less => {
+                        assert!(market.payout(0, suggestion).unwrap() < target);
+                        short += 1;
+                    }
+                }
+            }
             for quote in row["quotes"].as_array().unwrap() {
                 let amount = number(&quote["amount"]);
                 let actual = market.payout(0, amount);
@@ -137,6 +185,12 @@ mod tests {
                     mismatches.push((row["pool"].as_str().unwrap(), amount, actual, expected));
                 }
             }
+        }
+        assert_eq!(equal + over + short, 135);
+        if let Some(path) = std::env::var_os("ARB_AMMALGAM_INVERSE_EXPORT") {
+            let result = serde_json::json!({"block":26494988,"forward":185,"inverse":equal+over+short,
+                "minimum_matches_helper":equal,"helper_input_above_minimum":over,"helper_input_below_minimum":short});
+            std::fs::write(path, serde_json::to_vec(&result).unwrap()).unwrap();
         }
         assert!(
             mismatches.is_empty(),

@@ -170,7 +170,7 @@ fn usdt_round_trips_account_for_both_v3_pools_and_the_investors_franc_change() {
             .iter()
             .find(|n| n["market"] == broker && n["units"] == r["units"] && n["mode"] == "hub")
             .unwrap();
-        let sell_net = baseline["sells"]["direct"]["net_cash"]
+        let sell_net: u128 = baseline["sells"]["direct"]["net_cash"]
             .as_str()
             .unwrap()
             .parse()

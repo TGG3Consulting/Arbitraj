@@ -118,7 +118,10 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
-    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
+    if e.family.variant.issuer_shares() {
+        return super::super::aktionariat_plan::terms(ctx,e).map(|m|(k,m.module)).map_err(|e|e.message);
+    }
+    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
         return pinned_module_target(ctx,e).map(|t|(k,t)).ok_or_else(||format!("{}: не настроен модуль исполнения", e.family.id));
     }
 

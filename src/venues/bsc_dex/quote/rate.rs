@@ -56,7 +56,35 @@ fn best(
     }
     // Решение 410 (t195): пулы пары без копии записей (Arc) — раньше by_pair копировал каждую запись (Pool, строки,
     // состояние) на каждый пересчёт суммы; читается только состояние.
-    best_in(ctx, &reg.pair_arcs(quote, usdt), quote, token_in, amount)
+    let direct=best_in(ctx,&reg.pair_arcs(quote,usdt),quote,token_in,amount);
+    let Some(w)=wrapped_bridge(ctx,usdt,quote) else{return direct;};
+    let first=bridge_pools(reg,token_in,w);
+    let target=if token_in==quote {usdt} else {quote};
+    let bridge=best_in(ctx,&first,w,token_in,amount).and_then(|mid|
+        best_in(ctx,&bridge_pools(reg,w,target),target,w,mid));
+    match (direct,bridge) {
+        (Ok(a),Ok(b))=>Ok(a.max(b)),
+        (Err(_),Ok(b))=>Ok(b),
+        (a,_)=>a
+    }
+}
+
+/// Только активные Ethereum-профили с явным разрешением обеих промежуточных валют.
+pub(crate) fn wrapped_bridge(ctx:&Ctx,usdt:Address,quote:Address)->Option<Address>{
+    let (w,allowed)=bridge_settings(ctx)?;
+    (w!=quote && w!=usdt && quote!=usdt && allowed.contains(&quote)).then_some(w)
+}
+pub(crate) fn bridge_settings(ctx:&Ctx)->Option<(Address,Vec<Address>)>{
+    if ctx.chain_id()!=Some(1) || !ctx.flag("dex.intermediate_enabled").unwrap_or(false) ||
+        ctx.text("dex.router_mode").ok().as_deref()!=Some("graph") || ctx.int("dex.route_max_hops").ok()?<3 {return None;}
+    let w=ctx.addr("dex.native_wrapped").ok()?;
+    let allowed=ctx.settings.addresses("dex.intermediate_tokens",ctx.at()).ok()?;
+    allowed.contains(&w).then_some((w,allowed))
+}
+pub(crate) fn bridge_pools(reg:&Registry,a:Address,b:Address)->Vec<std::sync::Arc<Entry>>{
+    let mut pairs=reg.pair_arcs(a,b);
+    pairs.extend(reg.pair_arcs(b,a));
+    pairs
 }
 
 /// То же по уже взятым пулам «quote — USDT» (решение 129: учёт газа в графе берёт их один раз на котировку, а не на

@@ -86,9 +86,12 @@ pub async fn subscribe(
     let mode = multi_pair::multi_dex(&p.ctx);
     p.ctx.index.with(|s| multi_pair::retune(s, &mode));
     let mut found = discover::find_all(&p.ctx, &all, usdt);
+    let bridges=market_mids::wrapped_bridges(&p.ctx,&mid_list);
     let (via, watches) = market_mids::find(&p.ctx, &coins, &mid_list);
+    let (bridge_pools, bridge_watches)=market_mids::find(&p.ctx,&bridges.0,&bridges.1);
+    let watches=watches.into_iter().chain(bridge_watches).collect::<Vec<_>>();
     let mut seen: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
-    found.extend(via.into_iter().filter(|f| seen.insert(f.reference.clone())));
+    found.extend(via.into_iter().chain(bridge_pools).filter(|f| seen.insert(f.reference.clone())));
     let is_mid = |a: &Address| mid_list.iter().any(|m| m.address == *a);
     let known: HashSet<PoolRef> = found.iter().map(|f| f.reference.clone()).collect();
     // Решение 295: запись многомонетного вида, чья ссылка не совпадает с режимом dex.multi_pair (сменили на лету),
@@ -96,7 +99,7 @@ pub async fn subscribe(
     // (после «да → нет»); у прочих видов — всегда да.
     p.reg.retain(|e| {
         ((e.usdt == usdt && all.contains_key(&e.coin))
-            || (is_mid(&e.usdt) && coins.contains_key(&e.coin) && e.coin != e.usdt))
+            || (is_mid(&e.usdt) && (coins.contains_key(&e.coin) || bridges.0.contains_key(&e.coin) && bridges.1.iter().any(|m|m.address==e.usdt)) && e.coin != e.usdt))
             && multi_pair::entry_fits(&p.ctx, e, &known)
     });
     // Ревью t153 (Н6, решение 339): отметки неудач чтения пулов, которых больше нет среди найденных (и тех, что так

@@ -261,8 +261,7 @@ impl Book {
         // перевод в USD по новому курсу при кривой из памяти пересчётом не считается.
         // Решение 307: пулы «встречный — USDT» — из подготовки (одно чтение реестра на встречный токен).
         let rate = p.rate(reg, e);
-        let pools = rate.as_ref().map(|x| x.pools.as_slice());
-        let band = depth_band::band_from_rate(ctx, reg, tokens, e, usdt_dec, units, pools)?;
+        let band = depth_band::band_from_rate(ctx, reg, tokens, e, usdt_dec, units, rate.as_ref())?;
         let deep_buy = next_deep(prev.map(|p| p.0), band.buy, min, hyst);
         let deep_sell = next_deep(prev.map(|p| p.1), band.sell, min, hyst);
         let depth = Depth {

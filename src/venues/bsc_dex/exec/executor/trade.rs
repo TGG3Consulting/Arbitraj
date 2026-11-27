@@ -142,7 +142,7 @@ pub async fn trade(
         .iter()
         .flatten()
         .any(|s| {
-            matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis | crate::venues::bsc_dex::pools::family_variant::Variant::Surge)
+            s.entry.family.variant.issuer_shares() || matches!(s.entry.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::FraxTwamm | crate::venues::bsc_dex::pools::family_variant::Variant::Oasis | crate::venues::bsc_dex::pools::family_variant::Variant::Surge)
         })
         .then(|| ctx.settings.generation());
     let vista_generation = legs.iter().flatten().any(|s|super::super::vista_gate::needs(&s.entry))

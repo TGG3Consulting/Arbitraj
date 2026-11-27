@@ -207,7 +207,8 @@ async fn run(
             },
             None => None,
         };
-        match probe::run(ctx, e, source, wallet, amount, heads, min).await {
+        let funding=super::brokerbot_funding::Funding{source,reg,usdt,budget:probe};
+        match probe::run(ctx, e, funding, wallet, amount, heads, min).await {
             Ok(Ok(m)) => {
                 let dec = (tokens.decimals(ctx, e.coin), tokens.decimals(ctx, e.usdt));
                 let pt = pool_taxes::percent(&m, dec.0.await?, dec.1.await?);

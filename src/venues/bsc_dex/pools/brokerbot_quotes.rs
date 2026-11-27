@@ -61,7 +61,9 @@ pub(crate) fn request(
     let PoolState::Brokerbot(s) = &e.pool.state else {
         return Err(invalid(ctx));
     };
-    s.swap(input, true, budget).ok_or_else(|| invalid(ctx))?;
+    // The sell getter remains observable even if the broker currently cannot pay. The
+    // associated cash swap in this same simulation then gives the directional refusal.
+    if input != s.cash && input != s.share || budget.is_zero() { return Err(invalid(ctx)); }
     let data = if input == s.cash {
         IBroker::getSharesCall { amount: budget }.abi_encode()
     } else {

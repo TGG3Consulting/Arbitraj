@@ -67,6 +67,12 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant.issuer_shares() {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            let market=super::aktionariat_plan::terms(ctx,e)?;
+            Box::pin(super::aktionariat_plan::verify(ctx,e,market,at)).await?;
+            continue;
+        }
         if f.variant==Variant::IziModules{
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::izi_modules::at(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;

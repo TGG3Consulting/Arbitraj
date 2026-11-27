@@ -94,6 +94,9 @@ fn rate_key(ctx: &Ctx, reg: &Registry, tokens: &Tokens, e: &Entry) -> Vec<u64> {
     // Решение 129: отметки без копирования записей пулов (раньше — копия каждого пула «промежуточная — USDT» с картой
     // тиков на каждый пул с промежуточной монетой при каждом построении графа).
     let mut v = reg.pair_marks(e.usdt, usdt);
+    if let Some(w)=super::super::quote::rate::wrapped_bridge(ctx,usdt,e.usdt){
+        for (a,b) in [(e.usdt,w),(w,e.usdt),(usdt,w),(w,usdt)]{v.extend(reg.pair_marks(a,b));}
+    }
     v.sort_unstable();
     v
 }
@@ -113,6 +116,12 @@ type Marks = Arc<Vec<u64>>;
 pub struct Rate {
     pub marks: Marks,
     pub pools: Arc<Vec<Arc<Entry>>>,
+    pub bridge: Option<Arc<Bridge>>,
+}
+pub struct Bridge{
+    pub wrapped:Address,
+    pub to_wrapped:Vec<Arc<Entry>>,
+    pub to_usdt:Vec<Arc<Entry>>,
 }
 
 /// Подготовка к расчёту ключей многих пулов подряд (решение 131: построение графа маршрутов считает ключ КАЖДОГО пула
@@ -124,6 +133,7 @@ pub struct Prep {
     pub min: Decimal,
     pub hyst: Decimal,
     usdt: Option<Address>,
+    bridge:Option<(Address,Vec<Address>)>,
     rates: RefCell<HashMap<Address, Rate>>,
 }
 
@@ -135,6 +145,7 @@ impl Prep {
             min,
             hyst,
             usdt: tokens.usdt(ctx).ok(),
+            bridge:super::super::quote::rate::bridge_settings(ctx),
             rates: RefCell::default(),
         }
     }
@@ -168,8 +179,15 @@ impl Prep {
                 // Решение 410 (t195): Arc записей — без копии (см. Rate); порядок тот же, что у by_pair (индекс пары).
                 let pools = reg.pair_arcs(e.usdt, usdt);
                 let mut v: Vec<u64> = pools.iter().map(|p| p.state_gen).collect();
+                let bridge=self.bridge.as_ref().filter(|(w,allowed)|*w!=usdt && *w!=e.usdt && allowed.contains(&e.usdt)).map(|(w,_)|{
+                    let to_wrapped=super::super::quote::rate::bridge_pools(reg,e.usdt,*w);
+                    let to_usdt=super::super::quote::rate::bridge_pools(reg,*w,usdt);
+                    v.extend(to_wrapped.iter().chain(&to_usdt).map(|e|e.state_gen));
+                    Arc::new(Bridge{wrapped:*w,to_wrapped,to_usdt})
+                });
                 v.sort_unstable();
                 Rate {
+                    bridge,
                     marks: Arc::new(v),
                     pools: Arc::new(pools),
                 }

@@ -32,6 +32,7 @@ enum Venue {
     Integral,
     Prop,
     Pendle,
+    Brokerbot,
     Dagrow,
     Bundles,
     Temple,
@@ -50,7 +51,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -126,6 +127,15 @@ impl Market {
             super::registered_v3::funded(ctx,e,wallet,amount,head).await?;
             anchor=Some((head,Box::new(e.clone())));
             Venue::SafeSwap
+        } else if e.family.variant.issuer_shares() {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let m=super::super::exec::aktionariat_plan::terms(ctx,e)?;
+            let state=Box::pin(super::super::exec::aktionariat_plan::verify(ctx,e,m,&head.selector())).await?;
+            let mut entry=Box::new(e.clone());
+            entry.pool.state=PoolState::Brokerbot(Box::new(state));
+            entry.pool.block=number;
+            anchor=Some((head,entry));
+            Venue::Brokerbot
         } else if e.family.variant==super::super::pools::family_variant::Variant::PropVenue {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             for (i,o) in [(e.usdt,e.coin),(e.coin,e.usdt)] {
@@ -224,7 +234,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -283,6 +293,11 @@ impl Market {
         wallet: Address,
         list: &mut Vec<Call>,
     ) -> GatewayResult<Option<usize>> {
+        if let Venue::Brokerbot=self.venue && let PoolState::Brokerbot(s)=&e.pool.state {
+            let index=list.len();
+            list.push(pc::balance(wallet,s.cash,s.broker));
+            return Ok(Some(index));
+        }
         if !matches!(self.venue, Venue::Antfarm(_)) {
             return Ok(None);
         }
@@ -305,6 +320,10 @@ impl Market {
         quote: usize,
     ) -> Option<GatewayError> {
         let (i, r) = failure;
+        if matches!(self.venue,Venue::Brokerbot) {
+            return (observation==Some(i) || i < quote).then(||ctx.err(ErrorCode::NoRoute,
+                format!("Aktionariat: проба не подтвердила финансирование или кассу брокера: {}",r.why())));
+        }
         (observation == Some(i) || (self.self_funded(e, source) && i < quote)).then(|| {
             ctx.err(
                 ErrorCode::NoRoute,
@@ -334,6 +353,13 @@ impl Market {
                     )
                 })?;
                 antfarm_probe::after(ctx, e, &r.return_data).map(Some)
+            }
+            Venue::Brokerbot => {
+                let state=super::brokerbot_probe::after(e,e.usdt,amount,bought,observed)
+                    .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Aktionariat: расход или остаток брокера после пробы не подтверждён"))?;
+                let mut entry=Box::new(e.clone());
+                entry.pool.state=PoolState::Brokerbot(Box::new(state));
+                Ok(Some(entry))
             }
             Venue::Carbon => carbon_probe::after(ctx, e, e.usdt, amount, &buy.logs),
             Venue::Temple => temple::after_probe(ctx, e, e.usdt, amount, &buy.logs),

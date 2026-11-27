@@ -20,7 +20,6 @@
 //!
 //! Цена тика: sqrtPriceX96 = sqrt(1,0001^tick)·2^96 — Uniswap v3-core contracts/libraries/TickMath.sol (getSqrtRatioAtTick).
 
-use std::sync::Arc;
 
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -96,6 +95,7 @@ pub fn band_from_units(
 ) -> Result<Band, String> {
     let usdt = tokens.usdt(ctx).map_err(|e| e.message)?;
     let to = |a: U256| -> Result<Decimal, String> {
+        if a.is_zero() && e.family.variant.issuer_shares(){return Ok(Decimal::ZERO);}
         let u = rate::to_usdt(ctx, reg, usdt, e.usdt, a).map_err(|e| e.message)?;
         num::to_decimal(u, usdt_dec).ok_or_else(|| "глубина не переводится в USDT".to_string())
     };
@@ -118,7 +118,7 @@ pub fn band_from_rate(
     e: &Entry,
     usdt_dec: u8,
     units: (U256, U256, bool),
-    rate: Option<&[Arc<Entry>]>,
+    rate: Option<&super::super::pools::depth_key::Rate>,
 ) -> Result<Band, String> {
     let Some(pools) = rate else {
         return band_from_units(ctx, reg, tokens, e, usdt_dec, units);
@@ -129,7 +129,13 @@ pub fn band_from_rate(
     }
     let (buy, sell, full) = units;
     let to = |a: U256| -> Result<Decimal, String> {
-        let u = rate::best_in(ctx, pools, e.usdt, e.usdt, a).map_err(|e| e.message)?;
+        if a.is_zero() && e.family.variant.issuer_shares(){return Ok(Decimal::ZERO);}
+        let direct=rate::best_in(ctx,pools.pools.as_slice(),e.usdt,e.usdt,a);
+        let via=pools.bridge.as_ref().and_then(|b|{
+            let mid=rate::best_in(ctx,&b.to_wrapped,b.wrapped,e.usdt,a).ok()?;
+            rate::best_in(ctx,&b.to_usdt,usdt,b.wrapped,mid).ok()
+        });
+        let u=match via{Some(x)=>direct.map_or(x,|v|v.max(x)),None=>direct.map_err(|e|e.message)?};
         num::to_decimal(u, usdt_dec).ok_or_else(|| "глубина не переводится в USDT".to_string())
     };
     Ok(Band {

@@ -20,7 +20,7 @@ pub(crate) fn terms(ctx:&Ctx,e:&Entry)->GatewayResult<Market>{
         ![e.pool.token0,e.pool.token1].contains(&s.cash) || s.share==s.cash {return Err(changed(ctx));}
     Ok(Market{broker,module,runtime:*runtime})
 }
-pub(crate) async fn verify(ctx:&Ctx,e:&Entry,m:Market,at:&Value)->GatewayResult<()> {
+pub(crate) async fn verify(ctx:&Ctx,e:&Entry,m:Market,at:&Value)->GatewayResult<crate::core::types::BrokerbotState> {
     let (state,(),registry,issuer)=tokio::try_join!(
         brokerbot::market(ctx,e.family,m.broker,(e.pool.token0,e.pool.token1),at),
         direct_module::verify_code(ctx,e.family.id,m.module,at),
@@ -29,7 +29,7 @@ pub(crate) async fn verify(ctx:&Ctx,e:&Entry,m:Market,at:&Value)->GatewayResult<
     if registry!=ctx.dex_addr("dex.factory",e.family.id)? || issuer!=ctx.dex_addr("dex.quoter",e.family.id)? {return Err(changed(ctx));}
     if !state.registered && !(state.hub==issuer &&
         canonical(ctx,at,m.module,IAktionariatWallet::issuerMarketsCall{market:m.broker}).await?) {return Err(changed(ctx));}
-    Ok(())
+    Ok(state)
 }
 pub(super) async fn plan(ctx:&Ctx,s:&Step,payer:Address,height:u64,selected:Option<Address>)->GatewayResult<Plan>{
     let generation=ctx.settings.generation();

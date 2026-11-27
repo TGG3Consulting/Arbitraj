@@ -160,6 +160,10 @@ pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()>
         let event=fills.next().and_then(|l|Sell::decode_raw_log(l.topics.iter().copied(),&l.data).ok());
         return (fills.next().is_none()&&event.is_some_and(|v|v.orderContract==r.delay&&!v.orderId.is_zero()&&((v.tokenIn,v.tokenOut)==(a,b)||(v.tokenIn,v.tokenOut)==(b,a)))).then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Integral SIZE: мгновенная продажа не подтверждена"));
     }
+    if let PoolState::Brokerbot(s)=&e.pool.state {
+        return (logs.iter().filter(|l|super::brokerbot_probe::traded(s,l)).count()==1).then_some(())
+            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Aktionariat: отсутствует единственный обмен исходных акций на валюту этого брокера"));
+    }
     if super::super::quote::uses_wallet_quoter(e.family.variant) {
         let event=if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
             super::super::exec::pendle_wallet::IAdapter::Swap::SIGNATURE_HASH

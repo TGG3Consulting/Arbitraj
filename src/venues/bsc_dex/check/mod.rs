@@ -23,6 +23,8 @@ pub mod hooks_judge;
 pub mod hooks_probe;
 pub mod hooks_refine;
 mod market_probe;
+mod brokerbot_probe;
+mod brokerbot_funding;
 mod registered_v3;
 pub mod memory_proof;
 pub mod memory_proof_rules;

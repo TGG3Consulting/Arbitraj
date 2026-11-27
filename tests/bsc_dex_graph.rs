@@ -235,3 +235,6 @@ async fn cached_graph_rebuilds_only_on_change() {
 
 mod route_common;
 mod bsc_graph_policy;
+
+#[path = "aktionariat_graph_cases/mod.rs"]
+mod aktionariat_graph_cases;

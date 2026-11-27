@@ -94,15 +94,16 @@ pub struct Measured {
 /// Возвращает: Ok(Measured) или Ok(Err(причина)); Err — настройки, узел (метод не поддерживается и т.п.),
 /// NotConfigured — обмен сделал не этот пул (пул исключён, check/emitter.rs); NoRoute — через исполнитель пул не выпустил
 /// события или пробу через этот пул собрать нечем (check/probe_exec.rs).
-pub async fn run(
+pub(super) async fn run(
     ctx: &Ctx,
     e: &Entry,
-    source: Address,
+    funding: super::brokerbot_funding::Funding<'_>,
     wallet: Address,
     usdt_amount: U256,
     heads: &Heads,
     min: Option<U256>,
 ) -> GatewayResult<Result<Measured, String>> {
+    let source=funding.source;
     let (usdt, coin) = (e.usdt, e.coin);
     let empty = Address::from_slice(&keccak256(wallet.as_slice())[12..]);
     // Обе симуляции — поверх одного блока `at` (номер, не «latest»), срок транзакции — от его времени (решение 61);
@@ -115,7 +116,10 @@ pub async fn run(
     }
     let vista = &market.vista;
     let e = market.entry(e);
-    let mut list = market.funding(e,source,wallet,usdt_amount);
+    let mut list = if e.family.variant.issuer_shares() {
+        let hash=market.hash().ok_or_else(||ctx.err(ErrorCode::NoRoute,"Aktionariat: нет канонического блока"))?;
+        Box::pin(super::brokerbot_funding::calls(ctx,&funding,(wallet,usdt,usdt_amount),hash,now)).await?
+    } else {market.funding(e,source,wallet,usdt_amount)};
     let buy_order=Order{token_in:usdt,token_out:coin,amount_in:usdt_amount,min_out:U256::ONE};
     let buy=Box::pin(market.leg(ctx,e,buy_order,wallet,now,&list)).await?;
     let (buy_aps,buy_router,buy_data)=buy.call;
@@ -230,7 +234,27 @@ pub async fn run(
             t.transfer += 1;
         }
     }
-    let all = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
+    // Целая акция может быть единственной купленной. Проверяем её перевод в независимой
+    // ветви того же блока, чтобы и продавец, и отправитель располагали ею целиком.
+    let separate = e.family.variant.issuer_shares() && quarter.is_zero() && !bought.is_zero();
+    let (all,transfer_sent) = if separate {
+        let mut transfer = list[..base].to_vec();
+        transfer.push(pc::balance(wallet,coin,empty));
+        transfer.push(pc::transfer(wallet,coin,empty,U256::ONE));
+        transfer.push(pc::balance(wallet,coin,empty));
+        let (mut sale,mut send) = tokio::try_join!(
+            simulate::run_anchored(ctx,&list[..t.transfer],&values,&over,at,hash),
+            simulate::run_anchored(ctx,&transfer,&values,&over,at,hash)
+        )?;
+        let measured=send.split_off(base);
+        if measured.len()!=3 || measured.iter().any(|r|!r.ok()) || pc::u256(&measured[0])!=Some(U256::ZERO) {
+            return Err(ctx.err(ErrorCode::NoRoute,"Aktionariat: отдельный перевод целой акции не измерен"));
+        }
+        sale.extend(measured.into_iter().skip(1));
+        (sale,U256::ONE)
+    } else {
+        (simulate::run_anchored(ctx,&list,&values,&over,at,hash).await?,quarter)
+    };
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
             "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время симуляции по сети, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
@@ -270,7 +294,7 @@ pub async fn run(
                 None => got,
             }
         },
-        transfer_sent: quarter,
+        transfer_sent,
         transfer_got: xb,
         gas_buy: all[x].gas_used.to(),
         gas_approve_buy: gas(&all[approvals_start..approvals_start + n_appr]),

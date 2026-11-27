@@ -1,4 +1,5 @@
 """Rebuild both Ethereum slot-v2 wallets by read-only constructor calls on the recorded block."""
+import gzip
 import json
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ def verify(compiled, previous, endpoint):
     creation = bytes.fromhex(compiled["creation"])
     prior_init = bytes.fromhex(previous["creation"][2:])
     assert executable(prior_init) == executable(creation)
-    markets, metrics = {}, {}
+    markets, metrics, runtimes = {}, {}, {}
     types = ["address"]*3 + ["bytes32"]*3
     for venue, old in previous["markets"].items():
         addresses = old["addresses"]
@@ -38,11 +39,12 @@ def verify(compiled, previous, endpoint):
         row = dict(old, creationSha256=sha(creation+args), runtimeSha256=sha(runtime),
                    runtimeKeccak="0x"+keccak(runtime).hex())
         markets[venue] = row
+        runtimes[venue] = {"previousRuntime":"0x"+prior.hex(), "currentRuntime":"0x"+runtime.hex()}
         metrics[venue] = dict(previousRuntime=old["runtimeKeccak"],runtime=row["runtimeKeccak"],
                               identicalRuntimeBytes=len(executable(runtime)),
                               runtimeProgramSha256=sha(executable(runtime)))
     return (dict(previous,creation="0x"+compiled["creation"],markets=markets),
-            dict(sourceBlock=at["blockHash"], identicalInitBytes=len(executable(creation)), markets=metrics))
+            dict(sourceBlock=at["blockHash"], identicalInitBytes=len(executable(creation)), markets=metrics), runtimes)
 
 
 if __name__ == "__main__":
@@ -51,7 +53,7 @@ if __name__ == "__main__":
     previous = json.loads((root/"ui/src/assets/prop-slot-v2-ethereum-previous.json").read_bytes())
     for endpoint in ENDPOINTS:
         try:
-            card, metrics = verify(compiled, previous, endpoint)
+            card, metrics, runtimes = verify(compiled, previous, endpoint)
             break
         except (OSError, KeyError, RuntimeError, ValueError) as err:
             last = err
@@ -59,5 +61,7 @@ if __name__ == "__main__":
         raise RuntimeError("No Ethereum RPC returned the recorded constructors") from last
     out = Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
+    evidence = {"verification": metrics, "markets":runtimes}
+    (out/"prop_slot_creation_v2.json.gz").write_bytes(gzip.compress(json.dumps(evidence,separators=(",",":")).encode(),mtime=0))
     for name, obj in [("prop-slot-v2-ethereum.json",card),("verified.json",metrics)]:
         (out/name).write_text(json.dumps(obj,separators=(",",":"))+"\n")

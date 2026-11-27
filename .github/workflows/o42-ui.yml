@@ -1,7 +1,7 @@
-name: Dexalot key settings UI
+name: Dexalot wallet compatibility
 on:
   push:
-    branches: ['codex/ci-dexalot-o41-20261127']
+    branches: ['verify/o42-dexalot-20261127']
 permissions:
   contents: read
 jobs:

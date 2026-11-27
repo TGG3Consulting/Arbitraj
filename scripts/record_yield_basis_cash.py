@@ -20,42 +20,58 @@ def why(result):
     return str(error.get("message","reverted"))[:120]
 
 
-def measure(c,rpc,venue,entry,market,stable,timestamp):
-    def simulation(calls):
-        return simulate_block(c.endpoint,c.selector,{OWNER:{"balance":hex(10**18)}},calls,rpc)
-    def approve(asset,spender,quantity):
-        return tx(asset,"approve(address,uint256)",["address",UINT],[spender,quantity])
-    def swap(pool,i,j,amount,minimum):
-        call=tx(pool,"exchange(uint256,uint256,uint256,uint256,address)",
-                [UINT,UINT,UINT,UINT,"address"],[i,j,amount,minimum,OWNER])
-        call["gas"]=hex(6_000_000)
-        return call
+def approve(asset,spender,quantity):
+    return tx(asset,"approve(address,uint256)",["address",UINT],[spender,quantity])
+
+
+def swap(pool,i,j,amount,minimum):
+    call=tx(pool,"exchange(uint256,uint256,uint256,uint256,address)",
+            [UINT,UINT,UINT,UINT,"address"],[i,j,amount,minimum,OWNER])
+    call["gas"]=hex(6_000_000)
+    return call
+
+
+def funding_calls(market,stable,src,side,method,timestamp):
+    if method=="WETH.deposit":
+        return [tx(WETH,"deposit()",value=10**16)]
     usdc=STABLES[0]
     deposit=20*10**6
     prefix=[tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                [UINT,"address[]","address",UINT],[deposit,[WETH,usdc],OWNER,timestamp+600],value=10**17),
             approve(usdc,USD_POOL,deposit),
             tx(USD_POOL,"exchange(int128,int128,uint256,uint256)",["int128","int128",UINT,UINT],[0,1,deposit,1])]
+    if side == 0:
+        if src != stable:
+            raise ValueError("unexpected stable funding token")
+        return prefix
+    qty=10*10**18
+    if method=="mint collateral LP in underlying cryptopool":
+        return prefix+[approve(stable,market["cryptopool"],qty),
+                       tx(market["cryptopool"],"add_liquidity(uint256[2],uint256)",["uint256[2]",UINT],[[qty,0],1])]
+    venue=market["amm"] if method=="buy collateral LP in LEVAMM" else market["cryptopool"]
+    return prefix+[approve(stable,venue,qty),swap(venue,0,1,qty,1)]
+
+
+def measure(c,rpc,venue,entry,market,stable,timestamp):
+    def simulation(calls):
+        return simulate_block(c.endpoint,c.selector,{OWNER:{"balance":hex(10**18)}},calls,rpc)
     rows=[]
     for i in (0,1):
         j=1-i
         src,dst=entry["coins"][i],entry["coins"][j]
-        prep=list(prefix)
         funding="USDC/crvUSD"
         if i==1 and src==WETH:
-            prep=[tx(WETH,"deposit()",value=10**16)]
             funding="WETH.deposit"
         elif i==1:
-            qty=10*10**18
-            prep.append(approve(stable,market["cryptopool"],qty))
-            if entry["kind"]=="amm":
-                prep.append(tx(market["cryptopool"],"add_liquidity(uint256[2],uint256)",["uint256[2]",UINT],[[qty,0],1]))
-                funding="mint collateral LP in underlying cryptopool"
-            else:
-                prep.append(swap(market["cryptopool"],0,1,qty,1))
-                funding="asset purchase in underlying cryptopool"
+            funding="mint collateral LP in underlying cryptopool" if entry["kind"]=="amm" else "asset purchase in underlying cryptopool"
+        prep=funding_calls(market,stable,src,i,funding,timestamp)
         funding_frame=simulation(prep+[balance(src,OWNER)])
         failed=next((k for k,r in enumerate(funding_frame) if r["status"]!="0x1"),None)
+        if failed is not None and funding=="mint collateral LP in underlying cryptopool" and why(funding_frame[failed])=="!wl":
+            funding="buy collateral LP in LEVAMM"
+            prep=funding_calls(market,stable,src,i,funding,timestamp)
+            funding_frame=simulation(prep+[balance(src,OWNER)])
+            failed=next((k for k,r in enumerate(funding_frame) if r["status"]!="0x1"),None)
         if failed is not None:
             rows.append(dict(side=i,stage="funding",funding=funding,step=failed,reason=why(funding_frame[failed])))
             continue

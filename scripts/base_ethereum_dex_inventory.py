@@ -1720,6 +1720,16 @@ def tables(network, snapshots, profiles):
             snapshot=cypher if str(row["id"])=="7037" else cl
             candidates=[snapshot["factory"]["address"]]
             task=f"Cypher · {len(snapshot['markets'])} действительных регистраций, испытания и границы выше"
+        if not base and str(row["id"])=="6771":
+            fixture=Path("tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz")
+            original=json.loads(gzip.decompress(fixture.read_bytes()))
+            cases=[r for venue in original["venues"].values() for r in venue["cases"]]
+            virtual=[r for venue in original["venues"].values() if venue["kind"]=="virtual_pool" for r in venue["cases"] if "received" in r]
+            candidates=[original["factory"]]
+            task=(f"YieldBasis · {len(original['markets'])} рынков, {len(original['venues'])} контрактов обмена. "
+                  f"На блоке {original['block']} получено {sum(r['stage']=='paid' for r in cases)} выплат исходных пулов. "
+                  f"Фактическое поступление отличается от get_dy в {sum(r['preview']!=r['received'] for r in virtual)} из {len(virtual)} выплат VirtualPool. "
+                  f"[Объёмы и кошелёк](../{fixture.as_posix()})")
         if not base and str(row["id"])=="116":
             book_file=Path("tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz")
             with gzip.open(book_file,"rt",encoding="utf8") as stream:

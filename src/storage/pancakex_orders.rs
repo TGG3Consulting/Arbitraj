@@ -76,12 +76,18 @@ impl Index {
         if unknown_chain || !damaged.is_empty() {
             // Повреждена бронь. Исходные ключи ищутся один раз в сохранённых поручениях.
             // Свежие подписи спорного домена запрещены; прочие DEX продолжают обычную работу.
-            let mut q = c.prepare("SELECT id, json_extract(body,'$.lookup.parse.pancakex.ticket.cfg.p.chain')
+            let mut q = c.prepare("SELECT id, body -> '$.lookup.parse.pancakex.ticket.cfg.p.chain'
                 FROM core_state WHERE kind IN ('settlement_action','base_settlement_action')
                 AND CASE WHEN json_valid(body) THEN json_type(body,'$.lookup.parse.pancakex')='object' ELSE 0 END")?;
             let mut rows = q.query([])?;
             while let Some(row) = rows.next()? {
-                if let (Ok(chain), Ok(key)) = (row.get::<_, u64>(1), row.get::<_, String>(0)) {
+                if let Some(chain) = row
+                    .get_ref(1)
+                    .ok()
+                    .and_then(|v| v.as_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    && let Ok(key) = row.get::<_, String>(0)
+                {
                     Self::remember(&mut chains, chain, key);
                 }
             }

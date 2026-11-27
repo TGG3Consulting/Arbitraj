@@ -151,13 +151,39 @@ async fn disabled_channel_keeps_the_previous_signature_after_restart() {
 
 #[tokio::test]
 async fn damaged_permit_isolated_from_bsc_and_new_signatures() {
-    let m = marker();
+    let mut m = marker();
     let dir = directory("pancakex-damaged", 8453);
     {
         let p = parts(&dir, 8453, m.ticket.req.owner).await;
-        p.ctx.journal.db().ledger().write(|c| c.execute(
-            "INSERT INTO core_state(kind,id,body,updated_at) VALUES('pancakex_permit','[8453,0,0,0]','damaged','')", []
-        )).await.unwrap();
+        set(&p, "dex.evm_chain_id", json!(8453)).await;
+        let r = request(&p, &m);
+        m.key = ledger::identity(&p.ctx, &r).unwrap();
+        m.account = p.ctx.account.clone().unwrap();
+        let db = p.ctx.journal.db();
+        intent::scope(
+            db,
+            &m.key,
+            intent::Request::Order(Box::new(r)),
+            intent::before_send(&m.pending()),
+        )
+        .await
+        .unwrap();
+        assert!(m.reserve(db, &m.terms().unwrap()).await.unwrap());
+        db.ledger()
+            .write(|c| {
+                c.execute(
+                    "UPDATE core_state SET body='damaged' WHERE kind='pancakex_permit'",
+                    [],
+                )
+            })
+            .await
+            .unwrap();
+    }
+    {
+        let p = parts(&dir, 8453, m.ticket.req.owner).await;
+        let unresolved = prior(&p, &request(&p, &m)).await.unwrap_err();
+        assert_eq!(unresolved.code, ErrorCode::OutcomeUnknown);
+        assert_eq!(unresolved.pending.as_deref(), Some(&m.pending()));
     }
     let p = parts(&dir, 56, m.ticket.req.owner).await;
     set(&p, "dex.evm_chain_id", json!(56)).await;

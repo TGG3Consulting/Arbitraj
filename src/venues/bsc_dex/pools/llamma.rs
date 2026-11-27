@@ -83,63 +83,6 @@ pub(super) async fn factory(ctx: &Ctx, f: &Family, at: &Value) -> GatewayResult<
     super::solidly_classic_factory::runtime(ctx, a, h, at).await?;
     Ok(a)
 }
-impl Registry {
-    pub(super) fn count(self, f: Address) -> (Address, Bytes) {
-        if self == Self::Mint {
-            data(f, ILlama::n_collateralsCall {})
-        } else {
-            data(f, ILlama::market_countCall {})
-        }
-    }
-    pub(super) fn ask(self, f: Address, index: u64) -> Vec<(Address, Bytes)> {
-        let i = U256::from(index);
-        match self {
-            Self::V2 => vec![data(f, ILlama::marketsCall { i })],
-            Self::Lending => vec![
-                data(f, ILlama::ammsCall { i }),
-                data(f, ILlama::controllersCall { i }),
-                data(f, ILlama::borrowed_tokensCall { i }),
-                data(f, ILlama::collateral_tokensCall { i }),
-            ],
-            Self::Mint => vec![
-                data(f, ILlama::ammsCall { i }),
-                data(f, ILlama::controllersCall { i }),
-                data(f, ILlama::stablecoinCall {}),
-                data(f, ILlama::collateralsCall { i }),
-            ],
-        }
-    }
-    pub(super) fn row(self, ctx: &Ctx, index: u64, answers: &[Bytes]) -> GatewayResult<Row> {
-        let (amm, controller, coins) = match (self, answers) {
-            (Self::V2, [tuple]) => {
-                let v = call::decode::<ILlama::marketsCall>(tuple)?;
-                (v.amm, v.controller, [v.borrowed, v.collateral])
-            }
-            (Self::Mint | Self::Lending, [a, b, c, d]) => (
-                call::decode::<ILlama::ammsCall>(a)?,
-                call::decode::<ILlama::controllersCall>(b)?,
-                [
-                    call::decode::<ILlama::borrowed_tokensCall>(c)?,
-                    call::decode::<ILlama::collateral_tokensCall>(d)?,
-                ],
-            ),
-            _ => return Err(bad(ctx)),
-        };
-        if amm.is_zero()
-            || controller.is_zero()
-            || coins.contains(&Address::ZERO)
-            || coins[0] == coins[1]
-        {
-            return Err(bad(ctx));
-        }
-        Ok(Row {
-            index,
-            amm,
-            controller,
-            coins,
-        })
-    }
-}
 fn matches_class(code: &[u8], coins: [Address; 2], line: &str) -> Option<bool> {
     let mut parts = line.split_whitespace();
     let body = parts.next()?.parse::<usize>().ok()?;

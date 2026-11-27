@@ -64,3 +64,52 @@ fn actual_v5_refunds_and_measured_usdt_bridges() {
         assert!(p["steps"] == json!([4, 9]) || p["steps"] == json!([9, 4]));
     }
 }
+
+#[test]
+fn archived_factory_events_identify_the_registered_amm() {
+    let events: Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/llamma_factory_events.json"
+    ))
+    .unwrap();
+    let archive = archive(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/llamma_ethereum_registry.json.gz"
+    ));
+    let events = events.as_array().unwrap();
+    assert_eq!(events.len(), 3);
+    for event in events {
+        let group = event["kind"].as_str().unwrap();
+        let (registry, other) = match group {
+            "mint" => (Registry::Mint, Registry::Lending),
+            "oneway" => (Registry::Lending, Registry::Mint),
+            "v2" => (Registry::V2, Registry::Mint),
+            _ => panic!("unexpected factory"),
+        };
+        let log: alloy::rpc::types::Log = serde_json::from_value(event["log"].clone()).unwrap();
+        let id = event["index"].as_u64().unwrap();
+        let amm: Address = event["amm"].as_str().unwrap().parse().unwrap();
+        assert_eq!(
+            log.address(),
+            archive["factories"][group]
+                .as_str()
+                .unwrap()
+                .parse::<Address>()
+                .unwrap()
+        );
+        assert_eq!(
+            super::super::llamma_registry::creation_topic(Variant::Llamma(registry)),
+            log.topics().first().copied()
+        );
+        assert_eq!(registry.created_market(&log.inner.data), Some((id, amm)));
+        assert!(other.created_market(&log.inner.data).is_none());
+        let row = archive["markets"][group]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["index"].as_u64() == Some(id))
+            .unwrap();
+        assert_eq!(
+            row["amm"].as_str().unwrap().parse::<Address>().unwrap(),
+            amm
+        );
+    }
+}

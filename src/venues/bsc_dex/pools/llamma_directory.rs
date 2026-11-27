@@ -13,7 +13,6 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::{ctx::Ctx, node::call},
 };
-use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256};
 use std::collections::HashMap;
 async fn family(
@@ -101,14 +100,12 @@ pub(super) async fn created(
     log: &alloy::rpc::types::Log,
     quote: Address,
 ) -> GatewayResult<Option<Candidate>> {
-    let (id, amm) = if f.variant == Variant::Llamma(Registry::Mint) {
-        let e = ILlama::AddMarket::decode_log_data(&log.inner.data).map_err(|_| l::bad(ctx))?;
-        (e.ix, e.amm)
-    } else {
-        let e = ILlama::NewVault::decode_log_data(&log.inner.data).map_err(|_| l::bad(ctx))?;
-        (e.id, e.amm)
+    let Variant::Llamma(registry) = f.variant else {
+        return Err(l::bad(ctx));
     };
-    let index = u64::try_from(id).map_err(|_| l::bad(ctx))?;
+    let (index, amm) = registry
+        .created_market(&log.inner.data)
+        .ok_or_else(|| l::bad(ctx))?;
     let at = serde_json::json!({"blockHash":log.block_hash.ok_or_else(||l::bad(ctx))?,"requireCanonical":true});
     let (factory, m, _) = l::bound(ctx, f, index, &at).await?;
     if factory != log.address() || m.amm != amm {

@@ -250,6 +250,7 @@ pub(crate) mod ambient_directory;
 mod ambient_levels;
 pub(crate) mod llamma;
 mod llamma_directory;
+mod llamma_registry;
 pub(crate) mod llamma_quotes;
 pub(crate) mod yield_basis;
 pub(crate) mod yield_basis_quotes;

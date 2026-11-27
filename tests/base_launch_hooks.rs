@@ -67,6 +67,18 @@ fn configured_keys_match_initialize_and_verified_role_code() {
 fn positive_and_failed_orders_match_raw_wallet_deltas() {
     for (raw, count, expected) in [
         (
+            include_bytes!("data/first_run_dex_2026-11-26/o1_wrapped_base_wallets.json.gz")
+                .as_slice(),
+            3,
+            24,
+        ),
+        (
+            include_bytes!("data/first_run_dex_2026-11-26/baseline_base_wallets.json.gz")
+                .as_slice(),
+            1,
+            8,
+        ),
+        (
             include_bytes!("data/first_run_dex_2026-11-26/bankr_base_wallets.json.gz").as_slice(),
             15,
             120,

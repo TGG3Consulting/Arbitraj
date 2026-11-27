@@ -47,6 +47,8 @@ pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
 pub(super) mod temple_wallet;
 pub(super) mod o1_wallet;
+#[cfg(test)]
+mod o1_wallet_tests;
 pub(super) mod antfarm_wallet;
 pub(super) mod antfarm_output_wallet;
 #[cfg(test)]

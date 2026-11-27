@@ -44,11 +44,11 @@ def capture(name,endpoint):
         init="0x"+h.hex()
         markets=[]
         for pair in pairs:
-            a,b,stable,res,f=posts(c,[(pair,s,[],[]) for s in ["token0()","token1()","stable()","getReserves()","factory()"]])
+            a,b,stable,res=posts(c,[(pair,s,[],[]) for s in ["token0()","token1()","stable()","getReserves()"]])
             a,b=[decode(["address"],x)[0] for x in (a,b)];stable,=decode(["bool"],stable)
             salt=keccak(raw(a)+raw(b)+bytes([int(stable)]))
             want="0x"+keccak(b"\xff"+raw(factory)+salt+h)[-20:].hex()
-            if a>=b or want!=pair or decode(["address"],f)[0]!=factory:raise ValueError("чужой пул Archly")
+            if a>=b or want!=pair or c.one(factory,"isPair(address)",["address"],[pair],["bool"])!=(True,):raise ValueError("чужой пул Archly")
             for tokens in [(a,b),(b,a)]:
                 if c.one(factory,"getPair(address,address,bool)",["address","address","bool"],[*tokens,stable],["address"])!=(pair,):raise ValueError("иная регистрация")
             fee,=c.one(factory,"getRealFee(address)",["address"],[pair],["uint256"])

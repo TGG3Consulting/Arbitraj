@@ -1914,6 +1914,50 @@
     "0xd9f77f8b00d42e2a49d82f8115cd5db380550750": {
       "bytes": 1089,
       "keccak256": "0x019b3d8ec15246efccb5ab46d85d7703ce56ebb541adca2812cd6cba5d1c3077"
+    },
+    "0xe84428c279f19b757f79c0a867c8db9fdf2e6dbc": {
+      "bytes": 4736,
+      "keccak256": "0x2c586b90df9f327a373fb286517e4eabccfc40f3fe81bc99cdc79eec9b2fc53f"
+    },
+    "0xf60cacf0a3daa5b6a79ca6594bef38f85391ae0a": {
+      "bytes": 3516,
+      "keccak256": "0xf76bf77129cb9a0f54b9c090f7b97d31f48f879da79ff4b7f2a24f68db80e152"
+    },
+    "0xed6d68b9048a1842e31ab41ebfd1262e501fbea5": {
+      "bytes": 23581,
+      "keccak256": "0x15ff26f6784af4886282c879b38cc9d943f53cc4e16a107bef34249ec44dda11"
+    },
+    "0xa917112f10c7eff0e3699fcbc9d02c35a43d754f": {
+      "bytes": 21057,
+      "keccak256": "0x632f6a04786d3917a39a2aa924c09644b739a5c12064511ac3639d59f477f6c1"
+    },
+    "0x6e53173f935723fb771f93f13eb26b978b6579d7": {
+      "bytes": 2649,
+      "keccak256": "0x12349e4c788144b6dde95da5774ed04984ae8600d36b97d7dc325b584d04c534"
+    },
+    "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": {
+      "bytes": 5835,
+      "keccak256": "0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34"
+    },
+    "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": {
+      "bytes": 13886,
+      "keccak256": "0x1bd9347cab9fbe1be84ae97d4f6ef6bd1a94ea48bf433c139da899afbeb4d2ab"
+    },
+    "0x7f03ae4452192b0e280fb0d4f9c225dda88c7623": {
+      "bytes": 3516,
+      "keccak256": "0x6e375c2b48a674584dd2311da3725c11e353bf4072cdf762e602479886f41756"
+    },
+    "0xd08270b8149dbde478da8adad979246e957be866": {
+      "bytes": 23581,
+      "keccak256": "0x733d6e2218996322ef2115915c05765b2d2f201687133884852abfaada47b4d7"
+    },
+    "0x59e67d1e3816d3fb4b8802e41462d2ee4c7d59fc": {
+      "bytes": 21057,
+      "keccak256": "0xdbcdd73c29a9413f1feea8fe2146261fda98b7fccc46d86589441cf78be0a7fa"
+    },
+    "0x8a66e17dc6fa9c963e891391c92d451202b6fa28": {
+      "bytes": 2649,
+      "keccak256": "0x3d0808630550594390d643e0788bc8483bc5a2c96725c0b79bf209f2aad0259e"
     }
   },
   "router_getAmountOut": [

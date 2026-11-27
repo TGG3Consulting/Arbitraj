@@ -123,6 +123,7 @@ pub const DEX_KINDS: &[&str] = &[
     "algebra_integral_quickswap",
     "algebra_dir_fee",
     "solidly_v2",
+    "solidly_v2_clone",
     "solidly_v1",
     "solidly_v1_generator",
     "solidly_v1_pair_override",

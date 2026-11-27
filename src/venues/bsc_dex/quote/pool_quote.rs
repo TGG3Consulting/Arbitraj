@@ -356,6 +356,20 @@ pub fn swap(
             } else {
                 (*reserve1, *reserve0, *decimals1, *decimals0)
             };
+            if e.family.variant == super::super::pools::family_variant::Variant::SolidlyClone {
+                let quote=|raw| {
+                    let net=solidly_fee::net_in(raw,fee)?;
+                    if *stable { swap_solidly::stable_net(net,[r_in,r_out],[dec_in,dec_out],Some([*decimals0,*decimals1])) }
+                    else {net.checked_mul(r_out)?.checked_div(r_in.checked_add(net)?)}
+                };
+                let (paid,out)=if exact_in {(amount,quote(amount).ok_or_else(none)?)} else {
+                    if amount>=r_out{return Err(none());}
+                    let initial=amount.checked_mul(r_in).and_then(|n|n.checked_div(r_out)).unwrap_or(U256::ONE);
+                    let paid=swap_solidly::input_for(initial,amount,&quote).ok_or_else(none)?;
+                    (paid,amount)
+                };
+                return Ok(Swapped{amount_in:paid,amount_out:out,complete:true});
+            }
             if *stable {
                 if !exact_in {
                     return Err(why(

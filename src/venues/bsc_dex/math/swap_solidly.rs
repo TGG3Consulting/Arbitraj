@@ -50,13 +50,26 @@ pub fn get_amount_out(
     decimals_out: U256,
     fee: U256,
 ) -> Option<U256> {
+    let fee_part = amount_in.checked_mul(fee)? / fee_denominator();
+    stable_net(
+        amount_in.checked_sub(fee_part)?,
+        [reserve_in, reserve_out],
+        [decimals_in, decimals_out],
+        None,
+    )
+}
+
+pub(crate) fn stable_net(
+    amount_in: U256,
+    [reserve_in, reserve_out]: [U256; 2],
+    [decimals_in, decimals_out]: [U256; 2],
+    original_scales: Option<[U256; 2]>,
+) -> Option<U256> {
     if decimals_in.is_zero() || decimals_out.is_zero() {
         return None;
     }
     let one = e18();
     // amount_in -= amount_in·fee/10000 (контракт убирает комиссию из полученного до расчёта).
-    let fee_part = amount_in.checked_mul(fee)? / fee_denominator();
-    let amount_in = amount_in.checked_sub(fee_part)?;
     // Инвариант до свопа по исходным резервам (нормализация по decimals — внутри k).
     let xy = k(reserve_in, reserve_out, decimals_in, decimals_out)?;
     // Нормализация резервов и входа к 1e18 по своим decimals.
@@ -64,8 +77,40 @@ pub fn get_amount_out(
     let res_out_n = reserve_out.checked_mul(one)? / decimals_out;
     let in_n = amount_in.checked_mul(one)? / decimals_in;
     // Новый нормализованный баланс встречного токена и выход как его убыль.
-    let new_y = get_y(in_n.checked_add(res_in_n)?, xy, res_out_n)?;
+    let x = in_n.checked_add(res_in_n)?;
+    let new_y = match original_scales {
+        Some([d0, d1]) => {
+            super::solidly_math::get_y_with(x, xy, res_out_n, |x, y| k(x, y, d0, d1))?
+        }
+        None => get_y(x, xy, res_out_n)?,
+    };
     let y = res_out_n.checked_sub(new_y)?;
     // Денормализация выхода в единицы выходного токена.
     Some(y.checked_mul(decimals_out)? / one)
+}
+
+/// Минимальный сырой вход с проверенной выплатой. Оба конца двоичного поиска — в единицах плательщика.
+pub(crate) fn input_for(
+    seed: U256,
+    want: U256,
+    quote: impl Fn(U256) -> Option<U256>,
+) -> Option<U256> {
+    if want.is_zero() {
+        return None;
+    }
+    let mut hi = seed.max(U256::ONE);
+    let mut lo = U256::ZERO;
+    while quote(hi)? < want {
+        lo = hi;
+        hi = hi.checked_mul(U256::from(2))?;
+    }
+    while hi - lo > U256::ONE {
+        let mid = lo + (hi - lo) / U256::from(2);
+        if quote(mid)? >= want {
+            hi = mid;
+        } else {
+            lo = mid;
+        }
+    }
+    Some(hi)
 }

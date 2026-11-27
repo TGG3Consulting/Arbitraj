@@ -111,6 +111,7 @@ pub enum Variant {
     LeetSwap,
     /// Solidly V1 Base: привязка CREATE2 и наблюдаемое обеспечение на каноническом блоке.
     SolidlyClassic,
+    SolidlyClone,
     /// Создание пар Solidly V1 вынесено в штатный PairGenerator.
     SolidlyGenerator,
     /// Solidly Ethereum V2 delegates factory and pair calls to independently upgradable logic.
@@ -245,8 +246,9 @@ impl Variant {
     pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
     pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
-    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
+    pub(crate) fn classic_wallet(self)->bool { matches!(self,Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride) }
+    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyClone | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_quoter(self) -> bool { self.external_algebra_swap() || self.caller_algebra() }
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -279,6 +281,7 @@ impl Variant {
 pub fn of(kind: &str) -> Variant {
     match kind {
         "ekubo_v2_router" => Variant::EkuboV2,
+        "solidly_v2_clone" => Variant::SolidlyClone,
         "solidly_v1_generator" => Variant::SolidlyGenerator,
         "ring_few_v2" => Variant::RingFew,
         "lb_v21_clone" => Variant::LbV21Clone,

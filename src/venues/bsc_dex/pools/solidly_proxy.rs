@@ -167,6 +167,9 @@ pub(in crate::venues::bsc_dex) async fn router(
             "Solidly Router01: изменились фабрика, расчёт адреса пары или исполняемый код",
         )
     };
+    if e.family.variant == super::family_variant::Variant::SolidlyClone {
+        return Box::pin(super::solidly_clone::router(ctx,e,input,output,at)).await;
+    }
     if e.family.variant == super::family_variant::Variant::SolidlyPairOverride {
         if !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))

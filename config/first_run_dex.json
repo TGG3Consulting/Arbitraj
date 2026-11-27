@@ -6546,5 +6546,42 @@
       ],
       "dex.pmm_ladder_counter": true
     }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "hydrometer-base",
+    "source": "https://repo.sourcify.dev/8453/0xf60cacf0a3daa5b6a79ca6594bef38f85391ae0a · tests/data/first_run_dex_2026-11-26/hydrometer_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v2_clone",
+      "dex.factory": "0xf60cacf0a3daa5b6a79ca6594bef38f85391ae0a",
+      "dex.factory_runtime_hash": "0xf76bf77129cb9a0f54b9c090f7b97d31f48f879da79ff4b7f2a24f68db80e152",
+      "dex.pair_runtime_hash": "0x632f6a04786d3917a39a2aa924c09644b739a5c12064511ac3639d59f477f6c1",
+      "dex.router": "0xed6d68b9048a1842e31ab41ebfd1262e501fbea5",
+      "dex.router_runtime_hash": "0x15ff26f6784af4886282c879b38cc9d943f53cc4e16a107bef34249ec44dda11",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0xe84428c279f19b757f79c0a867c8db9fdf2e6dbc 0x2c586b90df9f327a373fb286517e4eabccfc40f3fe81bc99cdc79eec9b2fc53f"
+      ]
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "virtus-amm-base",
+    "source": "https://repo.sourcify.dev/8453/0x7f03ae4452192b0e280fb0d4f9c225dda88c7623 · tests/data/first_run_dex_2026-11-26/virtus_amm_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "solidly_v2_clone",
+      "dex.factory": "0x7f03ae4452192b0e280fb0d4f9c225dda88c7623",
+      "dex.factory_runtime_hash": "0x6e375c2b48a674584dd2311da3725c11e353bf4072cdf762e602479886f41756",
+      "dex.pair_runtime_hash": "0xdbcdd73c29a9413f1feea8fe2146261fda98b7fccc46d86589441cf78be0a7fa",
+      "dex.router": "0xd08270b8149dbde478da8adad979246e957be866",
+      "dex.router_runtime_hash": "0x733d6e2218996322ef2115915c05765b2d2f201687133884852abfaada47b4d7",
+      "dex.router_exact_tokens": [
+        "0x50c5725949a6f0c72e6c4a641f24049a917db0cb 0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34",
+        "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34 0x1bd9347cab9fbe1be84ae97d4f6ef6bd1a94ea48bf433c139da899afbeb4d2ab",
+        "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2 0x478746a8e4b17181c4efbeb2069d86f22ec395788099ed65c9442ca44df265bc"
+      ]
+    }
   }
 ]

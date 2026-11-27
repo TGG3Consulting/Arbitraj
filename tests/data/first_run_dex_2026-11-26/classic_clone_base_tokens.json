@@ -1,0 +1,62 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "tokens": {
+    "0x4200000000000000000000000000000000000006": {
+      "name": "WETH9",
+      "units": 18,
+      "bytes": 2041,
+      "keccak256": "0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+    },
+    "0x50c5725949a6f0c72e6c4a641f24049a917db0cb": {
+      "name": "OptimismMintableERC20",
+      "units": 18,
+      "bytes": 5835,
+      "keccak256": "0x1e46e35ba09d34326c25ed69598cfa5872647304d08a0f62ef10c8b25864bb34"
+    },
+    "0x5d3a1ff2b6bab83b63cd9ad0787074081a52ef34": {
+      "name": "USDeOFT",
+      "units": 18,
+      "bytes": 13886,
+      "keccak256": "0x1bd9347cab9fbe1be84ae97d4f6ef6bd1a94ea48bf433c139da899afbeb4d2ab"
+    },
+    "0x820c137fa70c8691f0e44dc420a5e53c168921dc": {
+      "name": "ERC1967Proxy",
+      "units": 18,
+      "bytes": 170,
+      "keccak256": "0xe6431fe7204630fa6de89c24d815cd5c35317245e7cf95af8f51fb631663cb7a"
+    },
+    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": {
+      "name": "FiatTokenProxy",
+      "units": 6,
+      "bytes": 1852,
+      "keccak256": "0xa6705a10bb756b5dea144591118be77d7af0c3eee3bf2dfe2583dcb0364fefab"
+    },
+    "0x9b25df55996e144f24ab60bf0f00a303521cf673": {
+      "name": "unknown",
+      "units": 18,
+      "bytes": 2391,
+      "keccak256": "0x9a6469a3d87bc49f5d038526a56d94d50fb2186cdb13b3274784c41a906978b5"
+    },
+    "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca": {
+      "name": "Proxy",
+      "units": 6,
+      "bytes": 2096,
+      "keccak256": "0x8cd2f08c7ee9e6ab6e0180e8d6cb0613bbd54d2c4ae2ecdcaddfcdd9a226215b"
+    },
+    "0xe84428c279f19b757f79c0a867c8db9fdf2e6dbc": {
+      "name": "Hydro",
+      "units": 18,
+      "bytes": 4736,
+      "keccak256": "0x2c586b90df9f327a373fb286517e4eabccfc40f3fe81bc99cdc79eec9b2fc53f"
+    },
+    "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2": {
+      "name": "USDT",
+      "units": 6,
+      "bytes": 6774,
+      "keccak256": "0x478746a8e4b17181c4efbeb2069d86f22ec395788099ed65c9442ca44df265bc"
+    }
+  }
+}

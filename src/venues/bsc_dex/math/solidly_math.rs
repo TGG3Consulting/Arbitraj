@@ -65,7 +65,17 @@ pub fn d(x0: U256, y: U256) -> Option<U256> {
 /// (инвариант до свопа); y — стартовое приближение (текущий нормализованный баланс встречного токена).
 /// Возвращает: новый нормализованный баланс встречного токена. None — переполнение/недобор, деление на ноль
 /// (`_d` = 0) или несходимость за 255 раундов (контракт: `revert("!y")`).
-pub fn get_y(x0: U256, xy: U256, mut y: U256) -> Option<U256> {
+pub fn get_y(x0: U256, xy: U256, y: U256) -> Option<U256> {
+    get_y_with(x0, xy, y, f)
+}
+
+/// Некоторые клоны повторно нормализуют числа по decimals0/1 именно в проверке y+1.
+pub(super) fn get_y_with(
+    x0: U256,
+    xy: U256,
+    mut y: U256,
+    next: impl Fn(U256, U256) -> Option<U256>,
+) -> Option<U256> {
     let one = e18();
     for _ in 0..255u16 {
         let k = f(x0, y)?;
@@ -79,7 +89,7 @@ pub fn get_y(x0: U256, xy: U256, mut y: U256) -> Option<U256> {
                 if k == xy {
                     return Some(y);
                 }
-                if f(x0, y.checked_add(U256::from(1u8))?)? > xy {
+                if next(x0, y.checked_add(U256::from(1u8))?)? > xy {
                     return Some(y + U256::from(1u8));
                 }
                 dy = U256::from(1u8);

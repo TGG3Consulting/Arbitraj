@@ -44,6 +44,8 @@ pub(super) mod maverick_two_wire;
 pub(in crate::venues::bsc_dex) mod registered_v3_wallet;
 mod v3_router02;
 pub(in crate::venues::bsc_dex) mod solidly_router_wallet;
+#[cfg(test)]
+mod solidly_clone_tests;
 pub(super) mod carbon_binding;
 pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;

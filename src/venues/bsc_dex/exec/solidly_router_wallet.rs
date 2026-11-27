@@ -18,7 +18,12 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-sol! {struct PoolRoute {address from; address to; bool stable;}
+sol! {
+interface CloneRouter {
+    struct Route {address from;address to;bool stable;address factory;}
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn,uint256 amountOutMin, Route[] routes,address to,uint256 deadline) external;
+}
+struct PoolRoute {address from; address to; bool stable;}
 interface Router {
     function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn,uint256 amountOutMin, PoolRoute[] routes,address to,uint256 deadline) external;
     function swapExactTokensForTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline) external returns(uint256[] amounts);
@@ -32,12 +37,15 @@ pub struct Market {
     pub stable: Option<bool>,
     #[serde(default)]
     pub supporting_fee: bool,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub factory:Option<Address>,
 }
 impl RouterMarket for Market {
     fn emitter(self) -> Address {
         self.pool
     }
     fn event(self) -> (&'static str, usize) {
+        if self.factory.is_some(){return ("Swap(address,address,uint256,uint256,uint256,uint256)",128)}
         ("Swap(address,uint256,uint256,uint256,uint256,address)", 128)
     }
     fn matches(self, data: &[u8], i: usize, spent: U256, received: U256, budget: U256) -> bool {
@@ -46,7 +54,7 @@ impl RouterMarket for Market {
             && word(i) == spent
             && word(1 - i).is_zero()
             && word(2 + i).is_zero()
-            && word(3 - i) == received
+            && (word(3 - i) == received || (self.factory.is_some() && word(3-i)>received))
     }
     fn order(
         self,
@@ -68,6 +76,10 @@ impl RouterMarket for Market {
             .abi_encode()
             .into();
         };
+        if let Some(factory)=self.factory {
+            return CloneRouter::swapExactTokensForTokensSupportingFeeOnTransferTokensCall{amountIn:amount,amountOutMin:minimum,
+                routes:vec![CloneRouter::Route{from:input,to:output,stable,factory}],to:wallet,deadline}.abi_encode().into();
+        }
         if self.supporting_fee {
             return Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall {
                 amountIn: amount,
@@ -140,6 +152,7 @@ pub(super) async fn plan(
     let market = Market {
         pool: e.pool.reference.address(),
         stable,
+        factory: if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyClone{Some(ctx.dex_addr("dex.factory",e.family.id)?)}else{None},
         supporting_fee: e.family.variant
             == crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyPairOverride,
     };
@@ -212,6 +225,7 @@ mod tests {
                     market: Market {
                         pool,
                         stable: None,
+                        factory:None,
                         supporting_fee: false,
                     },
                     target: addr(&d["roles"]["Router02"]["address"]),
@@ -264,6 +278,7 @@ mod tests {
                 market: Market {
                     pool: addr(&m["pool"]),
                     stable: m["stable"].as_bool(),
+                    factory:None,
                     supporting_fee: true,
                 },
                 target: addr(&archive["roles"]["router"]["address"]),
@@ -302,6 +317,7 @@ mod tests {
             let market = Market {
                 pool: addr(&m["pool"]),
                 stable: m["stable"].as_bool(),
+                factory:None,
                 supporting_fee: false,
             };
             for c in m["cases"].as_array().unwrap() {

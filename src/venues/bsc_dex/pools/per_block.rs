@@ -122,7 +122,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::V2Create2LiveFee
             | Variant::DiamondV2
             | Variant::LeetSwap
-            | Variant::SolidlyClassic | Variant::SolidlyGenerator | Variant::SolidlyProxy | Variant::SolidlyPairOverride
+            | Variant::SolidlyClassic | Variant::SolidlyClone | Variant::SolidlyGenerator | Variant::SolidlyProxy | Variant::SolidlyPairOverride
             | Variant::EtherVista
             | Variant::Oasis
             | Variant::DeltaSwap

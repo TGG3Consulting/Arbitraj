@@ -45,7 +45,7 @@ pub(super) async fn router(ctx: &Ctx, e: &Entry, head: Head) -> GatewayResult<Ad
         return Err(ctx.err(ErrorCode::NotApplicable, "Двусторонней пробе Maverick с оплатой WETH требуется V5"));
     }
     if registered_router::wallet_module(ctx,e).is_some() && let Ok(m)=registered_router::checked_module(ctx,e,&at).await{return Ok(m)}
-    if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
+    if e.family.variant.classic_wallet() {
         Box::pin(super::super::pools::solidly_proxy::router(
             ctx, e, e.usdt, e.coin, &at,
         ))
@@ -74,9 +74,9 @@ pub(super) fn leg(
     );
     let pool = e.pool.reference.address();
     let d = if e.family.variant == Variant::V2ExactRouter {
-        super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false}
+        super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false,factory:None}
           .order(order.token_in,order.token_out,order.amount_in,order.min_out,wallet,end)
-    } else if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
+    } else if e.family.variant.classic_wallet() {
         let crate::core::types::PoolState::Solidly { stable, .. } = &e.pool.state else {
             return Err(fail());
         };
@@ -84,6 +84,7 @@ pub(super) fn leg(
             pool,
             stable: Some(*stable),
             supporting_fee:e.family.variant==Variant::SolidlyPairOverride,
+            factory: if e.family.variant==Variant::SolidlyClone {Some(ctx.dex_addr("dex.factory",e.family.id)?)} else {None},
         }
         .order(
             order.token_in,

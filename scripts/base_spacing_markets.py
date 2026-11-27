@@ -48,3 +48,25 @@ def virtus_cl_markets():
             f"На блоке {book['height']} фабрика подтвердила {len(markets)} пулов по обоим токенам и шагу тика. У {overrides} комиссия отличается от базовой ставки для шага. Профиль virtus-cl-base считывает fee() у подписанных пулов каждым блоком и перед подписанием сверяет действующий модуль платы, квотер, фабрику и реализацию клона.", "",
             f"Проверено {len(matched)} сочетаний пула, размера и направления. В каждом кошелёк оплатил одинаковый вход и получил одинаковый выход через Router и V5. Штатный Router с формой classic_spacing сэкономил от {min(savings)} до {max(savings)} единиц газа до публикации Base. Время истечения указано внутри exactInputSingle. Прямой путь по начальному списку доступен для WETH и мостового USDT на Base. Для обновляемых токенов V5 проверяет чистый результат в транзакции. Для всех девяти пулов используется существующий шаг V5 и обычный callback Uniswap V3.", "",
             "[Официальный интерфейс Virtus](https://liquidity.virtus-protocol.com/) · [Проверенная фабрика](https://repo.sourcify.dev/8453/0x0e5ab24bebda7e5bb3961f7e9b3532a83ae86b48) · [Архив кошелька](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45992658070)", ""]
+
+
+def clone_classic_markets():
+    root = Path("tests/data/first_run_dex_2026-11-26")
+    lines = ["### Virtus AMM и Hydrometer на Base", "",
+             "Обе фабрики создают минимальные клоны с неизменной реализацией. При вводе профиля сверяются код фабрики и реализации, адрес CREATE2 из обоих токенов и признака stable, прямой и обратный реестры, физические остатки, пауза и ставка getFee(pool,stable). Для штатного Router дополнительно сверяются код, defaultFactory, одобрение реестром и poolFor. Вход поддерживается при подтверждённом точном исходящем переводе. Конечный минимум штатный роутер проверяет по изменению баланса получателя. Для остальных токенов остаётся существующий V5, шаг 3.", "",
+             "| Профиль | Stable / volatile | Рынки с выплатой | Выплаты Router и V5 | Газ Router минус V5 до публикации |",
+             "|---|---:|---:|---:|---:|"]
+    for name in ["virtus_amm","hydrometer"]:
+        b=json.loads(gzip.decompress((root/(name+"_base_wallets.json.gz")).read_bytes()))
+        stable=sum(m["stable"] for m in b["markets"])
+        payments={}
+        for r in b["cases"]:
+            payments.setdefault((r["pool"],r["input"],r["spent"]),{})[r["wire"]]=r
+        gas=[]
+        for p in payments.values():
+            assert p["router"]["received"]==p["v5"]["received"]
+            gas.append(p["router"]["gas"]-p["v5"]["gas"])
+        lines.append(f"| {name.replace('_','-')}-base | {stable} / {len(b['markets'])-stable} | {len({k[0] for k in payments})} | {len(b['cases'])} | {min(gas)}…{max(gas)} |")
+    lines.extend(["", "На блоке 62262756 в пуле Hydrometer WETH/USDC резерв одной стороны составлял одну минимальную единицу. При размерах покупки, полученных из 10¹² и 10¹⁴ wei, оба способа исполнения вернули отказ. Ставки за обмен выражены в долях от 10 000. Стабильная кривая в ветви с нулевым шагом Ньютона повторно нормализует один пробный баланс с исходными decimals0 и decimals1. Котировка и повторная нога используют реальное округление пары.", "",
+                  "[Фабрика Virtus AMM](https://repo.sourcify.dev/8453/0x7f03ae4452192b0e280fb0d4f9c225dda88c7623) · [Router Hydrometer](https://repo.sourcify.dev/8453/0xed6d68b9048a1842e31ab41ebfd1262e501fbea5) · [Архив обеих площадок](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45995605106)", ""])
+    return lines

@@ -530,7 +530,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // stable math/swap_solidly), НО tradable=false — исполнения пока нет (роутер Solidly — следующая фаза).
         // graphable=true, tradable=false, fork=false (ни UR своей фабрики, ни свой роутер-форк пока не подключены): как
         // DODO 86b / THENA Algebra — в графе и для сигналов, но guard executable (exec/chain.rs) в авто-сделку не пускает.
-        "solidly_v2" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
+        "solidly_v2" | "solidly_v2_clone" => (PoolKind::Solidly, Proto::Solidly, true, false, false),
         // Solidly V1 — THENA V1 (решение 122 F): тот же пул, своя фабрика и своя стабильная математика (Proto::SolidlyV1).
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
@@ -1061,10 +1061,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
+            if f.variant == Variant::SolidlyClone {list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]);}
             if f.variant == Variant::SolidlyProxy {list.extend(["dex.pair_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);}
             if f.variant == Variant::SolidlyGenerator {list.extend(["dex.solidly_generator_runtime_hash","dex.solidly_pause_method"]);}
             if f.variant == Variant::SolidlyProxy {list.extend(["dex.factory_runtime_hash", "dex.pool_code_hashes"]);}
-            else if f.variant.solidly_classic() {
+            else if f.variant.solidly_classic() && f.variant != Variant::SolidlyClone {
                 list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.solidly_fee_source"]);
             }
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {

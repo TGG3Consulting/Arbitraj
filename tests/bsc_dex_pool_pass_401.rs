@@ -499,3 +499,30 @@ async fn gate_follows_pool_fact() {
     pool_pass::put(BSC_ID, xa, &hooked.pool.reference, fact(unchecked));
     assert!(!check(&hooked));
 }
+
+#[tokio::test]
+async fn stored_yield_basis_step_needs_registered_state_and_configured_target() {
+    use arb::core::types::{PoolState,yield_basis::Preview};
+    let p=route_common::parts().await;
+    let q=p.quoting();
+    let mut e=q.reg.get(&PoolRef::Contract(route_common::WBNB_USDT_V2)).unwrap();
+    let family=families::make("yield-test-401","yield_basis").unwrap();
+    let manager=Address::repeat_byte(0x34);
+    let mut packed=[0u8;32];packed[10]=6;packed[12..].copy_from_slice(manager.as_slice());
+    let id=B256::from(packed);
+    let reference=PoolRef::Singleton{manager,id};
+    assert!(entry::supported(family,&reference).is_ok());
+    assert!(!entry::route_fits(&p.ctx,&q.reg,family,&reference));
+    let state=PoolState::YieldBasisPool(Box::new(Preview{id,venue:manager,cryptopool:manager,amm:Address::repeat_byte(0x35),coins:[e.usdt,e.coin],levels:Default::default()}));
+    e.pool.reference=reference.clone();e.family=family;e.pool.family=family.id.into();
+    for (name,value) in [("dex.router",json!(Address::repeat_byte(0x36))),
+        ("dex.module_runtime_hashes",json!(["0x67190b80abc4ab95864c339617edeff1946d17052a8f3f8158213651adf07fe6"]))] {
+        p.ctx.settings.set(name,Scope::Dex(family.id.into()),Some(value),"тест").await.unwrap();
+    }
+    q.reg.put(e.clone()); // generic V2 reserves are not YieldBasis factory state
+    assert!(!entry::route_fits(&p.ctx,&q.reg,family,&reference));
+    e.pool.state=state;q.reg.put(e);
+    assert!(entry::route_fits(&p.ctx,&q.reg,family,&reference));
+    let other=families::make("yield-other-401","yield_basis").unwrap();
+    assert!(!entry::route_fits(&p.ctx,&q.reg,other,&reference));
+}

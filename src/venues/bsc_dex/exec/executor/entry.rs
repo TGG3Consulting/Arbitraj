@@ -56,6 +56,17 @@ fn yield_basis_target(ctx:&Ctx,e:&Entry)->Option<Address>{
     (!addr.is_zero() && super::super::super::pools::direct_module::configured(ctx,e.family.id).is_ok_and(|v|v.len()==1)).then_some(addr)
 }
 
+/// A stored route carries its market reference; market-specific steps also need
+/// the registered token pair, physical deployment and currently configured target.
+pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
+    if f.variant == super::super::super::pools::family_variant::Variant::YieldBasis{
+        return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
+    }
+    if f.executor_kind.is_some_and(|k|k.singleton()){
+        reg.entry(r).is_some_and(|e|fits_ok(ctx,&e))
+    }else{supported(f,r).is_ok()}
+}
+
 /// Может ли шаг через этот пул идти исполнителем: у семейства есть вид шага (Family.executor_kind) и у пула свой
 /// контракт. Принимает: семейство и ссылку на пул (хватает хопа маршрута). Возвращает: вид шага и адрес пула или
 /// причину. Ошибок иных нет. Ревью t181 (Н2): у шагов пулов менеджеров (UNI_V4 / INF_*) ссылка — только Singleton;

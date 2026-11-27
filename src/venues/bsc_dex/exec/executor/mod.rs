@@ -148,17 +148,9 @@ pub fn takes(
     }
     // Ревью 2 t181: та же проверка шага, что котировка (graph_executor.rs all_via — entry::fits): у пула менеджера
     // (V4 / Infinity) — ещё ключ записи реестра (нативная валюта, пара записи); у прочих видов fits = supported.
-    let fits = |f: &families::Family, h: &crate::core::types::RouteHop| {
-        let singleton = f.executor_kind.is_some_and(|k| k.singleton());
-        if singleton {
-            reg.entry(&h.pool).is_some_and(|e| entry::fits_ok(ctx, &e))
-        } else {
-            entry::supported(f, &h.pool).is_ok()
-        }
-    };
     let all = route.legs.iter().flat_map(|l| l.hops.iter()).all(|h| {
         families::classify(ctx, &h.family)
-            .is_ok_and(|f| exec_kind::via_executor(ctx, f) && fits(f, h))
+            .is_ok_and(|f| exec_kind::via_executor(ctx, f) && entry::route_fits(ctx,reg,f,&h.pool))
     });
     if !all {
         return Ok(None);

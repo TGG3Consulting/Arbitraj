@@ -3660,6 +3660,28 @@ rationale = "Keccak256 проверенной сборки FermiSlotExecutor."
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section]]
+title = "Подписанные котировки AirSwap на Ethereum и Base"
+intro = "Расчётный контракт и хеш проверяются для каждой сети и каждого поколения. Владелец выбирает серверы котировок, срок действия заявки и предел платы за газ."
+
+[[section.rec]]
+name = "airswap.contracts"
+area = "площадка eth_dex"
+unit = "контракты"
+value = "1 v4 0xd82fa167727a4dc6d6f55830a2c47abbb4b3a0f8 0x8bd37a88bc50bfda430c694bfe8ce15ab0268f15d9e6ebfe8e027b3b9ada94c1,1 v5 0xd82e10b9a4107939e55fcca9b53a9ede6cf2fc46 0x7ae509ec9efce7942dde429c0914de0436a8b805e3bebd38d2ff94ab11027a13"
+source = "Официальные контракты AirSwap — https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/deployments.md"
+rationale = "Хеши сверены по каноническому блоку. При размещении модуля из интерфейса добавляется отдельная запись с адресом модуля этого кошелька."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "airswap.contracts"
+area = "площадка base_dex"
+unit = "контракты"
+value = "8453 v5 0xd82e10b9a4107939e55fcca9b53a9ede6cf2fc46 0x56a4634460e47a0887f91d0513680d070ea2bdaeecbd3852ecc1bb55c76a4d2d"
+source = "Официальные контракты AirSwap — https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/deployments.md"
+rationale = "Хеши сверены по каноническому блоку. При размещении модуля из интерфейса добавляется отдельная запись с адресом модуля этого кошелька."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
 title = "Native RFQ v6 на Ethereum и Base"
 intro = "Настройки публичного источника котировки и проверенные размещения для ручной сверки."
 

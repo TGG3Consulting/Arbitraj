@@ -1147,7 +1147,7 @@ Aerodrome Slipstream · 3 разных пула WETH/USDC, по одному у 
 
 ### Ethereum · DEX
 
-Снимок GeckoTerminal от 2026-11-25T22:10:30.630109+00:00, 80 идентификаторов. DefiLlama от 2026-11-25T22:07:56.407610+00:00, 193 строк. Сетевые разделы Velora — 65. Строки разных источников могут относиться к одному пулу. Контрольный блок 26494988, `0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a`. Из 80 строк GeckoTerminal адресные профили заданы для 80, остаются открытыми 0. Ещё 78 внутренних ключей обозначают отдельные фабрики и семейства.
+Снимок GeckoTerminal от 2026-11-25T22:10:30.630109+00:00, 80 идентификаторов. DefiLlama от 2026-11-25T22:07:56.407610+00:00, 193 строк. Сетевые разделы Velora — 65. Строки разных источников могут относиться к одному пулу. Контрольный блок 26494988, `0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a`. Из 80 строк GeckoTerminal адресные профили заданы для 80, остаются открытыми 0. Ещё 79 внутренних ключей обозначают отдельные фабрики и семейства.
 
 #### Значения для экрана «Первый запуск»
 
@@ -1850,7 +1850,7 @@ SmarDex · фабрика перечислила 31 пар. Свои фабри�
 | 2529 | PancakeSwap StableSwap | 0 | [pancakeswap-stableswap](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/pancakeswap-stableswap.ts) | `0xD173bf0851D2803177CC3928CF52F7b6bd29D054` | Совпадение по dex.factory в исходнике и профиле `pancakeswap-stableswap-ethereum`. |
 | 2837 | WAGMI | 0 | [wagmi](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/factory/uniV3.ts#L623-L623) | `0xb9a14ee1cd3417f3acc988f61650895151abde24` | Фабрика подтверждена в сетевой записи источника и в профиле `wagmi-ethereum` |
 | 2906 | Joe V2.1 | 0 | [joe-v2.1](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/factory/joeLiquidityBook.ts) | `0xDC8d77b69155c7E68A95a4fb0f06a71FF90B943a` | Совпадение по dex.factory в исходнике и профиле `traderjoe-v2-1-ethereum`. |
-| 2954 | AirSwap | 0 | [airswap](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/airswap/index.ts) | `0xd82fa167727a4dc6d6f55830a2c47abbb4b3a0f8` | `T-SOURCE-ethereum-2954` |
+| 2954 | AirSwap | 0 | [airswap](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/airswap/index.ts) | `0xd82fa167727a4dc6d6f55830a2c47abbb4b3a0f8` | Источник считает события SwapERC20 оригинальной кассы V4 Ethereum. На Ethereum проверены V4 и V5, на Base подтверждён V5. Подписанные заявки, проверка оплаты и настройки описаны в разделе AirSwap ниже. |
 | 3095 | Sudoswap V2 | 0 | [sudoswap-v2](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/sudoswap-v2/index.ts) | не установлены | `T-SOURCE-ethereum-3095` |
 | 3106 | Unibot | 0 | [unibot](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/unibot.ts) | `0x5c9321e92Ba4eb43f2901c4952358e132163a85A` | `T-SOURCE-ethereum-3106` |
 | 3336 | Banana Gun | 0 | [banana-gun-trading](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/banana-gun-trading.ts) | `0x3328f7f4a1d1c57c35df56bbf0c9dcafca309c49` | `T-SOURCE-ethereum-3336` |
@@ -2262,6 +2262,20 @@ V5 обменял одинаковые суммы между WETH и натив�
 | 42161 | `0x55084ee0fef03f14a305cd24286359a35d735151` | 527917584–527929289 | 0 | 0 |
 
 Для рабочего модуля в форме владельца выберите Taker с доступом Multi-Wallet. Выданное имя укажите в `hashflow.source`, ключ — в секрете `hashflow.taker_key`. Taker API передаёт ключ заголовком Authorization. Подпись RFQ создаёт маркетмейкер, а транзакцию оплачивает и подписывает выбранный кошелёк. Установление HMAC для Taker API v3 не требуется. Для индивидуального режима в форме выберите Taker с привязкой к одному кошельку. Введите `api` в `hashflow.source`, выданный ключ в `hashflow.taker_key`, а зарегистрированный публичный адрес в `hashflow.api_wallet`. На GET передаётся wallet, в подписанной RFQ его роль выполняет trader. Персональные условия, актуальные рынки и ответы для своего кошелька проверяются после получения доступа. [Форма](https://forms.gle/EEzfL59vQaTebAXN9) · [Два вида доступа](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3)
+
+### AirSwap на Base и Ethereum
+
+В Первом запуске сохраните строки `airswap.contracts` для площадки нужной сети. Поля строки — chainId, поколение, исходный обменный контракт и хеш кода. После проверки размещения через карточку кошелька добавляются адрес и хеш его модуля.
+
+| Сеть | Блок | Поколение | Исходный контракт | Хеш кода | Комиссия маркетмейкера на этом блоке |
+|---|---:|---|---|---|---:|
+| base | 62262756 | v5 | `0xd82e10b9a4107939e55fcca9b53a9ede6cf2fc46` | `0x56a4634460e47a0887f91d0513680d070ea2bdaeecbd3852ecc1bb55c76a4d2d` | 5 б.п. |
+| ethereum | 26494988 | v5 | `0xd82e10b9a4107939e55fcca9b53a9ede6cf2fc46` | `0x7ae509ec9efce7942dde429c0914de0436a8b805e3bebd38d2ff94ab11027a13` | 93 б.п. |
+| ethereum | 26494988 | v4 | `0xd82fa167727a4dc6d6f55830a2c47abbb4b3a0f8` | `0x8bd37a88bc50bfda430c694bfe8ce15ab0268f15d9e6ebfe8e027b3b9ada94c1` | 5 б.п. |
+
+Отдельно для `base_dex` и `eth_dex` задаются пять настроек. `airswap.contracts` — приведённые выше роли. `airswap.makers` — доверенные HTTPS-адреса серверов подписанных котировок. `airswap.min_validity_ms` — минимальный остаток срока заявки в миллисекундах, больше нуля. `airswap.gas_budget_native` — предел платы за транзакцию в ETH, больше нуля. `airswap.trading` — разрешение торговли, по умолчанию выключено. Адрес сервера и оба лимита заполняет оператор. Подпись маркетмейкера привязана к сети и контракту. Для точного выхода владелец ограничивает максимальный расход.
+
+На архивном блоке публичный реестр RequestForQuoteERC20 содержал 0 записей на Base и 2 на Ethereum. 27 ноября проверенный HTTPS-сервер вернул HTTP 503, второй опубликовал HTTP и не ответил по HTTPS. Архивная приёмка использует подпись тестового маркетмейкера и исходные контракты. В симуляции прошли 18 обменов: два направления через оригинал, модуль с привязкой отправителя и модуль с открытым отправителем для каждого из трёх размещений. [Прогон обеих сетей](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46021236936).
 
 <!-- /DEX -->
 

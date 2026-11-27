@@ -1990,6 +1990,9 @@ def tables(network, snapshots, profiles):
                     "Вторичный рынок с заявками и подписями учитывается отдельно от публичных Brokerbot. "
                     "[Реестр](../tests/data/first_run_dex_2026-11-26/aktionariat_ethereum_directory.json.gz) · "
                     "[Оплаченные входы и отказы](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45998983838).")
+        if not base and str(row["id"]) == "2954":
+            task = ("Источник считает события SwapERC20 оригинальной кассы V4 Ethereum. На Ethereum проверены V4 и V5, "
+                    "на Base подтверждён V5. Подписанные заявки, проверка оплаты и настройки описаны в разделе AirSwap ниже.")
         if not base and str(row["id"]) == "6815":
             wallets = data_dir / "shibaswap_v2_ethereum_payments.json.gz"
             book = json.loads(gzip.decompress(wallets.read_bytes()))
@@ -2571,6 +2574,31 @@ def main():
     lines.extend(alien_alternative_fees())
     lines.extend(stabull_markets())
     lines.extend(hashflow_market_observation())
+    lines.extend(["### AirSwap на Base и Ethereum", "",
+        "В Первом запуске сохраните строки `airswap.contracts` для площадки нужной сети. "
+        "Поля строки — chainId, поколение, исходный обменный контракт и хеш кода. "
+        "После проверки размещения через карточку кошелька добавляются адрес и хеш его модуля.", "",
+        "| Сеть | Блок | Поколение | Исходный контракт | Хеш кода | Комиссия маркетмейкера на этом блоке |",
+        "|---|---:|---|---|---|---:|"])
+    for network in ["base","ethereum"]:
+        path = Path("tests/data/first_run_dex_2026-11-26") / f"airswap_{network}_orders.json.gz"
+        book = json.loads(gzip.decompress(path.read_bytes()))
+        for version, terms in book["terms"].items():
+            role = book["roles"]["swap" if version == "v5" else "legacy"]
+            lines.append(f"| {network} | {book['height']} | {version} | `{role['address']}` | "
+                         f"`{role['hash']}` | {terms['fee']} б.п. |")
+    lines.extend(["", "Отдельно для `base_dex` и `eth_dex` задаются пять настроек. "
+        "`airswap.contracts` — приведённые выше роли. `airswap.makers` — доверенные HTTPS-адреса серверов подписанных котировок. "
+        "`airswap.min_validity_ms` — минимальный остаток срока заявки в миллисекундах, больше нуля. "
+        "`airswap.gas_budget_native` — предел платы за транзакцию в ETH, больше нуля. "
+        "`airswap.trading` — разрешение торговли, по умолчанию выключено. "
+        "Адрес сервера и оба лимита заполняет оператор. Подпись маркетмейкера привязана к сети и контракту. "
+        "Для точного выхода владелец ограничивает максимальный расход.", "",
+        "На архивном блоке публичный реестр RequestForQuoteERC20 содержал 0 записей на Base и 2 на Ethereum. "
+        "27 ноября проверенный HTTPS-сервер вернул HTTP 503, второй опубликовал HTTP и не ответил по HTTPS. "
+        "Архивная приёмка использует подпись тестового маркетмейкера и исходные контракты. "
+        "В симуляции прошли 18 обменов: два направления через оригинал, модуль с привязкой отправителя и модуль с открытым отправителем "
+        "для каждого из трёх размещений. [Прогон обеих сетей](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46021236936).", ""])
     doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")
 
 

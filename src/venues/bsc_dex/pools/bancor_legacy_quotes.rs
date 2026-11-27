@@ -34,7 +34,7 @@ async fn levels(
                 at,
                 s.network,
                 ILegacy::rateByPathCall {
-                    path: path.to_vec(),
+                    path: path.clone(),
                     amount,
                 },
             )
@@ -72,12 +72,12 @@ pub(super) async fn load(
     tokens: &Tokens,
     reg: &Registry,
     f: &Family,
-    pool: Address,
+    pool: &crate::core::types::PoolRef,
     pair: (Address, Address),
     counter: Address,
     at: &Value,
 ) -> GatewayResult<PoolState> {
-    let mut state = bancor_legacy::market(ctx, f, pool, pair, at).await?;
+    let mut state = super::bancor_legacy_bridge::bound(ctx, f, pool, pair, at).await?;
     let i = usize::from(counter != state.tokens[0]);
     if counter != state.tokens[i] {
         return Err(bancor_legacy::bad(ctx));

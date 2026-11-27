@@ -4,7 +4,16 @@ use alloy_primitives::{Address, U256};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BancorLegacyBridge {
+    pub middle: Address,
+    pub anchor: Address,
+    pub converter: Address,
+    pub fee_ppm: u32,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BancorLegacyState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub second: Option<BancorLegacyBridge>,
     pub anchor: Address,
     pub converter: Address,
     pub network: Address,
@@ -19,9 +28,17 @@ impl BancorLegacyState {
     fn side(&self, input: Address) -> Option<usize> {
         self.tokens.iter().position(|t| *t == input)
     }
-    pub fn path(&self, input: Address) -> Option<[Address; 3]> {
+    pub fn path(&self, input: Address) -> Option<Vec<Address>> {
         let i = self.side(input)?;
-        Some([self.reserves[i], self.anchor, self.reserves[1 - i]])
+        let mut path = vec![self.reserves[0], self.anchor];
+        if let Some(s) = &self.second {
+            path.extend([s.middle, s.anchor]);
+        }
+        path.push(self.reserves[1]);
+        if i == 1 {
+            path.reverse();
+        }
+        Some(path)
     }
     pub fn points(&self, input: Address) -> Option<&[LadderPoint]> {
         Some(&self.levels[self.side(input)?])

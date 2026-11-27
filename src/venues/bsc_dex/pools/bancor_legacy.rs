@@ -121,6 +121,18 @@ pub(crate) async fn market(
     at: &Value,
 ) -> GatewayResult<BancorLegacyState> {
     let r = Roles::read(ctx, f, at).await?;
+    let s = single(ctx, &r, converter, at).await?;
+    if s.tokens != [expected.0, expected.1] {
+        return Err(bad(ctx));
+    }
+    Ok(s)
+}
+pub(super) async fn single(
+    ctx: &Ctx,
+    r: &Roles,
+    converter: Address,
+    at: &Value,
+) -> GatewayResult<BancorLegacyState> {
     let (anchor, count, first, second, fee_ppm) = tokio::try_join!(
         read(ctx, converter, ILegacy::tokenCall {}, at),
         read(ctx, converter, ILegacy::connectorTokenCountCall {}, at),
@@ -148,7 +160,6 @@ pub(crate) async fn market(
         || first.is_zero()
         || second.is_zero()
         || tokens[0] == tokens[1]
-        || tokens != [expected.0, expected.1]
         || fee_ppm > 1_000_000
     {
         return Err(bad(ctx));
@@ -186,6 +197,7 @@ pub(crate) async fn market(
     )?;
     Ok(BancorLegacyState {
         wallet_balances: [h0, h1],
+        second: None,
         anchor,
         network: r.network,
         converter,

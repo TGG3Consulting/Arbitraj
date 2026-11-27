@@ -7,12 +7,10 @@ use super::{
     verify::{Candidate, Verdict},
 };
 use crate::{
-    core::types::PoolRef,
     gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::{ctx::Ctx, directory::gt_parse::IndexedPool},
 };
 use alloy_primitives::Address;
-use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
 async fn family(
@@ -28,8 +26,7 @@ async fn family(
     if tracked.contains(&r.wrapped) {
         tracked.insert(r.native);
     }
-    let mut by_asset: HashMap<Address, HashSet<Address>> = HashMap::new();
-
+    let mut wanted = HashSet::new();
     for raw in tracked {
         let anchors = read(
             ctx,
@@ -39,19 +36,7 @@ async fn family(
         )
         .await?;
         out.calls += 1;
-
-        by_asset
-            .entry(r.normalize(raw))
-            .or_default()
-            .extend(anchors);
-    }
-    let mut wanted = HashSet::new();
-    for coin in coins.keys() {
-        for quote in quotes.iter().filter(|q| *q != coin) {
-            if let (Some(x), Some(y)) = (by_asset.get(coin), by_asset.get(quote)) {
-                wanted.extend(x.intersection(y).copied());
-            }
-        }
+        wanted.extend(anchors);
     }
     if wanted.is_empty() {
         return Ok(());
@@ -76,17 +61,14 @@ async fn family(
     if anchors.len() != converters.len() {
         return Err(bancor_legacy::bad(ctx));
     }
-    let bindings: HashMap<_, _> = anchors.into_iter().zip(converters).collect();
-    out.calls += 2;
+    let graph = super::bancor_legacy_bridge::edges(ctx, &r, &converters, &at).await?;
+    out.calls += 2 + converters.len() * 3;
     for (coin, sym) in coins {
         for q in quotes.iter().filter(|q| *q != coin) {
-            let (Some(x), Some(y)) = (by_asset.get(coin), by_asset.get(q)) else {
-                continue;
-            };
-            for cv in x.intersection(y).filter_map(|a| bindings.get(a)) {
+            for pool in super::bancor_legacy_bridge::paths(&graph, *coin, *q, &r) {
                 out.found.entry(*coin).or_default().push(IndexedPool {
                     dex_id: f.id.into(),
-                    pool: format!("{cv:#x}"),
+                    pool,
                     base: *coin,
                     quote: *q,
                     base_symbol: sym.clone(),
@@ -112,15 +94,15 @@ pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[
     out
 }
 pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
-    let Ok(pool) = c.pool.parse::<Address>() else {
+    let Some(pool) = super::bancor_legacy_bridge::parse(&c.pool) else {
         return Verdict::Rejected("Bancor 2.1: нужен конвертер".into());
     };
     let result = async {
         let at = super::nami::block(ctx, "latest").await?;
-        bancor_legacy::market(
+        super::bancor_legacy_bridge::bound(
             ctx,
             c.family,
-            pool,
+            &pool,
             super::discover::sorted(c.coin, c.quote),
             &at,
         )
@@ -128,10 +110,7 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
     .await;
     match result {
-        Ok(_) => Verdict::Taken(Box::new(super::verify_woo::found(
-            c,
-            PoolRef::Contract(pool),
-        ))),
+        Ok(_) => Verdict::Taken(Box::new(super::verify_woo::found(c, pool))),
         Err(e) if e.code == ErrorCode::NotApplicable => Verdict::Rejected(e.message),
         Err(e) => Verdict::Failed(e.message),
     }
@@ -140,10 +119,12 @@ pub(super) async fn created(
     ctx: &Ctx,
     f: &'static Family,
     anchor: Address,
-    at: &Value,
-) -> GatewayResult<(Address, [Address; 2])> {
-    let roles = Roles::read(ctx, f, at).await?;
-    let pool = read(ctx, anchor, ILegacy::ownerCall {}, at).await?;
+    coins: &HashMap<Address, String>,
+    quotes: &[Address],
+) -> GatewayResult<Vec<Candidate>> {
+    let at = super::nami::block(ctx, "latest").await?;
+    let roles = Roles::read(ctx, f, &at).await?;
+    let pool = read(ctx, anchor, ILegacy::ownerCall {}, &at).await?;
     let (a, b) = tokio::try_join!(
         read(
             ctx,
@@ -151,7 +132,7 @@ pub(super) async fn created(
             ILegacy::connectorTokensCall {
                 i: alloy_primitives::U256::ZERO
             },
-            at
+            &at
         ),
         read(
             ctx,
@@ -159,8 +140,34 @@ pub(super) async fn created(
             ILegacy::connectorTokensCall {
                 i: alloy_primitives::U256::ONE
             },
-            at
+            &at
         )
     )?;
-    Ok((pool, [roles.normalize(a), roles.normalize(b)]))
+    let touched = [roles.normalize(a), roles.normalize(b)];
+    let intersects_quotes = quotes.iter().any(|q| touched.contains(q));
+    let subset = coins
+        .iter()
+        .filter(|(asset, _)| intersects_quotes || touched.contains(asset))
+        .map(|(a, t)| (*a, t.clone()))
+        .collect::<HashMap<_, _>>();
+    if subset.is_empty() {
+        return Ok(vec![]);
+    }
+    let mut result = Extra::default();
+    family(ctx, f, &subset, quotes, &mut result).await?;
+    let mut candidates = Vec::new();
+    let marker = format!("{pool:#x}");
+    for rows in result.found.into_values() {
+        for row in rows {
+            if row.pool.split('/').any(|id| id == marker) {
+                candidates.push(Candidate {
+                    family: f,
+                    pool: row.pool,
+                    coin: row.base,
+                    quote: row.quote,
+                });
+            }
+        }
+    }
+    Ok(candidates)
 }

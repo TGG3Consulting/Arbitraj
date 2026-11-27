@@ -319,11 +319,8 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     }
     if f.variant == super::family_variant::Variant::BancorLegacy {
         let e=super::bancor_legacy::ILegacy::LiquidityPoolAdded::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
-        let at=super::nami::block(&p.ctx,"latest").await.map_err(|e|e.message)?;
-        let (pool,tokens)=Box::pin(super::bancor_legacy_directory::created(&p.ctx,f,e.liquidityPool,&at)).await.map_err(|e|e.message)?;
-        for r in super::stable_list::candidates(f.id,pool,&tokens,&w.coins,&[w.usdt]){
-            take(p,w,f,Candidate{family:f,pool:r.pool,coin:r.base,quote:r.quote}).await?;
-        }
+        let candidates=Box::pin(super::bancor_legacy_directory::created(&p.ctx,f,e.liquidityPool,&w.coins,&[w.usdt])).await.map_err(|e|e.message)?;
+        for c in candidates{take(p,w,f,c).await?;}
         return Ok(());
     }
     if f.variant == super::family_variant::Variant::BancorV3 {

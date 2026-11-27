@@ -2564,7 +2564,7 @@ def tables(network, snapshots, profiles):
                 measured = describe(network, str(row["id"]), r, configured, candidates)
                 if measured:
                     task = measured
-            task = f"{status}. {task}" if task else status
+            task = f"{status.rstrip('.')}. {task}" if task else status
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
     direct, provider = coverage_counts["spot"], coverage_counts["provider"]

@@ -6196,5 +6196,50 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "elk-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xfbb4e52fecc90924c79f980eb24a9794ae4affa4 · tests/data/first_run_dex_2026-11-26/llama_base_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xfbb4e52fecc90924c79f980eb24a9794ae4affa4",
+      "dex.pool_code_hashes": [
+        "0x84845e7ccb283dec564acfcd3d9287a491dec6d675705545a2ab8be22ad78f31"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "kinetix-v2-base",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x8ad3d3e6b1b7b65138bd508e48330b544539b2c3 · tests/data/first_run_dex_2026-11-26/llama_base_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x8ad3d3e6b1b7b65138bd508e48330b544539b2c3",
+      "dex.pool_code_hashes": [
+        "0x465addb639fecd8755d0d033c23e3093255900cb92d3f6d681ab422c0b5728b9"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "velox-base",
+    "source": "https://basescan.org/address/0xa28dbae4d926067f4c343aa8071e833b04c8b99e#code · tests/data/first_run_dex_2026-11-26/llama_base_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xa28dbae4d926067f4c343aa8071e833b04c8b99e",
+      "dex.pool_code_hashes": [
+        "0xe6a0dc3d50e56d003af73fd0e618f5aa65211bd7f801c411518185a488019625"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.01"
+    }
   }
 ]

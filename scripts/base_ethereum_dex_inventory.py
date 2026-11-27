@@ -1755,7 +1755,8 @@ def tables(network, snapshots, profiles):
     data_dir = Path("tests/data/first_run_dex_2026-11-26")
     registry_sources = read(data_dir / "llama_factory_scopes.json")
     registry_entries = registry_sources["networks"][network]
-    legacy_v2 = json.loads(gzip.decompress((data_dir / "llama_eth_v2_wallets.json.gz").read_bytes())) if not base else {}
+    archive_v2 = data_dir / ("llama_base_v2_wallets.json.gz" if base else "llama_eth_v2_wallets.json.gz")
+    legacy_v2 = json.loads(gzip.decompress(archive_v2.read_bytes()))
     hashflow_data = read(Path("tests/data/hashflow_direct_2026-11-26/markets_hour.json"))
     hashflow = next(n for n in hashflow_data["networks"] if n["chain"] == (8453 if base else 1))
     king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
@@ -1775,13 +1776,13 @@ def tables(network, snapshots, profiles):
                 same = [p for p in configured.values() if p["settings"].get("dex.factory", "").lower() == candidates[0]]
                 if len(same) == 1:
                     task = f"Фабрика подтверждена в сетевой записи источника и в профиле `{same[0]['id']}`"
-                    slug = same[0]["id"].removesuffix("-ethereum")
+                    slug = same[0]["id"].removesuffix("-" + network)
                     if slug in legacy_v2:
                         book = legacy_v2[slug]
                         sample = next(s for s in book["samples"] if "cases" in s)
                         assert book["factory"] == candidates[0] == sample["factory"]
                         task += (f" · {len(book['pools'])} зарегистрированных пар, покупка и обратная продажа "
-                                 f"на {len(sample['cases'])} объёмах в [кассовом повторе](../{data_dir.as_posix()}/llama_eth_v2_wallets.json.gz)")
+                                 f"на {len(sample['cases'])} объёмах в [кассовом повторе](../{archive_v2.as_posix()})")
                 else:
                     task += " · установлена фабрика этого протокола и сети; торговый профиль требует проверки"
                 if kind == "fee_factory":

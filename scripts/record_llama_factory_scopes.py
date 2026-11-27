@@ -39,7 +39,19 @@ def scope(lines, source, module, network):
         if not matches:
             return {"kind": "absent", "lines": [block[0][0], block[-1][0]]}
         n, line = matches[0]
-        out = {"kind": "subgraph" if category == "subgraphConfigs" else "other", "lines": [n, n]}
+        field_line = n
+        if line == tag + ": {":
+            # Stay within this exact network object, including when the protocol has several chains.
+            for number, continuation in block:
+                if number <= n:
+                    continue
+                if continuation.startswith("    " + "}") or continuation.lstrip().startswith("[CHAIN."):
+                    break
+                if continuation.lstrip().startswith("factory:"):
+                    line += " " + continuation.strip()
+                    field_line = number
+                    break
+        out = {"kind": "subgraph" if category == "subgraphConfigs" else "other", "lines": [n, field_line]}
         if category in ("configs", "feesConfigs"):
             field = re.match(re.escape(tag) + r""":\s*\{\s*factory:\s*['"](0x[0-9a-fA-F]{40})['"]""", line)
             if field:

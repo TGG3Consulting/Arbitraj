@@ -298,11 +298,12 @@
       "7575": {
         "module": "virtus-protocol-cl",
         "path": "factory/uniV3.ts",
-        "kind": "other",
+        "kind": "factory",
         "lines": [
           653,
-          653
-        ]
+          654
+        ],
+        "factory": "0x0e5ab24bebda7e5bb3961f7e9b3532a83ae86b48"
       },
       "9327": {
         "module": "vectaswap",

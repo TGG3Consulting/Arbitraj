@@ -130,6 +130,15 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
     for (slug, book) in archived {
         assert!(factories.insert(format!("{slug}-ethereum"), book).is_none());
     }
+    let base_archived: serde_json::Map<String, Value> = serde_json::from_reader(
+        flate2::read::GzDecoder::new(include_bytes!(
+            "data/first_run_dex_2026-11-26/llama_base_v2_wallets.json.gz"
+        ).as_slice()),
+    ).unwrap();
+    assert_eq!(base_archived.len(), 3);
+    for (slug, book) in base_archived {
+        assert!(factories.insert(format!("{slug}-base"), book).is_none());
+    }
     let mut pool_count = 0;
     for (id, market) in &factories {
         let factory = market["factory"].as_str().unwrap().parse().unwrap();
@@ -208,7 +217,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         assert_eq!(sample["block_hash"], market["selector"]["blockHash"]);
         captures.push(sample.clone());
     }
-    assert_eq!(pool_count, 1394);
+    assert_eq!(pool_count, 1519);
     let profiles: Vec<Value> =
         serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
     let mut admitted = 0;
@@ -219,6 +228,7 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
                 || s.contains("base_ethereum_v2_variable_fees.json")
                 || s.contains("ethereum_v2_factories.json")
                 || s.contains("llama_eth_v2_wallets.json.gz")
+                || s.contains("llama_base_v2_wallets.json.gz")
                 || s.contains("base_v2_factories.json")
         })
     }) {
@@ -361,6 +371,9 @@ fn configured_v2_rates_match_the_pair_executor_and_wallet_balances() {
         "fwx-base",
         "shibaswap",
         "torus",
+        "elk-base",
+        "kinetix-v2-base",
+        "velox-base",
         "bxh-ethereum",
         "empire-ethereum",
         "luaswap-ethereum",

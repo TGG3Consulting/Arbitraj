@@ -1934,7 +1934,11 @@
       "dex.quoter_virtual": true,
       "dex.plugin_factory": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
       "dex.plugin_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
-      "dex.plugin_implementation": "0x7a937e89018298c03b3343c7d3228f64856ea697"
+      "dex.plugin_implementation": "0x7a937e89018298c03b3343c7d3228f64856ea697",
+      "dex.plugin_runtime_hashes": [
+        "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a"
+      ],
+      "dex.plugin_pool_offset": 75
     }
   },
   {
@@ -4044,6 +4048,12 @@
     "id": "wagmi-ethereum",
     "source": "https://docs.popsicle.finance/wagmi-1/our-tech/contracts.md · tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json",
     "settings": {
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+        "0x5f98805a4e8be255a32880fdec7f6728c6568ba0 0xa607f4c8379ffb91323184b39d374287ea702b699648610ba87b29fd4f9b00a1"
+      ],
       "dex.kind": "registered_uni_v3",
       "dex.factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24",
       "dex.factory_runtime_hash": "0x287405c05352828361cda2962f637b8e80b4b20a6c63507e9fefbe33782796e5",
@@ -4071,6 +4081,12 @@
     "id": "lif3-ethereum",
     "source": "https://docs.lif3.com/liquidity/v3/contracts-swap-v3 · tests/data/first_run_dex_2026-11-26/lif3_ethereum_registry.json",
     "settings": {
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+        "0x5f98805a4e8be255a32880fdec7f6728c6568ba0 0xa607f4c8379ffb91323184b39d374287ea702b699648610ba87b29fd4f9b00a1"
+      ],
       "dex.kind": "registered_uni_v3",
       "dex.factory": "0x129538ee65a692fa041e107921d716c31d186803",
       "dex.factory_runtime_hash": "0x0bcd06e30fbc3b43136cb80589cb7ce67b3d74e5252afb6d825acf19a94ca3fe",
@@ -4097,6 +4113,12 @@
     "id": "solidlydex",
     "source": "https://docs.solidly.com/resources/contract-addresses.html · tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz",
     "settings": {
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+        "0x5f98805a4e8be255a32880fdec7f6728c6568ba0 0xa607f4c8379ffb91323184b39d374287ea702b699648610ba87b29fd4f9b00a1"
+      ],
       "dex.kind": "solidly_v2_proxy",
       "dex.factory": "0x777de5fe8117caaa7b44f396e93a401cf5c9d4d6",
       "dex.factory_runtime_hash": "0x7a5f2c4abaced8bbdc0b185cd84444c250b5c8048cde0179ac1a26ee552771a5",
@@ -4238,6 +4260,25 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.3",
       "dex.router_runtime_hash": "0x21bcce9b2e7cb9ca7aa751e1878629ff4bea542e8c697bdf1d9d2f626b8e6421"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "thirdfy",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xffa6aed670dd4fe095e02deeb94205887a319258 · tests/data/first_run_dex_2026-11-26/thirdfy_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_base_plugin_v1",
+      "dex.factory": "0xefcb993e113ea8197c17c6f4959495929be0b68e",
+      "dex.factory_runtime_hash": "0xd30cf34241eacddc94b4c61f6785aa8f795d04fc018a441162ee7b1b9638c997",
+      "dex.pool_code_hashes": [
+        "0xb3fc09be5eb433d99b1ec89fd8435aaf5ffea75c1879e19028aa2414a14b3c85"
+      ],
+      "dex.plugin_factory": "0xffa6aed670dd4fe095e02deeb94205887a319258",
+      "dex.plugin_runtime_hashes": [
+        "0x3cc6554212816ea09f21c89b2cda92b09fefa49849bf1923791e346f6dc779b3"
+      ],
+      "dex.quoter_virtual": true
     }
   }
 ]

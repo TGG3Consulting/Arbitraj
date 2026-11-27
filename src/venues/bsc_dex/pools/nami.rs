@@ -29,18 +29,6 @@ sol! {
     }
 }
 
-fn proxy_matches(code: &[u8], pool: Address, offset: usize, expected: B256) -> bool {
-    let Some(end) = offset.checked_add(32) else {
-        return false;
-    };
-    if code.get(offset..end) != Some(pool.into_word().as_slice()) {
-        return false;
-    }
-    let mut normalized = code.to_vec();
-    normalized[offset..end].fill(0);
-    keccak256(normalized) == expected
-}
-
 pub(in crate::venues::bsc_dex) async fn block(ctx: &Ctx, tag: &str) -> GatewayResult<Value> {
     elfomo::block(ctx, tag).await
 }
@@ -106,7 +94,7 @@ pub async fn check(ctx: &Ctx, id: &str, pool: Address, tag: &Value) -> GatewayRe
     )
     .await?;
     if word.as_ref() != beacon.into_word().as_slice()
-        || !proxy_matches(&proxy_code, pool, offset, *template)
+        || !super::quickswap_plugin::proxy_matches(&proxy_code, pool, offset, *template)
         || keccak256(&imp_code) != *imp_hash
         || keccak256(&ext_code) != *ext_hash
         || imp_code.is_empty()

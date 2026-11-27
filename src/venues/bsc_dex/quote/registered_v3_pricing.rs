@@ -38,7 +38,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     for e in entries {
         let pool = e.pool.reference.address();
         let classic = e.family.variant == Variant::SolidlyProxy;
-        let router = if ctx.chain_id() == Some(1) && registered_router::eligible(input, output) {
+        let router = if registered_router::eligible(ctx, e.family.id, input, output) {
             match head {
                 Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
                     ctx,

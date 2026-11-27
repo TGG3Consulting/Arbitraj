@@ -6,6 +6,16 @@ use serde_json::Value;
 
 #[test]
 fn wallet_limits_and_identity_survive_serialization() {
+    let proof: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/ethereum_exact_transfers.json"
+    ))
+    .unwrap();
+    let exact: Vec<Address> = proof["tokens"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|r| r["address"].as_str().unwrap().parse().unwrap())
+        .collect();
     for raw in [
         include_bytes!(
             "../../../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_wallets.json.gz"
@@ -27,7 +37,7 @@ fn wallet_limits_and_identity_survive_serialization() {
         {
             let input = parse(&row["source"]);
             let output = parse(&row["target"]);
-            if !registered_router::eligible(input, output) {
+            if !exact.contains(&input) || !exact.contains(&output) {
                 continue;
             }
             let pool = parse(&row["pool"]);

@@ -59,6 +59,25 @@ fn integral_executor_quotes_and_sender_specific_fee() {
                     data["addresses"]["PluginFactory"]
                 );
                 assert_ne!(m["plugin"], m["previous_plugin"]);
+                let profiles: Value =
+                    serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+                let settings = &profiles
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|row| row["id"] == "quickswap-v4-base")
+                    .unwrap()["settings"];
+                assert_eq!(
+                    settings["dex.plugin_runtime_hashes"],
+                    serde_json::json!([data["proxy_template_hash"]])
+                );
+                let evidence = data["sources"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .find_map(|proof| proof["immutable_offset"].as_u64())
+                    .unwrap();
+                assert_eq!(settings["dex.plugin_pool_offset"].as_u64(), Some(evidence));
             }
             let mut ticks = BTreeMap::new();
             for (index, row) in m["ticks"].as_object().unwrap() {

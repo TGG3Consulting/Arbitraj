@@ -19,17 +19,17 @@ sol! {
 }
 
 const BEACON_SLOT: B256 = b256!("a3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50");
-const PROXY_TEMPLATE: B256 =
-    b256!("b98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a");
-
-/// Верифицированный AlgebraPluginProxy содержит ровно одну immutable-подстановку адреса пула.
-pub fn matches_proxy(code: &[u8], pool: Address) -> bool {
-    if code.get(75..107) != Some(pool.into_word().as_slice()) {
+/// Сверяет immutable пула и хеш нормализованного байткода AlgebraPluginProxy.
+pub(super) fn proxy_matches(code: &[u8], pool: Address, offset: usize, expected: B256) -> bool {
+    let Some(end) = offset.checked_add(32) else {
+        return false;
+    };
+    if code.get(offset..end) != Some(pool.into_word().as_slice()) {
         return false;
     }
     let mut normalized = code.to_vec();
-    normalized[75..107].fill(0);
-    keccak256(normalized) == PROXY_TEMPLATE
+    normalized[offset..end].fill(0);
+    keccak256(normalized) == expected
 }
 
 async fn at<C: SolCall>(
@@ -44,6 +44,20 @@ async fn at<C: SolCall>(
 }
 
 pub async fn check(ctx: &Ctx, id: &str, pool: Address, tag: &str) -> GatewayResult<()> {
+    let generation = ctx.settings.generation();
+    let binding_error = || {
+        ctx.err(
+            ErrorCode::NotApplicable,
+            "QuickSwap: нужны один хеш шаблона proxy и смещение immutable pool",
+        )
+    };
+    let hashes = ctx.dex_list("dex.plugin_runtime_hashes", id)?;
+    let [template] = hashes.as_slice() else {
+        return Err(binding_error());
+    };
+    let template: B256 = template.trim().parse().map_err(|_| binding_error())?;
+    let offset =
+        usize::try_from(ctx.dex_int("dex.plugin_pool_offset", id)?).map_err(|_| binding_error())?;
     #[derive(serde::Deserialize)]
     struct Header {
         hash: B256,
@@ -81,10 +95,16 @@ pub async fn check(ctx: &Ctx, id: &str, pool: Address, tag: &str) -> GatewayResu
             json!([plugin, BEACON_SLOT, canonical])
         )
     )?;
-    if Address::from_word(word) != beacon || !matches_proxy(&code, pool) {
+    if Address::from_word(word) != beacon || !proxy_matches(&code, pool, offset, template) {
         return Err(ctx.err(
             ErrorCode::InvalidAddress,
             "QuickSwap: прокси плагина, его immutable pool или beacon расходятся с проверенными",
+        ));
+    }
+    if generation != ctx.settings.generation() {
+        return Err(ctx.err(
+            ErrorCode::StaleData,
+            "QuickSwap: настройки изменились во время сверки",
         ));
     }
     Ok(())

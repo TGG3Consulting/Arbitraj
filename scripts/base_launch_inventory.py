@@ -43,10 +43,17 @@ def recovered(network):
         f"MultiHopRouter `{ry['router']['address']}` проверяет подписанный ордер; штатное исполнение использует nonce EIP‑712 и данные оракула. "
         "[ABI и назначение контрактов](https://documentation.ryze.pro/guide/abis).",
         "",f"Фабрика Thirdfy Algebra Integral `{third['factory']['address']}` подтвердила каждый из шести рынков. "
-        "На каноническом чтении все шесть имели ненулевую активную ликвидность и pluginConfig 193. Комиссия на высоте варьировалась от 3000 до 7386 миллионных.",
+        "На каноническом чтении все шесть имели ненулевую активную ликвидность и pluginConfig 193. Комиссия на высоте варьировалась от 3000 до 7386 миллионных. ArbExecutor V5 исполнил 24 ноги на шести рынках, в обоих направлениях и на двух объёмах. "
+        f"[Архив кошельковых выплат и повышенных минимумов](../{DATA/'thirdfy_base_wallets.json.gz' }).",
         "",f"Baseline использует bToken `{bl['btoken']['address']}` в качестве идентификатора страницы. Реальный ключ BSR/cbBTC `{bl['pool_id']}` "
         f"создан в транзакции `{bl['index']['createdAtTxnId']}`, хук `{bl['hook']['address']}`. "
-        f"[Канонические вызовы и квитанция деплоя](../{DATA/'base_recovered_markets.json'}) · [Спецификация идентификатора bToken](https://www.baseline.markets/docs/contracts/api).",""]
+        "На 100 и 1000 raw cbBTC владелец получил 26019463245970438 и 260194412075800528 raw BSR. "
+        "При продаже этих объёмов вернулись 98 и 980 raw cbBTC. Роутер и V5 дали одинаковый чистый выход во всех восьми ногах. "
+        f"[Выплаты BSR/cbBTC](../{DATA/'baseline_base_wallets.json.gz'}).",
+        "", "У Omni Flux перечислен 71 NFT позиции. Их 38 уникальных ключей проверены через CLPoolManager.poolIdToPoolKey; "
+        "на 11 ключах была активная ликвидность и у всех 38 адрес хука нулевой. Охват ограничен этой выборкой CL; отдельный BinPoolManager установлен через роутер. "
+        f"[Роли Flux и записи CL PositionManager](../{DATA/'omni_flux_base_directory.json.gz'}).",
+        "", f"[Канонические вызовы и квитанция деплоя](../{DATA/'base_recovered_markets.json'}) · [Спецификация идентификатора bToken](https://www.baseline.markets/docs/contracts/api).",""]
 
 
 def registry_row(network,id):
@@ -58,12 +65,15 @@ def registry_row(network,id):
         r=json.loads((DATA/"base_recovered_markets.json").read_bytes())
         if id=="thirdfy":
             m=r["thirdfy"]
-            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"poolByPair для 6/6 рынков","DEX-41 · реестр, fee и активная ликвидность проверены"
+            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"poolByPair для 6/6 рынков","DEX-41 · 24 ноги V5 на шести рынках, динамическая комиссия BasePluginV1"
         if id=="ryze":
             m=r["ryze"]
             return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","DEX-41 · для собственной выплаты требуется подписанный ордер, nonce и данные оракула"
         b=r["baseline"]
-        return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC зарегистрирован у физического менеджера V4"
+        return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; для профиля требуется проверить привязку изменяемых ролей хука"
+    if id=="omni-exchange-v4-base":
+        d=evidence("omni_flux_base_directory.json.gz")
+        return d["markets"][0]["id"],d["roles"]["clPoolManager"],"Flux Router, NFT и канонические PoolKey","DEX-41 · у Flux 38 подтверждённых рынков CL; атрибуция идентификатора индексатора остаётся открытой"
     if id=="marswap-base":
         with gzip.open(DATA/"marswap-base.json.gz") as f:d=json.load(f)
         return None,d["factory"],"allPairsLength = 0 и INIT_CODE_PAIR_HASH","фабрика проверена на Base; 0 зарегистрированных пар на снимке"

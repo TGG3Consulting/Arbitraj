@@ -972,15 +972,13 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             ) {
                 list.extend([
                     "dex.plugin_factory",
+                    "dex.plugin_runtime_hashes",
+                    "dex.plugin_pool_offset",
                     "dex.plugin_beacon",
                     "dex.plugin_implementation",
                 ]);
                 if f.variant == Variant::NamiIntegral {
-                    list.extend([
-                        "dex.plugin_extension",
-                        "dex.plugin_runtime_hashes",
-                        "dex.plugin_pool_offset",
-                    ]);
+                    list.push("dex.plugin_extension");
                 }
             }
         }

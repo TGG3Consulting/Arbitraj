@@ -27,8 +27,7 @@ pub(crate) async fn checked(
             "V3 Router: не подтверждены фабрика, код или точная выплата ERC20",
         )
     };
-    if !eligible(input, output)
-        || e.family.variant != super::family_variant::Variant::RegisteredUniV3
+    if e.family.variant != super::family_variant::Variant::RegisteredUniV3
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -42,7 +41,7 @@ pub(crate) async fn checked(
     tokio::try_join!(
         registered_v3::fresh(ctx, e, at),
         plain(ctx, router, hash, at),
-        super::exact_wallet_tokens::check(ctx, input, output, at)
+        super::exact_wallet_tokens::check(ctx, id, input, output, at)
     )?;
     let f = Pool::factoryCall {};
     let [actual] = batch::read(ctx, [batch::view(at, router, f.clone())]).await?;

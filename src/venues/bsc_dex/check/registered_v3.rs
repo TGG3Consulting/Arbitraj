@@ -17,8 +17,7 @@ use serde_json::json;
 
 pub(super) fn configured(ctx: &Ctx, e: &Entry) -> bool {
     e.family.variant.exact_router()
-        && ctx.chain_id() == Some(1)
-        && registered_router::eligible(e.coin, e.usdt)
+        && registered_router::eligible(ctx, e.family.id, e.coin, e.usdt)
         && ctx.dex_addr("dex.router", e.family.id).is_ok()
 }
 pub(super) async fn funded(

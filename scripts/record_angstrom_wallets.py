@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import requests
-from eth_abi import encode
+from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_angstrom_ethereum import ADAPTER, GATEWAY, HOOK, MANAGER, rpc
@@ -31,11 +31,32 @@ def record(url):
     directory=json.loads(gzip.decompress((DIRECTORY/"angstrom_ethereum_directory.json.gz").read_bytes()))
     witness=json.loads((DIRECTORY/"angstrom_public_attestation.json").read_bytes())
     message=next(m for m in witness["messages"] if len(m["data"])==172)
-    height=message["block"]
+    announced=message["block"]
+    observed=rpc(url,"eth_getBlockByNumber",[hex(announced),False])
+    if observed["hash"]!=message["header"]["hash"] or rpc(url,"eth_chainId",[])!="0x1":
+        raise ValueError("Wrong chain or observed block")
+    data=bytes.fromhex(message["data"][2:])
+    node="0x"+data[:20].hex()
+    basis=dict(blockHash=observed["hash"],requireCanonical=True)
+    domain=rpc(url,"eth_call",[dict(to=HOOK,data="0x"+keccak(text="eip712Domain()")[:4].hex()),basis])
+    fields,name,version,chain,verifier,_,extensions=decode(["bytes1","string","string","uint256","address","bytes32","uint256[]"],bytes.fromhex(domain[2:]))
+    if fields!=b"\x0f" or chain!=1 or verifier!=HOOK or extensions:
+        raise ValueError("Unexpected EIP-712 domain")
+    domain_hash=keccak(encode(["bytes32","bytes32","bytes32","uint256","address"],[
+        keccak(text="EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"),
+        keccak(text=name),keccak(text=version),chain,verifier]))
+    recovered={}
+    for n in (announced,announced+1):
+        struct_hash=keccak(encode(["bytes32","uint64"],[keccak(text="AttestAngstromBlockEmpty(uint64 block_number)"),n]))
+        digest=keccak(b"\x19\x01"+domain_hash+struct_hash)
+        proof=digest+data[-1].to_bytes(32,"big")+data[20:84]
+        result=rpc(url,"eth_call",[dict(to="0x"+"0"*39+"1",data="0x"+proof.hex()),basis])
+        recovered[n]={"recovered":decode(["address"],bytes.fromhex(result[2:]))[0],"digest":"0x"+digest.hex()}
+    height,=[n for n,v in recovered.items() if v["recovered"]==node]
     head=rpc(url,"eth_getBlockByNumber",[hex(height),False])
     at=dict(blockHash=head["parentHash"],requireCanonical=True)
-    if head["hash"]!=message["header"]["hash"] or rpc(url,"eth_chainId",[])!="0x1":
-        raise ValueError("Wrong chain, attestation block or canonical parent")
+    if height==announced+1 and head["parentHash"]!=observed["hash"]:
+        raise ValueError("Reorg at verified attestation parent")
     c=Capture(dict(endpoint=url,selector=at))
     stamp=int(head["timestamp"],16)
     for address in (OWNER,EXEC):
@@ -43,8 +64,6 @@ def record(url):
     for address,expected in directory["runtime_hashes"].items():
         code=bytes.fromhex(rpc(url,"eth_getCode",[address,at])[2:])
         if "0x"+keccak(code).hex()!=expected:raise ValueError("Market deployment code changed")
-    data=bytes.fromhex(message["data"][2:])
-    node="0x"+data[:20].hex()
     good=[(height,data)]
     controls=[]
     payments=[]
@@ -98,7 +117,7 @@ def record(url):
     if not all(any(a["pool"]==p and ("buy" in a or "sell" in a) for a in payments) for p in directory["directory"]):
         raise ValueError("Missing genuine taker payment on a registered market")
     return dict(chain=1,parent=at,block=height,canonical_hash=head["hash"],public_source=witness["url"],signer=node,
-                source_data=message["data"],owner=OWNER,executor=EXEC,adapter=ADAPTER,controls=controls,payments=payments)
+                wire_block=announced,eip712=recovered,source_data=message["data"],owner=OWNER,executor=EXEC,adapter=ADAPTER,controls=controls,payments=payments)
 
 
 if __name__=="__main__":

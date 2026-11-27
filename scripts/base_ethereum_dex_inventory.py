@@ -1752,6 +1752,12 @@ def tables(network, snapshots, profiles):
     volumes = volume.get("by_id", {})
     top_data = read(Path("tests/data/first_run_dex_2026-11-26/llama_top_bindings.json"))
     top = {item["id"]:item for item in top_data["networks"][network]["rows"]}
+    data_dir = Path("tests/data/first_run_dex_2026-11-26")
+    registry_sources = read(data_dir / "llama_factory_scopes.json")
+    registry_entries = registry_sources["networks"][network]
+    legacy_v2 = json.loads(gzip.decompress((data_dir / "llama_eth_v2_wallets.json.gz").read_bytes())) if not base else {}
+    hashflow_data = read(Path("tests/data/hashflow_direct_2026-11-26/markets_hour.json"))
+    hashflow = next(n for n in hashflow_data["networks"] if n["chain"] == (8453 if base else 1))
     king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
                   if s["network"] == network}
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
@@ -1759,6 +1765,37 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if source_scope := registry_entries.get(str(row["id"])):
+            assert source_scope["module"] == row["module"] and source_scope["path"] == r["path"]
+            start, end = source_scope["lines"]
+            ref = ref.split("#")[0] + f"#L{start}-L{end}"
+            candidates = [source_scope["factory"]] if "factory" in source_scope else []
+            kind = source_scope["kind"]
+            if candidates:
+                same = [p for p in configured.values() if p["settings"].get("dex.factory", "").lower() == candidates[0]]
+                if len(same) == 1:
+                    task = f"Фабрика подтверждена в сетевой записи источника и в профиле `{same[0]['id']}`"
+                    slug = same[0]["id"].removesuffix("-ethereum")
+                    if slug in legacy_v2:
+                        book = legacy_v2[slug]
+                        sample = next(s for s in book["samples"] if "cases" in s)
+                        assert book["factory"] == candidates[0] == sample["factory"]
+                        task += (f" · {len(book['pools'])} зарегистрированных пар, покупка и обратная продажа "
+                                 f"на {len(sample['cases'])} объёмах в [кассовом повторе](../{data_dir.as_posix()}/llama_eth_v2_wallets.json.gz)")
+                else:
+                    task += " · установлена фабрика этого протокола и сети; торговый профиль требует проверки"
+                if kind == "fee_factory":
+                    task += " · адрес взят из реестра комиссий источника"
+            elif kind == "subgraph":
+                task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
+            elif kind == "absent":
+                task = "В сетевой записи этого адаптера нет данной сети. Отдельные развёртывания проверяются по своему реестру."
+        if str(row["id"]) == "1447":
+            assert hashflow["factory"] in {a.lower() for a in candidates}
+            candidates = [hashflow["factory"], hashflow["router"]]
+            task = (f"Hashflow RFQ · фабрика источника совпадает с factory() официального роутера. "
+                    f"В часовом срезе {len(hashflow['events'])} локальных Trade. "
+                    "В суточном агрегате также учитываются исходящие межсетевые операции. См. раздел Hashflow четырёх сетей.")
         if not base and str(row["id"]) == "6483":
             task = "Angstrom L1 · 2 физических ключа Uniswap V4, 12 архивных оплат на открытом блоке. Профиль наблюдения; автоматический платёж требует актуальной аттестации"
         if str(row["id"]) == "4752":

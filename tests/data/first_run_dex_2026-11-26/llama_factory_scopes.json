@@ -1,0 +1,616 @@
+{
+  "revision": "be9967c3f0d3ccd06c871bab0d16beb3304de719",
+  "source_sha256": {
+    "factory/uniV2.ts": "dc6e403d034531a8ae5a75ca1a2b28cbac28f2975ba3f575da933cf02ec8b0eb",
+    "factory/uniV3.ts": "4c1791ea9b2f85411682d68922cae7d0c1f66925f7df205d1d9d6f941fd4676c"
+  },
+  "networks": {
+    "base": {
+      "420": {
+        "module": "elk",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          872,
+          872
+        ],
+        "factory": "0xfbb4e52fecc90924c79f980eb24a9794ae4affa4"
+      },
+      "2837": {
+        "module": "wagmi",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          627,
+          627
+        ],
+        "factory": "0x576a1301b42942537d38fb147895fe83fb418fd4"
+      },
+      "3234": {
+        "module": "DerpDEX",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          337,
+          337
+        ],
+        "factory": "0xeddef4273518b137cdbcb3a7fa1c6a688303dfe2"
+      },
+      "3314": {
+        "module": "rocketswap-cc",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          126,
+          126
+        ],
+        "factory": "0x1b8128c3a1b7d20053d10763ff02466ca7ff99fc"
+      },
+      "3328": {
+        "module": "swapbased-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1194,
+          1194
+        ],
+        "factory": "0x04c9f118d21e8b767d2e50c946f0cc9f6c367300"
+      },
+      "3333": {
+        "module": "baseswap-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1166,
+          1166
+        ],
+        "factory": "0xfda619b6d20975be80a10332cd39b9a4b0faa8bb"
+      },
+      "3345": {
+        "module": "dackieswap",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          837,
+          837
+        ],
+        "factory": "0x3d237ac6d2f425d2e890cc99198818cc1fa48870"
+      },
+      "3361": {
+        "module": "alienbase",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1170,
+          1170
+        ],
+        "factory": "0x3e84d913803b02a4a7f027165e8ca42c14c0fde7"
+      },
+      "3382": {
+        "module": "throne-v3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          370,
+          370
+        ],
+        "factory": "0xe8839bf8175812691c6578c0fc80e721bc3e00fb"
+      },
+      "3481": {
+        "module": "solidly-v3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          817,
+          817
+        ],
+        "factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+      },
+      "3507": {
+        "module": "baseswap-v3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          807,
+          807
+        ],
+        "factory": "0x38015d05f4fec8afe15d7cc0386a126574e8077b"
+      },
+      "3515": {
+        "module": "dackieswap-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          901,
+          901
+        ],
+        "factory": "0x591f122d1df761e616c13d265006fcbf4c6d6551"
+      },
+      "3533": {
+        "module": "kinetix-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          684,
+          684
+        ],
+        "factory": "0x8ad3d3e6b1b7b65138bd508e48330b544539b2c3"
+      },
+      "3575": {
+        "module": "Scale",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          346,
+          346
+        ],
+        "factory": "0xed8db60acc29e14bc867a497d94ca6e3ceb5ec04"
+      },
+      "3714": {
+        "module": "sharkswap-finance",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          166,
+          166
+        ],
+        "factory": "0x57592d44eb60011500961ef177bff8d8691d5a8b"
+      },
+      "3878": {
+        "module": "thick",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          479,
+          479
+        ],
+        "factory": "0xe6da85feb3b4e0d6aed95c41a125fba859bb9d24"
+      },
+      "3940": {
+        "module": "archly-finance-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          605,
+          605
+        ],
+        "factory": "0x12508dd9108abab2c5fd8fc6e4984e46a3cf7824"
+      },
+      "4062": {
+        "module": "deltaswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          411,
+          411
+        ],
+        "factory": "0x9a9a171c69cc811dc6b59bb2f9990e34a22fc971"
+      },
+      "4294": {
+        "module": "infusion",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          575,
+          575
+        ],
+        "factory": "0x2d9a3a2bd6400ee28d770c7254ca840c82faf23f"
+      },
+      "4962": {
+        "module": "fwx-dex",
+        "path": "factory/uniV2.ts",
+        "kind": "subgraph",
+        "lines": [
+          2138,
+          2138
+        ]
+      },
+      "5416": {
+        "module": "9mm-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          712,
+          712
+        ],
+        "factory": "0x4c1b8d4ae77a37b94e195cab316391d3c687ebd1"
+      },
+      "5417": {
+        "module": "9mm",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          847,
+          847
+        ],
+        "factory": "0x7b72c4002ea7c276dd717b96b20f4956c5c904e7"
+      },
+      "5423": {
+        "module": "hydrometer",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          674,
+          674
+        ],
+        "factory": "0xf60cacf0a3daa5b6a79ca6594bef38f85391ae0a"
+      },
+      "5531": {
+        "module": "goblin-dex",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          356,
+          356
+        ],
+        "factory": "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8"
+      },
+      "6365": {
+        "module": "hydrex",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          215,
+          215
+        ],
+        "factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e"
+      },
+      "6506": {
+        "module": "omni-exchange-v3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          634,
+          634
+        ],
+        "factory": "0xd6ab0566e7e60b67c50ac73ddff4e3ddcb829ec2"
+      },
+      "6539": {
+        "module": "omni-exchange-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1108,
+          1108
+        ],
+        "factory": "0x7d9d51267f7e9e6b46a48e0a75c0086f46777087"
+      },
+      "7526": {
+        "module": "velox",
+        "path": "factory/uniV2.ts",
+        "kind": "fee_factory",
+        "lines": [
+          1964,
+          1964
+        ],
+        "factory": "0xa28dbae4d926067f4c343aa8071e833b04c8b99e"
+      },
+      "7574": {
+        "module": "virtus-protocol",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1092,
+          1092
+        ],
+        "factory": "0x7f03ae4452192b0e280fb0d4f9c225dda88c7623"
+      },
+      "7575": {
+        "module": "virtus-protocol-cl",
+        "path": "factory/uniV3.ts",
+        "kind": "other",
+        "lines": [
+          653,
+          653
+        ]
+      },
+      "9327": {
+        "module": "vectaswap",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          259,
+          259
+        ],
+        "factory": "0xe84fa17c2ea423e0dea3c986ee3e1560d684bb2d"
+      }
+    },
+    "ethereum": {
+      "221": {
+        "module": "defi-swap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          327,
+          327
+        ],
+        "factory": "0x9deb29c9a4c7a88a3c0257393b7f3335338d9a9d"
+      },
+      "291": {
+        "module": "integral",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1221,
+          1221
+        ],
+        "factory": "0xc480b33ee5229de3fbdfad1d2dcd3f3bad0c56c6"
+      },
+      "292": {
+        "module": "swapr",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          886,
+          886
+        ],
+        "factory": "0xd34971bab6e5e356fd250715f5de0492bb070452"
+      },
+      "324": {
+        "module": "unicly",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          503,
+          503
+        ],
+        "factory": "0xbacc776b231c571a7e6ab7bc2c8a099e07153377"
+      },
+      "327": {
+        "module": "youswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1277,
+          1277
+        ],
+        "factory": "0xa7028337d3da1f04d638cc3b4dd09411486b49ea"
+      },
+      "366": {
+        "module": "dfx-finance",
+        "path": "factory/uniV2.ts",
+        "kind": "subgraph",
+        "lines": [
+          2120,
+          2120
+        ]
+      },
+      "392": {
+        "module": "wardenswap",
+        "path": "factory/uniV2.ts",
+        "kind": "absent",
+        "lines": [
+          554,
+          556
+        ]
+      },
+      "397": {
+        "module": "shibaswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          352,
+          352
+        ],
+        "factory": "0x115934131916c8b277dd010ee02de363c09d037c"
+      },
+      "398": {
+        "module": "apeswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          839,
+          839
+        ],
+        "factory": "0xbae5dc9b19004883d0377419fef3c2c8832d7d7b"
+      },
+      "404": {
+        "module": "bxh",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1033,
+          1033
+        ],
+        "factory": "0x8d0fca60fdf50cfe65e3e667a37ff3010d6d1e8d"
+      },
+      "420": {
+        "module": "elk",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          868,
+          868
+        ],
+        "factory": "0x6511eba915fc1b94b2364289cca2b27ae5898d80"
+      },
+      "595": {
+        "module": "convergence",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1237,
+          1237
+        ],
+        "factory": "0x4eef5746ed22a2fd368629c1852365bf5dcb79f1"
+      },
+      "707": {
+        "module": "luaswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          375,
+          375
+        ],
+        "factory": "0x0388c1e0f210abae597b7de712b9510c6c36c857"
+      },
+      "812": {
+        "module": "empiredex",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          882,
+          882
+        ],
+        "factory": "0xd674b01e778cf43d3e6544985f893355f46a74a5"
+      },
+      "863": {
+        "module": "yoshi-exchange",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          534,
+          534
+        ],
+        "factory": "0x773cadc167deafa46f603d96172fa45686c4fa58"
+      },
+      "911": {
+        "module": "sumswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1247,
+          1247
+        ],
+        "factory": "0x96ff042f8c6757fce515d171f194b5816cafee11"
+      },
+      "1616": {
+        "module": "radioshack",
+        "path": "factory/uniV2.ts",
+        "kind": "absent",
+        "lines": [
+          1058,
+          1062
+        ]
+      },
+      "1732": {
+        "module": "verse",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          506,
+          506
+        ],
+        "factory": "0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2"
+      },
+      "1824": {
+        "module": "swapsicle",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          896,
+          896
+        ],
+        "factory": "0x2f0c7c98462651bb2102f6cd05acdad333e031b0"
+      },
+      "1896": {
+        "module": "justmoney",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1283,
+          1283
+        ],
+        "factory": "0xd36aba9ec96523b0a89886c76065852adfe2eb39"
+      },
+      "2400": {
+        "module": "solidlydex",
+        "path": "factory/uniV2.ts",
+        "kind": "subgraph",
+        "lines": [
+          2045,
+          2045
+        ]
+      },
+      "2837": {
+        "module": "wagmi",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          623,
+          623
+        ],
+        "factory": "0xb9a14ee1cd3417f3acc988f61650895151abde24"
+      },
+      "3481": {
+        "module": "solidly-v3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          815,
+          815
+        ],
+        "factory": "0x70fe4a44ea505cfa3a57b95cf2862d4fd5f0f687"
+      },
+      "3940": {
+        "module": "archly-finance-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          609,
+          609
+        ],
+        "factory": "0xe8e2b714c57937e0b29c6abeaf00b52388cab598"
+      },
+      "4062": {
+        "module": "deltaswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          412,
+          412
+        ],
+        "factory": "0x5fbe219e88f6c6f214ce6f5b1fcaa0294f31ae1b"
+      },
+      "6815": {
+        "module": "shibaswap-v2",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          458,
+          458
+        ],
+        "factory": "0xd9ce49caf7299daf18fffcb2b84a44fd33412509"
+      },
+      "7037": {
+        "module": "cypher-v2",
+        "path": "factory/uniV2.ts",
+        "kind": "subgraph",
+        "lines": [
+          2257,
+          2257
+        ]
+      },
+      "7501": {
+        "module": "wswap",
+        "path": "factory/uniV2.ts",
+        "kind": "factory",
+        "lines": [
+          1119,
+          1119
+        ],
+        "factory": "0x46b0b17bb1f637ccffa9fcc34bd591e3a0ff58f9"
+      },
+      "9157": {
+        "module": "communityv3",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          747,
+          747
+        ],
+        "factory": "0x00a38533c68327abe0cc265436e036066e2d6b38"
+      },
+      "9514": {
+        "module": "theorem",
+        "path": "factory/uniV3.ts",
+        "kind": "factory",
+        "lines": [
+          199,
+          199
+        ],
+        "factory": "0xd265f57c36ac60d3f7931ec5c7396966f0c246a7"
+      }
+    }
+  }
+}

@@ -6072,5 +6072,127 @@
         "adapter@0xb535aeb27335b91e1b5bccbd64888ba7574efbf8@0x6280f4c65e60bb69e42628c819347aea85d7982710f7eb67b64eaf2cb1a6a6b2"
       ]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bxh-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x8d0fca60fdf50cfe65e3e667a37ff3010d6d1e8d · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x8d0fca60fdf50cfe65e3e667a37ff3010d6d1e8d",
+      "dex.pool_code_hashes": [
+        "0xce75b5651f6cb65bd7add32a949a736f1d16c3ec46e59ec3ee03c7b9707661ff"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.25"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "empire-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xd674b01e778cf43d3e6544985f893355f46a74a5 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xd674b01e778cf43d3e6544985f893355f46a74a5",
+      "dex.pool_code_hashes": [
+        "0xf1fe94ebb9864b9c3f0bc8f49c058990133fe8cb981093210b082b8f6b383b13"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "luaswap-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x0388c1e0f210abae597b7de712b9510c6c36c857 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2_live_fee",
+      "dex.factory": "0x0388c1e0f210abae597b7de712b9510c6c36c857",
+      "dex.pool_code_hashes": [
+        "0xf176ce2ef2ec9c3333f7ab282e4269fdd75024da47415e2c7c6e04272fc1bfab"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "swapFee()",
+      "dex.v2_fee_denominator": 1000,
+      "dex.v2_fee_rule_hash": "0x1788a4ef1d62e8c7d6ba08f66293f560dc84d51e7790b32f8e691398985be129"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "sumswap-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x96ff042f8c6757fce515d171f194b5816cafee11 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x96ff042f8c6757fce515d171f194b5816cafee11",
+      "dex.pool_code_hashes": [
+        "0xfaac9b01131e6030edb52a46a89c730d78d48f9fefa069bb474360705066e9fb"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "swapsicle-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x2f0c7c98462651bb2102f6cd05acdad333e031b0 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x2f0c7c98462651bb2102f6cd05acdad333e031b0",
+      "dex.pool_code_hashes": [
+        "0x2ed0c8714ca80192f88764ee4b4c8c8cb6dfc01859a02b25ce67f304e499d48e"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "wswap-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x46b0b17bb1f637ccffa9fcc34bd591e3a0ff58f9 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x46b0b17bb1f637ccffa9fcc34bd591e3a0ff58f9",
+      "dex.pool_code_hashes": [
+        "0x78b9069d48c93365b1d138365ec3f9c761f91bd3a0b9cfda24ba11cf6a8f122e"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "yoshi-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x773cadc167deafa46f603d96172fa45686c4fa58 · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0x773cadc167deafa46f603d96172fa45686c4fa58",
+      "dex.pool_code_hashes": [
+        "0xbac784ed14868c7f097de0aa20646d3fa69ef8a8c35e883892182428291b38bd"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "youswap-ethereum",
+    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xa7028337d3da1f04d638cc3b4dd09411486b49ea · tests/data/first_run_dex_2026-11-26/llama_eth_v2_wallets.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_executor_create2",
+      "dex.factory": "0xa7028337d3da1f04d638cc3b4dd09411486b49ea",
+      "dex.pool_code_hashes": [
+        "0x8919347964f406fcc7e9a98fd3e05e8ba3e0270039e1e056121a8bffd0f2789e"
+      ],
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.3"
+    }
   }
 ]

@@ -1834,6 +1834,18 @@ def tables(network, snapshots, profiles):
                          f"[События, расходы и выплаты](../{protected.as_posix()}). "
                          "Открытый реестр доступен через RPC. Каталог всех стратегий 1inch с пагинацией требует Bearer с планом Aqua. "
                          "[Условия доступа к каталогу](https://business.1inch.com/portal/documentation/aqua/api/quick-start).")
+            directory=data_dir/f"aqua_{network}_directory.json.gz"
+            if directory.is_file():
+                records=json.loads(gzip.decompress(directory.read_bytes()))
+                task+=(f" От размещения на {records['first']} до {records['through']} включительно у {len(records['active'])} "
+                       f"стратегий сохранилась хотя бы одна зарегистрированная валюта. Для котировки пары "
+                       f"требуются две действующие записи rawBalances. [Реестр по событиям](../{directory.as_posix()}).")
+            task+=(" Профиль `1inch-aqua` принимает события Shipped, Docked, Pushed и Swapped по адресу контракта и topic0. "
+                   "Для загрузки прошлых регистраций включают `dex.history_scan`. Начальные программы оплаченных рынков находятся в `dex.aqua_programs`. "
+                   "Ступени для чтения цен — 0,1, 1 и 10 USDT с переводом в фактическую входную валюту. Лимит поручения задаёт владелец. "
+                   "В настройках DEX владелец размещает AquaStrategyWallet и сохраняет проверенный адрес в `dex.router`. "
+                   "Там же можно скачать отдельный неподписанный вызов cache для V5. Прямой модуль принимает полную программу при каждом обмене. "
+                   "После оплаты восстановление сверяет подписанное поручение, событие SwapVM и движения обеих валют кошелька.")
         if source_scope := registry_entries.get(str(row["id"])):
             assert source_scope["module"] == row["module"] and source_scope["path"] == r["path"]
             start, end = source_scope["lines"]

@@ -87,6 +87,8 @@ pub(super) mod empire_wallet;
 pub(super) mod shiba_payment;
 mod shiba_return;
 mod shiba_executor;
+#[cfg(test)]
+mod aqua_tests;
 pub(super) mod aqua_wallet;
 pub(super) mod aqua_plan;
 pub(super) mod angstrom_wallet;

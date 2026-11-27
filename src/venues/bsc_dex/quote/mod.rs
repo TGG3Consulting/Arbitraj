@@ -78,6 +78,7 @@ mod aktionariat_pricing;
 mod bancor_legacy_pricing;
 mod ambient_pricing;
 mod llamma_pricing;
+mod aqua_sizing;
 mod aqua_pricing;
 mod mooniswap_pricing;
 mod defiplaza_pricing;

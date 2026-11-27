@@ -1,5 +1,6 @@
 <!-- Размещение принятого модуля одним CREATE в выбранной сети по действию оператора. -->
 <script>
+  import {unsignedCache} from '../lib/aquaDeploy.js';
   import {onDestroy} from 'svelte';
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {store, setValue} from '../lib/settings.svelte.js';
@@ -7,6 +8,10 @@
   import {usesOriginalAktionariat} from '../lib/aktionariatDeploy.js';
   import ErrorText from './ErrorText.svelte';
   let {id, kind, venue} = $props();
+  const aquaByChain = {
+    '8453':{file:'aqua-base',key:'aqua-wallet:8453',name:'AquaStrategyWallet на Base',load:()=>import('../assets/aqua-base-create.json')},
+    '1':{file:'aqua-ethereum',key:'aqua-wallet:1',name:'AquaStrategyWallet в Ethereum',load:()=>import('../assets/aqua-ethereum-create.json')},
+  };
   const stabullByChain = {
     '8453':{file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')},
     '1':{file:'stabull-ethereum',key:'stabull-create:1',name:'StabullAdapter в Ethereum',load:()=>import('../assets/stabull-ethereum.json')},
@@ -47,6 +52,7 @@
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : ['stabull','stabull_module'].includes(kind)
       ? stabullByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
+      : kind==='aqua_swapvm' ? aquaByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
       : kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
   const recoverable = $derived(!!deployment?.load);
   const file = $derived(deployment?.file);
@@ -102,9 +108,19 @@
     const action = scope(), plan = manifest;
     await loadPlan(action.settings,plan);
     action.check();
-    const url = URL.createObjectURL(new Blob([JSON.stringify(unsigned(plan), null, 2)], {type:'application/json'}));
-    const a=document.createElement('a'); a.href=url; a.download=file+'-create.json'; a.click();
+    saveJson(unsigned(plan),file+'-create.json');
+  }
+  function saveJson(tx,name) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(tx, null, 2)], {type:'application/json'}));
+    const a=document.createElement('a'); a.href=url; a.download=name; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  async function cacheFile(entry) {
+    const action=scope(), plan=manifest;
+    await loadPlan(action.settings,plan);
+    const tx=await unsignedCache(provider(),plan,value(target)?.toLowerCase(),entry);
+    action.check();
+    saveJson(tx,file+'-cache-'+entry.order+'.json');
   }
   async function price() {
     const action = scope(), plan = manifest;
@@ -222,6 +238,15 @@
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}
         <div>{label} <code>{manifest.arguments[i]}</code></div>
       {/each}
+    {:else if kind==='aqua_swapvm'}
+      <p>SwapVM <code>{manifest.roles.engine.address}</code>, реестр Aqua <code>{manifest.roles.registry.address}</code>. После финализации адрес модуля сохраняется в <code>dex.router</code>.</p>
+      {#if value(target)}
+        <p>Прямой обмен принимает программу в calldata. Для V5 оператор один раз регистрирует программу вызовом cache на своём модуле.</p>
+        {#each manifest.cache as entry}
+          <p><code>{entry.order}</code> · {entry.gas} газа при архивной регистрации.</p>
+          <button class="quiet" disabled={busy} onclick={()=>run(()=>cacheFile(entry))}>Скачать неподписанное поручение cache</button>
+        {/each}
+      {/if}
     {:else if kind==='ambient_ethereum'}
       <p>Контракт обмена <code>{manifest.exchange}</code>, данные пула <code>{manifest.query}</code>, WETH <code>{manifest.wrapped}</code>. После финализации модуль сохраняется в <code>dex.router</code>.</p>
     {:else if ['llamma_lending','llamma_mint','llamma_v2','ammalgam_dlex'].includes(kind)}

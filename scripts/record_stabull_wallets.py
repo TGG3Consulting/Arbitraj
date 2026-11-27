@@ -98,8 +98,8 @@ def capture(url, artifact, network):
             if not all(map(OK,r[:len(setup)+len(reads)])) or not all(map(OK,r[-len(reads):])):raise ValueError("unavailable setup/read")
             before=[int(row["returnData"],16) for row in r[len(setup):len(setup)+len(reads)]]
             after=[int(row["returnData"],16) for row in r[-len(reads):]]
-            return trade,r[-len(reads)-1],before,after
-        _,first,b,a=play(cap if want else 1,expiry)
+            return trade,r[-len(reads)-1],before,after,int(r[len(prefix)]["gasUsed"],16)
+        _,first,b,a,_=play(cap if want else 1,expiry)
         base={"mode":mode,"input":ip,"output":op,"specified":str(amount),"quoted":str(q),"exact_output":want}
         if not OK(first):
             if a!=b:raise ValueError("failed payment moved funds")
@@ -108,17 +108,18 @@ def capture(url, artifact, network):
         if (want and (paid>cap or net<amount)) or (not want and paid!=amount) or net<=0 or a[2:]!=b[2:]:
             return None,dict(**base,stage="wallet differs",paid=str(paid),net=str(net))
         tight=paid if want else net
-        payment,out,before,after=play(tight,expiry)
+        payment,out,before,after,auth_gas=play(tight,expiry)
         if not OK(out) or before!=b or after!=a:return None,dict(**base,stage="strict boundary unavailable",paid=str(paid),net=str(net))
-        _,fail,bf,af=play(tight-1 if want else tight+1,expiry)
+        _,fail,bf,af,_=play(tight-1 if want else tight+1,expiry)
         if mode=="v5":
-            _,equal,eb,ea=play(tight,stamp)
+            _,equal,eb,ea,_=play(tight,stamp)
             if not OK(equal) or eb!=before or ea!=after:raise ValueError((pool,"V5 outer deadline equality"))
             base["deadline_equality_gas"]=int(equal["gasUsed"],16)
-        _,late,bl,al=play(tight,stamp-1 if mode=="v5" else stamp)
+        _,late,bl,al,_=play(tight,stamp-1 if mode=="v5" else stamp)
         if OK(fail) or OK(late) or bf!=af or bl!=al:raise ValueError((pool,mode,"boundary rollback"))
         return setup+[payment],dict(**base,stage="paid",paid=str(paid),net=str(net),gas=int(out["gasUsed"],16),logs=out["logs"],calldata=payment,
-                                    min_or_cap_error=fail.get("error"),deadline_error=late.get("error"))
+                                    wallet_and_module_before=list(map(str,before)),wallet_and_module_after=list(map(str,after)),
+                                    approval_gas=auth_gas,min_or_cap_error=fail.get("error"),deadline_error=late.get("error"))
     modes=["module","v5"] if artifact else ["pool","router"]
     def cycle(row):
         pool=row["address"];token=row["token0"]

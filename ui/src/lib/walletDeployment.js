@@ -1,4 +1,5 @@
-// Проверка неподписанного CREATE и канонического результата для Rubicon Classic.
+// Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
+import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
@@ -15,6 +16,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (settings.kind === "uniswap_v1" || plan.kind === "uniswap_v1") return loadV1(settings,plan,hashCode);
   requireFact(plan.chainId === 8453 && address.test(plan.market) && address.test(plan.implementation)
     && digest.test(plan.runtimeKeccak), 'Формат архивного размещения не распознан.');
   requireFact(settings.kind === 'rubicon_classic' && settings.market?.toLowerCase() === plan.market
@@ -29,11 +31,12 @@ export async function loadPlan(settings, plan) {
 const call = (provider, method, params = []) => provider.request({method, params});
 
 async function checkChain(provider, p) {
-  requireFact(BigInt(await call(provider, 'eth_chainId')) === BigInt(p.chainId), 'Выберите Base в кошельке.');
+  requireFact(BigInt(await call(provider, 'eth_chainId')) === BigInt(p.chainId), 'Выберите '+(p.chainId === 1 ? 'Ethereum' : 'Base')+' в кошельке.');
 }
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (p.kind === "uniswap_v1") return checkV1(provider,p,at,hashCode);
   const [proxy, slot, code] = await Promise.all([
     call(provider, 'eth_getCode', [p.market, at]),
     call(provider, 'eth_getStorageAt', [p.market, implementationSlot, at]),
@@ -42,6 +45,10 @@ export async function checkMarket(provider, p, at) {
   requireFact(digest.test(slot) && slot.toLowerCase().slice(2) === p.implementation.slice(2).padStart(64, '0')
     && await hashCode(proxy) === p.proxySha256 && await hashCode(code) === p.implementationSha256,
     'Код рынка или активная реализация изменились.');
+}
+
+async function sameRuntime(code, p) {
+  return await hashCode(code) === p.runtimeSha256 && (p.kind !== 'uniswap_v1' || runtimeKeccak(code) === p.runtimeKeccak);
 }
 
 export function unsigned(p) {
@@ -60,7 +67,7 @@ export async function estimate(provider, p) {
   const [gas, price, runtime] = await Promise.all([
     call(provider, 'eth_estimateGas', [tx]), call(provider, 'eth_gasPrice'), call(provider, 'eth_call', [tx, at]),
   ]);
-  requireFact(await hashCode(runtime) === p.runtimeSha256, 'Проверка создания вернула другой код модуля.');
+  requireFact(await sameRuntime(runtime,p), 'Проверка создания вернула другой код модуля.');
   return {from, gas:BigInt(gas).toString(), fee:(BigInt(gas)*BigInt(price)).toString()};
 }
 
@@ -96,15 +103,21 @@ export async function deployed(provider, p, hash, pending) {
   if (tx.chainId != null) requireFact(BigInt(tx.chainId) === BigInt(p.chainId), 'Транзакция принадлежит другой сети.');
   if (pending) requireFact(tx.from.toLowerCase() === pending.from && BigInt(tx.nonce) === BigInt(pending.nonce)
     && pending.creation === p.creationSha256 && pending.chain === p.chainId, 'Плательщик, nonce или исходное поручение отличаются.');
+  if (p.kind === 'uniswap_v1') {
+    const who = pending?.from ?? (await call(provider, 'eth_requestAccounts'))?.[0];
+    requireFact(address.test(who) && who.toLowerCase() === tx.from.toLowerCase(), 'Плательщик канонического CREATE отличается от кошелька.');
+    requireFact(!pending?.hash || pending.hash.toLowerCase() === hash.toLowerCase(), 'Хеш отличается от исходной отправки.');
+  }
   const final = await call(provider, 'eth_getBlockByNumber', ['finalized', false]);
   const canonical = await call(provider, 'eth_getBlockByNumber', [r.blockNumber, false]);
   requireFact(final && canonical?.hash === r.blockHash && BigInt(final.number) >= BigInt(r.blockNumber),
-    'Транзакция ожидает финализированного блока Base.');
+    'Транзакция ожидает финализированного блока.');
   if (BigInt(r.status) === 0n) return {reverted:true};
   requireFact(BigInt(r.status) === 1n && address.test(r.contractAddress), 'Квитанция не подтверждает создание контракта.');
   const at = {blockHash:final.hash, requireCanonical:true};
   await checkMarket(provider, p, at);
+  if (p.kind === 'uniswap_v1') await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
-  requireFact(await hashCode(code) === p.runtimeSha256, 'Размещённый runtime отличается от проверенного кода.');
+  requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
   return {address:r.contractAddress.toLowerCase()};
 }

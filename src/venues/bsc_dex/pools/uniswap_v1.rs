@@ -22,6 +22,7 @@ use serde_json::{Value, json};
 
 sol! {
     interface IFactory {
+        event NewExchange(address indexed token,address indexed exchange);
         function exchangeTemplate() external view returns(address);
         function getExchange(address token) external view returns(address);
         function getToken(address exchange) external view returns(address);
@@ -206,4 +207,85 @@ pub(super) fn topics() -> Vec<B256> {
     ]
     .map(alloy_primitives::keccak256)
     .to_vec()
+}
+
+/// An event names one ERC20 exchange. If that ERC20 is the quote, it also opens cross-exchange markets for subscribed tokens.
+pub(super) fn created(
+    f: &'static Family,
+    factory: Address,
+    token: Address,
+    exchange: Address,
+    wrapped: Address,
+    quote: Address,
+    watched: impl Iterator<Item = Address>,
+) -> Vec<Candidate> {
+    let mut out = vec![];
+    for coin in watched.filter(|c| *c != quote && (*c == token || quote == token)) {
+        let mut add = |a: Address| {
+            out.push(Candidate {
+                family: f,
+                pool: format!("{a:#x}"),
+                coin,
+                quote,
+            })
+        };
+        if (coin == token && quote == wrapped) || (quote == token && coin == wrapped) {
+            add(exchange);
+        }
+        add(factory);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn registered_exchange_produces_native_and_token_paths_only_for_the_watched_pair() {
+        use alloy::sol_types::SolEvent;
+        let capture: Value = serde_json::from_str(include_str!(
+            "../../../../tests/data/first_run_dex_2026-11-26/uniswap_v1_ethereum_prices.json"
+        ))
+        .unwrap();
+        let log: alloy::rpc::types::Log =
+            serde_json::from_value(capture["registration"].clone()).unwrap();
+        let e = IFactory::NewExchange::decode_log_data(&log.inner.data).unwrap();
+        let f = super::super::families::make("original-v1", "uniswap_v1").unwrap();
+        let wrapped = capture["wrapped"].as_str().unwrap().parse().unwrap();
+        let factory = log.inner.address;
+        let found = created(
+            f,
+            factory,
+            e.token,
+            e.exchange,
+            wrapped,
+            wrapped,
+            [e.token].into_iter(),
+        );
+        assert_eq!(found.len(), 2);
+        assert_eq!(found[0].pool, format!("{:#x}", e.exchange));
+        assert_eq!(found[1].pool, format!("{factory:#x}"));
+        let matches = created(
+            f,
+            factory,
+            e.token,
+            e.exchange,
+            wrapped,
+            e.token,
+            [wrapped].into_iter(),
+        );
+        assert_eq!(matches.len(), 2);
+        assert!(
+            created(
+                f,
+                factory,
+                e.token,
+                e.exchange,
+                wrapped,
+                wrapped,
+                [wrapped].into_iter()
+            )
+            .is_empty()
+        );
+    }
 }

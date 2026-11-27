@@ -17,11 +17,11 @@
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { dirStatus } from '../lib/directory.js';
   import SettingEditor from './SettingEditor.svelte';
-  import RubiconDeploy from './RubiconDeploy.svelte';
+  import MarketModuleDeploy from './MarketModuleDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
 
   /** families — [DexFamily] (DEX с заданным видом); dir — PoolDirectory или null (справочник не получен). */
-  let { families, dir } = $props();
+  let { families, dir, venue } = $props();
   let showAll = $state(false);
   let copyFrom = $state({});
   let copyError = $state('');
@@ -129,8 +129,8 @@
         <td>
           <details>
             <summary>Адреса и настройки DEX</summary>
-            {#if store.values['dex.kind|Dex|'+r.id] === 'rubicon_classic'}
-              <RubiconDeploy id={r.id}/>
+            {#if ['rubicon_classic','uniswap_v1'].includes(store.values['dex.kind|Dex|'+r.id])}
+              {#key store.values['dex.kind|Dex|'+r.id]}<MarketModuleDeploy id={r.id} {venue} kind={store.values['dex.kind|Dex|'+r.id]}/>{/key}
             {/if}
             {#each rest as def (def.name)}
               <div class="setting-line">

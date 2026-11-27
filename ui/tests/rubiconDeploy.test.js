@@ -2,7 +2,7 @@
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {checkMarket, deployed, hashCode, loadPlan, send, unsigned} from '../src/lib/rubiconDeploy.js';
+import {checkMarket, deployed, hashCode, loadPlan, send, unsigned} from '../src/lib/walletDeployment.js';
 
 const archived = JSON.parse(readFileSync(new URL('../public/rubicon-classic-base.json',import.meta.url)));
 const settings={kind:'rubicon_classic', market:archived.market, hashes:[archived.runtimeKeccak],

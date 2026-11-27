@@ -100,8 +100,11 @@ pub fn path_costs(
             false,
         );
         if let PoolState::UniswapV1(s)=&h.entry.pool.state{
-            let f=s.swap(h.token_in,side==Side::Sell,if side==Side::Sell{h.swapped.amount_in}else{h.swapped.amount_out})
-                .filter(|f|f.spent==h.swapped.amount_in && f.received==h.swapped.amount_out)
+            // A normal BUY is priced backwards; sequential graph fills may instead already carry an exact-input quote.
+            let inputs = (h.swapped.amount_in,h.swapped.amount_out);
+            let by_input = |exact_in| s.swap(h.token_in,exact_in,if exact_in {inputs.0}else{inputs.1})
+                .filter(|f|(f.spent,f.received)==inputs);
+            let f=by_input(side==Side::Sell).or_else(||by_input(side!=Side::Sell))
                 .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Uniswap V1: размер или промежуточная выплата изменились"))?;
             add(&mut out,CostKind::PoolFee,pct(h.pool_in,Decimal::new(3,1)),&from,true);
             if s.dual(){

@@ -1,5 +1,4 @@
 //! One V1 directory factory can expose many ERC20/native markets and composite ERC20 pairs.
-#[allow(dead_code)]
 mod native_common;
 use alloy_primitives::Address;
 use arb::core::types::{

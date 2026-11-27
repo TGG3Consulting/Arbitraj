@@ -35,9 +35,10 @@ fn input(x: U256, y: U256, amount: U256) -> Option<U256> {
         return None;
     }
     let weighted = amount.checked_mul(U256::from(INPUT_AFTER_FEE))?;
-    weighted
-        .checked_mul(y)?
-        .checked_div(x.checked_mul(U256::from(FEE_SCALE))?.checked_add(weighted)?)
+    weighted.checked_mul(y)?.checked_div(
+        x.checked_mul(U256::from(FEE_SCALE))?
+            .checked_add(weighted)?,
+    )
 }
 fn output(x: U256, y: U256, want: U256) -> Option<U256> {
     if want.is_zero() || x.is_zero() || want >= y {
@@ -45,7 +46,10 @@ fn output(x: U256, y: U256, want: U256) -> Option<U256> {
     }
     x.checked_mul(want)?
         .checked_mul(U256::from(FEE_SCALE))?
-        .checked_div(y.checked_sub(want)?.checked_mul(U256::from(INPUT_AFTER_FEE))?)?
+        .checked_div(
+            y.checked_sub(want)?
+                .checked_mul(U256::from(INPUT_AFTER_FEE))?,
+        )?
         .checked_add(U256::ONE)
 }
 
@@ -117,13 +121,21 @@ impl UniswapV1State {
     pub fn spot(&self, source: Address, amount: U256) -> Option<U256> {
         use crate::venues::bsc_dex::math::full_math::mul_div;
         let i = self.side(source)?;
-        let eth = match &self.markets[i] {
-            Some(e) => mul_div(amount, e.eth, e.erc20)?,
-            None => amount,
-        };
-        match &self.markets[1 - i] {
-            Some(e) => mul_div(eth, e.erc20, e.eth),
-            None => Some(eth),
+        match (&self.markets[i], &self.markets[1 - i]) {
+            (Some(a), Some(b)) => {
+                // A spot price is a ratio, so a fractional intermediate wei is rounded only in the final asset.
+                type Wide = alloy_primitives::Uint<768, 12>;
+                let numerator = Wide::from(amount) * Wide::from(a.eth) * Wide::from(b.erc20);
+                let denominator = Wide::from(a.erc20) * Wide::from(b.eth);
+                let result = numerator.checked_div(denominator)?;
+                if result.bit_len() > 256 {
+                    return None;
+                }
+                Some(U256::from_limbs(result.as_limbs()[..4].try_into().ok()?))
+            }
+            (Some(a), None) => mul_div(amount, a.eth, a.erc20),
+            (None, Some(b)) => mul_div(amount, b.erc20, b.eth),
+            (None, None) => None,
         }
     }
 }
@@ -158,12 +170,19 @@ mod tests {
                 exchange(b, 800000, 100000),
             ],
         };
-        for t in [a, b] {
-            let f = s.swap(t, true, U256::from(700)).unwrap();
+        // On the small reverse trade both outputs round to 9; at 7000 the charges are visible in raw units.
+        for (t, size, intermediate, paid, spot) in [
+            (a, 700u64, 6293u64, 47229u64, 50666u64),
+            (b, 700, 87, 9, 9),
+            (b, 7000, 864, 95, 96),
+        ] {
+            let f = s.swap(t, true, U256::from(size)).unwrap();
+            assert_eq!(f.eth, U256::from(intermediate));
+            assert_eq!(f.received, U256::from(paid));
+            assert_eq!(s.spot(t, f.spent), Some(U256::from(spot)));
             let inv = s.swap(t, false, f.received).unwrap();
             assert!(inv.spent <= f.spent);
             assert!(s.swap(t, true, inv.spent).unwrap().received >= f.received);
-            assert!(f.received < s.spot(t, f.spent).unwrap());
         }
     }
     #[test]

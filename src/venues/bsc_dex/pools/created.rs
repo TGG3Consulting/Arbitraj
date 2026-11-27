@@ -96,6 +96,7 @@ async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
             .map(|a| B256::left_padding_from(a.as_slice()))
             .collect(),
     );
+    let quote_topic=B256::left_padding_from(w.usdt.as_slice());
     for filter in list {
         match conn.subscribe(json!(["logs", filter])).await {
             Ok(mut sub) => {
@@ -103,7 +104,7 @@ async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
                 let mine = mine.clone();
                 tokio::spawn(async move {
                     while let Some(raw) = sub.rx.recv().await {
-                        if relevant(raw.get(), &mine) {
+                        if relevant_for_quote(raw.get(),&mine,quote_topic) {
                             let _ = tx.send(raw.get().to_string());
                         }
                     }
@@ -127,8 +128,15 @@ async fn session(p: &Pools, w: &Watch, list: Vec<Value>) -> String {
 /// Принимает: сырой лог, адреса монет (32 байта). Возвращает: да/нет; лог не разобран — да (поиск безопасен,
 /// пропуск — нет). Ошибок нет.
 pub fn relevant(raw: &str, mine: &HashSet<B256>) -> bool {
+    relevant_for_quote(raw,mine,B256::ZERO)
+}
+
+fn relevant_for_quote(raw:&str,mine:&HashSet<B256>,quote:B256)->bool {
+    use alloy::sol_types::SolEvent;
     match serde_json::from_str::<alloy::rpc::types::Log>(raw) {
-        Ok(log) => log.topics().iter().skip(1).any(|t| mine.contains(t)),
+        Ok(log) => log.topics().iter().skip(1).any(|t| mine.contains(t))
+            || (log.topics().first()==Some(&super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH)
+            && !quote.is_zero() && log.topics().get(1)==Some(&quote)),
         Err(_) => true,
     }
 }
@@ -139,13 +147,17 @@ async fn filters(p: &Pools, usdt: Address) -> Vec<Value> {
     let u = B256::left_padding_from(usdt.as_slice());
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    for (addr, t0, v4, _) in created_log::sources(&p.ctx) {
+    for (addr, t0, v4, family) in created_log::sources(&p.ctx) {
         // Один источник у двух видов (CLPoolManager: Infinity CL и Infinity Stable) — одна подписка, вид разбирает
         // created_log::on_log.
         if !seen.insert((addr, t0)) {
             continue;
         }
         // V2/V3: токены — topics[1], topics[2]; V4: PoolId — topics[1], валюты — topics[2], topics[3].
+        if family.variant == super::family_variant::Variant::UniswapV1 {
+            out.push(json!({"address":addr,"topics":[t0]}));
+            continue;
+        }
         let (a, b) = if v4 {
             (
                 json!([t0, Value::Null, u]),

@@ -68,6 +68,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Carbon => ("dex.factory",super::carbon::ICarbon::PairCreated::SIGNATURE_HASH,false),
+            Proto::V2 if f.variant == super::family_variant::Variant::UniswapV1 => ("dex.factory",super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::MintClub => ("dex.factory",super::mint_club::IBond::TokenCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::BunnySwap => continue,
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => (
@@ -295,6 +296,17 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
 /// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
 async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
     // Решение 453: событие фабрики crypto-пулов Curve — до двух пар пула (Tricrypto) или поиск по фабрике (v1).
+    if f.variant == super::family_variant::Variant::UniswapV1 {
+        let registered=super::uniswap_v1::IFactory::NewExchange::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
+        let wrapped=p.ctx.addr("dex.native_wrapped").map_err(|e|e.message)?;
+        let candidates=super::uniswap_v1::created(f,log.inner.address,registered.token,registered.exchange,
+            wrapped,w.usdt,w.coins.keys().copied());
+        let mut errors=Vec::new();
+        for candidate in candidates {
+            if let Err(e)=take(p,w,f,candidate).await{errors.push(e);}
+        }
+        return if errors.is_empty(){Ok(())}else{Err(errors.join("; "))};
+    }
     if f.proto.is_curve_crypto() {
         let mut errs = Vec::new();
         for c in created_crypto::candidates(&p.ctx, f, log, w.usdt).await? {

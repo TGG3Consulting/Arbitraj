@@ -97,7 +97,16 @@ def capture(endpoint):
                     raise ValueError((call, len(raw)))
                 call["return_bytes"] = len(raw)
                 call["result"] = str(int.from_bytes(raw[:32], "big"))
-    return dict(block=snapshot["block"], selector=c.selector, factory=FACTORY, roles=roles, state_root=head["stateRoot"], wrapped=WETH, markets=markets, quotes=rows)
+    # Historical creation of the registered USDC exchange, independently located via its creation transaction.
+    origin = rpc("eth_getTransactionReceipt", ["0x4dd8319218534a4176fa747dcc806a50bac692be1f5a1fc5b2fcc95a016f69b9"])
+    canonical = rpc("eth_getBlockByNumber", [origin["blockNumber"],False])
+    topics = ["0x"+keccak(text="NewExchange(address,address)").hex(),
+              "0x"+STABLES[0][2:].zfill(64), "0x"+markets[STABLES[0]]["exchange"][2:].zfill(64)]
+    events = [r for r in origin["logs"] if r["address"] == FACTORY and r["topics"] == topics]
+    if canonical["hash"] != origin["blockHash"] or origin["status"] != "0x1" or len(events) != 1:
+        raise ValueError("cannot prove original V1 registration")
+    return dict(block=snapshot["block"], selector=c.selector, factory=FACTORY, roles=roles,
+                state_root=head["stateRoot"], wrapped=WETH, markets=markets, quotes=rows, registration=events[0])
 
 
 if __name__ == "__main__":

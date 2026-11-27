@@ -1,14 +1,19 @@
-<!-- Размещение принятого кошелька Rubicon Classic одним CREATE в Base по явному действию оператора. -->
+<!-- Размещение принятого модуля одним CREATE в выбранной сети по действию оператора. -->
 <script>
   import {store, setValue} from '../lib/settings.svelte.js';
-  import {loadPlan, unsigned, estimate, send, deployed} from '../lib/rubiconDeploy.js';
+  import {loadPlan, unsigned, estimate, send, deployed} from '../lib/walletDeployment.js';
   import ErrorText from './ErrorText.svelte';
-  let {id} = $props();
+  let {id, kind, venue} = $props();
+  const v1 = $derived(kind === "uniswap_v1");
+  const file = $derived(v1 ? "uniswap-v1-ethereum" : "rubicon-classic-base");
   let manifest = $state(null), estimateSeen = $state(null), pending = $state(null), txHash = $state('');
   let result = $state(''), error = $state(''), busy = $state(false), readyAddress = $state('');
-  const key = 'rubicon-classic-create:8453';
+  const key = $derived(v1 ? 'uniswap-v1-create:1' : 'rubicon-classic-create:8453');
   const value = (name) => store.values[name+'|Dex|'+id];
-  const current = () => ({kind:value('dex.kind'), market:value('dex.factory'),
+  const atVenue = (name) => store.values[name+'|Venue|'+venue];
+  const current = () => ({chainId:atVenue('dex.evm_chain_id'), wrapped:atVenue('dex.native_wrapped'),
+    factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
+    templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations')});
   function refreshPending() {
     pending = JSON.parse(localStorage.getItem(key) ?? 'null');
@@ -30,14 +35,19 @@
   }
   async function prepare() {
     refreshPending();
-    const response = await fetch(import.meta.env.BASE_URL+'rubicon-classic-base.json');
-    if (!response.ok) throw new Error('Архив размещения отсутствует в этой сборке.');
-    manifest = await loadPlan(current(), await response.json());
+    if (v1) {
+      const artifact = await import('../assets/uniswap-v1-ethereum.json');
+      manifest = await loadPlan(current(),artifact.default);
+    } else {
+      const response = await fetch(import.meta.env.BASE_URL+file+'.json');
+      if (!response.ok) throw new Error('Архив размещения отсутствует в этой сборке.');
+      manifest = await loadPlan(current(), await response.json());
+    }
   }
   async function download() {
     await loadPlan(current(),manifest);
     const url = URL.createObjectURL(new Blob([JSON.stringify(unsigned(manifest), null, 2)], {type:'application/json'}));
-    const a=document.createElement('a'); a.href=url; a.download='rubicon-classic-base-create.json'; a.click();
+    const a=document.createElement('a'); a.href=url; a.download=file+'-create.json'; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   async function price() {
@@ -72,16 +82,20 @@
 </script>
 
 <details>
-  <summary>Разместить RubiconClassicWallet на Base</summary>
+  <summary>Разместить {v1 ? 'UniswapV1Adapter в Ethereum' : 'RubiconClassicWallet на Base'}</summary>
   <button class="quiet" disabled={busy} onclick={() => run(prepare)}>Открыть параметры размещения</button>
   {#if manifest}
-    <p>Рынок <code>{manifest.market}</code>. Конструктор принимает этот адрес. Перевод ETH контракту — 0.</p>
+    {#if v1}
+      <p>Фабрика <code>{manifest.roles.factory.address}</code>, WETH <code>{manifest.roles.wrapped.address}</code>. Конструктор принимает оба адреса. Перевод ETH контракту — 0.</p>
+    {:else}
+      <p>Рынок <code>{manifest.market}</code>. Конструктор принимает этот адрес. Перевод ETH контракту — 0.</p>
+    {/if}
     <p>Хеш проверенного runtime <code>{manifest.runtimeKeccak}</code>.</p>
     <button class="quiet" disabled={busy} onclick={() => run(download)}>Скачать неподписанный CREATE</button>
     {#if !pending && !value('dex.router')}
       <button class="quiet" disabled={busy} onclick={() => run(price)}>Оценить газ в кошельке</button>
       {#if estimateSeen}
-        <p>Плательщик <code>{estimateSeen.from}</code>. Оценка L2 — {estimateSeen.gas} ед. газа, {estimateSeen.fee} wei. Кошелёк покажет условия отправки и сетевую комиссию.</p>
+        <p>Плательщик <code>{estimateSeen.from}</code>. Оценка {v1 ? "Ethereum" : "L2"} — {estimateSeen.gas} ед. газа, {estimateSeen.fee} wei. Кошелёк покажет условия отправки и сетевую комиссию.</p>
         <button disabled={busy} onclick={() => run(submit)}>Подтвердить создание контракта в кошельке</button>
       {/if}
     {/if}

@@ -139,7 +139,7 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
-    if e.family.variant==super::super::pools::family_variant::Variant::PropVenue{
+    if e.family.variant.prop_venue(){
         use super::super::exec::prop_abi::IProp::Swapped;
         let r=super::super::pools::prop_venue::Roles::read(ctx,e.family.id)?;
         let owner=super::super::wallet::signer::address(ctx)?;

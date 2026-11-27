@@ -241,6 +241,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn prop_venue(self) -> bool { self == Self::PropVenue }
     pub(crate) fn motoswap(self) -> bool { self == Self::Motoswap }
     pub(crate) fn e3_lb(self) -> bool { self == Self::E3Lb }
     pub fn fluid_lite(self)->bool{ self==Self::FluidDexLite }

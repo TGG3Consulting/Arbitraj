@@ -385,7 +385,7 @@ pub fn state<'a>(
             })
         });
     }
-    if f.variant == Variant::PropVenue {
+    if f.variant.prop_venue() {
         return Box::pin(async move {
             let tag = block_tag(block);
             let at = super::nami::block(ctx, &tag).await?;

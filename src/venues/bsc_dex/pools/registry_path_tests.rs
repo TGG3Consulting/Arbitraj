@@ -26,6 +26,33 @@ fn ambient(reg: &Registry) -> (Entry, B256) {
 }
 
 #[test]
+fn recorded_goliath_and_pancake_keep_their_quote_and_refresh_paths() {
+    use crate::venues::bsc_dex::{pools::per_block, quote::uses_wallet_quoter};
+
+    let venue: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"
+    )).unwrap();
+    let profiles: Vec<Value> = serde_json::from_str(include_str!(
+        "../../../../config/first_run_dex.json"
+    )).unwrap();
+    let profile = profiles.iter().find(|p| {
+        p["chain_id"] == 1 && p["settings"]["dex.factory"] == venue["venue"]
+    }).unwrap();
+    let family = families::make(
+        profile["id"].as_str().unwrap(),
+        profile["settings"]["dex.kind"].as_str().unwrap(),
+    ).unwrap();
+    assert!(family.variant.prop_venue());
+    assert!(uses_wallet_quoter(family.variant));
+    assert!(per_block::needs(family));
+
+    let pancake = fixtures::pancake().family;
+    assert!(!pancake.variant.prop_venue());
+    assert!(!uses_wallet_quoter(pancake.variant));
+    assert!(!per_block::needs(pancake));
+}
+
+#[test]
 fn recorded_motoswap_uses_its_own_plan_and_block_refresh_on_ethereum() {
     use crate::venues::bsc_dex::{exec::motoswap_plan, pools::per_block, quote::v2_pair_quote};
 

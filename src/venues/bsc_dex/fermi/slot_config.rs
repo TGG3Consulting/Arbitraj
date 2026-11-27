@@ -1,7 +1,7 @@
 //! Параметры одного расчётного актива и разрешённого строителя с независимыми исполнителями площадок.
 use super::super::{
     parts::Parts,
-    pools::{families, family_variant::Variant, load_woo_ladder},
+    pools::{families, load_woo_ladder},
 };
 use super::{Builder, Deployment, prop_oracle::Oracle, prop_profile};
 use alloy_primitives::{Address, B256};
@@ -84,7 +84,7 @@ impl Config {
         }
         for f in families::all(ctx)
             .into_iter()
-            .filter(|f| f.variant == Variant::PropVenue)
+            .filter(|f| f.variant.prop_venue())
         {
             let Some(market_profile) = prop_profile::Profile::read(ctx, f.id) else {
                 continue;

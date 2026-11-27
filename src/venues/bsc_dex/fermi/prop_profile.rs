@@ -7,10 +7,7 @@ use crate::{
     },
     venues::bsc_dex::{
         ctx_place::key_of,
-        pools::{
-            families::{self, Family},
-            family_variant::Variant,
-        },
+        pools::families::{self, Family},
     },
 };
 use std::collections::BTreeMap;
@@ -46,7 +43,7 @@ impl Profile {
 
     pub(super) fn read(ctx: &Ctx, key: &str) -> Option<Self> {
         let family = families::classify(ctx, key).ok()?;
-        if family.variant != Variant::PropVenue {
+        if !family.variant.prop_venue() {
             return None;
         }
         let market = ctx.dex_addr("dex.factory", key).ok()?;
@@ -70,7 +67,7 @@ pub(in crate::venues::bsc_dex) fn sources(ctx: &Ctx) -> BTreeMap<String, Vec<Str
     }
     families::all(ctx)
         .into_iter()
-        .filter(|f| f.variant == Variant::PropVenue)
+        .filter(|f| f.variant.prop_venue())
         .filter_map(|f| {
             let profile = Profile::read(ctx, f.id)?;
             let id = f.id.split('@').next()?;

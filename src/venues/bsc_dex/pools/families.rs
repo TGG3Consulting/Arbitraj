@@ -881,7 +881,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.safeswap_spender", "dex.router_runtime_hash", "dex.pool_code_hashes", "dex.pair_runtime_hash",
             "dex.proxy_implementations", "dex.proxy_runtime_hashes", "dex.router", "dex.module_runtime_hashes", "dex.pmm_ladder_usd",
         ]),
-        Proto::V2 if f.variant==Variant::PropVenue=>{list.extend(["dex.factory","dex.quoter","dex.propamm_roles","dex.propamm_pairs","dex.pmm_ladder_usd"]);}
+        Proto::V2 if f.variant.prop_venue()=>{list.extend(["dex.factory","dex.quoter","dex.propamm_roles","dex.propamm_pairs","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::IntegralSize=>{list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.integral_delay","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::Pendle=>{list.extend(["dex.pendle_roles","dex.pendle_markets","dex.quoter"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
         Proto::V2 if f.variant.defiplaza()=>list.extend(["dex.factory","dex.factory_runtime_hash","dex.router","dex.module_runtime_hashes"]),

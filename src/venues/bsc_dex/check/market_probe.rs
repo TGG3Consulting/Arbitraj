@@ -60,7 +60,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Motoswap(_)|PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Motoswap(_)|PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant.prop_venue() || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -218,7 +218,7 @@ impl Market {
             entry.pool.block=number;
             anchor=Some((head,entry));
             Venue::Brokerbot
-        } else if e.family.variant==super::super::pools::family_variant::Variant::PropVenue {
+        } else if e.family.variant.prop_venue() {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             for (i,o) in [(e.usdt,e.coin),(e.coin,e.usdt)] {
                 let target=super::super::exec::prop_plan::probe_target(ctx,e,i)?;

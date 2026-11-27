@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.defiplaza() || (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || e.family.variant.ambient() || e.family.variant.fluid_lite() || e.family.variant.motoswap() || matches!(e.family.variant,Variant::BaseStonk|Variant::Brokerbot|Variant::Aqua|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.defiplaza() || (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || e.family.variant.ambient() || e.family.variant.fluid_lite() || e.family.variant.motoswap() || e.family.variant.prop_venue() || matches!(e.family.variant,Variant::BaseStonk|Variant::Brokerbot|Variant::Aqua|Variant::Angstrom|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) fn native_module(v:Variant)->bool {
@@ -140,7 +140,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             continue;
         }
         if e.family.variant.issuer_shares(){quotes.extend(Box::pin(super::aktionariat_pricing::options(q,i,e,payer,graph,head)).await);continue}
-        if e.family.variant==Variant::PropVenue{quotes.extend(Box::pin(super::prop_pricing::options(q,i,e,payer,head)).await);continue}
+        if e.family.variant.prop_venue(){quotes.extend(Box::pin(super::prop_pricing::options(q,i,e,payer,head)).await);continue}
         if e.family.variant==Variant::IntegralSize{quotes.extend(Box::pin(super::integral_pricing::options(q,i,e,payer,graph,head)).await);continue}
         if e.family.variant==Variant::Bundles{
             quotes.extend(Box::pin(super::bundles_pricing::options(q,i,e,payer,graph,head)).await);

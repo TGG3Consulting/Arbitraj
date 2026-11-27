@@ -3,7 +3,6 @@
 mod kipseli;
 use super::{
     families::{self, Family},
-    family_variant::Variant,
     nami_batch as batch, solidly_classic_factory as code,
     stable_list::Extra,
     verify::{Candidate, Verdict},
@@ -258,7 +257,7 @@ pub(super) fn directory(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[A
     let mut out = Extra::default();
     for f in families::all(ctx)
         .into_iter()
-        .filter(|f| f.variant == Variant::PropVenue)
+        .filter(|f| f.variant.prop_venue())
     {
         if let (Ok(r), Ok(accepted)) = (Roles::read(ctx, f.id), pairs(ctx, f.id)) {
             for (a, b) in accepted {

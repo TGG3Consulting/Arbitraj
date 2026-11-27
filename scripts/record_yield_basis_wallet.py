@@ -42,6 +42,7 @@ def capture(endpoint,artifact,book):
     def cash(asset,owner):
         return tx(MULTICALL,"getEthBalance(address)",["address"],[owner]) if asset==ETH else balance(asset,owner)
     results = []
+    samples = set()
     for venue,entry in book["venues"].items():
         index = entry["markets"][0]
         market = book["markets"][index]
@@ -91,6 +92,10 @@ def capture(endpoint,artifact,book):
                 results.append(dict(index=index,kind=entry["kind"],venue=venue,mode=mode,side=case["side"],source=a,target=b,
                                     amount=str(amount),spent=str(actual[0]),received=str(actual[1]),stage=case["stage"],
                                     reason=None if success else why(trade),gas=int(trade["gasUsed"],16)))
+                key=(entry["kind"],mode,case["side"])
+                if success and key not in samples:
+                    results[-1]["logs"]=trade["logs"]
+                    samples.add(key)
     creation = bytes.fromhex(artifact["creation"])+encode(["address","address"],[factory,WETH])
     manifest=dict(kind="yield_basis",chainId=1,factory=factory,wrapped=WETH,factoryHash=book["factory_code"]["keccak256"],
                   wrappedHash="0x"+keccak(hexstr=rpc(endpoint,"eth_getCode",[WETH,at])).hex(),sourceBlock=at["blockHash"],

@@ -14,6 +14,8 @@ use serde_json::Value;
 
 sol! {
     interface ISolidlyProxy {
+        function factory() external view returns (address);
+        function pairFor(address a,address b,bool stable) external view returns(address);
         function logicAddress() external view returns (address);
         function childSubImplementationAddress() external view returns (address);
         function factoryAddress() external view returns (address);
@@ -46,7 +48,8 @@ pub(super) async fn state(
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let roots = ctx.dex_list("dex.proxy_implementations", f.id)?;
     let hashes = ctx.dex_list("dex.proxy_runtime_hashes", f.id)?;
-    let ([fac_logic, pair_logic], [fac_hash, pair_hash]) = (roots.as_slice(), hashes.as_slice())
+    let (Some([fac_logic, pair_logic]), Some([fac_hash, pair_hash])) =
+        (roots.get(..2), hashes.get(..2))
     else {
         return Err(config());
     };
@@ -147,4 +150,76 @@ pub(super) async fn state(
             max_gas_price: None,
         },
     })
+}
+
+/// Router01 has its own proxy. Its implementation and pool derivation are independent from V5 admission.
+pub(in crate::venues::bsc_dex) async fn router(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    input: Address,
+    output: Address,
+    at: &Value,
+) -> GatewayResult<Address> {
+    let id = e.family.id;
+    let bad = || {
+        ctx.err(
+            ErrorCode::NotApplicable,
+            "Solidly Router01: изменились фабрика, расчёт адреса пары или исполняемый код",
+        )
+    };
+    if e.family.variant != super::family_variant::Variant::SolidlyProxy
+        || !((input, output) == (e.pool.token0, e.pool.token1)
+            || (output, input) == (e.pool.token0, e.pool.token1))
+    {
+        return Err(bad());
+    }
+    let generation = ctx.settings.generation();
+    let target = ctx.dex_addr("dex.router", id)?;
+    let hash: B256 = ctx
+        .dex_text("dex.router_runtime_hash", id)?
+        .parse()
+        .map_err(|_| bad())?;
+    let logic: Address = ctx
+        .dex_list("dex.proxy_implementations", id)?
+        .get(2)
+        .ok_or_else(bad)?
+        .parse()
+        .map_err(|_| bad())?;
+    let logic_hash: B256 = ctx
+        .dex_list("dex.proxy_runtime_hashes", id)?
+        .get(2)
+        .ok_or_else(bad)?
+        .parse()
+        .map_err(|_| bad())?;
+    let PoolState::Solidly { stable, .. } = &e.pool.state else {
+        return Err(bad());
+    };
+    let pair = ISolidlyProxy::pairForCall {
+        a: input,
+        b: output,
+        stable: *stable,
+    };
+    let (gate, (), (), (), [fac, implementation, pool]) = tokio::try_join!(
+        solidly_classic::fresh(ctx, e, at),
+        runtime(ctx, target, hash, at),
+        runtime(ctx, logic, logic_hash, at),
+        super::exact_wallet_tokens::check(ctx, input, output, at),
+        batch::read(
+            ctx,
+            [
+                batch::view(at, target, ISolidlyProxy::factoryCall {}),
+                batch::view(at, target, ISolidlyProxy::logicAddressCall {}),
+                batch::view(at, target, pair.clone())
+            ]
+        )
+    )?;
+    if gate.paused
+        || batch::decode(&fac, ISolidlyProxy::factoryCall {})? != ctx.dex_addr("dex.factory", id)?
+        || batch::decode(&implementation, ISolidlyProxy::logicAddressCall {})? != logic
+        || batch::decode(&pool, pair)? != e.pool.reference.address()
+        || ctx.settings.generation() != generation
+    {
+        return Err(bad());
+    }
+    Ok(target)
 }

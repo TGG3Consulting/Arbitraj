@@ -31,6 +31,7 @@ use super::ur;
 
 #[derive(Debug, Clone)]
 pub(super) enum DirectCall {
+    SolidlyRouter(std::sync::Arc<super::solidly_router_wallet::Proof>),
     RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
@@ -214,6 +215,7 @@ impl Plan {
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
+                DirectCall::SolidlyRouter(proof) => proof.data(),
                 DirectCall::RegisteredV3(proof) => proof.data(),
                 DirectCall::Umbrae{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),

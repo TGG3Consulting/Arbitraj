@@ -392,7 +392,7 @@ pub mod shell_sides;
 pub mod solidly_fee_read;
 pub(in crate::venues::bsc_dex) mod solidly_classic;
 pub(super) mod solidly_classic_factory;
-pub(super) mod solidly_proxy;
+pub(in crate::venues::bsc_dex) mod solidly_proxy;
 pub(in crate::venues::bsc_dex) mod exact_wallet_tokens;
 pub(in crate::venues::bsc_dex) mod base_plugin_v1;
 pub mod solidly_gate_read;

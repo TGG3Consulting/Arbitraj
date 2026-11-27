@@ -28,7 +28,7 @@ pub(super) async fn candidates(
         if native {
             continue;
         }
-        kinds[13] |= e.family.variant == super::super::pools::family_variant::Variant::RegisteredUniV3;
+        kinds[13] |= e.family.variant.exact_router();
         kinds[12] |= e.family.variant.umbrae();
         kinds[11] |= super::super::pools::sectorone::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
@@ -134,7 +134,7 @@ fn individual(e: &Entry, native: bool) -> bool {
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
         || super::router_pricing::is_native(e)
-        || e.family.variant==super::super::pools::family_variant::Variant::RegisteredUniV3 || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(e)
+        || e.family.variant.exact_router() || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(e)
         || super::delta_pricing::is_delta(e)
 }
 

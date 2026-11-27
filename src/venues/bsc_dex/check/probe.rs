@@ -109,7 +109,7 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
-    let market = Box::pin(super::market_probe::Market::load(ctx,e,at.number,wallet,usdt_amount)).await?;
+    let market = Box::pin(super::market_probe::Market::load(ctx,e,at.number,wallet,usdt_amount,source)).await?;
     let vista = &market.vista;
     let e = market.entry(e);
     let mut list = market.funding(e,source,wallet,usdt_amount);

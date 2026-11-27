@@ -338,7 +338,6 @@
         ]
       },
       "omni-exchange-v4-base": {
-        "at": "2026-11-26T15:55:21+00:00",
         "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/omni-exchange-v4-base/pools?page=1",
         "status": 200,
         "state": "enumerated",
@@ -385,10 +384,48 @@
         ]
       },
       "thirdfy": {
-        "at": "2026-11-26T15:55:27+00:00",
         "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/thirdfy/pools?page=1",
-        "status": 429,
-        "state": "http"
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 6,
+        "samples": [
+          {
+            "id": "base_0xe3ad77ad97576358741be55ee4a0e6e8f32dac27",
+            "address": "0xe3ad77ad97576358741be55ee4a0e6e8f32dac27",
+            "name": "AIXBT / WETH 0.3%",
+            "dex": "thirdfy"
+          },
+          {
+            "id": "base_0x02e14e2f260b38d53e38823c58754a2975af7e58",
+            "address": "0x02e14e2f260b38d53e38823c58754a2975af7e58",
+            "name": "VIRTUAL / WETH 0.3%",
+            "dex": "thirdfy"
+          },
+          {
+            "id": "base_0x22e7e0885ea2ffa1e189d36f60f0c4c097378de5",
+            "address": "0x22e7e0885ea2ffa1e189d36f60f0c4c097378de5",
+            "name": "WETH / USDC 0.3%",
+            "dex": "thirdfy"
+          },
+          {
+            "id": "base_0x0829f78f95f593d1fce6318e3f038fa27e13a920",
+            "address": "0x0829f78f95f593d1fce6318e3f038fa27e13a920",
+            "name": "CEO / VIRTUAL 0.478%",
+            "dex": "thirdfy"
+          },
+          {
+            "id": "base_0xffca449a03663c2b3343861db27af2500076322d",
+            "address": "0xffca449a03663c2b3343861db27af2500076322d",
+            "name": "TFY / VIRTUAL 0.739%",
+            "dex": "thirdfy"
+          },
+          {
+            "id": "base_0xb1467649433e83a83d94982840d70e83a2847716",
+            "address": "0xb1467649433e83a83d94982840d70e83a2847716",
+            "name": "REPLY / WETH 0.35%",
+            "dex": "thirdfy"
+          }
+        ]
       },
       "fluid-base": {
         "at": "2026-11-26T15:55:30+00:00",
@@ -550,10 +587,18 @@
         ]
       },
       "baseline-base": {
-        "at": "2026-11-26T15:55:48+00:00",
         "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/baseline-base/pools?page=1",
-        "status": 429,
-        "state": "http"
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 1,
+        "samples": [
+          {
+            "id": "base_0x4082b90beba6935c7718497165557106e43a6ac6",
+            "address": "0x4082b90beba6935c7718497165557106e43a6ac6",
+            "name": "BSR / cbBTC",
+            "dex": "baseline-base"
+          }
+        ]
       },
       "umbrae-damm": {
         "at": "2026-11-26T15:55:51+00:00",
@@ -574,10 +619,24 @@
         "state": "http"
       },
       "ryze": {
-        "at": "2026-11-26T15:56:00+00:00",
         "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/ryze/pools?page=1",
-        "status": 429,
-        "state": "http"
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 2,
+        "samples": [
+          {
+            "id": "base_0x40f3daae59bfe03f9fb019bb089bb0c381de27cf",
+            "address": "0x40f3daae59bfe03f9fb019bb089bb0c381de27cf",
+            "name": "cbBTC / USDC",
+            "dex": "ryze"
+          },
+          {
+            "id": "base_0x22f902cefcf8b0bec6489cb8ac11fdda9b2af125",
+            "address": "0x22f902cefcf8b0bec6489cb8ac11fdda9b2af125",
+            "name": "WETH / USDC",
+            "dex": "ryze"
+          }
+        ]
       },
       "aero-stable-base": {
         "at": "2026-11-26T15:56:03+00:00",
@@ -590,6 +649,27 @@
         "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/nami/pools?page=1",
         "status": 429,
         "state": "http"
+      },
+      "ensurer": {
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/ensurer/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
+      },
+      "dex-on-crypto-base": {
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/dex-on-crypto-base/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
+      },
+      "treble-v4-limit": {
+        "url": "https://api.geckoterminal.com/api/v2/networks/base/dexes/treble-v4-limit/pools?page=1",
+        "status": 200,
+        "state": "enumerated",
+        "rows_page1": 0,
+        "samples": []
       }
     },
     "volume": {

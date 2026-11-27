@@ -17,6 +17,7 @@ use alloy_primitives::{Address, B256, Bytes};
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) enum Market {
     RegisteredV3,
+    SolidlyRouter,
     Umbrae,
     Antfarm,
     Temple,
@@ -52,6 +53,7 @@ impl Selection {
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
+            _ if e.family.variant==Variant::SolidlyProxy => Some(Self::SolidlyRouter),
             _ if e.family.variant==Variant::RegisteredUniV3 => Some(Self::RegisteredV3),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
@@ -72,6 +74,7 @@ impl Market {
     }
     pub(super) fn missing_selection(self) -> &'static str {
         match self {
+            Self::SolidlyRouter => "Solidly Router01: требуется исходный адрес исполнения",
             Self::RegisteredV3 => "V3 Router: требуется исходный адрес исполнения",
             Self::Umbrae => "Umbrae: требуется выбранный адрес исполнения",
             Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
@@ -84,6 +87,7 @@ impl Market {
     }
     pub(super) fn name(self) -> &'static str {
         match self {
+            Self::SolidlyRouter => "Solidly Router01",
             Self::RegisteredV3 => "V3 Router",
             Self::Umbrae => "Umbrae",
             Self::Antfarm => "Antfarm",
@@ -102,6 +106,7 @@ impl Market {
         selected: Selection,
     ) -> GatewayResult<Plan> {
         match self {
+            Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(
@@ -172,6 +177,22 @@ impl Market {
             }
         }
     }
+}
+
+/// Router01/V3 also support V5 graph execution. Their native single-call form and the
+/// dedicated Umbrae/SectorOne wallets require exactly one ERC20-to-ERC20 hop.
+pub(super) fn router_shape(
+    q:&super::super::quote::Quoting,route:&crate::core::types::DexRoute,leg:&crate::core::types::RouteLeg,
+    native_asset:bool,cash:Address,
+) -> GatewayResult<()> {
+    let direct=route.mode==crate::core::types::RouteMode::Direct;
+    let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
+        (direct && e.family.variant.exact_router()) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+    if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
+        || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));
+    }
+    Ok(())
 }
 
 type ProbeCall = (Vec<Approval>, Address, Bytes);

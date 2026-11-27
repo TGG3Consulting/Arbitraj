@@ -33,15 +33,22 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     } else {
         (i.coin, i.usdt)
     };
-    let entries = i
-        .entries
-        .iter()
-        .filter(|e| e.family.variant == Variant::RegisteredUniV3);
+    let entries = i.entries.iter().filter(|e| e.family.variant.exact_router());
     let mut options = Vec::new();
     for e in entries {
         let pool = e.pool.reference.address();
+        let classic = e.family.variant == Variant::SolidlyProxy;
         let router = if ctx.chain_id() == Some(1) && registered_router::eligible(input, output) {
             match head {
+                Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
+                    ctx,
+                    e,
+                    input,
+                    output,
+                    &h.selector(),
+                ))
+                .await
+                .ok(),
                 Some(h) => registered_router::checked(ctx, e, input, output, &h.selector())
                     .await
                     .ok(),
@@ -50,15 +57,29 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         } else {
             None
         };
-        if let (Some(target), Some(fee)) = (router, e.pool.fee_pips) {
-            let market = Market {
-                pool,
-                fee: U24::from(fee),
-            };
+        let wire = if classic {
+            match &e.pool.state {
+                crate::core::types::PoolState::Solidly { stable, .. } => Some(Wire::SolidlyRouter(
+                    super::super::exec::solidly_router_wallet::Market {
+                        pool,
+                        stable: *stable,
+                    },
+                )),
+                _ => None,
+            }
+        } else {
+            e.pool.fee_pips.map(|fee| {
+                Wire::RegisteredV3(Market {
+                    pool,
+                    fee: U24::from(fee),
+                })
+            })
+        };
+        if let (Some(target), Some(wire)) = (router, wire) {
             let order = Execution {
                 mode: RouteMode::Direct,
                 target,
-                wire: Wire::RegisteredV3(market),
+                wire,
             };
             if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, order, head).await {
                 options.push(option);
@@ -66,7 +87,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         }
         if let Some(target) = executor {
             let wire = Wire::V5(V5Step {
-                kind: 1,
+                kind: if classic { 3 } else { 1 },
                 pool,
                 data: Bytes::new(),
                 native: None,

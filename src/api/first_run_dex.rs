@@ -217,6 +217,10 @@ mod tests {
             assert_eq!(selector,&base["selector"]);
             pairs.push(serde_json::json!({"dex":id,"network":"base","creation_code_hash":hash}));
         }
+        let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/sashimi_ethereum_registry.json.gz");
+        let sashimi:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
+        assert_eq!(sashimi["selector"],eth["selector"]);
+        pairs.push(serde_json::json!({"dex":"sashimiswap","network":"ethereum","creation_code_hash":sashimi["origin"]["creation_code_hash"]}));
         let bitswap:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json")).unwrap();
         assert_eq!(bitswap["block_hash"],eth["selector"]["blockHash"]);
         assert_eq!(bitswap["chain"],eth["chain_id"]);

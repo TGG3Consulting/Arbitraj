@@ -1,0 +1,73 @@
+"""Сводит адреса и результаты запусков Bankr и o1 из канонических архивов без сетевых чтений."""
+import gzip
+import json
+from pathlib import Path
+
+DATA=Path("tests/data/first_run_dex_2026-11-26")
+
+def evidence(name):
+    with gzip.open(DATA/name,"rt",encoding="utf8") as f:return json.load(f)
+
+def section():
+    cfg=evidence("base_launch_hooks.json.gz")
+    rows=[r for r in cfg["rows"] if "terms" in r]
+    out=["","#### Bankr, Bankr Index и o1 на Base","",
+         f"На контрольной высоте {cfg['height']} событие Initialize менеджера `{cfg['manager']}` и регистрации хуков подтвердили {len(rows)} рынков. "
+         "При измерении V4Quoter исполняет обмен с хуком. Для исполнимого маршрута проверяются списание и выплата кошелька, лимит и срок. "
+         "Из-за внешних обменов компонентов и реинвестирования комиссий каждый такой рынок котируется отдельно. "
+         "Размеры ступеней в USDT и допуск групп хуков задаёт владелец.","",
+         "| Площадка | Контрольных рынков | Успешных ног Router / V5 | Газ Router / V5, на ногу | Публичные измерения |",
+         "|---|---:|---:|---|---|"]
+    for id in ("bankr","bankr-index-base","o1-launchpad"):
+        f=id.replace("-","_")+"_base_wallets.json.gz"
+        d=evidence(f)
+        success={m:[r[leg] for item in d["markets"] for r in item["cases"] if r["mode"]==m for leg in ("buy","sell")
+                    if r.get(leg) and r[leg]["stage"]=="accepted"] for m in ("router","v5")}
+        gas=["–".join([f"{min(x['gas'] for x in a):,}",f"{max(x['gas'] for x in a):,}"]) for a in success.values()]
+        out.append(f"| `{id}` | {len(d['markets'])} | {len(success['router'])} / {len(success['v5'])} | {' / '.join(gas)} | [Списания, выплаты и оба отказа](../{DATA/f}) |")
+    return out+["","Bankr использует DopplerHookInitializer и два зарегистрированных RehypeDopplerHookInitializer. У 15 пулов состояние Locked, флаги дочерней роли равны 3. Пары имеют шаг 200 и динамическую комиссию, запись прогрева подтверждается повторным чтением обеих ролей. У девяти торговых токенов попытка лишнего разрешения Permit2 отклонилась; кошелёк использовал уже действующее разрешение.",
+        "","Каждый из девяти ключей Index входит в poolsOf(index), а фабрика признаёт vault. На снимке ни один из этих индексов не требовал подписанного пропуска. При включении passRequired покупка исчезает из лесенки. Размер корзины и комиссии влияют на исполнимый объём: в 18 случаях каждого маршрута отклонилась сама котировка, ещё четыре ненулевых котировки на 1000 USDC не завершили оплату у измеренного отправителя.",
+        "","У o1 в выборке три реализации Standard. Их PoolKey содержит fee 0, но указанный в poolConfig базовый сбор составляет 100 базисных пунктов. Начальный повышенный сбор до 9900 базисных пунктов и продолжительность окна считываются для каждого пула. Нативный ETH проверен через опубликованный Universal Router; у текущего V5 класс 19 требует две валюты ERC‑20. На трёх ETH рынках исходная валюта платежа отличается от WETH, количество и газ учитываются отдельно. Для ANTc, NVDAc и VVV проверены реальные держатели на каноническом блоке.",
+        "",f"[Initialize, формы ABI, роль и хеш каждого контракта](../{DATA/'base_launch_hooks.json.gz'}) · [Держатели ANTc, NVDAc и VVV](../{DATA/'o1_launch_holders.json'}).",""]
+
+def recovered(network):
+    doc=json.loads((DATA/"docswap_empty_directories.json").read_bytes())
+    d=doc[network]
+    out=["",f"DOCSWAP · `{d['router']}` вернул фабрику `{d['factory']}` и WETH своей сети. В реестре allPairsLength() = {int(d['count'],16)} на контрольном хеше. "
+         f"[Код и исходные ответы в обеих сетях](../{DATA/'docswap_empty_directories.json'}) · [Реестр проекта]({doc['source']}).",""]
+    if network!="base":return out
+    r=json.loads((DATA/"base_recovered_markets.json").read_bytes())
+    ry,third,bl=r["ryze"],r["thirdfy"],r["baseline"]
+    return out+["#### Повторная проверка каталогов Base","",
+        f"Адреса WETH/USDC и cbBTC/USDC из официального Ryze API совпали с двумя элементами pools() фабрики `{ry['factory']['address']}`. "
+        f"MultiHopRouter `{ry['router']['address']}` проверяет подписанный ордер; штатное исполнение использует nonce EIP‑712 и данные оракула. "
+        "[ABI и назначение контрактов](https://documentation.ryze.pro/guide/abis).",
+        "",f"Фабрика Thirdfy Algebra Integral `{third['factory']['address']}` подтвердила каждый из шести рынков. "
+        "На каноническом чтении все шесть имели ненулевую активную ликвидность и pluginConfig 193. Комиссия на высоте варьировалась от 3000 до 7386 миллионных.",
+        "",f"Baseline использует bToken `{bl['btoken']['address']}` в качестве идентификатора страницы. Реальный ключ BSR/cbBTC `{bl['pool_id']}` "
+        f"создан в транзакции `{bl['index']['createdAtTxnId']}`, хук `{bl['hook']['address']}`. "
+        f"[Канонические вызовы и квитанция деплоя](../{DATA/'base_recovered_markets.json'}) · [Спецификация идентификатора bToken](https://www.baseline.markets/docs/contracts/api).",""]
+
+
+def registry_row(network,id):
+    if id in {"dex-on-crypto-base","dex-on-crypto-ethereum"}:
+        r=json.loads((DATA/"docswap_empty_directories.json").read_bytes())[network]
+        return None,r["factory"],"Router.factory и WETH; allPairsLength = 0","фабрика проверена, 0 зарегистрированных пар на снимке"
+    if network!="base":return None
+    if id in {"ryze","thirdfy","baseline-base"}:
+        r=json.loads((DATA/"base_recovered_markets.json").read_bytes())
+        if id=="thirdfy":
+            m=r["thirdfy"]
+            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"poolByPair для 6/6 рынков","DEX-41 · реестр, fee и активная ликвидность проверены"
+        if id=="ryze":
+            m=r["ryze"]
+            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","DEX-41 · для собственной выплаты требуется подписанный ордер, nonce и данные оракула"
+        b=r["baseline"]
+        return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC зарегистрирован у физического менеджера V4"
+    if id=="marswap-base":
+        with gzip.open(DATA/"marswap-base.json.gz") as f:d=json.load(f)
+        return None,d["factory"],"allPairsLength = 0 и INIT_CODE_PAIR_HASH","фабрика проверена на Base; 0 зарегистрированных пар на снимке"
+    if id in ("bankr","bankr-index-base","o1-launchpad"):
+        d=evidence("base_launch_hooks.json.gz");m=next(r for r in d["rows"] if r["group"]==id and "terms" in r)
+        return m["id"],d["manager"],"Initialize, keccak PoolKey и регистрация на хуке","DEX-40 · публичные кошельковые выплаты по каждой выборке приведены выше"
+    return None

@@ -1,5 +1,6 @@
 //! Финальное сравнение на фактических балансах кошелька: разрешения, обмен,
 //! чистый приход, газ каждого вызова. Оба исполнения используют один родительский блок.
+use super::super::exec::registered_v3_wallet::RouterMarket;
 use super::super::{
     check::{
         sim_base::Base,
@@ -37,6 +38,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
     Umbrae(super::super::exec::umbrae::Path),
     RegisteredV3(super::super::exec::registered_v3_wallet::Market),
+    SolidlyRouter(super::super::exec::solidly_router_wallet::Market),
     SectorLb(super::super::exec::sectorone::Path),
     Carbon(std::sync::Arc<super::super::exec::carbon_wire::Call>),
     MintClub(super::super::exec::mint_club_wire::Call),
@@ -186,6 +188,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if spent != Some(o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::SolidlyRouter(market)=&o.wire {
+        let proof=super::super::exec::solidly_router_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::RegisteredV3(market)=&o.wire {
         let proof=super::super::exec::registered_v3_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -285,6 +291,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Oasis { rebate } => super::super::exec::oasis_direct::swap_data(
             o.input, o.output, o.amount, minimum, o.payer, deadline, *rebate,
         ),
+        Wire::SolidlyRouter(market) => market.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::RegisteredV3(market) => market.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::Umbrae(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::SectorLb(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),

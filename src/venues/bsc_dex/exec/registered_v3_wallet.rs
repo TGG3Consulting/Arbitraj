@@ -28,8 +28,39 @@ pub struct Market {
     pub pool: Address,
     pub fee: U24,
 }
-impl Market {
-    pub(in crate::venues::bsc_dex) fn order(
+pub trait RouterMarket: Copy {
+    fn pool(self) -> Address;
+    fn event(self) -> (&'static str, usize);
+    fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool;
+    fn order(
+        self,
+        input: Address,
+        output: Address,
+        amount: U256,
+        minimum: U256,
+        wallet: Address,
+        deadline: U256,
+    ) -> Bytes;
+}
+impl RouterMarket for Market {
+    fn pool(self) -> Address {
+        self.pool
+    }
+    fn event(self) -> (&'static str, usize) {
+        (
+            "Swap(address,address,int256,int256,uint160,uint128,int24)",
+            160,
+        )
+    }
+    fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool {
+        let word = |i: usize| U256::from_be_slice(&data[32 * i..32 * (i + 1)]);
+        spent <= budget
+            && !spent.bit(255)
+            && !received.bit(255)
+            && word(side) == spent
+            && word(1 - side) == U256::ZERO.wrapping_sub(received)
+    }
+    fn order(
         self,
         input: Address,
         output: Address,
@@ -55,8 +86,8 @@ impl Market {
     }
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Proof {
-    pub market: Market,
+pub struct Proof<M = Market> {
+    pub market: M,
     pub target: Address,
     pub payer: Address,
     pub input: Address,
@@ -65,7 +96,7 @@ pub struct Proof {
     pub minimum: U256,
     pub deadline: U256,
 }
-impl Proof {
+impl<M: RouterMarket> Proof<M> {
     pub(super) fn data(&self) -> Bytes {
         self.market.order(
             self.input,
@@ -113,30 +144,28 @@ impl Proof {
         {
             return None;
         }
-        let swap = keccak256("Swap(address,address,int256,int256,uint160,uint128,int24)");
+        let (signature, bytes) = self.market.event();
+        let swap = keccak256(signature);
         let mut hits = logs
             .iter()
-            .filter(|l| l.address() == self.market.pool && l.topics().first() == Some(&swap));
+            .filter(|l| l.address() == self.market.pool() && l.topics().first() == Some(&swap));
         let event = hits.next()?;
         if hits.next().is_some()
             || event.topics() != [swap, self.target.into_word(), wallet.into_word()]
-            || event.data().data.len() != 160
+            || event.data().data.len() != bytes
         {
             return None;
         }
-        let word = |i: usize| U256::from_be_slice(&event.data().data[32 * i..32 * (i + 1)]);
         let i = usize::from(input > output);
         let spent = fill::moved_logs(logs, input, Some(wallet), None)
             .checked_sub(fill::moved_logs(logs, input, None, Some(wallet)))?;
         let received = fill::moved_logs(logs, output, None, Some(wallet))
             .checked_sub(fill::moved_logs(logs, output, Some(wallet), None))?;
         (spent > U256::ZERO
-            && spent <= self.budget
             && received >= self.minimum
-            && word(i) == spent
-            && word(1 - i) == U256::ZERO.wrapping_sub(received)
-            && !spent.bit(255)
-            && !received.bit(255))
+            && self
+                .market
+                .matches(&event.data().data, i, spent, received, self.budget))
         .then_some((spent, received))
     }
 }

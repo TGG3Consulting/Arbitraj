@@ -1110,6 +1110,14 @@
     "0x3902bbe25945649e39602470e8e023416cfb794e": {
       "bytes": 15200,
       "keccak256": "0xf73e6e09d5222c09ef758061be439303ff2cdcbead5ece0b16c6567777987ff1"
+    },
+    "0xf028f723ed1d0fe01cc59973c49298aa95c57472": {
+      "bytes": 9820,
+      "keccak256": "0x54072ac1f2e63f3088e79bc4544ff015eebc053ec64c6acbe4be9b8c94fc3d95"
+    },
+    "0xe4fe6a45f354e845f954cddee6084603cedb9410": {
+      "bytes": 19025,
+      "keccak256": "0x21bcce9b2e7cb9ca7aa751e1878629ff4bea542e8c697bdf1d9d2f626b8e6421"
     }
   },
   "router_getAmountOut": [

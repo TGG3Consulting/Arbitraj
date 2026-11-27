@@ -25,6 +25,8 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 
 enum Venue {
     Regular,
+    WalletRouter(Address),
+    FundedExecutor,
     Temple,
     Antfarm,
     Carbon,
@@ -46,6 +48,7 @@ impl Market {
         number: u64,
         wallet: Address,
         amount: U256,
+        source: Address,
     ) -> GatewayResult<Self> {
         let mut anchor = None;
         let mut vista = None;
@@ -73,6 +76,21 @@ impl Market {
             market.pool.state = PoolState::MintClub(Box::new(state));
             anchor = Some((head, market));
             Venue::MintClub(protection)
+        } else if super::registered_v3::configured(ctx, e) {
+            let head = white_state::head(ctx, &format!("{number:#x}")).await?;
+            let executor = super::super::exec::executor::address(ctx).ok().flatten();
+            match super::registered_v3::funded(ctx, e, wallet, amount, head).await {
+                Err(_) if source != wallet && executor.is_some() => Venue::Regular,
+                Err(err) => return Err(err),
+                Ok(()) => {
+                    anchor = Some((head, Box::new(e.clone())));
+                    match super::registered_v3::router(ctx, e, head).await {
+                        Ok(router) => Venue::WalletRouter(router),
+                        Err(_) if executor.is_some() => Venue::FundedExecutor,
+                        Err(err) => return Err(err),
+                    }
+                }
+            }
         } else if antfarm_wallet::enabled(e) {
             anchor = Some(Box::pin(antfarm_probe::anchor(ctx, e, number)).await?);
             Venue::Antfarm
@@ -127,7 +145,11 @@ impl Market {
                 || source == antfarm_probe_wallet::VAULT)
     }
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
-        if matches!(self.venue, Venue::Carbon | Venue::MintClub(_)) || self.self_funded(e, source) {
+        if matches!(
+            self.venue,
+            Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+        ) || self.self_funded(e, source)
+        {
             Vec::new()
         } else {
             vec![pc::transfer(source, e.usdt, wallet, amount)]
@@ -142,6 +164,10 @@ impl Market {
         now: u64,
         prefix: &[Call],
     ) -> GatewayResult<Leg> {
+        if let Venue::WalletRouter(router) = self.venue {
+            let call = super::registered_v3::leg(ctx, e, router, wallet, order, now)?;
+            return Ok(Leg { entry: None, call });
+        }
         if matches!(self.venue, Venue::Antfarm)
             && let Some((head, _)) = &self.anchor
         {
@@ -238,7 +264,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::Regular => Ok(None),
+            Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

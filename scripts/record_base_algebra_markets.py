@@ -19,13 +19,13 @@ MARKETS={
     "treble-v4":("0x6e606cf94a4ddc01aeed2fce16d1b4f5b33e0a31","0x09f3805c6743d9d0548ffe5657a985a057f82a7b"),
 }
 ZERO="0x"+"00"*20
-def capture(dex,endpoint):
+def capture(dex,endpoint,market=None,holders=None):
     e=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())
     e["endpoint"]=endpoint;c=Capture(e);tag=e["selector"]
     header=rpc(endpoint,"eth_getBlockByHash",[tag["blockHash"],False])
     if rpc(endpoint,"eth_chainId",[])!="0x2105" or int(header["number"],16)!=e["block"]:
         raise ValueError("wrong chain or header")
-    fac,pool=MARKETS[dex];integral=dex!="synthswap-v3"
+    fac,pool=market or MARKETS[dex];integral=dex!="synthswap-v3"
     addr=lambda to,method,types=(),args=():c.one(to,method,types,args,["address"])[0]
     a,b=(addr(pool,token) for token in ("token0()","token1()"))
     if a>=b or addr(pool,"factory()")!=fac or addr(fac,"poolByPair(address,address)",["address","address"],[a,b])!=pool:
@@ -64,13 +64,14 @@ def capture(dex,endpoint):
         verified[name]={"address":address,"keccak":"0x"+keccak(hexstr=code).hex(),"size":(len(code)-2)//2}
     liquidity,=c.one(pool,"liquidity()",returns=["uint128"])
     spacing,=c.one(pool,"tickSpacing()",returns=["int24"])
-    token=next(t for t in (a,b) if t in HOLDERS["base"]);other=b if token==a else a
+    payers=holders or HOLDERS["base"]
+    token=next(t for t in (a,b) if t in payers);other=b if token==a else a
     decimals,=c.one(token,"decimals()",returns=["uint8"])
     # 0.000001 and 0.00001 WETH; USDC 0.01 and 0.1. Sizes only describe this snapshot.
     sizes=[max(1,10**decimals//x) for x in ((10**6,10**5) if decimals==18 else (100,10))]
     runtime=RUNTIME.read_text().strip().removeprefix("0x");virt=VIRTUAL_FILE.read_text().strip().removeprefix("0x")
     cases=[round_trip(e,pool,token,other,size,int(header["timestamp"],16)+120,runtime,kind=2,
-                      owner=HOLDERS["base"][token],algebra=(VIRTUAL,virt,a),time=(oracle["timestamp"]+oracle["block_step"] if oracle else None)) for size in sizes]
+                      owner=payers[token],algebra=(VIRTUAL,virt,a),time=(oracle["timestamp"]+oracle["block_step"] if oracle else None)) for size in sizes]
     return dict(id=dex,oracle=oracle,chain_id=8453,selector=tag,state_root=header["stateRoot"],roles=verified,reads=reads,raw=c.calls,
                 tokens=[a,b],global_state=list(gs),liquidity=str(liquidity),tick_spacing=spacing,cases=cases,
                 v5="0x"+keccak(hexstr=runtime).hex(),virtual="0x"+keccak(hexstr=virt).hex())

@@ -19,8 +19,10 @@ PAYER=dict(HOLDERS,**{ZERO:HOLDERS[WETH],"0xb20000000000000000000078ee7ce2fe4908
 word=lambda n:"0x"+format(n,"064x")
 
 
-def replay(group,endpoint):
-    with gzip.open(DATA/"base_launch_hooks.json.gz") as f:d=json.load(f)
+def replay(group,endpoint,directory=None):
+    if directory is None:
+        with gzip.open(DATA/"base_launch_hooks.json.gz") as f:directory=json.load(f)
+    d=directory
     holders=json.loads((DATA/"o1_launch_holders.json").read_bytes())
     if holders["selector"]!=d["selector"]:raise ValueError("держатели на другой высоте")
     payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()}}

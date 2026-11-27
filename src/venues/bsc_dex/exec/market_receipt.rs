@@ -12,6 +12,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
     c.vista = super::vista_direct::proof(p);
     c.ekubo = p.ekubo_proof();
     match p.direct_market() {
+        Some(DirectCall::SolidlyRouter(a)) => c.solidly_router = Some(Box::new((*a).clone())),
         Some(DirectCall::RegisteredV3(a)) => c.registered_v3 = Some(Box::new((*a).clone())),
         Some(DirectCall::AntfarmOutput(a)) => c.antfarm_output = Some(Box::new((*a).clone())),
         Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
@@ -34,6 +35,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
 }
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
+    SolidlyRouter(&'a super::solidly_router_wallet::Proof),
     RegisteredV3(&'a super::registered_v3_wallet::Proof),
     AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
     Antfarm(&'a super::antfarm_wallet::Proof),
@@ -45,6 +47,7 @@ pub(super) enum Saved<'a> {
 }
 fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
+        c.solidly_router.as_deref().map(Saved::SolidlyRouter),
         c.registered_v3.as_deref().map(Saved::RegisteredV3),
         c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
@@ -71,6 +74,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     }
     for saved in entries(c) {
         match saved {
+            Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
             Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
             Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
@@ -92,6 +96,7 @@ impl Saved<'_> {
         output: Address,
     ) -> Result<(U256, U256), &'static str> {
         match self {
+            Self::SolidlyRouter(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Solidly Router01: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::RegisteredV3(p) => p.amounts(&r.logs,wallet,input,output).ok_or("V3 Router: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::AntfarmOutput(p) => p
                 .amounts(&r.logs, wallet, input, output)

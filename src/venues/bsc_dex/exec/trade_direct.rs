@@ -81,15 +81,7 @@ pub async fn trade(
         usdt_dec: decs.1,
     };
     let is_native = native::is_native(ctx, &req.asset);
-    if route.mode == crate::core::types::RouteMode::Direct
-        && leg.hops.iter().any(|h|q.reg.entry(&h.pool).is_some_and(|e|e.family.variant==super::super::pools::family_variant::Variant::RegisteredUniV3))
-        && (route.legs.len()!=1 || leg.hops.len()!=1 || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
-        return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"V3 Router: требуется ровно одна нога с двумя ERC20 кошелька"));
-    }
-    if leg.hops.iter().any(|h|q.reg.entry(&h.pool).is_some_and(|e|e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e)))
-        && (leg.hops.len()!=1 || route.legs.len()!=1 || route.mode!=crate::core::types::RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
-        return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));
-    }
+    super::market_plan::router_shape(q,route,leg,is_native,usdt)?;
     if leg.hops.iter().any(|h|q.reg.entry(&h.pool).is_some_and(|e|super::temple_wallet::enabled(&e))) &&
        (leg.hops.len()!=1 || route.legs.len()!=1 || route.mode!=crate::core::types::RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)){
         return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: прямому модулю требуется один ERC20 шаг кошелька"));

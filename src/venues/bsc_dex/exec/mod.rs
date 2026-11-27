@@ -40,6 +40,7 @@ pub(super) mod ekubo_v2_direct;
 pub(super) mod ekubo_v2_fact;
 mod signed_call;
 pub(in crate::venues::bsc_dex) mod registered_v3_wallet;
+pub(in crate::venues::bsc_dex) mod solidly_router_wallet;
 pub(super) mod carbon_binding;
 pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;

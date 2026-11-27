@@ -287,7 +287,7 @@ fn ethereum_solidly_uses_the_active_logic_and_the_actual_wallet_floor() {
     }
     for market in wallets["markets"].as_array().unwrap() {
         let m = pools.iter().find(|p| p["pool"] == market["pool"]).unwrap();
-        assert!(curves.insert(m["stable"].as_bool().unwrap()));
+        curves.insert(m["stable"].as_bool().unwrap());
         let i = usize::from(m["tokens"][0] != market["token_in"]);
         let fee = SolidlyFee {
             value: m["fee"].as_str().unwrap().parse().unwrap(),

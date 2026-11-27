@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from eth_abi import decode
-from record_aero_basic_base import RUNTIME, round_trip
+from record_aero_basic_base import HOLDERS, RUNTIME, round_trip
 from record_base_classic_wallets import capture
 from record_solidly_v3 import ETH_WETH
 from record_base_slipstream_executor import rpc
@@ -54,6 +54,22 @@ def record(endpoint,directory):
     block=rpc(endpoint,"eth_getBlockByHash",[directory["selector"]["blockHash"],False])
     deadline = int(block["timestamp"],16)+120
     runtime = RUNTIME.read_text().strip().removeprefix("0x")
+    token_file=Path(__file__).resolve().parents[1]/"tests/data/first_run_dex_2026-11-26/ethereum_exact_transfers.json"
+    audit=json.loads(token_file.read_bytes())
+    if audit["selector"]!=directory["selector"] or audit["state_root"]!=directory["state_root"]:
+        raise ValueError("token evidence on wrong state")
+    accepted={row["address"] for row in audit["tokens"].values()}
+    for market in directory["markets"]:
+        if (set(market["tokens"])<=accepted and ETH_WETH in market["tokens"]
+                and market["balances"]==market["reserves"] and all(map(int,market["reserves"]))):
+            i=market["tokens"].index(ETH_WETH)
+            owned=HOLDERS["ethereum"][ETH_WETH]
+            other=market["tokens"][1-i]
+            first_qty=min(10**15,int(market["reserves"][i])//100)
+            case=round_trip(dict(endpoint=endpoint,selector=directory["selector"]),market["pool"],ETH_WETH,
+                            other,first_qty,deadline,runtime,kind=3,owner=owned,wrapped=ETH_WETH)
+            result["markets"].append(dict(pool=market["pool"],init=directory["init"],stable=market["stable"],
+                token_in=ETH_WETH,token_out=other,cases=[case],exact_transfer=True))
     for m in result["markets"]:
         market = next(o for o in directory["markets"] if o["pool"]==m["pool"])
         i = market["tokens"].index(m["token_in"])

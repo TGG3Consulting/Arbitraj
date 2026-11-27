@@ -9,6 +9,7 @@ import gzip
 import json
 from pathlib import Path
 from base_eth_omni_mars_deli import paragraphs as omni_mars_deli
+import base_launch_inventory
 
 
 def read(path):
@@ -72,6 +73,8 @@ def tables(network, snapshots, profiles):
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
     out.extend(omni_mars_deli(network))
+    out.extend(base_launch_inventory.recovered(network))
+    if base:out.extend(base_launch_inventory.section())
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
         out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
@@ -106,6 +109,17 @@ def tables(network, snapshots, profiles):
                     out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
         out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
 
+    if not base and "sashimiswap" in configured:
+        out.extend(["", "#### SashimiSwap на Ethereum", "",
+                    "На блоке 26494988 фабрика зарегистрировала 83 пары. Внутренний учёт Router02 совпал с обоими резервами у 80 ненулевых пар. "
+                    "Остатки ERC20 на самих 83 парах нулевые. При обмене платит Router02 с проверкой фактического прироста баланса получателя. "
+                    "При нехватке остатка роутер запрашивает средства у общего хранилища. Возможность выплаты на выбранный объём проверяет кошельковая симуляция.",
+                    "На 53 парах проверены 102 входа. Кошельковой симуляцией подтверждены 73 покупки и 56 обратных продаж, включая полные циклы на 31 паре. "
+                    "У 16 покупок вырос показанный токеном баланс, но его Transfer в квитанции отсутствовал, а чтение allowance перед обратной продажей откатилось. "
+                    "Для этих покупок стандартный денежный учёт по событиям не подтверждён. "
+                    "[Архив GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45925784274).",
+                    "[Фабрика в SDK](https://github.com/SashimiProject/sashimiswap-sdk/blob/50fb3f0b7fcc7108be957a0616158a952f60ca2e/src/constants.ts) · "
+                    "[Реестр, остатки и хранилище](../tests/data/first_run_dex_2026-11-26/sashimi_ethereum_registry.json.gz)."])
     for key,name in (("wagmi","WAGMI"),("lif3","Lif3")):
         if base or key+"-ethereum" not in configured:
             continue
@@ -120,9 +134,14 @@ def tables(network, snapshots, profiles):
             groups.setdefault((r["pool"],r["source"],r["spent"],r["received"]),{})[r["wire"]]=int(r["gas"])
         deltas=[g["v5"]-g["router"] for g in groups.values() if "v5" in g and "router" in g]
         directions=len({(r["pool"],r["source"]) for r in rows})
+        exact={"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"}
+        eligible=[r for r in rows if r["wire"]=="router" and {r["source"],r["target"]}==exact]
+        savings=[groups[(r["pool"],r["source"],r["spent"],r["received"])]["v5"]-int(r["gas"]) for r in eligible]
+        approval_gap=[int(r["approval_gas"])-saved for r,saved in zip(eligible,savings,strict=True)]
         out.extend(["",f"#### {name} V3 на Ethereum","",
                     f"Блок {reg['height']}. У фабрики {len(reg['markets'])} пулов. У собственного плательщика подтверждены {len(rows)} выплат "
                     f"в {directions} из {2*len(reg['markets'])} направлений. При одинаковых расходе и выплате V5 потребовал на {min(deltas):,}–{max(deltas):,} единиц газа больше штатного Router. Стоимость разрешения зависит от кошелька и адреса получателя allowance.",
+                    f"Для WBTC/WETH получено {len(eligible)} сопоставимых расчётов. При имеющихся разрешениях экономия Router составила {min(savings):,}–{max(savings):,} единиц газа. Если разрешение есть только у V5, добавление измеренного approve Router меняет выбор: V5 дешевле на {min(approval_gap):,}–{max(approval_gap):,} единиц газа.",
                     "Перед обменом проверяются CREATE2, комиссия, оба порядка getPool и канонический блок. Прямая нога Router требует точной передачи обоих ERC20 и проверенного кода роутера. В этой выборке условия выполняет WBTC/WETH. Для других пар и составных маршрутов применяется доступный V5. При восстановлении прямой ноги сверяются подписанный вызов, единственный Swap этого пула и фактические чистые Transfer кошелька.",
                     f"[Адреса площадки]({reg['source']}) · [Регистрации](../{registry_path.as_posix()}) · [Квитанции и дельты](../{wallet_path.as_posix()})."])
     if not base and "concave" in configured:
@@ -1097,7 +1116,7 @@ def tables(network, snapshots, profiles):
                    "У 66 пар ненулевые резервы совпали с обоими балансами. У одной пары резервы нулевые, у USDC/DEI фактический баланс DEI обнулился. "
                    "Шаг Solidly в ArbExecutor V5 использует getAmountOut самой пары и проверяет минимум выплаты. У обеих кривых комиссия — feeRatio пары в миллионных. "
                    "Для фабрики проверяется logicAddress, для каждой пары — её фабрика и childSubImplementationAddress; implementationAddress служит обозначением интерфейса. "
-                   "Результаты кошелька на двух контрольных парах приведены для V5 и официального Router01. Router01 проверяет номинальный выход, его отдельный маршрут требует гарантии зачисления получателю. "
+                   "Результаты кошелька на двух контрольных парах приведены для V5 и официального Router01. У Router01 минимум номинальный. Прямой маршрут доступен при проверенном неизменяемом коде входного и выходного ERC-20 (WETH, WBTC, DAI, LUSD); фактический кошелёк проверяется перед отправкой и по квитанции. Для USDT и USDC применяется V5. Управляющий адрес Router01 может обновлять его логику после проверки состояния перед отправкой. "
                    "[Реестр фабрики](../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz) · [Обмены и откаты](../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum_wallets.json.gz).")
         integral_path=Path("tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz")
         integral=json.loads(gzip.decompress(integral_path.read_bytes()))
@@ -1302,6 +1321,10 @@ def tables(network, snapshots, profiles):
             status="Integral SIZE · релеер отключил все 15 пар. Для публичной заявки Delay нужна отдельная транзакция исполнения"
         if not base and id == "ring-exchange-ethereum" and ring_path.exists():
             status = "Ring Few · адресная проверка всех пар; котировки, обеспечение и контрольные обмены выше"
+        specific=base_launch_inventory.registry_row(network,id)
+        if specific:
+            selected, factory, roundtrip, status = specific
+            pool = selected or pool
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):

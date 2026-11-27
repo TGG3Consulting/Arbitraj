@@ -66,6 +66,9 @@ pub(in crate::venues::bsc_dex) fn breaks(
     };
     let mut points = std::collections::BTreeSet::new();
     for book in p.slot_markets.current(p) {
+        if crate::gateway::quote_stage::settlement() && book.prop.is_none() {
+            continue;
+        }
         if let Some(side) = book.sides.get(&(coin, side == Side::Buy)) {
             points.extend(side.breaks(max));
         }
@@ -96,10 +99,12 @@ pub(in crate::venues::bsc_dex) async fn consider(
     {
         return baseline;
     }
+    let mixed = crate::gateway::quote_stage::settlement();
     let candidates: Vec<_> = p
         .slot_markets
         .current(p)
         .into_iter()
+        .filter(|b| !mixed || b.prop.is_some())
         .filter_map(|b| candidate(p, b, asset, side, qty))
         .collect();
     if candidates.is_empty() {
@@ -108,13 +113,19 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let old = if let Ok(b) = &baseline
         && b.fillable_qty == qty
         && b.qty == qty
+        && (!mixed
+            || crate::gateway::quote_stage::settlement_quote_supported(
+                b,
+                crate::gateway::quote_stage::is_final(),
+            ))
         && (!crate::gateway::quote_stage::is_final()
             || b.route.as_ref().is_none_or(|r| r.executable))
     {
-        let Some(cost) = hashflow::routing::total(p, b).await else {
+        let cost = hashflow::routing::total(p, b).await;
+        if cost.is_none() {
             return baseline;
-        };
-        Some(cost)
+        }
+        cost
     } else {
         None
     };
@@ -158,7 +169,10 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let mut best = baseline;
     let mut value = old;
     let mut ticket = None;
-    for (prepared, q) in options.into_iter().flatten() {
+    for (prepared, mut q) in options.into_iter().flatten() {
+        if mixed && let Some(route) = q.route.as_mut() {
+            route.exec_note = Some(crate::gateway::quote_stage::PROP_SETTLEMENT_SLOT.into());
+        }
         let Some(net) = hashflow::routing::total(p, &q).await else {
             continue;
         };

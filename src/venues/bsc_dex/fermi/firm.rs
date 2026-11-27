@@ -68,6 +68,12 @@ pub(super) async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
         },
         c.decs.1,
     )?;
+    if quote.side == Side::Buy
+        && crate::gateway::quote_stage::buy_budget(&ctx.venue().0, b.config.cash)
+            .is_some_and(|cap| gross > cap)
+    {
+        return None;
+    }
     quote.avg_price = gross.checked_div(quote.qty)?;
     // До подписания допускаем стоимость газа вплоть до потолка типа 2; отдельного перевода чаевых нет.
     let cost = num::to_decimal(U256::from(fees.max_fee).checked_mul(U256::from(gas))?, 18)?;

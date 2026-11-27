@@ -203,6 +203,7 @@ impl Venue for BscDex {
         let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::fermi::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
         let baseline = async {
@@ -287,6 +288,7 @@ impl Venue for BscDex {
         let mut extra = super::hanji::routing::breaks(&self.p, asset, side, max_qty);
         extra.extend(self.p.ryze.breaks(&self.p,asset,side,max_qty));
         extra.extend(super::raindex::routing::breaks(&self.p,asset,side,max_qty));
+        extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
         if !crate::gateway::quote_stage::settlement() {
             extra.extend(self.p.dexalot.breaks(&self.p,asset,side,max_qty));
             extra.extend(self.p.airswap.breaks(&self.p,asset,side,max_qty));
@@ -294,7 +296,6 @@ impl Venue for BscDex {
             extra.extend(super::hashflow::routing::breaks(
                 &self.p, asset, side, max_qty,
             ));
-            extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
             extra.extend(super::native_rfq::routing::breaks(&self.p, asset, side, max_qty));
             extra.extend(super::gladius::routing::breaks(&self.p, asset, side, max_qty));
         }

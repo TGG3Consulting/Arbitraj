@@ -8,7 +8,7 @@ mod deployment;
 mod frame;
 pub(super) mod markets;
 pub(super) mod routing;
-pub(super) use execute::trade;
+pub(super) use execute::{trade,trade_settlement};
 pub(super) use recovery::reconcile;
 mod dispatch;
 mod execute;

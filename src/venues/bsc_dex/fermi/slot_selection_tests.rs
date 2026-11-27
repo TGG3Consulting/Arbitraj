@@ -97,3 +97,24 @@ fn builder_names_authorize_only_one_venue_and_require_an_unambiguous_choice() {
     assert!(builders(vec!["old".into(), "titan".into()]).is_empty());
     assert!(builders(vec!["titan".into(), "titan".into()]).is_empty());
 }
+
+#[test]
+fn only_a_named_slot_ticket_can_enter_the_mixed_settlement_path() {
+    use crate::core::types::{DexRoute, RouteMode};
+    use crate::gateway::quote_stage::{PROP_SETTLEMENT_SLOT, prop_settlement_slot};
+    let mut r = DexRoute {
+        mode: RouteMode::Slot(B256::repeat_byte(3)),
+        legs: vec![],
+        block: 1,
+        gas_units: 100000,
+        executable: true,
+        exec_note: None,
+    };
+    assert!(!prop_settlement_slot(&r));
+    r.exec_note = Some(PROP_SETTLEMENT_SLOT.into());
+    assert!(prop_settlement_slot(&r));
+    r.mode = RouteMode::Rfq(B256::repeat_byte(7));
+    assert!(!prop_settlement_slot(&r));
+    r.mode = RouteMode::SlotIndicative;
+    assert!(prop_settlement_slot(&r));
+}

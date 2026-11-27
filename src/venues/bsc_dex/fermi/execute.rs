@@ -22,6 +22,8 @@ pub(super) struct Marker {
     pub order: Proof,
     pub decs: (u8, u8),
     pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outer_account: Option<String>,
 }
 pub(super) fn identity(p: &Parts, r: &TradeRequest) -> GatewayResult<String> {
     if r.deal_id.is_empty() || r.asset.contract.is_none() || r.venue != p.ctx.venue() {
@@ -98,9 +100,54 @@ pub(in crate::venues::bsc_dex) async fn trade(
     req: TradeRequest,
     id: B256,
 ) -> GatewayResult<TradeResult> {
+    if req
+        .route
+        .as_ref()
+        .is_some_and(crate::gateway::quote_stage::prop_settlement_slot)
+    {
+        return Err(p.ctx.err(
+            ErrorCode::NotApplicable,
+            "Для слота нужен исходный денежный шаг",
+        ));
+    }
+    submit(p, req, id, None).await
+}
+pub(in crate::venues::bsc_dex) async fn trade_settlement(
+    p: &Parts,
+    req: TradeRequest,
+    id: B256,
+    cash: Address,
+) -> GatewayResult<TradeResult> {
+    if !req
+        .route
+        .as_ref()
+        .is_some_and(crate::gateway::quote_stage::prop_settlement_slot)
+        || cash != p.tokens.usdt(&p.ctx)?
+        || !intent::active()
+        || !crate::gateway::settlement_proofs::active()
+    {
+        return Err(p.ctx.err(
+            ErrorCode::NotApplicable,
+            "Нет исходного денежного поручения и привязки к его кассе",
+        ));
+    }
+    submit(p, req, id, Some(cash)).await
+}
+async fn submit(
+    p: &Parts,
+    req: TradeRequest,
+    id: B256,
+    outer_cash: Option<Address>,
+) -> GatewayResult<TradeResult> {
     let ctx = &p.ctx;
     ctx.bound()?;
-    let key = identity(p, &req)?;
+    let local_key = identity(p, &req)?;
+    let key = if outer_cash.is_some() {
+        intent::current_key()
+            .ok_or_else(|| ctx.err(ErrorCode::NotApplicable, "Отсутствует ключ денежного шага"))?
+    } else {
+        local_key
+    };
     let db = ctx.journal.db();
     let storage = |e: String| ctx.err(ErrorCode::OutcomeUnknown, e);
     let pending = |m: &PendingRef| {
@@ -147,6 +194,21 @@ pub(in crate::venues::bsc_dex) async fn trade(
             "В памяти нет выбранного билета Fermi этого кошелька",
         )
     })?;
+    if outer_cash.is_some_and(|cash| {
+        q.proof.prop.is_none()
+            || cash != q.book.config.cash
+            || cash
+                != (if req.side == Side::Buy {
+                    q.proof.input
+                } else {
+                    q.proof.output
+                })
+    }) {
+        return Err(ctx.err(
+            ErrorCode::QuoteMismatch,
+            "Контракт расчётной валюты расходится с билетом строителя",
+        ));
+    }
     check(p, &req, &q, who)?;
     let notice = |text| {
         p.stats.emit(MarketEvent::Notice {
@@ -188,6 +250,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
         order: proof,
         decs: q.decs,
         key: key.clone(),
+        outer_account: outer_cash.and(ctx.account.clone()),
     };
     let marker = PendingRef {
         nonce: Some(nonce),
@@ -198,13 +261,17 @@ pub(in crate::venues::bsc_dex) async fn trade(
         ),
         ..Default::default()
     };
-    intent::scope(
-        db,
-        &key,
-        intent::Request::Order(Box::new(req.clone())),
-        intent::before_send(&marker),
-    )
-    .await?;
+    if outer_cash.is_some() {
+        intent::before_send(&marker).await?;
+    } else {
+        intent::scope(
+            db,
+            &key,
+            intent::Request::Order(Box::new(req.clone())),
+            intent::before_send(&marker),
+        )
+        .await?;
+    }
     exec::settlement_swap::reserve(ctx, &nonce_slot, tx.hash, nonce)
         .await
         .map_err(|_| pending(&marker))?;

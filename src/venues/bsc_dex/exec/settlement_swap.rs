@@ -35,13 +35,16 @@ pub async fn trade(p: &Parts, req: TradeRequest, quote: &Asset) -> GatewayResult
         || p.tokens.usdt(ctx)? != cash
         || !req.route.as_ref().is_some_and(|r| {
             r.executable
-                && matches!(
+                && (matches!(
                     r.mode,
                     RouteMode::Direct | RouteMode::Smart | RouteMode::Orderbook(_) | RouteMode::Relay(_)
-                )
+                )||crate::gateway::quote_stage::prop_settlement_slot(r))
         })
     {
         return Err(ctx.err(ErrorCode::NoRoute,"Для денежного свопа требуется закреплённый расчётный актив и однотранзакционный маршрут AMM"));
+    }
+    if let Some(RouteMode::Slot(id))=req.route.as_ref().filter(|r|crate::gateway::quote_stage::prop_settlement_slot(r)).map(|r|r.mode){
+        return super::super::fermi::trade_settlement(p,req,id,cash).await;
     }
     if let Some(done)=super::super::pancakex::recovery::prior(p,&req).await? {return Ok(done);}
     if let Some(done)=super::super::ryze::recovery::prior(p,&req).await? {return Ok(done);}

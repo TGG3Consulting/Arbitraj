@@ -168,7 +168,7 @@ pub fn needs(f: &Family) -> bool {
 pub fn light(f: &Family) -> bool {
     matches!(
         f.variant,
-        Variant::SlipstreamAero | Variant::SlipstreamAeroMetaquoter
+        Variant::SlipstreamAero | Variant::SlipstreamAeroMetaquoter | Variant::RegisteredSpacingV3
     )
 }
 

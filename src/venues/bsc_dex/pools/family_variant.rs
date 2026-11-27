@@ -37,6 +37,8 @@ pub enum Variant {
     VvsV3,
     RegisteredV3,
     RegisteredUniV3,
+    /// Фабрика V3 с постоянным шагом в CREATE2 и отдельной изменяемой ставкой каждого пула.
+    RegisteredSpacingV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
@@ -229,7 +231,7 @@ impl Variant {
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -293,6 +295,7 @@ pub fn of(kind: &str) -> Variant {
         "umbrae_damm" | "umbrae_damm_module" => Variant::UmbraeDamm,
         "vvs_v3" | "vvs_v3_module" => Variant::VvsV3,
         "hello_v3" => Variant::HelloV3,
+        "registered_spacing_v3" => Variant::RegisteredSpacingV3,
         "registered_uni_v3" => Variant::RegisteredUniV3,
         "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,

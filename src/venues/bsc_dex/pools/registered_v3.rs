@@ -9,7 +9,7 @@ use crate::{
     venues::bsc_dex::ctx::Ctx,
 };
 use alloy::sol_types::SolValue;
-use alloy_primitives::{Address, B256, aliases::U24, keccak256};
+use alloy_primitives::{Address, B256, aliases::{I24,U24}, keccak256};
 use serde_json::Value;
 
 pub(crate) fn address(
@@ -19,6 +19,10 @@ pub(crate) fn address(
     init: B256,
 ) -> Address {
     factory.create2(keccak256((tokens.0, tokens.1, fee).abi_encode()), init)
+}
+
+fn spacing_address(factory:Address,tokens:(Address,Address),spacing:I24,init:B256)->Address{
+    factory.create2(keccak256((tokens.0,tokens.1,spacing).abi_encode()),init)
 }
 
 pub(crate) async fn market(
@@ -71,6 +75,7 @@ pub(crate) async fn market(
     let deployer = if matches!(f.variant,super::family_variant::Variant::HelloV3 | super::family_variant::Variant::VvsV3) {
         super::hello_v3::creator(ctx, f, factory, quoter, pool, at).await?
     } else { factory };
+    let by_spacing=f.variant==super::family_variant::Variant::RegisteredSpacingV3;
     if a >= b
         || a.is_zero()
         || space.as_i32() <= 0
@@ -82,9 +87,17 @@ pub(crate) async fn market(
         || batch::decode(&second, t1)? != b
         || !init
             .iter()
-            .any(|h| address(deployer, (a, b), fee, *h) == pool)
+            .any(|h| (if by_spacing {spacing_address(deployer,(a,b),space,*h)} else {address(deployer,(a,b),fee,*h)}) == pool)
     {
         return Err(bad());
+    }
+    if by_spacing {
+        use super::abi_slipstream::ICLFactory as F;
+        let one=F::getPoolCall{tokenA:a,tokenB:b,tickSpacing:space};
+        let two=F::getPoolCall{tokenA:b,tokenB:a,tickSpacing:space};
+        let [ab,ba]=batch::read(ctx,[batch::view(at,factory,one.clone()),batch::view(at,factory,two.clone())]).await?;
+        if batch::decode(&ab,one)?!=pool || batch::decode(&ba,two)?!=pool || ctx.settings.generation()!=gen_before{return Err(bad());}
+        return Ok(());
     }
     let one = Factory::getPoolCall {
         tokenA: a,
@@ -278,6 +291,10 @@ mod tests {
         assert!(!f.tradable && f.fork && f.graphable);
     }
 }
+
+#[cfg(test)]
+#[path = "registered_spacing_tests.rs"]
+mod spacing_tests;
 
 #[cfg(test)]
 #[path = "registered_v3_wallet_tests.rs"]

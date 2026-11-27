@@ -88,6 +88,7 @@ pub const DEX_KINDS: &[&str] = &[
     "v3_fork",
     "hello_v3",
     "registered_uni_v3",
+    "registered_spacing_v3",
     "vvs_v3",
     "vvs_v3_module",
     "registered_v3",

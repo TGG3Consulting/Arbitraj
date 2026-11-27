@@ -49,13 +49,16 @@ pub async fn load(
 ) -> GatewayResult<(PoolState, TickMap, u32)> {
     let v2line = match f.variant {
         Variant::RamsesCl => true,
-        Variant::RamsesClV2 => false,
+        Variant::RamsesClV2 | Variant::RegisteredSpacingV3 => false,
         _ => {
             let why = format!("{}: чтение Ramses для вида не Ramses CL", f.id);
             return Err(ctx.err(ErrorCode::Internal, why));
         }
     };
-    let (sqrt, tick) = if v2line {
+    let (sqrt, tick) = if f.variant==Variant::RegisteredSpacingV3 {
+        let s=call::view(ctx,pool,&super::abi_v2v3::IUniswapV3Pool::slot0Call{},tag).await?;
+        (U256::from(s.sqrtPriceX96),s.tick.as_i32())
+    } else if v2line {
         let s = call::view(ctx, pool, &IRamsesClPool::slot0Call {}, tag).await?;
         (U256::from(s.sqrtPriceX96), s.tick.as_i32())
     } else {

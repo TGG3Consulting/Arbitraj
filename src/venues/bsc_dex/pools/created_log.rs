@@ -57,6 +57,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             continue;
         }
         let (setting, t0, v4) = match f.proto {
+            _ if f.variant==super::family_variant::Variant::RegisteredSpacingV3 => ("dex.factory",IV3Factory::PoolCreated::SIGNATURE_HASH,false),
             _ if f.variant == super::family_variant::Variant::SolidlyCl => (
                 "dex.factory",
                 super::solidly_v3::ISolidlyV3::PoolCreated::SIGNATURE_HASH,
@@ -486,6 +487,7 @@ fn remember(p: &Pools, w: &Watch, c: &Candidate) {
 /// встречном поле не тот токен.
 pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candidate, String> {
     let (t0, t1, pool) = match f.proto {
+        _ if f.variant==super::family_variant::Variant::RegisteredSpacingV3 => {let x=IV3Factory::PoolCreated::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;(x.token0,x.token1,x.pool)},
         Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne=>{let c=super::maverick_one::IMaverickOne::PoolCreated::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;(c.tokenA,c.tokenB,c.poolAddress)}
         Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm=>{
             let c=super::umbrae::IMarket::PairCreated::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;

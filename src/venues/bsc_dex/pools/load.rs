@@ -601,7 +601,7 @@ async fn read(
     if f.variant == Variant::Spectra {
         Box::pin(super::spectra::check(ctx, f, reference.address(), &tag)).await?;
     }
-    if f.variant.registered_v3() && let PoolRef::Contract(pool)=reference {
+    if (f.variant.registered_v3() || f.variant==Variant::RegisteredSpacingV3) && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
     }
@@ -1132,10 +1132,13 @@ async fn read(
     // (который читал бы через TickLens и чужой slot0).
     // Решение 483: Ramses CL / CL V2 — свои ABI slot0 / ticks() и комиссия этого блока (currentFee() / fee()) при
     // каждом чтении (load_ramses.rs). Отсекается до Slipstream и общего пути V3 (ticks() из 10 полей — не через TickLens).
-    if super::ramses::is_cl(f) {
+    if super::ramses::is_cl(f) || f.variant==Variant::RegisteredSpacingV3 {
         if let PoolRef::Contract(a) = reference {
             let sp = spacing.ok_or_else(|| missing("tickSpacing"))?;
             let (state, t, fee) = load_ramses::load(ctx, f, *a, sp, &tag).await?;
+            let fee = if f.variant == Variant::RegisteredSpacingV3 {
+                super::aero_fee_seen::newest(ctx.place.id,*a,block,fee)
+            } else { fee };
             return Ok(Loaded {
                 state,
                 ticks: Some(t),

@@ -205,6 +205,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
         "hello_v3"
+        | "registered_spacing_v3"
         | "registered_uni_v3"
         | "pancakeswap_v3"
         | "uniswap_v3"

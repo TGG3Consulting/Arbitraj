@@ -42,6 +42,10 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     }
     let tag = call::block_tag(block);
     for (fam, items) in by {
+        if fam.variant==super::family_variant::Variant::RegisteredSpacingV3 {
+            pool_fees(p,&items,&tag,block).await?;
+            continue;
+        }
         let asks: Vec<(Address, i32)> = items.iter().map(|(_, a, sp)| (*a, *sp)).collect();
         let res = match aero_cl::hook_tax(&p.ctx, fam, &tag).await {
             Ok(tax) => aero_cl_head::read(&p.ctx, fam, &asks, block)
@@ -67,6 +71,38 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
                 }
                 Err(why) => pool_fail::block_failed(p, f, &why).await,
             }
+        }
+    }
+    Ok(())
+}
+
+/// Администратор может изменить fee() без события. Одна пачка на блок, состояние тиков идёт обычным потоком.
+async fn pool_fees(
+    p: &Pools,
+    items: &[(&Found, Address, i32)],
+    tag: &str,
+    block: u64,
+) -> Result<(), End> {
+    let calls = items.iter().map(|(_, address, _)| super::fee_fresh::call(*address)).collect::<Vec<_>>();
+    let rows = match call::try_many(&p.ctx, &calls, tag).await {
+        Ok(rows) => rows,
+        Err(error) => {
+            for (found, _, _) in items {
+                pool_fail::block_failed(p, found, &error).await;
+            }
+            return Ok(());
+        }
+    };
+    for (i, (found, address, _)) in items.iter().enumerate() {
+        let fee = rows.get(i).and_then(|row| row.as_ref().ok())
+            .and_then(|raw| call::decode::<super::abi_check::IPoolImmutables::feeCall>(raw).ok())
+            .map(|value| value.to::<u32>()).filter(|fee| *fee < 1_000_000);
+        if let Some(fee) = fee {
+            put(p, found, aero_fee_seen::newest(p.ctx.place.id, *address, block, fee))?;
+        } else {
+            let why = p.ctx.err(crate::gateway::errors::ErrorCode::BadResponse,
+                "Не получена фактическая комиссия зарегистрированного V3 пула");
+            pool_fail::block_failed(p, found, &why).await;
         }
     }
     Ok(())

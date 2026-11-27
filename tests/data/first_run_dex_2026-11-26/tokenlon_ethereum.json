@@ -51,6 +51,10 @@
     "user_proxy_impl": {
       "address": "0x0b9f13ffab8448089f50073cf24bbe5c7bd8675a",
       "runtime": "0xdb3bf7e4d3bea9449bdaaf049140386c9c0d57c1d9fcb962a88310b002fc70a5"
+    },
+    "zero_exchange": {
+      "address": "0x080bf510fcbf18b91105470639e9561022937712",
+      "runtime": "0x1eb08f4905a226eb84c664ee73b6d81cd1a40720e6b3dd946591500a959aeefa"
     }
   },
   "controls": [
@@ -324,6 +328,107 @@
           "reason": "NO_DATA"
         }
       }
+    },
+    "sdk_flow": {
+      "legacy_sdk": "d6493032ab30eb6262e322fd92afbee8f7d3d507",
+      "samples": [
+        {
+          "pair": "ETH_USDT",
+          "side": "SELL",
+          "size_base": "0.04",
+          "relayer": true,
+          "ephemeral": "0x9cf2447775E12B5489A21Db0f80d4987fa85aDb8",
+          "utc_unix": 1795778223,
+          "result": [
+            {
+              "step": "order",
+              "ok": true,
+              "reason": null,
+              "protocol": "PMMV5",
+              "fee_recipient_own": true,
+              "fee_bps": 30,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": "1795778510"
+            },
+            {
+              "step": "lastOrder",
+              "ok": false,
+              "reason": "USER_BALANCE_INSUFFICIENT",
+              "protocol": null,
+              "fee_recipient_own": false,
+              "fee_bps": null,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": null
+            }
+          ]
+        },
+        {
+          "pair": "ETH_USDT",
+          "side": "BUY",
+          "size_base": "0.04",
+          "relayer": false,
+          "ephemeral": "0xA0a72796df9db60518eAB916f56a666273F7D70c",
+          "utc_unix": 1795778236,
+          "result": [
+            {
+              "step": "order",
+              "ok": true,
+              "reason": null,
+              "protocol": "PMMV5",
+              "fee_recipient_own": true,
+              "fee_bps": 30,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": "1795778523"
+            },
+            {
+              "step": "lastOrder",
+              "ok": false,
+              "reason": "USER_BALANCE_INSUFFICIENT",
+              "protocol": null,
+              "fee_recipient_own": false,
+              "fee_bps": null,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": null
+            }
+          ]
+        },
+        {
+          "pair": "USDC_USDT",
+          "side": "SELL",
+          "size_base": "100",
+          "relayer": false,
+          "ephemeral": "0xf8C31471eAE7A7368c99B50254b1650D47AF57A3",
+          "utc_unix": 1795778236,
+          "result": [
+            {
+              "step": "order",
+              "ok": true,
+              "reason": null,
+              "protocol": "PMMV5",
+              "fee_recipient_own": true,
+              "fee_bps": 4,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": "1795778523"
+            },
+            {
+              "step": "lastOrder",
+              "ok": false,
+              "reason": "USER_BALANCE_INSUFFICIENT",
+              "protocol": null,
+              "fee_recipient_own": false,
+              "fee_bps": null,
+              "maker_bytes": 0,
+              "payload_bytes": 0,
+              "expiry": null
+            }
+          ]
+        }
+      ]
     }
   }
 }

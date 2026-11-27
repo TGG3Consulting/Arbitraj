@@ -9,9 +9,9 @@ from eth_utils import keccak
 
 from record_base_slipstream_executor import ROOT, calldata
 from record_carbon_ethereum import WETH
+from record_ethereum_x7 import ENDPOINTS
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json"
-ENDPOINTS = ("https://eth.drpc.org", "https://ethereum-rpc.publicnode.com", "https://ethereum.gateway.tenderly.co")
 READS = {"eth_chainId", "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getBlockByHash",
          "eth_getCode", "eth_getStorageAt", "eth_simulateV1"}
 MULTICALL = "0xca11bde05977b3631167028862be2a173976ca11"
@@ -32,7 +32,8 @@ def rpc(method, params):
             result = reply.json()
             if "result" in result and result["result"] is not None:
                 return result["result"]
-            errors.append((endpoint, result.get("error", {}).get("code")))
+            error = result.get("error", {})
+            errors.append((endpoint,error.get("code"),str(error.get("message",""))[:120]))
         except (requests.RequestException, ValueError) as error:
             errors.append((endpoint, type(error).__name__))
     raise RuntimeError((method, errors))
@@ -72,6 +73,23 @@ def original(c, roles):
         log = found[0]
         assert log["topics"][2] == c["order_hash"] and log["topics"][3][-40:] == user[2:]
         assert tuple(decode(FILL, bytes.fromhex(log["data"][2:]))) == expected
+        exchange = roles["zero_exchange"]["address"]
+        signature = "Fill(address,address,address,address,uint256,uint256,uint256,uint256,bytes32,bytes,bytes)"
+        topic = "0x" + keccak(text=signature).hex()
+        fills = [x for x in logs if x["address"].lower() == exchange and x["topics"][:1] == [topic]]
+        assert len(fills) == 1
+        amounts = fills[0]
+        assert [t[-40:] for t in amounts["topics"][1:3]] == [maker[2:],user[2:]]
+        assert amounts["topics"][3] == c["order_hash"]
+        values = decode(["address","address","uint256","uint256","uint256","uint256","bytes","bytes"],
+                        bytes.fromhex(amounts["data"][2:]))
+        assert values == (taker,taker,order[4],taker_qty,0,0,*assets)
+        transfer = "0x"+keccak(text="Transfer(address,address,uint256)").hex()
+        def transferred(token, sender, to):
+            return sum(int(x["data"],16) for x in logs if x["address"].lower() == token and len(x["topics"]) == 3
+                       and x["topics"][0] == transfer and [t[-40:] for t in x["topics"][1:]] == [sender[2:],to[2:]])
+        assert transferred(c["src"],taker,maker) == taker_qty
+        assert transferred(c["dst"],maker,taker) == order[4]
         return log
     assert int(event(receipt["logs"])["logIndex"], 16) == c["log_index"]
     return tx, receipt, header, event, {"outer_keccak": "0x"+keccak(raw).hex(),
@@ -82,7 +100,7 @@ def simulate(c, roles):
     tx, receipt, header, event, proof = original(c, roles)
     tag = dict(blockHash=header["parentHash"], requireCanonical=True)
     # Версии обеих сторон proxy, выбранного PMM и обоих подписанных активов на исходном родителе.
-    for key in ("user_proxy", "user_proxy_impl", "pmm"):
+    for key in ("user_proxy", "user_proxy_impl", "pmm", "zero_exchange"):
         role = roles[key]
         assert "0x"+keccak(hexstr=rpc("eth_getCode", [role["address"], tag])).hex() == role["runtime"]
     proxy = roles["user_proxy"]["address"]
@@ -91,7 +109,7 @@ def simulate(c, roles):
     payer = tx["from"].lower() if c["src"] == WETH.lower() else c["user"]
     for token, who in ((c["src"],payer), (c["dst"],c["recipient"])):
         native = token == WETH.lower()
-        reads.append(dict(to=MULTICALL if native else token, data=calldata("getEthBalance(address)" if native else "balanceOf(address)", ["address"],[who])))
+        reads.append(dict(gas=hex(100_000),to=MULTICALL if native else token, data=calldata("getEthBalance(address)" if native else "balanceOf(address)", ["address"],[who])))
     # Исполняем только в симуляции. Исходные ETH и ERC20 остаются на архивных счетах.
     swap = {"from":tx["from"], "to":proxy, "value":tx["value"], "data":tx["input"], "gas":tx["gas"]}
     calls = [*reads,swap,*reads,swap,*reads]

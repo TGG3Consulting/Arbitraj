@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Ethereum. The payer bounds both the order currency and Antfarm's separate fee currency.
+// Владелец развёртывает модуль в Ethereum. Плательщик задаёт предел расхода входной валюты и отдельной комиссии ATF.
 pragma solidity 0.8.37;
 
 interface IAntfarmAsset {
@@ -93,8 +93,8 @@ contract AntfarmWallet {
             if(o.fundingTier==0) {
                 pull(feeToken,o.feeFunding);
             } else {
-                // Acquire the exact fee amount using part of the same bounded input. The ATF pair's own fee
-                // is included in this purchase price. Its distinct fee ceiling is determined by the tier and output.
+                // Часть ограниченной суммы входа оплачивает точное количество ATF. Комиссия самой пары ATF
+                // входит в цену покупки. Предел этой комиссии определяется тарифом и точным выходом.
                 uint256 fundingFee=o.feeFunding*o.fundingTier/(1000-o.fundingTier);
                 router.swapTokensForExactTokens(IAntfarmVenue.Swap(o.feeFunding,o.maxFundingDebit,fundingFee,
                     path(o.input,feeToken),fees(o.fundingTier),address(this),o.deadline));

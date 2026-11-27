@@ -1096,6 +1096,13 @@ def tables(network, snapshots, profiles):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
             factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
+        if not base and id=="antfarm-ethereum" and pool:
+            import gzip
+            with gzip.open("tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz","rt",encoding="utf8") as archive:
+                antfarm=json.load(archive)
+            if any(m["pair"]==pool.lower() for m in antfarm["pairs"]):
+                factory=antfarm["contracts"]["AntfarmFactory"]["address"]
+                roundtrip="CREATE2 и getPair(token0,token1,fee) в обоих порядках"
         if not base and id=="templedao" and pool:
             tr=read(Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json"))
             if pool.lower()==tr["pair"]:

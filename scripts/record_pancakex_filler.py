@@ -40,11 +40,12 @@ def record(net):
         return tx(who, token, call_data(fn, ["address"], [owner]))
     balances = [balance(a, p) for a, p in [(spend, who), (proceeds, who), (spend, maker),
                                              (proceeds, maker), (spend, reactor)]]
+    seed = 3 * 10**19 if spend == ZERO else 10**18
     def attempt(stamp, cap):
         init = setup if spend == ZERO else setup + [approve(who, spend, reactor, cap)]
         action = tx(who, reactor, execute, cap if spend == ZERO else 0)
         calls = init + balances + [action] + balances + [action] + balances
-        block = {"blockOverrides":{"time":hex(stamp)}, "stateOverrides":{who:{"balance":hex(10**19)}}, "calls":calls}
+        block = {"blockOverrides":{"time":hex(stamp)}, "stateOverrides":{who:{"balance":hex(seed)}}, "calls":calls}
         result, = reader.rpc("eth_simulateV1", [{"validation":False, "blockStateCalls":[block]},canonical(head)])
         assert result["parentHash"] == head["hash"] and int(result["timestamp"],16) == stamp
         res = result["calls"]
@@ -81,7 +82,7 @@ def record(net):
     assert not rows["expired"]["ok"]
     return {"network":net,"historical_tx":src["transaction"]["hash"],"parent":canonical(head),"original_timestamp":int(src["header"]["timestamp"],16),"order_hash":o["hash"],
             "filler":who,"exclusive":o["exclusiveFiller"],"entry":entry,"paid_token":spend,"received_token":proceeds,
-            "cash_seed_wei":str(10**19),"override_bps":o["exclusivityOverrideBps"],"cases":rows}
+            "cash_seed_wei":str(seed),"override_bps":o["exclusivityOverrideBps"],"cases":rows}
 
 
 if __name__=="__main__":

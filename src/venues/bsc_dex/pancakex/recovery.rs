@@ -67,7 +67,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
                 .await
                 .map_err(|_| unknown())?
         };
-        let events = history::scan(ctx, &m, &t, tip)
+        let (cutoff, events) = history::scan(ctx, &m, &t, tip)
             .await
             .map_err(|_| unknown())?;
         if let Some(id) = events.original {
@@ -82,14 +82,14 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
             m.ticket
                 .cfg
                 .p
-                .check(ctx, fin, &m.ticket.offer.version)
+                .check(ctx, cutoff, &m.ticket.offer.version)
                 .await
                 .map_err(|_| unknown())?;
             let unused = m
                 .ticket
                 .cfg
                 .p
-                .unused(ctx, fin, m.ticket.req.owner, t.nonce)
+                .unused(ctx, cutoff, m.ticket.req.owner, t.nonce)
                 .await
                 .map_err(|_| unknown())?;
             if !closed(expired, unused, &events) {

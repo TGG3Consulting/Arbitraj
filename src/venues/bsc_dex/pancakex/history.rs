@@ -22,6 +22,9 @@ pub(super) struct Events {
     pub original: Option<B256>,
     pub excludes: bool,
 }
+pub(super) fn fill_filter(who: Address) -> Value {
+    json!([Fill::SIGNATURE_HASH, null, null, who.into_word()])
+}
 pub(super) fn expired(timestamp: u64, deadline: u64) -> bool {
     timestamp > deadline
 }
@@ -49,9 +52,15 @@ async fn last(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> GatewayResult<u64>
     }
     Ok(low)
 }
-pub(super) async fn scan(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> GatewayResult<Events> {
+pub(super) async fn scan(
+    ctx: &Ctx,
+    m: &Marker,
+    t: &Terms,
+    tip: Head,
+) -> GatewayResult<(Head, Events)> {
     let mut start = m.start;
     let end = last(ctx, m, t, tip).await?;
+    let cutoff = white_state::head(ctx, &format!("{end:#x}")).await?;
     let p = &m.ticket.cfg.p;
     let who = m.ticket.req.owner;
     let bad = || {
@@ -71,10 +80,7 @@ pub(super) async fn scan(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> Gateway
             )
         };
         let (fills, cancels, permits) = tokio::try_join!(
-            query(
-                p.router.address,
-                json!([Fill::SIGNATURE_HASH, null, who.into_word()])
-            ),
+            query(p.router.address, fill_filter(who)),
             query(
                 p.router.address,
                 json!([
@@ -129,7 +135,11 @@ pub(super) async fn scan(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> Gateway
             let receipt = send::receipt::read(ctx, id).await?.ok_or_else(bad)?;
             if receipt.status != U64::from(1)
                 || receipt.block_hash != log.block_hash
-                || !receipt.logs.iter().any(|r| r == &log)
+                || !receipt.logs.iter().any(|r| {
+                    r.inner == log.inner
+                        && r.log_index == log.log_index
+                        && r.transaction_hash == Some(id)
+                })
             {
                 return Err(bad());
             }
@@ -159,7 +169,7 @@ pub(super) async fn scan(ctx: &Ctx, m: &Marker, t: &Terms, tip: Head) -> Gateway
     {
         return Err(bad());
     }
-    Ok(out)
+    Ok((cutoff, out))
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -6,6 +6,23 @@ use serde_json::Value;
 
 pub(super) fn paid(terms: &Terms, h: &Value) {
     let logs: Vec<Log> = serde_json::from_value(h["receipt"]["logs"].clone()).unwrap();
+    let filter = super::history::fill_filter(terms.request.owner);
+    let topics = filter.as_array().unwrap();
+    let n = logs
+        .iter()
+        .filter(|l| {
+            l.address() == terms.roles.reactor
+                && l.topics().len() == topics.len()
+                && topics
+                    .iter()
+                    .zip(l.topics())
+                    .all(|(want, raw)| want.is_null() || *want == serde_json::json!(raw))
+        })
+        .count();
+    assert_eq!(
+        n, 1,
+        "eth_getLogs filter must match the original swapper across all historical reactors"
+    );
     let native: Vec<_> = h["native_recipient_calls"]
         .as_array()
         .unwrap()

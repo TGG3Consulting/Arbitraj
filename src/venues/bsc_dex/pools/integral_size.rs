@@ -218,7 +218,7 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
         Err(e) => Verdict::Failed(e.message),
     }
 }
-pub(super) async fn funded(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<bool> {
+pub(in crate::venues::bsc_dex) async fn funded(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<bool> {
     use crate::venues::bsc_dex::node::rpc;
     let (rows, balance): (_, U256) = tokio::try_join!(
         batch::read(

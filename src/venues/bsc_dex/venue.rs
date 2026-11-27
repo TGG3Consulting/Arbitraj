@@ -84,7 +84,7 @@ impl Venue for BscDex {
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
-        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::enabled(&self.p.ctx)
+        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side)
             || super::hanji::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
         {
@@ -235,7 +235,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
-        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::enabled(&self.p.ctx)
+        if super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side)
             || super::hanji::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
             || (crate::gateway::quote_stage::is_final()

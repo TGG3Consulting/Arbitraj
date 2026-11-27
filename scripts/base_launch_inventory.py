@@ -213,5 +213,9 @@ def spoke(network):
             out.extend(["",f"Модуль MaverickV1Adapter привязан к фабрике этой сети. Архивный runtime `{w['module_hash']}`. Владелец задаёт фактический dex.router после размещения модуля и переключает dex.kind с maverick_v1 на maverick_v1_module. Официальный PoolInformation на точном входе возвращает только выход. Модуль проверяет полное списание, callback зарегистрированной пары и реальное зачисление. Владелец задаёт размеры лестницы dex.pmm_ladder_usd согласно своему бюджету."])
         else:
             out.extend(["","Плата пула fee() учитывает отправителя и состояние TWAP в блоке. Фабрика поддерживает запасную ставку на случай отказа модуля. Цена перед отправкой проверяется от своего адреса. Повторный шаг по тому же рынку требует нового состояния модуля."])
+            fee=evidence(f"topaz_{network}_fees.json.gz")
+            cur=fee["blocks"][1]
+            rates=sorted({v["value"][0] for m in cur["markets"] for v in m["fees"].values()})
+            out.extend(["",f"На трёх соседних высотах проверены все {len(cur['markets'])} пулов. Окно TWAP 600 секунд, масштаб 1 000 000, предел по умолчанию 50 000, коэффициент по умолчанию 0. На центральной высоте фактические ставки в миллионных долях: {', '.join(map(str,rates))}. Событий регистрации и снятия скидки от блока {fee['from_block']} до {fee['to_block']} включительно: {len(fee['registrations'])}. [Ставки от кошельков и параметры каждого пула](../tests/data/first_run_dex_2026-11-26/topaz_{network}_fees.json.gz)."])
         out.extend([f"[Реестр и размещения](../tests/data/first_run_dex_2026-11-26/{stem}_directory.json.gz). [Канонические симуляции](../tests/data/first_run_dex_2026-11-26/{stem}_wallets.json.gz). [Документация контрактов]({d['source']}).",""])
     return out

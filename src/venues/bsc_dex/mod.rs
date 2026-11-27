@@ -15,6 +15,7 @@ pub mod check;
 pub mod coins;
 pub mod connection;
 pub mod hashflow;
+pub mod ryze;
 mod native_rfq;
 pub mod hanji;
 mod source_quote;

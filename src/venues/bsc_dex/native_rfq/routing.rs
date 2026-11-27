@@ -58,6 +58,9 @@ fn pair(p: &Parts, asset: &Asset, side: Side) -> Option<(Address, Address)> {
         (coin, quote)
     })
 }
+pub(in crate::venues::bsc_dex) fn available(p:&Parts,asset:&Asset,side:Side)->bool{
+    super::enabled(&p.ctx) && pair(p,asset,side).zip(p.native_quotes.depth(p)).is_some_and(|((a,b),book)|book.contains(a,b))
+}
 pub(in crate::venues::bsc_dex) fn breaks(
     p: &Parts,
     a: &Asset,

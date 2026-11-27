@@ -7245,6 +7245,7 @@
       ],
       "dex.pmm_ladder_counter": true,
       "dex.module_runtime_hashes": [
+        "0x51c8cc1194019385b200c2df5176a96d90208fb02534041fd715438ec8f5a67e",
         "0x78ad6e7591f7b26ee73155a0da44f95b1dd2ff4cca39aab8d398c72ca98ef641",
         "0xd69663d10c59f075bdbca5302ead1e4a2886355fd5fb061acd1323dab562e739"
       ]

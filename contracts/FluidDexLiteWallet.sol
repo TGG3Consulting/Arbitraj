@@ -19,12 +19,23 @@ interface IFluidWrapped is IERC20 {
     function deposit() external payable;
 }
 
-// Instadapp/fluid-contracts-public@404d73f9, deployments/mainnet/FluidDexLite.json, embedded metadata.
-// The core exposes the original DexKey array in slot 1. Its trading state is keyed by the first
-// eight bytes of keccak256(abi.encode(DexKey)). Keep the core identity and array position together.
+// Модуль для прямого расчёта и V5 проверяет исходный DexKey в каталоге Fluid DEX Lite.
 contract FluidDexLiteWallet {
     address private constant NATIVE = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-    uint256 private constant ARRAY_START = uint256(keccak256(abi.encode(uint256(1))));
+    // _dexesList: contracts/protocols/dexLite/other/variables.sol:11 и storageLayout основной кассы.
+    // https://github.com/Instadapp/fluid-contracts-public/blob/404d73f91e6806f881f8dabeb30494f93f9e99b7/deployments/mainnet/FluidDexLite.json#L550-L556
+    uint256 private constant DEX_KEYS_SLOT = 1;
+    uint256 private constant ARRAY_START = uint256(keccak256(abi.encode(DEX_KEYS_SLOT)));
+    // DexKey(token0, token1, salt): три слова по 32 байта, поля в слотах 0, 1 и 2.
+    // https://github.com/Instadapp/fluid-contracts-public/blob/404d73f91e6806f881f8dabeb30494f93f9e99b7/deployments/mainnet/FluidDexLite.json#L627-L656
+    uint256 private constant DEX_KEY_WORDS = 3;
+    uint256 private constant TOKEN1_OFFSET = 1;
+    uint256 private constant SALT_OFFSET = 2;
+    // Fluid: metadata.sources["contracts/protocols/dexLite/core/coreInternals.sol"], строки 12 и 153:
+    // dexId = bytes8(keccak256(abi.encode(dexKey))). PoolRef нашего адаптера дописывает индекс в младшие 192 бита.
+    // https://github.com/Instadapp/fluid-contracts-public/blob/404d73f91e6806f881f8dabeb30494f93f9e99b7/deployments/mainnet/FluidDexLite.json#L495
+    uint256 private constant MARKET_INDEX_MASK = type(uint192).max;
+    bytes32 private constant DEX_ID_MASK = ~bytes32(MARKET_INDEX_MASK);
     IFluidDexLite public immutable dex;
     IFluidWrapped public immutable wrapped;
     bytes32 public immutable venueHash;
@@ -63,13 +74,13 @@ contract FluidDexLiteWallet {
 
     function resolve(bytes32 market) public view returns (IFluidDexLite.DexKey memory k) {
         if (address(dex).codehash != venueHash) revert Market();
-        uint256 index = uint192(uint256(market));
-        if (index >= dex.readFromStorage(bytes32(uint256(1)))) revert Market();
-        uint256 pos = ARRAY_START + index * 3;
+        uint256 index = uint256(market) & MARKET_INDEX_MASK;
+        if (index >= dex.readFromStorage(bytes32(DEX_KEYS_SLOT))) revert Market();
+        uint256 pos = ARRAY_START + index * DEX_KEY_WORDS;
         k = IFluidDexLite.DexKey(address(uint160(dex.readFromStorage(bytes32(pos)))),
-                                 address(uint160(dex.readFromStorage(bytes32(pos+1)))),
-                                 bytes32(dex.readFromStorage(bytes32(pos+2))));
-        if (bytes8(keccak256(abi.encode(k))) != bytes8(market)) revert Market();
+                                 address(uint160(dex.readFromStorage(bytes32(pos + TOKEN1_OFFSET)))),
+                                 bytes32(dex.readFromStorage(bytes32(pos + SALT_OFFSET))));
+        if ((keccak256(abi.encode(k)) & DEX_ID_MASK) != (market & DEX_ID_MASK)) revert Market();
     }
 
     function execute(bytes32 market, address input, address output, uint256 budget, uint256 minimum,

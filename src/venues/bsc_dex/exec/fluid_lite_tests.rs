@@ -10,6 +10,58 @@ fn a(v: &Value) -> Address {
 fn n(v: &Value) -> U256 {
     v.as_str().unwrap().parse().unwrap()
 }
+/// Снимок DexKey[] и фактический market из calldata архива задают обе стороны 64/192-битной границы.
+#[test]
+fn recorded_market_id_selects_the_same_directory_key_and_keeps_index_out_of_dex_id() {
+    let snapshot = read(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/fluid_dex_lite_ethereum.json.gz"
+    ));
+    let wallet = read(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/fluid_dex_lite_wallet.json.gz"
+    ));
+    assert_eq!(wallet["head"], snapshot["active"]["head"]);
+    let directory = snapshot["active"]["pools"].as_array().unwrap();
+    let mut selected = std::collections::BTreeSet::new();
+    for payment in wallet["payments"].as_array().unwrap() {
+        let id = payment["market"].as_str().unwrap().parse::<B256>().unwrap();
+        let index = U256::from_be_slice(&id[8..]);
+        let position = usize::try_from(index).unwrap();
+        let row = &directory[position];
+        let market = Market {
+            token0: a(&row["token0"]),
+            token1: a(&row["token1"]),
+            salt: row["salt"].as_str().unwrap().parse().unwrap(),
+            index,
+        };
+        assert_eq!(market.id(), Some(id));
+        assert_eq!(format!("0x{}", hex::encode(&id[..8])), row["pool_id"]);
+        if !selected.insert(position) {
+            continue;
+        }
+
+        // Отдельная граница формата PoolRef. Такой индекс не заявляется существующим в каталоге.
+        let overflow: U256 = U256::ONE << 192;
+        let largest = Market {
+            index: overflow - U256::ONE,
+            ..market
+        }
+        .id()
+        .unwrap();
+        assert_eq!(&largest[..8], &id[..8]);
+        assert_eq!(&largest[8..], &[u8::MAX; 24]);
+        assert_eq!(
+            Market {
+                index: overflow,
+                ..market
+            }
+            .id(),
+            None
+        );
+    }
+    assert_eq!(selected.len(), directory.len());
+    assert!(selected.len() > 1);
+}
+
 #[test]
 fn two_physical_markets_and_twelve_paid_wallet_routes() {
     let raw = read(include_bytes!(

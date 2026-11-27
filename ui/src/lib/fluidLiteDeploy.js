@@ -31,3 +31,22 @@ export async function checkFluidLite(provider, plan, at) {
       throw Error('Изменился код контракта Fluid DEX Lite ' + target + '.');
   }
 }
+
+/** Точное исходное размещение имеет приоритет. Без поручения выбирается первая разрешённая версия. */
+export function selectFluidCard(settings, pending, input, cards) {
+  const allowed = new Set((settings.hashes ?? []).map(h => h.toLowerCase()));
+  const card = cards.find(c => allowed.has(c.runtimeKeccak) &&
+    (!pending || c.creationSha256 === pending.creation) &&
+    (input === undefined || c.data.toLowerCase() === input?.toLowerCase()));
+  if (!card) throw Error('Для размещения Fluid DEX Lite требуется разрешённый хеш соответствующей версии.');
+  return card;
+}
+
+/** Карточки из этой сборки. Обе затем проходят полную проверку loadFluidLite. */
+export async function fluidCard(settings, pending, input) {
+  const [{default: current}, {default: previous}] = await Promise.all([
+    import('../assets/fluid-dex-lite-ethereum.json'),
+    import('../assets/fluid-dex-lite-ethereum-previous.json'),
+  ]);
+  return { default: selectFluidCard(settings, pending, input, [current, previous]) };
+}

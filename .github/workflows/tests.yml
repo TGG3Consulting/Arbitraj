@@ -640,6 +640,10 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: startsWith(matrix.market, 'mooniswap-')
+        run: python scripts/record_mooniswap.py "${MATRIX_MARKET#mooniswap-}" "$RUNNER_TEMP/market.json"
+        env:
+          MATRIX_MARKET: ${{ matrix.market }}
       - if: matrix.market == 'clipper-access'
         run: |
           python -m pip install --quiet eth-account==0.13.7

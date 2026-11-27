@@ -6,7 +6,8 @@ from pathlib import Path
 DATA=Path("tests/data/first_run_dex_2026-11-26")
 
 def evidence(name):
-    with gzip.open(DATA/name,"rt",encoding="utf8") as f:return json.load(f)
+    opener=gzip.open if name.endswith(".gz") else open
+    with opener(DATA/name,"rt",encoding="utf8") as f:return json.load(f)
 
 def section():
     cfg=evidence("base_launch_hooks.json.gz")
@@ -151,3 +152,38 @@ def umia():
         "Статистика DefiLlama объединяет спотовые и условные рынки. Обмен внутри UmiaMarketCore ведёт права на исход предложения "
         "в собственном реестре. Выдача обеспечения зависит от погашения прав и результата settlement. "
         "[Первичные контракты](https://github.com/umiafinance/protocol/tree/3165f5a5bdaa23a83fbfd4894523e7ca84d53a14).",""]
+
+def fynd(network):
+    f=evidence("fynd_"+network+"_markets.json.gz")
+    markets=f["markets"]
+    shared=sorted({r["controller"] for r in markets})
+    listing=", ".join(f"`{r['id']}` ({r['tokens'][0]} / {r['tokens'][1]})" for r in markets)
+    return ["#### Fynd AMM · подписанная комиссия","",
+        f"На высоте {f['height']} проверены все {f['initialize_logs']} событий PoolInitialized ядра Ekubo с момента размещения расширения. "
+        f"Расширения Fynd создали {len(markets)} физических ключей. {listing}.","",
+        f"Контроллер на этом блоке {', '.join(shared)}. Для каждого ключа вызов beforeSwap вернул SwapMustHappenThroughForward. "
+        "Ключ Ekubo задаёт базовую ставку 0. Для исполнения контроллер подписывает PoolId, предел изменения баланса, плату за конкретный обмен, срок, nonce и ограничения locker. "
+        "Нулевое поле authorizedLocker допускает любой locker, иначе контракт сравнивает младшие 128 бит. Продукт указывает Tycho Router. "
+        "Проверка минимального изменения баланса внутри Core предшествует отдельной подписанной плате. "
+        f"Публичная проверка hosted API без ключа вернула HTTP {f['unauthenticated_health']['status']}. Для торгового допуска необходимы ключ участника, "
+        "подключение Fynd AMM routing, живая подпись для собственного допустимого маршрута и архивный замер чистой выплаты. "
+        f"[Канонические контракты, PoolId и контрольные отказы](../tests/data/first_run_dex_2026-11-26/fynd_{network}_markets.json.gz). "
+        "[Правила Fynd](https://docs.fynd.xyz/get-started/fynd-amm.md). [Получение ключа и условия интеграции](https://docs.fynd.xyz/get-started/hosted-api.md).",""]
+
+
+def vecta():
+    d=evidence("vecta_base_directory.json")
+    t=evidence("vecta_base_tiers.json.gz")
+    w=evidence("vecta_base_wallets.json.gz")
+    return ["#### VectaSwap · кошелёк и фабрика","",
+        f"На высоте {d['block']} nonce фабрики {d['nonce']} подтвердил все три PoolCreated. Совпали CREATE2 и исполняемый runtime "
+        "каждого пула с эталоном Uniswap V3 после учёта объявленных immutable. Код и роли SwapRouter, QuoterV2, TickLens проверены у размещений "
+        f"того же отправителя. Уровни комиссии в миллионных долях и шаг тика: {', '.join(f'{k} → {v}' for k,v in sorted(t['tiers'].items(),key=lambda x:int(x[0])))}. "
+        "[Реестр и привязки байткода](../tests/data/first_run_dex_2026-11-26/vecta_base_directory.json). "
+        "[Все изменения разрешённых ставок](../tests/data/first_run_dex_2026-11-26/vecta_base_tiers.json.gz).","",
+        "EURC/USDC: при двух расходах 1 000 и 1 000 000 raw USDC кошелёк получил 910 и 911 093 raw EURC. "
+        "При обратном обмене тем же маршрутом получено 997 и 999 798 raw USDC. Штатный Router и V5 дали равные суммы. "
+        "Для WETH/USDC и WETH/USDT на этой высоте нулевая активная ликвидность и два отказа котировки. "
+        "Обе монеты действующей пары допускают смену реализации, поэтому обычный Router с номинальным минимумом не подтверждает "
+        "прирост баланса для произвольной реализации. V5 сверяет конечную выплату при исполнении. "
+        "[Списания, выплаты, газ и контрольные отказы](../tests/data/first_run_dex_2026-11-26/vecta_base_wallets.json.gz).",""]

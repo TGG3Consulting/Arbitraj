@@ -26,7 +26,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     let graph =
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut quotes = Vec::new();
-    for e in i.entries.iter().filter(|e| enabled(e)) {
+    let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
+    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native())) {
         if matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade){
             let safe=e.family.variant==Variant::SafeSwapTrade;
             let Ok(target)=ctx.dex_addr("dex.router",e.family.id) else{continue};
@@ -58,7 +59,6 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.extend(Box::pin(super::antfarm_pricing::options(q,i,e,head)).await);
             continue;
         }
-        let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
         if super::super::exec::o1_wallet::enabled(e) && native {
             if e.family.variant.flux_native() {
                 for module in [false,true] {

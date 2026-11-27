@@ -9,6 +9,8 @@ from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_base_native_v3_directory import CanonicalReads, directory as pools
+from record_fraxswap_swaps import bound_runtime
+from record_registered_v3_module import ADAPTER
 from record_base_slipstream_executor import EXEC, RUNTIME, STEP, calldata, rpc
 from record_hello_wallets import BASE_ENDPOINTS, BASE_WETH, DATA, HOLDERS, QPARAM
 from record_spectra_base import AT, BLOCK, call, many, read
@@ -65,9 +67,13 @@ def directory():
     return dict(d,markets=markets,roles=roles,nonce=n,init_hash=init,reference=REFERENCE,template_hash=hash_bytes(reference),immutable_slots=ir)
 
 
-def wallets(d,url):
+def wallets(d,url,artifact=None):
     head=rpc(url,"eth_getBlockByHash",[AT["blockHash"],False]);end=int(head["timestamp"],16)+300
     if head["stateRoot"]!=d["state_root"] or rpc(url,"eth_getCode",[EXEC,AT])!="0x":raise ValueError("другой архив")
+    module=None
+    if artifact:
+        if rpc(url,"eth_getCode",[ADAPTER,AT])!="0x":raise ValueError("постановочный адрес уже занят")
+        module=bound_runtime(artifact,FACTORY,url,AT)
     router=d["roles"]["router"]["address"];quoter=d["roles"]["quoter"]["address"];markets=[]
     for m in d["markets"]:
         x=USDC if USDC in m["tokens"] else BASE_WETH;y=next(t for t in m["tokens"] if t!=x);owner=HOLDERS["base"][x]
@@ -78,19 +84,21 @@ def wallets(d,url):
             if mode=="v5":
                 word=lambda n:"0x"+format(n,"064x")
                 block["stateOverrides"]={EXEC:dict(code="0x"+RUNTIME.read_text().strip().removeprefix("0x"),stateDiff={word(0):word(int(owner,16)),word(1):word(int(BASE_WETH,16))})}
+            if mode=="module":block["stateOverrides"]={ADAPTER:dict(code="0x"+module)}
             r,=rpc(url,"eth_simulateV1",[dict(blockStateCalls=[block],validation=False),AT])
             if r["parentHash"]!=AT["blockHash"] or len(r["calls"])!=len(calls):raise ValueError("другая высота или неполный набор")
             return r["calls"]
         def leg(mode,prefix,a,b,qty):
-            spender=EXEC if mode=="v5" else router
+            spender={"v5":EXEC,"router":router,"module":ADAPTER}[mode]
             approval=tx(a,"approve(address,uint256)",["address","uint256"],[spender,qty])
-            balances=[tx(t,"balanceOf(address)",["address"],[who]) for who in (owner,EXEC) for t in (a,b)]
+            balances=[tx(t,"balanceOf(address)",["address"],[who]) for who in (owner,ADAPTER if mode=="module" else EXEC) for t in (a,b)]
             q=tx(quoter,"quoteExactInputSingle("+QPARAM+")",[QPARAM],[(a,b,qty,m["fee"],0)])
             base=prefix+[approval,*balances,q];front=simulate(base,mode)
             if any(r["status"]!="0x1" for r in front):return None,dict(stage="quote",calls=base,results=front)
             out=decode(["uint256","uint160","uint32","uint256"],bytes.fromhex(front[-1]["returnData"][2:]))[0]
             if not out:return None,dict(stage="zero",calls=base,results=front)
             def order(minimum,expiry):
+                if mode=="module":return tx(ADAPTER,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[m["pool"],a,b,qty,minimum,expiry])
                 if mode=="router":return tx(router,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,m["fee"],owner,expiry,qty,minimum,0)])
                 return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,qty,b,minimum,expiry,[(1,m["pool"],a,b,10000,b"")]])
             exact=order(out,end);calls=base+[order(out+1,end),order(out,0),exact,*balances];r=simulate(calls,mode)
@@ -102,21 +110,21 @@ def wallets(d,url):
             return prefix+[approval,exact],dict(stage="paid",input=str(qty),paid=str(paid),net=str(net),full=paid==qty,gas=int(r[-5]["gasUsed"],16),calls=calls,results=r)
         cases=[]
         for qty in ([1000,10**6] if x==USDC else [10**12,10**14]):
-            for mode in ("router","v5"):
+            for mode in (("router","v5","module") if module else ("router","v5")):
                 prefix,buy=leg(mode,[],x,y,qty)
                 sell=leg(mode,prefix,y,x,int(buy["net"]))[1] if prefix and buy["full"] else None
                 cases.append(dict(mode=mode,input=str(qty),buy=buy,sell=sell))
         markets.append(dict(pool=m["pool"],cash=x,payer=owner,cases=cases))
-    return dict(selector=AT,state_root=d["state_root"],markets=markets)
+    return dict(selector=AT,state_root=d["state_root"],markets=markets,module_hash=hash_bytes(bytes.fromhex(module)) if module else None)
 
 
 if __name__=="__main__":
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("action",choices=("directory","wallets"));ap.add_argument("output",type=Path);a=ap.parse_args()
+    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("action",choices=("directory","wallets"));ap.add_argument("output",type=Path);ap.add_argument("--module",type=Path);a=ap.parse_args()
     if a.action=="directory":v=directory()
     else:
         d=json.loads((DATA/"vecta_base_directory.json").read_bytes())
         for url in BASE_ENDPOINTS:
-            try:v=wallets(d,url);break
+            try:v=wallets(d,url,json.loads(a.module.read_bytes()) if a.module else None);break
             except (ValueError,requests.RequestException) as exc:
                 if url==BASE_ENDPOINTS[-1]:raise
     raw=(json.dumps(v,indent=2)+"\n").encode();a.output.write_bytes(gzip.compress(raw,mtime=0) if a.output.suffix==".gz" else raw)

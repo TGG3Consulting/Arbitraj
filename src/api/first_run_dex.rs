@@ -400,6 +400,10 @@ mod tests {
                         let evidence: Value=serde_json::from_str(registry).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);
                         assert_eq!(evidence["init"].as_str(),Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && p.id=="vectaswap-base" {
+                        let proof:Value=serde_json::from_slice(include_bytes!("../../tests/data/first_run_dex_2026-11-26/vecta_base_directory.json")).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert_eq!(proof["init_hash"].as_str(),Some(text.as_str()));
                     } else if k=="dex.pool_code_hashes" && p.id=="communityv3" {
                         let deployment:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json")).unwrap();
                         assert_eq!(deployment["selector"],snapshot["selector"]);assert_eq!(deployment["init"].as_str(),Some(text.as_str()));

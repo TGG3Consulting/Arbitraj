@@ -471,7 +471,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","goliath-ethereum","native-rfq-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","spectra-base","umia-base","umia-source","vecta-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","community-v3-router-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","safeswap-protected-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","goliath-ethereum","native-rfq-ethereum","native-rfq-protected-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","spectra-base","umia-base","umia-source","vecta-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","community-v3-router-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","safeswap-protected-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -509,7 +509,10 @@ jobs:
           "$RUNNER_TEMP/umia-solc/node_modules/.bin/solcjs" --standard-json < "$RUNNER_TEMP/umia-input.reference.json" > "$RUNNER_TEMP/umia-compiled.reference.json"
           python scripts/record_umia_source.py verify "$RUNNER_TEMP/umia-compiled.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'vecta-base'
-        run: python scripts/record_vecta_base.py wallets "$RUNNER_TEMP/market.json"
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/vecta" CommunityV3Adapter
+          python scripts/record_vecta_base.py wallets "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/vecta/CommunityV3Adapter.json"
       - if: matrix.market == 'umia-base'
         run: python scripts/record_umia_base.py wallets "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-base'
@@ -600,13 +603,17 @@ jobs:
         run: python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'goliath-ethereum'
         run: python scripts/record_goliath_ethereum.py "$RUNNER_TEMP/market.json"
-      - if: matrix.market == 'pendle-protected-ethereum'
+      - if: matrix.market == 'pendle-protected-ethereum' || matrix.market == 'native-rfq-protected-ethereum'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - if: matrix.market == 'pendle-protected-ethereum'
+      - if: matrix.market == 'pendle-protected-ethereum' || matrix.market == 'native-rfq-protected-ethereum'
         working-directory: contracts
         run: npm ci --no-audit --no-fund
+      - if: matrix.market == 'native-rfq-protected-ethereum'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter
+          python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/native/NativeRfqAdapter.json"
       - if: matrix.market == 'pendle-protected-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/pendle" PendleMarketAdapter

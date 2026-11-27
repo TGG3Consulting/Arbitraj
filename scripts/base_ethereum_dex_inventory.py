@@ -78,6 +78,8 @@ def tables(network, snapshots, profiles):
         out.extend(base_launch_inventory.section())
         out.extend(base_launch_inventory.spectra())
         out.extend(base_launch_inventory.umia())
+        out.extend(base_launch_inventory.vecta())
+    out.extend(base_launch_inventory.fynd(network))
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
         out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
@@ -1582,6 +1584,13 @@ def tables(network, snapshots, profiles):
                     + ("8/8 обменов изменили собственный пул." if base else
                        "4/4 обмена дополнительно изменили пул Uniswap V3 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640.")
                     + " Исполнитель сравнивает одиночный Nami с обычным сплитом на тот же объём и направляет сюда только отдельный обмен")
+        if str(row["id"])=="9267":
+            record=base_launch_inventory.evidence("fynd_"+network+"_markets.json.gz")
+            candidates=[record["core"],*record["deployments"]]
+            task=f"DEX-45 · {len(record['markets'])} физических ключей Fynd. Каждая сделка требует действующей подписи контроллера и разрешённого locker; см. условия и подключение Fynd AMM."
+        if base and str(row["id"])=="9327":
+            candidates=[base_launch_inventory.evidence("vecta_base_directory.json")["roles"]["factory"]["address"]]
+            task="DEX-45 · три рынка VectaSwap; V5 и штатный Router выплатили проверенные суммы на EURC/USDC. Профиль vectaswap-base."
         if base and str(row["id"])=="8513":
             task="DEX-44 · UmiaHub, четыре текущих и один прежний спотовый vault. Общий объём включает решения UmiaMarketCore, по которым нужны исход и погашение. См. фактические выплаты в разделе Umia."
         if base and str(row["id"])=="4725":

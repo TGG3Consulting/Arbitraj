@@ -361,3 +361,6 @@ async fn frame(
     }
     Ok(frame.calls)
 }
+#[cfg(test)]
+#[path="native_ranges_tests.rs"]
+mod native_ranges_tests;

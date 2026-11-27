@@ -8,6 +8,7 @@
   const deployments = {
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
     bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
+    yield_basis:{file:'yield-basis-ethereum',key:'yield-basis-create:1',name:'YieldBasisAdapter в Ethereum',load:()=>import('../assets/yield-basis-ethereum.json')},
     balancer_v1:{file:'balancer-v1-ethereum',key:'balancer-v1-create:1',name:'BalancerV1Adapter в Ethereum',load:()=>import('../assets/balancer-v1-ethereum.json')},
     stabull:stabullPlan, stabull_module:stabullPlan,
     rubicon_classic:{file:'rubicon-classic-base',key:'rubicon-classic-create:8453',name:'RubiconClassicWallet на Base'},
@@ -132,8 +133,8 @@
   <summary>Разместить {deployment.name}</summary>
   <button class="quiet" disabled={busy} onclick={() => run(prepare)}>Открыть параметры размещения</button>
   {#if manifest}
-    {#if kind === 'balancer_v1'}
-      <p>Фабрика BPool <code>{manifest.factory}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
+    {#if kind === 'balancer_v1' || kind === 'yield_basis'}
+      <p>Фабрика {kind === 'yield_basis' ? 'YieldBasis' : 'BPool'} <code>{manifest.factory}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
     {:else if deployment === stabullPlan}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
     {:else if kind === 'bancor_v3'}

@@ -5883,5 +5883,53 @@
         "0x763d93fa28f4e1699b4c9e071e0e31e048879a82037c67f95a20c8d6d8ce5635"
       ]
     }
+  },
+  {
+    "network": "ethereum",
+    "id": "yield-basis-ethereum",
+    "chain_id": 1,
+    "source": "https://github.com/yield-basis/yb-core/tree/a1433a0c3d3887ecd2ea085992d041014cf98468",
+    "settings": {
+      "dex.kind": "yield_basis",
+      "dex.factory": "0x370a449febb9411c95bf897021377fe0b7d100c0",
+      "dex.factory_runtime_hash": "0x0478f003fa75e4c84472205794a27caf20254ef25ccd62e3f39291e1ca2c9e12",
+      "dex.yield_basis_amm_hashes": [
+        "0x2cb3d04b9797bfc07a7338d6ef8851b004c0eb38b539ab5a08c1a6d8b03758b2 always",
+        "0x7cf8523d9287f663cdff14755eabaf4e477700ac545da7ae2efc1714bbfbe511 always",
+        "0x0ce1f9f1c8ef14f1b2f62b6f00a2700e2fbf6f1506c2139a168f2b0109760a28 always",
+        "0x65b043da63e42028b699aa8a4bb7d3ffbf0d3ad69082f7d0c506183f1e331188 always",
+        "0x1387c49afa529924348389f01e4e63f7b28bd173249c5a6e4ebf01e9b95286b6 always",
+        "0xc9b0c1a7147da3e52aa215954a0e67dd38c1c5279801dc264e582ea45d721fe2 always",
+        "0x7de2ee5cc9eb2483ebeac85c09d710633473853fc11117ab074235ade49043ab always",
+        "0x804007480a42292415f94cec5e5fe263f168f446fe1e36ac5c423c9e52288780 relax_improving",
+        "0xc178206a2203c9ac9d2c720377473bc55c2fcc516bd8126a0810fb02d10b52e3 relax_improving",
+        "0xc84b2dc29786dd2f8a6db381d4f1d074827ab0c077f3583cefd93d13972a0b74 relax_improving",
+        "0xf010330f35d428c09b655f8894e395b1d665e4dd5b99598ce6fd22ac5fbb7b46 relax_improving"
+      ],
+      "dex.yield_basis_pool_hashes": [
+        "0x00080bf66472ed3a87b3eacfdff3cb930483d5af876363c1f7fdc9b1c52239b1",
+        "0x116eeee684882885cda3ddf0287d0979f71d64030fbec90f1f52924cf0e7643a",
+        "0x1578c5a836891e466a1fa5879bc7f0e36bfd9fc625586765541191d8cd3880ae",
+        "0x1d2a312fe8a751875aa5bc84d5e277e40a35b2834dec9b8c66385ae7f8c27cab",
+        "0x21cdea51fbfdc55ec46c00742aa4518bb8bed7716052d59a5c878829b7ed8183",
+        "0x873b628e55b3cc64a4ec63efc57ffa149a8d4c41d96bd2860f26ae1c41656bcb",
+        "0x9060709a2a8e69609440625b9b8eb375f565658c4e9d9bbb50e49cb8b54e69d2",
+        "0x95e925c867e0f0827b4c9d5d8587f6e94554388b9888e2678ced6662913dd267",
+        "0xa7e176c7ddfb6898f7b065594eb27149db3958e0ab5410cdc05324c9724ec550",
+        "0xa86e2cece808af005da8f6aa5af2290653d03426f9fa0d8965aa04d69ee29651",
+        "0xaefafc4c0157bc496db238fc46d730a140174f3fb542527bb86443974ed4f7a6",
+        "0xb00ba7467a75fffe15d018cc822a09b282a285f4012f857b19966046b3191b3a",
+        "0xb29082ddff7c6331443e1911705149f42cf63cb3451a3e0d0ed9510ccc9f925d",
+        "0xc0ff34e03d3a83a927a69056810d093221481e7c7aa2fd1e3bdbe82141beeecd",
+        "0xd0b9195b91086bd9cafaa5e1ab8a6eab1a0d473fadb6c1a3ca69e31f687100e9",
+        "0xd19e3a232367411c825df98165c95898c08e181fe2e0f9211445f48eb4c0dc62",
+        "0xdef421b014d1788a2e07169a759b6f1b8b9747d391614c30d4e0146b9c568362",
+        "0xe27d9bd013e127576cab7ce17df7be5cc6394b6acd4161dcf8dbb0391d3a4164",
+        "0xe4ac67017f888827e6efe22cd8edc37bf562166368f6eb62837bff2e4a4a23e8"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x67190b80abc4ab95864c339617edeff1946d17052a8f3f8158213651adf07fe6"
+      ]
+    }
   }
 ]

@@ -1076,6 +1076,18 @@ def tables(network, snapshots, profiles):
                     "развёрнутого с dex.factory и dex.native_wrapped. "
                     f"[Баланс до и после каждой операции](../{archive.as_posix()})."])
     if not base:
+        fixture=Path("tests/data/first_run_dex_2026-11-26/yield_basis_wallet.json.gz")
+        with gzip.open(fixture,"rt") as stream:
+            book=json.load(stream)
+        cases=book["cases"]
+        success=[case for case in cases if case["stage"]=="paid"]
+        out.extend(["",f"YieldBasis · Ethereum, блок {book['block']}. Профиль yield-basis-ethereum связывает каждую версию LEVAMM с её правилом проверки долга. "
+            f"Оригинальный минимум подтверждён кошельком в {sum(c['mode']=='wallet' for c in success)} обменах ERC20, "
+            f"в {sum(c['mode']=='native' for c in success)} обменах с ETH и в {sum(c['mode']=='v5' for c in success)} обменах через V5. "
+            f"В {sum(c['stage']=='pool rejected' for c in cases)} проверках исходный пул отклонил обмен и баланс владельца сохранился. "
+            "Для размещения у семейства выберите YieldBasisAdapter в Ethereum. Сохраните подтверждённый адрес в dex.router. "
+            f"[Кошельковые суммы и расходы газа](../{fixture.as_posix()})."])
+    if not base:
         original_path=Path("tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz")
         paid_path=original_path.with_name("balancer_v1_wallet.json.gz")
         if paid_path.exists():

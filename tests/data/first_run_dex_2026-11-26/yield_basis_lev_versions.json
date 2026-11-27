@@ -1,0 +1,68 @@
+{
+  "0xa25306937dba98378c32f167588f5dc17a95c94b": {
+    "code": "0x2cb3d04b9797bfc07a7338d6ef8851b004c0eb38b539ab5a08c1a6d8b03758b2",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0xa25306937dba98378c32f167588f5dc17a95c94b?tab=contract"
+  },
+  "0xb42e34bf1f8627189e099abdb069b9d73b521e4f": {
+    "code": "0x7cf8523d9287f663cdff14755eabaf4e477700ac545da7ae2efc1714bbfbe511",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0xb42e34bf1f8627189e099abdb069b9d73b521e4f?tab=contract"
+  },
+  "0xb0faabe84076c6330a9642a6400e87ce4caec9d4": {
+    "code": "0x0ce1f9f1c8ef14f1b2f62b6f00a2700e2fbf6f1506c2139a168f2b0109760a28",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0xb0faabe84076c6330a9642a6400e87ce4caec9d4?tab=contract"
+  },
+  "0x10b663da78055bda0c7c26712ce1a0613af0ae66": {
+    "code": "0x65b043da63e42028b699aa8a4bb7d3ffbf0d3ad69082f7d0c506183f1e331188",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0x10b663da78055bda0c7c26712ce1a0613af0ae66?tab=contract"
+  },
+  "0xdc90f6b111df0c26e349d3cc8d3c357b191e109a": {
+    "code": "0x1387c49afa529924348389f01e4e63f7b28bd173249c5a6e4ebf01e9b95286b6",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0xdc90f6b111df0c26e349d3cc8d3c357b191e109a?tab=contract"
+  },
+  "0x61ed017468c8a3be3bac972b54fdae6eafcbcd79": {
+    "code": "0xc9b0c1a7147da3e52aa215954a0e67dd38c1c5279801dc264e582ea45d721fe2",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0x61ed017468c8a3be3bac972b54fdae6eafcbcd79?tab=contract"
+  },
+  "0x35095d94e0f1f4a78386b7eb74bb64768a2341e4": {
+    "code": "0x7de2ee5cc9eb2483ebeac85c09d710633473853fc11117ab074235ade49043ab",
+    "sha256": "e69703c0bcb8aedcd7319cc06f3132416fab407052f1c922d9555d1c4bd2283e",
+    "rule": "always",
+    "verified_url": "https://eth.blockscout.com/address/0x35095d94e0f1f4a78386b7eb74bb64768a2341e4?tab=contract"
+  },
+  "0x7b9817eb5c49a99875138a5d52bf64a8b2cffffe": {
+    "code": "0x804007480a42292415f94cec5e5fe263f168f446fe1e36ac5c423c9e52288780",
+    "sha256": "746a1fbfa71c02444b0605cddc963f76e68406353cd0c7811858ab96e4fc6147",
+    "rule": "relax_improving",
+    "verified_url": "https://eth.blockscout.com/address/0x7b9817eb5c49a99875138a5d52bf64a8b2cffffe?tab=contract"
+  },
+  "0x49f51d7e279252f3c9a09678fdc65b4dbd5cb196": {
+    "code": "0xc178206a2203c9ac9d2c720377473bc55c2fcc516bd8126a0810fb02d10b52e3",
+    "sha256": "746a1fbfa71c02444b0605cddc963f76e68406353cd0c7811858ab96e4fc6147",
+    "rule": "relax_improving",
+    "verified_url": "https://eth.blockscout.com/address/0x49f51d7e279252f3c9a09678fdc65b4dbd5cb196?tab=contract"
+  },
+  "0x0e357af536592f275c6aa07b8ac2ca6eb3d0cf5a": {
+    "code": "0xc84b2dc29786dd2f8a6db381d4f1d074827ab0c077f3583cefd93d13972a0b74",
+    "sha256": "746a1fbfa71c02444b0605cddc963f76e68406353cd0c7811858ab96e4fc6147",
+    "rule": "relax_improving",
+    "verified_url": "https://eth.blockscout.com/address/0x0e357af536592f275c6aa07b8ac2ca6eb3d0cf5a?tab=contract"
+  },
+  "0x5f8d24f33cc5a1d5d1bf012261e6a2214c92233c": {
+    "code": "0xf010330f35d428c09b655f8894e395b1d665e4dd5b99598ce6fd22ac5fbb7b46",
+    "sha256": "746a1fbfa71c02444b0605cddc963f76e68406353cd0c7811858ab96e4fc6147",
+    "rule": "relax_improving",
+    "verified_url": "https://eth.blockscout.com/address/0x5f8d24f33cc5a1d5d1bf012261e6a2214c92233c?tab=contract"
+  }
+}

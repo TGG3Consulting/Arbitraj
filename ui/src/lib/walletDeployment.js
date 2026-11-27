@@ -1,10 +1,10 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
-import {loadBPool, checkBPool} from './balancerV1Deploy.js';
+import {loadFactoryWallet, checkFactoryWallet, supportsFactoryWallet} from './balancerV1Deploy.js';
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
-const bindsWallet = kind => ['uniswap_v1','bancor_v3','stabull','balancer_v1'].includes(kind);
+const bindsWallet = kind => supportsFactoryWallet(kind) || ['uniswap_v1','bancor_v3','stabull'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -20,7 +20,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
-  if (settings.kind === "balancer_v1" || plan.kind === "balancer_v1") return loadBPool(settings,plan,hashCode);
+  if (supportsFactoryWallet(settings.kind) || supportsFactoryWallet(plan.kind)) return loadFactoryWallet(settings,plan,hashCode);
   if (['stabull','stabull_module'].includes(settings.kind) || plan.kind === 'stabull') return loadStabull(settings, plan, hashCode);
   if (settings.kind === "bancor_v3" || plan.kind === "bancor_v3") return loadBancor(settings,plan,hashCode);
   if (settings.kind === "uniswap_v1" || plan.kind === "uniswap_v1") return loadV1(settings,plan,hashCode);
@@ -43,7 +43,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
-  if (p.kind === 'balancer_v1') return checkBPool(provider,p,at);
+  if (supportsFactoryWallet(p.kind)) return checkFactoryWallet(provider,p,at);
   if (p.kind === 'stabull') return checkStabull(provider, p, at);
   if (p.kind === "bancor_v3") return checkBancor(provider,p,at);
   if (p.kind === "uniswap_v1") return checkV1(provider,p,at,hashCode);

@@ -45,6 +45,20 @@ struct Original {
     value: U256,
 }
 
+fn outer_matches(
+    account: &str,
+    bound: Option<&str>,
+    key: &str,
+    active: Option<&str>,
+    leg: B256,
+) -> bool {
+    !account.is_empty()
+        && !key.is_empty()
+        && bound == Some(account)
+        && active.is_none_or(|value| value == key)
+        && alloy_primitives::keccak256(key.as_bytes()) == leg
+}
+
 pub(in crate::venues::bsc_dex) async fn reconcile(
     p: &Parts,
     req: TradeRequest,
@@ -64,10 +78,21 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     let nonce = nonce.ok_or_else(unknown)?;
     let o = &parse.order;
     let db = ctx.journal.db();
-    if ctx.chain_id() != Some(1)
-        || identity(p, &req)? != parse.key
-        || wallet::signer::address(ctx)? != o.payer
-    {
+    let key_matches = match parse.outer_account.as_deref() {
+        Some(account) => {
+            o.prop.is_some()
+                && req.venue == ctx.venue()
+                && outer_matches(
+                    account,
+                    ctx.account.as_deref(),
+                    &parse.key,
+                    intent::current_key().as_deref(),
+                    o.leg,
+                )
+        }
+        None => identity(p, &req)? == parse.key,
+    };
+    if ctx.chain_id() != Some(1) || !key_matches || wallet::signer::address(ctx)? != o.payer {
         return Err(unknown());
     }
     let entry = intent::load(db, &parse.key)
@@ -122,12 +147,18 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
-    if o.prop.is_some() {
-        send::canonical_receipt::verify(ctx, hash, &r.receipt)
-            .await
-            .map_err(|_| unknown())?;
-    }
     let ok = r.receipt.status == U64::from(1);
+    if o.prop.is_some() {
+        if ok && parse.outer_account.is_some() && crate::gateway::settlement_proofs::active() {
+            send::canonical_receipt::observe(ctx, hash, &r.receipt)
+                .await
+                .map_err(|_| unknown())?;
+        } else {
+            send::canonical_receipt::verify(ctx, hash, &r.receipt)
+                .await
+                .map_err(|_| unknown())?;
+        }
+    }
     if o.prop.is_some() {
         let filled = super::canonical(
             ctx,
@@ -273,6 +304,46 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn recovery_reuses_only_the_original_mixed_wallet_and_leg_even_outside_an_active_scope() {
+        let leg = alloy_primitives::keccak256("deal-a/coin-buy");
+        assert!(outer_matches(
+            "w2",
+            Some("w2"),
+            "deal-a/coin-buy",
+            None,
+            leg
+        ));
+        assert!(outer_matches(
+            "w2",
+            Some("w2"),
+            "deal-a/coin-buy",
+            Some("deal-a/coin-buy"),
+            leg
+        ));
+        assert!(!outer_matches(
+            "w2",
+            Some("w3"),
+            "deal-a/coin-buy",
+            None,
+            leg
+        ));
+        assert!(!outer_matches(
+            "w2",
+            Some("w2"),
+            "deal-a/coin-buy",
+            Some("deal-b/coin-buy"),
+            leg
+        ));
+        assert!(!outer_matches(
+            "w2",
+            Some("w2"),
+            "deal-a/cash-sell",
+            None,
+            leg
+        ));
+    }
+
     #[test]
     fn rpc_inclusion_preserves_identity_for_canonical_position_checks() {
         let tx = B256::with_last_byte(1);

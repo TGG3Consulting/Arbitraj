@@ -15,6 +15,7 @@ mod execute;
 mod indicative;
 mod prop_slot;
 mod slot_config;
+mod slot_feed;
 mod prop_levels;
 mod firm;
 mod levels;

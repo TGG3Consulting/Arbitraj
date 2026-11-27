@@ -700,6 +700,8 @@ jobs:
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/base-cl" CommunityV3Adapter
           python scripts/record_llama_base_cl.py "${MARKET#base-cl-wallet-}" "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/base-cl/CommunityV3Adapter.json"
+      - if: matrix.market == 'virtus-amm' || matrix.market == 'hydrometer'
+        run: python scripts/record_clone_classic_base.py "${{ matrix.market }}" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'virtus-cl-base'
         run: python scripts/record_virtus_cl_base.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'base-cl-factory-')

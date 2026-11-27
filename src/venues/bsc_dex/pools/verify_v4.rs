@@ -98,6 +98,8 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                         f.key.as_ref().map_or_else(Default::default, |k| k.hooks()),
                     ))
                 }
+                Ok(f) if c.family.proto==Proto::UniswapV4 && f.key.as_ref().is_some_and(|k|super::deli_keys::claimed(ctx,k.hooks())) =>
+                    Verdict::Rejected("Deli: резервы принадлежат constant-product хуку".into()),
                 Ok(f) => Verdict::Taken(Box::new(f)),
                 Err(w) => Verdict::Rejected(w),
             },

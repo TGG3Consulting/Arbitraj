@@ -152,6 +152,8 @@ pub enum RouterFeeMode {
     NativeGrossMinimum,
     /// Защитный модуль ERC20 выбран по чистой выплате и закреплён до подписи.
     ProtectedWallet { target: alloy_primitives::Address },
+    /// Семейство Carbon сохраняет прямой контроллер или выбранный модуль и физическую расчётную валюту.
+    CarbonWallet {module:Option<alloy_primitives::Address>,native_cash:bool},
     /// Нативная расчётная валюта; фиксируется вид минимума выбранного публичного ABI.
     NativeSettlement {
         gross_minimum: bool,

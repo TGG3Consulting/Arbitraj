@@ -66,6 +66,11 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant==Variant::DeliConstant && let PoolRef::Singleton{manager,id}=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
+    }
     if f.variant==Variant::Carbon && let PoolRef::Singleton{manager,id}=reference {
         let at=super::nami::block(ctx,&tag).await?;
         let state=Box::pin(super::carbon::market(ctx,f,*manager,*id,pair,&at)).await?;

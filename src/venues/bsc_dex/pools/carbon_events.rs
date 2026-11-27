@@ -66,7 +66,11 @@ pub(super) fn invalidated(p: &Pools, items: &[(Found, String)], log: &Log) -> bo
                     b.sort_unstable();
                     b == a || b == [a[1], a[0]]
                 })
-                && (log.removed || log.block_number.is_none_or(|n| n > e.synced_block))
+                && (log.removed
+                    || log
+                        .block_number
+                        .zip(log.log_index)
+                        .is_none_or(|(n, i)| !e.has_applied(n, i)))
             {
                 e.valid = false;
             }

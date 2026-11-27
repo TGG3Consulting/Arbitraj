@@ -107,7 +107,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
-            _ if matches!(c.family.variant,Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon) => stable_u.push(i),
+            _ if matches!(c.family.variant,Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon | Variant::DeliConstant) => stable_u.push(i),
             _ if c.family.variant == Variant::RingFew => ring.push(i),
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),

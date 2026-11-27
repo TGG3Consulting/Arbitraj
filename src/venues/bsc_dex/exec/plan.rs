@@ -29,8 +29,9 @@ use super::chain::{self, Step};
 use super::native::Wrap;
 use super::ur;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) enum DirectCall {
+    Carbon(std::sync::Arc<super::carbon_wire::Call>),
     MintClub(super::mint_club_wire::Call),
     EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
     Module {
@@ -78,7 +79,7 @@ pub struct Plan {
 
 impl Plan {
     pub(super) fn direct_market(&self) -> Option<DirectCall> {
-        self.direct_market.as_deref().copied()
+        self.direct_market.as_deref().cloned()
     }
     pub(super) fn set_direct_market(&mut self, call: DirectCall) {
         self.direct_market = Some(Box::new(call));
@@ -141,6 +142,7 @@ impl Plan {
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub(super) fn ekubo_proof(&self)->Option<super::ekubo_v2_fact::Proof>{super::ekubo_v2_fact::Proof::of(self,self.deadline)}
     pub fn value(&self) -> U256 {
+        if let Some(DirectCall::Carbon(c))=self.direct_market(){return c.value();}
         if let Some(DirectCall::EkuboV2{key,..})=self.direct_market(){return key.value();}
         if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market() {
             return call.value(amount);
@@ -195,6 +197,7 @@ impl Plan {
                     self.deadline,
                     rebate,
                 ),
+                DirectCall::Carbon(c)=>c.data(),
                 DirectCall::MintClub(order)=>order.data(self.wallet),
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
@@ -253,6 +256,7 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::carbon_direct::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется подтвержденный вектор действий контроллера"));}
     if super::mint_club_direct::enabled(e) { return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение с собственными границами суммы")); }
     if super::super::quote::ekubo_v2_pricing::enabled(e) {return Box::pin(super::ekubo_v2_direct::plan(ctx,steps,wallet,now,all_approvals)).await;}
     if super::vault_direct::enabled(e) {

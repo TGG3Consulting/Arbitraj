@@ -65,6 +65,7 @@ pub mod fills;
 pub mod fluid_depth;
 pub(crate) mod frax_pricing;
 pub(super) mod ekubo_v2_pricing;
+pub(super) mod carbon_pricing;
 pub(super) mod mint_club_pricing;
 mod module_pricing;
 pub mod gas;

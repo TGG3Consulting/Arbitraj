@@ -73,6 +73,12 @@ pub fn parse_all(ctx: &Ctx, f: &'static Family, logs: &[Log]) -> GatewayResult<V
 pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Option<Found>> {
     if f.proto != Proto::InfinityStable {
         let found = parse(ctx, f, log)?;
+        if f.proto==Proto::UniswapV4 && let Some(key)=&found.key {
+            if f.variant==super::family_variant::Variant::DeliConstant {
+                return Ok(super::deli_keys::observed(ctx,f,log.inner.address,key)?.then_some(found));
+            }
+            if super::deli_keys::claimed(ctx,key.hooks()) {return Ok(None);}
+        }
         // Решение «122 (Infinity Stable, ответы)»: пул с крючком из dex.stable_hooks — только вид Infinity Stable.
         let taken = f.proto == Proto::InfinityCl
             && found

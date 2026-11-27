@@ -38,6 +38,7 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if let crate::core::types::PoolState::Carbon(s)=&e.pool.state {return super::carbon_probe::emitted(s,&e.pool.reference,log);}
     if let crate::core::types::PoolState::MintClub(state)=&e.pool.state {
         return e.pool.reference==PoolRef::Contract(state.token) && super::super::pools::mint_club::emitted(state,log);
     }

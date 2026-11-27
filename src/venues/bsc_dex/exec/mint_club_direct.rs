@@ -239,7 +239,7 @@ pub(super) async fn path_plan(
 
 pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -> Option<Address> {
     if let [h] = leg.hops.as_slice()
-        && let Some(crate::core::types::RouterFeeMode::ProtectedWallet { target }) = h.fee_mode
+        && let Some(crate::core::types::RouterFeeMode::ProtectedWallet { target }|crate::core::types::RouterFeeMode::CarbonWallet{module:Some(target),..}) = h.fee_mode
     {
         Some(target)
     } else {

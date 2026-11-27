@@ -75,24 +75,12 @@ pub async fn on_log(
     waiting: bool,
     queued: &UnboundedReceiver<Msg>,
 ) -> Result<bool, End> {
-    let r = match log.topics().get(1) {
-        Some(id)
-            if p.reg.contains(&PoolRef::Singleton {
-                manager: log.address(),
-                id: *id,
-            }) =>
-        {
-            PoolRef::Singleton {
-                manager: log.address(),
-                id: *id,
-            }
-        }
-        // Решение 447: пул Ekubo — PoolId в данных лога ядра (ekubo_route.rs).
-        _ => match super::carbon_events::singleton(log).or_else(||super::ekubo_route::singleton(log)) {
-            Some(r) if p.reg.contains(&r) => r,
-            _ => PoolRef::Contract(log.address()),
-        },
-    };
+    let single = super::carbon_events::singleton(log).or_else(|| {
+        log.topics().get(1).map(|id| PoolRef::Singleton { manager: log.address(), id: *id })
+    });
+    let r = single.filter(|r| p.reg.contains(r))
+        .or_else(|| super::ekubo_route::singleton(log).filter(|r| p.reg.contains(r)))
+        .unwrap_or_else(|| PoolRef::Contract(log.address()));
     let Some(entry) = p.reg.get(&r) else {
         return Ok(false);
     };

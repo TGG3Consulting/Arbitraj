@@ -4,6 +4,9 @@ use crate::core::types::{CarbonOrder, CarbonState};
 use alloy_primitives::{Address, U256};
 use std::cmp::Ordering;
 #[cfg(test)]
+#[path = "carbon_replay_tests.rs"]
+mod replay_tests;
+#[cfg(test)]
 #[path = "carbon_match_tests.rs"]
 mod tests;
 

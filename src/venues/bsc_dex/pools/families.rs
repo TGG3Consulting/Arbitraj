@@ -444,7 +444,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
-        "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "deli_v4_constant" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
@@ -906,6 +906,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::InfinityCl | Proto::InfinityBin => {
             list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"])
         }
+        Proto::UniswapV4 if f.variant == Variant::DeliConstant => list.extend([
+            "dex.pool_manager","dex.state_view","dex.quoter","dex.deli_role_bindings",
+        ]),
         Proto::UniswapV4 => list.extend([
             "dex.pool_manager",
             "dex.position_manager",

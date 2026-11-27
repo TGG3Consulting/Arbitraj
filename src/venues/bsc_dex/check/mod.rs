@@ -64,3 +64,4 @@ pub mod tax_wallet;
 pub mod taxes;
 pub mod taxes_util;
 mod vista_probe;
+mod carbon_probe;

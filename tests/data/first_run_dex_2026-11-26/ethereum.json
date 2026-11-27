@@ -926,6 +926,14 @@
     "0x2f52793a3f5d27ce9f856081dcbed42611394243": {
       "bytes": 17743,
       "keccak256": "0xf20348c4b9e8812011c68871c63cee6aee1b4a0823d85ba84056aae765cacddd"
+    },
+    "0xc537e898cd774e2dcba3b14ea6f34c93d5ea45e1": {
+      "bytes": 2304,
+      "keccak256": "0x928e1f741e909019fa85db08bc2479fdbfdfdab1f16965c44a672fbde5e0ad80"
+    },
+    "0x1e08049c180e25478bf7a0357171547b7332bf2c": {
+      "bytes": 23418,
+      "keccak256": "0xcc6f9ba53c3a971839d96b1f632122c47e5eff1624670a562c589e707ce19983"
     }
   },
   "router_getAmountOut": [

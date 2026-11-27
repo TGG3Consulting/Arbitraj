@@ -42,9 +42,6 @@ def collect(c):
     return directory
 
 def wallet(c,row,source,target,amount,by_target,end):
-    approve=lambda coin,n:tx(coin,"approve(address,uint256)",["address","uint256"],[CTRL,n])
-    def getbalance(t):
-        return tx(MULTI,"getEthBalance(address)",["address"],[OWNER]) if t==NATIVE else tx(t,"balanceOf(address)",["address"],[OWNER])
     # The controller accepts order IDs, not a pair-wide implicit swap. Verify fills against each
     # order's actual remaining target inventory. Compare all eligible single-order allocations.
     eligible=[]
@@ -66,10 +63,20 @@ def wallet(c,row,source,target,amount,by_target,end):
     if not candidates:return None
     other,sid=(min if by_target else max)(candidates)
     spent,received=(other,amount) if by_target else (amount,other)
+    result=settle(c,source,target,[(sid,amount)],spent,received,by_target,end)
+    return dict(result,id=str(sid),quote_comparisons=len(candidates))
+
+
+def settle(c,source,target,actions,spent,received,by_target,end):
+    """Measure the supplied plan unchanged, including rollback on a tighter limit and expiry."""
+    def approve(coin,n):
+        return tx(coin,"approve(address,uint256)",["address","uint256"],[CTRL,n])
+    def getbalance(t):
+        return tx(MULTI,"getEthBalance(address)",["address"],[OWNER]) if t==NATIVE else tx(t,"balanceOf(address)",["address"],[OWNER])
     name="tradeByTargetAmount" if by_target else "tradeBySourceAmount"
     def order(limit,expires):
         value=(limit if by_target else spent) if source==NATIVE else 0
-        return tx(CTRL,name+"(address,address,"+ACTION+",uint256,uint128)",["address","address",ACTION,"uint256","uint128"],[source,target,[(sid,amount)],expires,limit],value)
+        return tx(CTRL,name+"(address,address,"+ACTION+",uint256,uint128)",["address","address",ACTION,"uint256","uint128"],[source,target,actions,expires,limit],value)
     prep=[]
     if source!=NATIVE:
         prep=[tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[spent,[WETH,source],OWNER,end],10**18),approve(source,spent)]
@@ -78,11 +85,11 @@ def wallet(c,row,source,target,amount,by_target,end):
     calls=prep+balances+[order(limit-1 if by_target else limit+1,end),order(limit,1)]+balances+[order(limit,end)]+balances
     res=simulate_block(c.endpoint,c.selector,{OWNER:{"balance":hex(20*10**18)}},calls)
     n=len(prep)
-    if [i for i,r in enumerate(res) if r["status"]!="0x1"]!=[n+2,n+3]:raise ValueError((sid,source,name,[(i,r.get("error")) for i,r in enumerate(res) if r["status"]!="0x1"]))
+    if [i for i,r in enumerate(res) if r["status"]!="0x1"]!=[n+2,n+3]:raise ValueError((actions,source,name,[(i,r.get("error")) for i,r in enumerate(res) if r["status"]!="0x1"]))
     def bal(i):return [int(r["returnData"],16) for r in res[i:i+2]]
     before=bal(n);middle=bal(n+4);after=bal(n+7)
     if before!=middle or [before[0]-after[0],after[1]-before[1]]!=[spent,received]:raise ValueError("Carbon wallet/account delta differs from signed limit")
-    return dict(source=source,target=target,by_target=by_target,id=str(sid),input=str(spent),output=str(received),quote_comparisons=len(candidates),
+    return dict(source=source,target=target,by_target=by_target,input=str(spent),output=str(received),approval_gas=int(res[1]["gasUsed"],16) if prep else 0,
                 gas=int(res[n+6]["gasUsed"],16),transaction=calls[n+6],logs=res[n+6]["logs"],owner=OWNER,strict=res[n+2]["error"],expired=res[n+3]["error"])
 
 def capture(url):

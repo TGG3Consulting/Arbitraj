@@ -35,6 +35,7 @@ pub(in crate::venues::bsc_dex) struct V5Step {
 #[derive(Clone)]
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
+    Carbon(std::sync::Arc<super::super::exec::carbon_wire::Call>),
     MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
@@ -75,6 +76,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         input,
     };
     let (wrapped, value) = match &o.wire {
+        Wire::Carbon(c)=>(c.wrapped(),c.value()),
         Wire::EkuboV2(key,wrapped)=>(*wrapped,key.value()),
         Wire::Vista(v) => (
             if v.form == super::super::exec::vista_wire::Form::ModuleToken {
@@ -138,7 +140,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             o.input,
             o.target,
             U256::from_be_slice(&current),
-            match &o.wire { Wire::MintClub(c) if c.mint=>c.limit, _=>o.amount },
+            match &o.wire { Wire::Carbon(c)=>c.cap(), Wire::MintClub(c) if c.mint=>c.limit, _=>o.amount },
         )?
     };
     let mut calls = vec![balance(o.input), balance(o.output)];
@@ -192,6 +194,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if spent != Some(o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::Carbon(c)=&o.wire {
+        let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::MintClub(c)=&o.wire {
         let proof=super::super::exec::mint_club_fact::Proof{call:*c,bond:c.protection.map_or(o.target,|v|v.bond),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -199,11 +205,15 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if boundary {
         // Тот же плательщик, исходные остатки и разрешения. Более строгий лишь минимум.
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
+        let strict_carbon=match &o.wire{Wire::Carbon(c)=>Some(c.tighten(o.amount,received).ok_or_else(fail)?),_=>None};
         calls[offset + n + 2].input = match &o.wire {
+            Wire::Carbon(_)=>strict_carbon.as_ref().ok_or_else(fail)?.data(),
             Wire::MintClub(c)=>c.tighten(spent.ok_or_else(fail)?,received).ok_or_else(fail)?.data(o.payer),
             _=>calldata(&o, deadline, strict),
         };
-        let strict_result = frame(ctx, h, &calls, values.as_slice()).await?;
+        let strict_value=strict_carbon.as_ref().map_or(value,|c|c.value());
+        let stricter=(!strict_value.is_zero()).then_some((offset+n+2,strict_value));
+        let strict_result = frame(ctx, h, &calls, stricter.as_slice()).await?;
         let alt = &strict_result[offset..strict_result.len() - offset];
         if (vault.is_some()
             && (word(&strict_result[0]) != word(&result[0])
@@ -229,6 +239,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
 
 fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
+        Wire::Carbon(c)=>c.data(),
         Wire::MintClub(c) => c.data(o.payer),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(

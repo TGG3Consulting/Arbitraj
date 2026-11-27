@@ -7,7 +7,7 @@ import solc from 'solc';
 const output = process.argv[2];
 if (!output) throw new Error('Expected an artifact directory');
 const name = process.argv[3] ?? 'HanjiExecutor';
-if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor', 'BasePmmExecutor', 'FraxswapAdapter', 'OasisSwapAdapter', 'EtherVistaAdapter','MemeboxAdapter','BunnySwapAdapter','CandySwapAdapter','MintClubAdapter','YumyumAdapter','BluedexAdapter'].includes(name)) throw new Error('Unknown executor');
+if (!['HanjiExecutor', 'FermiSlotExecutor', 'SolidlyV3Executor', 'ElfomoExecutor', 'BasePmmExecutor', 'FraxswapAdapter', 'OasisSwapAdapter', 'EtherVistaAdapter','MemeboxAdapter','BunnySwapAdapter','CandySwapAdapter','MintClubAdapter','CarbonWallet','YumyumAdapter','BluedexAdapter'].includes(name)) throw new Error('Unknown executor');
 const file = name + '.sol';
 const root = import.meta.dirname;
 const files = name === 'BasePmmExecutor' ? [file, 'IBasePmm.sol', 'BaseNativeV3.sol', 'BaseVirtuals.sol'] : ['YumyumAdapter','BluedexAdapter'].includes(name) ? [file, 'RegisteredV3Adapter.sol', 'IPools.sol'] : [file];
@@ -30,5 +30,5 @@ mkdirSync(output, { recursive: true });
 writeFileSync(join(output, name + '.json'), JSON.stringify({
   solc: solc.version(), abi: contract.abi, creation: contract.evm.bytecode.object,
   runtime: contract.evm.deployedBytecode.object, storage: contract.storageLayout.storage,
-  ...(['FraxswapAdapter','OasisSwapAdapter','EtherVistaAdapter','MemeboxAdapter','BunnySwapAdapter','CandySwapAdapter','MintClubAdapter','YumyumAdapter','BluedexAdapter'].includes(name) ? { immutableReferences: contract.evm.deployedBytecode.immutableReferences } : {}),
+  ...(['FraxswapAdapter','OasisSwapAdapter','EtherVistaAdapter','MemeboxAdapter','BunnySwapAdapter','CandySwapAdapter','MintClubAdapter','CarbonWallet','YumyumAdapter','BluedexAdapter'].includes(name) ? { immutableReferences: contract.evm.deployedBytecode.immutableReferences } : {}),
 }));

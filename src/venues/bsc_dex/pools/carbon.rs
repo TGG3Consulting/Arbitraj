@@ -209,18 +209,43 @@ pub(crate) async fn market(
     let mut unique = HashSet::new();
     // Each ABI page is bounded to 32 strategies. Independent pages share one RPC round trip.
     for base in (0..count).step_by(256) {
-        let pages:Vec<_>=(base..base.saturating_add(256).min(count)).step_by(32).map(|start|{
-            let end=start.saturating_add(32).min(count);
-            (end-start,ICarbon::strategiesByPairCall{token0:a,token1:b,startIndex:U256::from(start),endIndex:U256::from(end)})
-        }).collect();
-        let requests:Vec<_>=pages.iter().map(|(_,q)|batch::view(at,controller_address,q.clone())).collect();
-        let replies=super::super::node::rpc::batch(ctx,&requests).await?;
-        if replies.len()!=pages.len(){return Err(bad());}
-        for ((length,call),reply) in pages.into_iter().zip(replies){
-            let part:Bytes=serde_json::from_str(reply?.get()).map_err(|_|bad())?;
-            let rows=batch::decode(&part,call)?;
-            if rows.len()!=length{return Err(bad());}
-            for r in rows{if !unique.insert(r.id){return Err(bad());}state.strategies.push(orient(r,found.id,oriented).ok_or_else(bad)?);}
+        let pages: Vec<_> = (base..base.saturating_add(256).min(count))
+            .step_by(32)
+            .map(|start| {
+                let end = start.saturating_add(32).min(count);
+                (
+                    end - start,
+                    ICarbon::strategiesByPairCall {
+                        token0: a,
+                        token1: b,
+                        startIndex: U256::from(start),
+                        endIndex: U256::from(end),
+                    },
+                )
+            })
+            .collect();
+        let requests: Vec<_> = pages
+            .iter()
+            .map(|(_, q)| batch::view(at, controller_address, q.clone()))
+            .collect();
+        let replies = super::super::node::rpc::batch(ctx, &requests).await?;
+        if replies.len() != pages.len() {
+            return Err(bad());
+        }
+        for ((length, call), reply) in pages.into_iter().zip(replies) {
+            let part: Bytes = serde_json::from_str(reply?.get()).map_err(|_| bad())?;
+            let rows = batch::decode(&part, call)?;
+            if rows.len() != length {
+                return Err(bad());
+            }
+            for r in rows {
+                if !unique.insert(r.id) {
+                    return Err(bad());
+                }
+                state
+                    .strategies
+                    .push(orient(r, found.id, oriented).ok_or_else(bad)?);
+            }
         }
     }
     if ctx.settings.generation() != generation {
@@ -228,3 +253,7 @@ pub(crate) async fn market(
     }
     Ok(state)
 }
+
+#[cfg(test)]
+#[path = "carbon_tests.rs"]
+mod tests;

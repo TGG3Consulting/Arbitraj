@@ -109,13 +109,17 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
-    let vista = if super::super::quote::vista_pricing::native_router(e) || (super::super::quote::ekubo_v2_pricing::enabled(e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native.is_some())) {
+    let carbon=super::super::exec::carbon_direct::enabled(e);
+    let vista = if carbon || super::super::quote::vista_pricing::native_router(e) || (super::super::quote::ekubo_v2_pricing::enabled(e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native.is_some())) {
         Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
             .await?
             .map(Box::new)
     } else {
         None
     };
+    if carbon && let Some(p)=&vista && let crate::core::types::PoolState::Carbon(s)=p.market_state() {
+        Box::pin(super::carbon_probe::funded(ctx,s,e.usdt,usdt_amount,wallet,p.head)).await?;
+    }
     let own_bond = if super::super::exec::mint_club_direct::enabled(e) {
         let head=super::super::quote::white_state::head(ctx,&format!("{:#x}",at.number)).await?;
         let mut market=Box::new(e.clone());
@@ -152,7 +156,7 @@ pub async fn run(
     let way = probe_quote::Way::of(ctx, e);
     let over = way.overrides(ctx)?;
     let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
-    let mut list = if own_bond.is_some(){Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
+    let mut list = if carbon || own_bond.is_some(){Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
     if let Some(seed) = vista
         .as_ref()
         .and_then(|v| v.fund(wallet, usdt, usdt_amount))
@@ -222,7 +226,7 @@ pub async fn run(
     // как balanceOf − резерв). Остаток — тот же, что раньше, газ продажи сравним с прежними замерами.
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
-    let post=super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought)?;
+    let post=if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought)?};
     let e=post.as_deref().unwrap_or(e);
     let (sell_aps, sell_router, sell_data) = part(
         ctx,
@@ -328,6 +332,7 @@ async fn part(
     (vista,protection): (Option<&super::vista_probe::Probe>,Option<super::super::exec::mint_club_wire::Protection>),
 ) -> GatewayResult<(Vec<Approval>, Address, Bytes)> {
     if let Some(v) = vista {
+        if super::super::exec::carbon_direct::enabled(e){return Box::pin(super::carbon_probe::leg(ctx,e,&order,v.head,now)).await;}
         return v.leg(ctx, e, &order, wallet, now);
     }
     // Решение 122 F/X: у вида без своего пути исполнения (family.tradable = false: DODO, THENA Fusion, Solidly,

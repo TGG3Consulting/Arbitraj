@@ -115,7 +115,7 @@ pub(super) async fn plain(
     bind(ctx, address, runtime, None, tag).await
 }
 
-pub(super) async fn bind(
+pub(in crate::venues::bsc_dex) async fn bind(
     ctx: &Ctx,
     address: Address,
     runtime: B256,

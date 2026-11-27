@@ -38,6 +38,12 @@ impl Probe {
         wallet: Address,
     ) -> GatewayResult<Option<Self>> {
         let head = white_state::head(ctx, &format!("{number:#x}")).await?;
+        if super::super::exec::carbon_direct::enabled(e) {
+            let s=Box::pin(super::super::exec::carbon_direct::state(ctx,e,head)).await?;
+            let native=s.native_side.and_then(|i|s.tokens.get(i)).copied();
+            let multi=if native.is_some(){ctx.addr("dex.multicall3")?}else{Address::ZERO};
+            return Ok(Some(Self{market:None,state:crate::core::types::PoolState::Carbon(Box::new(s)),wrapped:native.unwrap_or_default(),head,multi}));
+        }
         if super::super::quote::ekubo_v2_pricing::enabled(e) {
             let crate::core::types::PoolRef::Singleton{manager,id}=e.pool.reference else{return Ok(None);};
             let state=Box::pin(super::super::pools::ekubo_v2::load(ctx,e.family,manager,id,number)).await?;
@@ -78,6 +84,7 @@ impl Probe {
             multi: ctx.addr("dex.multicall3")?,
         }))
     }
+    pub fn market_state(&self)->&crate::core::types::PoolState{&self.state}
     pub fn state(&self) -> crate::core::types::PoolState {
         self.state.clone()
     }
@@ -136,6 +143,7 @@ impl Probe {
         .value(amount)
     }
     pub fn fund(&self, wallet: Address, token: Address, amount: U256) -> Option<Call> {
+        if matches!(self.state,crate::core::types::PoolState::Carbon(_)){return None;}
         (token == self.wrapped).then(|| {
             pc::call(
                 wallet,

@@ -74,8 +74,6 @@ pub fn result(
         (coin_dec, usdt_dec),
         native_routers,
         None,
-        None,
-        None,
     )
 }
 
@@ -88,9 +86,7 @@ pub(super) fn with_native_fact(
     (tin, tout): (Address, Address),
     (coin_dec, usdt_dec): (u8, u8),
     native_routers: &[Address],
-    vista: Option<&super::vista_fact::Proof>,
-    ekubo:Option<&super::ekubo_v2_fact::Proof>,
-    mint_club:Option<&super::mint_club_fact::Proof>,
+    proofs: Option<&super::swap_ctx::SwapCtx>,
 ) -> GatewayResult<TradeResult> {
     let r = match (d.chain.outcome, &d.receipt) {
         (TxOutcome::Included, Some(r)) => r.clone(),
@@ -131,7 +127,12 @@ pub(super) fn with_native_fact(
                 .with_tx(d.chain));
         }
     };
-    let (spent, got) = if let Some(proof)=mint_club {
+    let vista=proofs.and_then(|p|p.vista.as_ref());
+    let ekubo=proofs.and_then(|p|p.ekubo.as_ref());
+    let carbon=proofs.and_then(|p|p.carbon.as_ref());
+    let (spent, got) = if let Some(proof)=carbon{
+        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Carbon: не подтверждены исходные стратегии и чистая выплата").with_tx(d.chain.clone()))?
+    }else if let Some(proof)=proofs.and_then(|p|p.mint_club.as_ref()) {
         proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Mint Club: расчёт по исходному поручению Bond не подтверждён").with_tx(d.chain.clone()))?
     }else if let Some(proof)=ekubo {
         proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Ekubo V2: лог Core не подтвердил выплату кошельку").with_tx(d.chain.clone()))?
@@ -155,7 +156,7 @@ pub(super) fn with_native_fact(
         (spent, got)
     };
     // Нативная BNB: на кошелёк приходит (или уходит с value) нативный BNB — событий Transfer кошелька нет.
-    let coins_u = if native_routers.is_empty() || vista.is_some() || ekubo.is_some() {
+    let coins_u = if native_routers.is_empty() || vista.is_some() || ekubo.is_some() || carbon.is_some() {
         coins_u
     } else {
         let wbnb = if req.side == Side::Buy { tout } else { tin };

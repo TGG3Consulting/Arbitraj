@@ -39,6 +39,41 @@ class Snapshot:
 
     def code(self,address):return bytes.fromhex(self.rpc("eth_getCode",[address,self.tag])[2:])
 
+def multi_quotes(chain, controller, market):
+    """Compare two official per-strategy outputs and their one-call aggregate on the same state."""
+    results=[]
+    for source in market["tokens"]:
+        target=next(a for a in market["tokens"] if a!=source)
+        orders=[]
+        for sid,_,tokens,book in market["orders"]:
+            y,_,a,b=map(int,book[tokens.index(target)])
+            if y>0 and (a or b):
+                orders.append((y,int(sid)))
+        orders.sort(reverse=True)
+        for by_target in [False,True]:
+            sized=target if by_target else source
+            size=10**14 if sized=="0x"+"ee"*20 else 100000
+            chosen=[]
+            def getter(actions):
+                name="calculateTradeSourceAmount" if by_target else "calculateTradeTargetAmount"
+                data=calldata(name+"(address,address,(uint256,uint128)[])",["address","address","(uint256,uint128)[]"],[source,target,actions])
+                raw=chain.rpc("eth_call",[{"to":controller,"data":data},chain.tag])
+                return {"data":data,"result":raw}
+            for capacity,sid in orders:
+                if by_target and capacity<size:continue
+                # These amounts fit the first two funded, priced orders at the accepted height.
+                individual=getter([(sid,size)])
+                if int(individual["result"],16)>0:
+                    chosen.append((sid,individual))
+                    if len(chosen)==2:break
+            if len(chosen)!=2:raise ValueError("no two funded Carbon strategies")
+            actions=[(sid,size) for sid,_ in chosen]
+            combined=getter(actions)
+            results.append({"source":source,"target":target,"by_target":by_target,
+                "actions":[[str(sid),str(amount)] for sid,amount in actions],
+                "individual":[reply for _,reply in chosen],"aggregate":combined})
+    return results
+
 def capture():
     src=json.loads(gzip.decompress(ARCHIVE.read_bytes()))
     chain=Snapshot(src)
@@ -74,7 +109,7 @@ def capture():
                 if h["hash"]!=l["blockHash"]:raise ValueError("hash mismatch")
                 samples[t]=l
     if chain.rpc("eth_getBlockByNumber",[hex(chain.height),False])["hash"]!=chain.tag["blockHash"]:raise ValueError("anchor no longer canonical")
-    return {"chain_id":1,"height":chain.height,"selector":chain.tag,"state_root":src["state_root"],"contracts":code,"implementation_slot":role,"version":src["version"],"storage_layout":"contracts/carbon/Pairs.sol:_pairsStorage slot 53","pairs":rows,"event_window":[begin,chain.height],"counts":counts,"samples":samples,"trade_txs":len(trade_txs),"markets":[{"tokens":p,"swaps":r[0],"amount0":str(r[1]),"amount1":str(r[2])} for p,r in sorted(market_volume.items())]}
+    return {"chain_id":1,"height":chain.height,"selector":chain.tag,"state_root":src["state_root"],"contracts":code,"implementation_slot":role,"version":src["version"],"storage_layout":"contracts/carbon/Pairs.sol:_pairsStorage slot 53","pairs":rows,"multi_quotes":multi_quotes(chain,ctrl,reg[4]),"event_window":[begin,chain.height],"counts":counts,"samples":samples,"trade_txs":len(trade_txs),"markets":[{"tokens":p,"swaps":r[0],"amount0":str(r[1]),"amount1":str(r[2])} for p,r in sorted(market_volume.items())]}
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);args=p.parse_args();args.output.write_text(json.dumps(capture(),indent=2)+"\n",encoding="utf8",newline="\n")

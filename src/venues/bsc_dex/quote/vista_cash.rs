@@ -28,9 +28,9 @@ pub(in crate::venues::bsc_dex) fn terminal_cash(
     matches!(r.mode, RouteMode::Direct)
         && matches!(
             h.fee_mode,
-            Some(crate::core::types::RouterFeeMode::NativeSettlement { .. })
+            Some(crate::core::types::RouterFeeMode::NativeSettlement { .. }|crate::core::types::RouterFeeMode::CarbonWallet{native_cash:true,..})
         )
-        && reg.entry(&h.pool).is_some_and(|e| native_router(&e) || super::ekubo_v2_pricing::enabled(&e))
+        && reg.entry(&h.pool).is_some_and(|e| native_router(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::carbon_direct::enabled(&e))
 }
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.
 pub(super) async fn funded(

@@ -165,6 +165,7 @@ fn protected_wallet_binds_issuer_module_and_receives_each_asset_before_and_after
         let module = address(&raw["module"]);
         let bond = address(&raw["bond"]);
         let wallet = address(&raw["owner"]);
+        assert_eq!(raw["cash_cases"].as_array().unwrap().len(),2);
         let cases = raw["cases"]
             .as_array()
             .unwrap()

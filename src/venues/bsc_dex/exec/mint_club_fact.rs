@@ -1,11 +1,10 @@
 //! Сверка включённого поручения Bond и обеих сторон расчёта при штатном подтверждении и восстановлении.
-use super::super::{ctx::Ctx, node::rpc, pools::mint_club::IBond, send::track::Receipt};
+use super::super::{ctx::Ctx, pools::mint_club::IBond, send::track::Receipt};
 use super::{fill, mint_club_wire::Call};
-use crate::gateway::errors::{ErrorCode, GatewayResult};
+use crate::gateway::errors::GatewayResult;
 use alloy::{rpc::types::Log, sol_types::SolEvent};
-use alloy_primitives::{Address, B256, Bytes, U256};
+use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof {
@@ -16,54 +15,22 @@ pub struct Proof {
 
 impl Proof {
     pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Tx {
-            hash: B256,
-            block_hash: Option<B256>,
-            from: Address,
-            to: Option<Address>,
-            value: U256,
-            input: Bytes,
-        }
-        let fail = || {
-            ctx.err(
-                ErrorCode::OutcomeUnknown,
-                "Mint Club: не подтверждены исходный хеш, блок или подписанное поручение Bond",
-            )
-        };
-        if r.transaction_hash != Some(hash) || r.block_hash.is_none() {
-            return Err(fail());
-        }
-        let tx: Option<Tx> = rpc::call(ctx, "eth_getTransactionByHash", json!([hash]))
-            .await
-            .map_err(|_| fail())?;
-        if tx.is_some_and(|t| {
-            t.hash == hash
-                && t.block_hash == r.block_hash
-                && t.from == self.payer
-                && t.to == Some(self.call.protection.map_or(self.bond, |p| p.module))
-                && t.value.is_zero()
-                && t.input == self.call.data(self.payer)
-        }) {
-            Ok(())
-        } else {
-            Err(fail())
-        }
+        super::signed_call::included(
+            ctx,
+            hash,
+            r,
+            self.payer,
+            self.call.protection.map_or(self.bond, |p| p.module),
+            U256::ZERO,
+            self.call.data(self.payer),
+        )
+        .await
     }
     pub(in crate::venues::bsc_dex) fn measured(
         &self,
         rows: &[super::super::check::simulate::SimLog],
     ) -> Option<(U256, U256)> {
-        let logs = rows
-            .iter()
-            .map(|r| {
-                Some(Log {
-                    inner: alloy_primitives::Log::new(r.address, r.topics.clone(), r.data.clone())?,
-                    ..Default::default()
-                })
-            })
-            .collect::<Option<Vec<_>>>()?;
+        let logs = super::signed_call::logs(rows)?;
         let (input, output) = self.call.pair();
         self.amounts(&logs, self.payer, input, output)
     }

@@ -301,7 +301,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // src/Vault.sol L74-L86, L143-L175, src/pool-cl/CLPoolManager.sol L162-L212, src/pool-bin/BinPoolManager.sol
         // L133-L177). Infinity Stable — пул в крючке пула CL, обмен — тот же CL_SWAP с ключом пула (как у Universal
         // Router, решение «122 (Infinity Stable)»). EVM-тест с официальным кодом менеджеров — contracts/evmtest/singleton.mjs.
-        "uniswap_v4" => ExecKind::UniV4,
+        "uniswap_v4" | "deli_v4_constant" => ExecKind::UniV4,
         "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
         "pancakeswap_infinity_bin" => ExecKind::InfBin,
         // Решение 440: swapIn пула без белого списка вызывающих (poolT1 main.sol L51-L58, L689-L700: пауза и

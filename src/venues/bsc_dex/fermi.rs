@@ -16,6 +16,7 @@ mod dispatch;
 mod execute;
 mod indicative;
 mod prop_slot;
+mod slot_checks;
 mod slot_config;
 mod slot_feed;
 mod prop_levels;

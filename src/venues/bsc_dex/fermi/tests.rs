@@ -47,10 +47,10 @@ fn builders_drop_irrelevant_overrides_and_expire_at_target() {
     let engine = binding.engine;
     assert_eq!(f["router"], format!("{router:#x}"));
     assert_eq!(f["engine"], format!("{engine:#x}"));
-    for (name, builder) in [
+    let [titan, buildernet] = [
         ("Titan", Builder::Titan),
         ("BuilderNet", Builder::BuilderNet),
-    ] {
+    ].map(|(name, builder)| {
         let frame = &f["frames"][name];
         let diff = &frame["stateDiff"];
         let row = json!({"maker":"Fermi","quoteAddress":router,"blockNumber":frame["target"],
@@ -62,6 +62,8 @@ fn builders_drop_irrelevant_overrides_and_expire_at_target() {
                 "blockNumber":format!("0x{:x}",frame["target"].as_u64().unwrap())}),
         };
         let parsed = Frame::read(builder, &result, binding).unwrap();
+        let repeated = Frame::read(builder, &result, binding).unwrap();
+        assert!(slot_config::same_frame(&parsed, &repeated));
         assert!(
             Frame::read(
                 builder,
@@ -93,7 +95,10 @@ fn builders_drop_irrelevant_overrides_and_expire_at_target() {
         assert!(!parsed.current(parsed.target - 2, t - 12, t - 1));
         assert!(!parsed.current(parsed.target - 1, t - 24, t - 13));
         assert!(!parsed.current(parsed.target - 1, t - 12, t));
-    }
+        parsed
+    });
+    assert_eq!((titan.target, titan.slot), (buildernet.target, buildernet.slot));
+    assert!(!slot_config::same_frame(&titan, &buildernet));
     assert_ne!(
         f["frames"]["Titan"]["stateDiff"],
         f["frames"]["BuilderNet"]["stateDiff"]

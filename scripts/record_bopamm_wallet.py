@@ -1,11 +1,12 @@
 """Replay own ERC20 funds through a slot-bound bopAMM module next to real multi-maker fills."""
 import argparse
+import gzip
 import json
 from pathlib import Path
 
 from eth_abi import decode, encode
 from eth_utils import keccak
-from record_bopamm_ethereum import (AMM, DATA, FILL, FUNDING, MARKET_EVENT, OWNER, PAMM,
+from record_bopamm_ethereum import (AMM, DATA, FILL, FUNDING, MARKET_EVENT, OWNER, PAMM, REGISTRY,
                                     USDC, WETH, approval, balance, raw, signed_update, tx)
 from record_base_slipstream_executor import simulate_block
 from record_kewlswap_base import create_address
@@ -51,18 +52,27 @@ def capture(reader, artifact, price, historical):
     qty, paid, receiver = decode(["uint256","uint256","address"],raw(event["data"]))
     included = maker_fills(receipt["logs"],WETH,USDC,receiver,qty,paid)
     assert len({f["maker"] for f in included}) >= 2
+    height, timestamp = int(h["number"],16), int(h["timestamp"],16)
+    block = {"time":h["timestamp"],"feeRecipient":h["miner"],"gasLimit":h["gasLimit"]}
+    module,cases = wallet_trials(reader,artifact,tag,height,timestamp,block,
+        [(WETH,USDC,qty),(WETH,USDC,10**16),(USDC,WETH,100*10**6),(USDC,WETH,10**6)],update=update)
+    return dict(block=height,timestamp=timestamp,hash=h["hash"],parent=tag["blockHash"],update=price,original=historical,
+                original_fills=included,original_market_event=event,payer=OWNER,module=module,cases=cases)
+
+def wallet_trials(reader,artifact,tag,height,timestamp,block,amounts,update=None,published=None):
     module = create_address(OWNER,0)
     assert reader.many([("eth_getTransactionCount",[OWNER,tag]),("eth_getCode",[module,tag])]) == ["0x0","0x"]
     create = {"from":OWNER,"gas":hex(5000000),"data":"0x"+artifact["creation"]+encode(
         ["address"]*3,[AMM,PAMM,USDC]).hex()}
-    height, timestamp = int(h["number"],16), int(h["timestamp"],16)
     def run(calls, updated=True):
         def request(_url, method, params):
-            params[0]["blockStateCalls"][0]["blockOverrides"] = {
-                "time":h["timestamp"],"feeRecipient":h["miner"],"gasLimit":h["gasLimit"]}
+            params[0]["blockStateCalls"][0]["blockOverrides"] = block
             return reader.one(method,params)
-        prefix = [update] if updated else []
-        result = simulate_block(None,tag,{OWNER:{"balance":hex(2*10**18)}},prefix+[create,*calls],read_rpc=request)
+        prefix = [update] if updated and update else []
+        overrides = {OWNER:{"balance":hex(2*10**18)}}
+        if updated and published:
+            overrides[REGISTRY] = {"stateDiff":published}
+        result = simulate_block(None,tag,overrides,prefix+[create,*calls],read_rpc=request)
         assert all(x["status"] == "0x1" for x in result[:len(prefix)+1])
         runtime = "0x"+keccak(hexstr=result[len(prefix)]["returnData"]).hex()
         return runtime, result[len(prefix)+1:]
@@ -107,15 +117,47 @@ def capture(reader, artifact, price, historical):
         after.update(fills=maker_fills(x["logs"],a,b,OWNER.lower(),size,net),gas=int(x["gasUsed"],16),
                      transaction=executed,logs=x["logs"],controls=[r.get("error") for r in results if r["status"] == "0x0"])
         return dict(input=a,output=b,amount=str(size),before=before,after=after)
-    cases = [trial(a,b,n) for a,b,n in [(WETH,USDC,qty),(WETH,USDC,10**16),(USDC,WETH,100*10**6),(USDC,WETH,10**6)]]
-    return dict(block=height,timestamp=timestamp,hash=h["hash"],parent=tag["blockHash"],update=price,original=historical,
-                original_fills=included,original_market_event=event,payer=OWNER,module=module,cases=cases)
+    return module, [trial(a,b,n) for a,b,n in amounts]
+
+def published_frames(reader,artifact,observations):
+    results=[]
+    for name in ("BuilderNet","Titan"):
+        valid=[row[name] for row in observations if row[name].get("same_live_parent") and
+               row[name]["finished_ns"] < (1606824023+row[name]["slot"]*12)*10**9 and
+               row[name]["other_patched_accounts"]==0]
+        cases=[]
+        for sample in valid:
+            if len(cases)>=2:
+                break
+            if any(x["target"]==sample["target"] for x in cases):
+                continue
+            tag={"blockHash":sample["parent"],"requireCanonical":True}
+            head=reader.one("eth_getBlockByHash",[sample["parent"],False])
+            slot_time=1606824023+sample["slot"]*12
+            assert int(head["number"],16)+1==sample["target"] and int(head["timestamp"],16)<slot_time
+            assert sample["registry"]==REGISTRY and sample["key"] in (PAMM,AMM)
+            patch=sample["stateDiff"]
+            assert 0<len(patch)<=128 and all(len(raw(k))==32 for d in patch.items() for k in d)
+            module,legs=wallet_trials(reader,artifact,tag,sample["target"],slot_time,{"time":hex(slot_time)},
+                [(WETH,USDC,10**15),(USDC,WETH,10**6)],published=patch)
+            cases.append({"target":sample["target"],"slot":sample["slot"],"parent":sample["parent"],
+                          "frame_observed_ns":sample["observed_ns"],"module":module,"cases":legs,
+                          "source_quotes":sample["quotes"]})
+        if len(cases)!=2:
+            raise ValueError(f"{name}: insufficient archived canonical frames")
+        results.append(dict(builder=name,frames=cases))
+    return results
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("output",type=Path)
     parser.add_argument("artifact",type=Path)
+    parser.add_argument("--published-output",type=Path)
     args=parser.parse_args()
     reader=Reader("ethereum",json.loads((DATA/"ethereum.json").read_bytes()))
     frames=[capture(reader,json.loads(args.artifact.read_bytes()),*pair) for pair in SAMPLES]
     args.output.write_text(json.dumps(frames,separators=(",",":")),encoding="utf8")
+    if args.published_output:
+        saved=json.loads(gzip.decompress((DATA/"bopamm_ethereum_frames.json.gz").read_bytes()))
+        result=published_frames(reader,json.loads(args.artifact.read_bytes()),saved)
+        args.published_output.write_text(json.dumps(result,separators=(",",":")),encoding="utf8")

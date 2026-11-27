@@ -660,7 +660,7 @@ jobs:
         run: |
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/aqua" AquaStrategyWallet
-          python scripts/record_aqua_wallet.py "${MATRIX_MARKET#aqua-protected-}" "$RUNNER_TEMP/market.json" --compiled "$RUNNER_TEMP/aqua/AquaStrategyWallet.json"
+          python scripts/record_aqua_wallet.py "${MATRIX_MARKET#aqua-protected-}" "$RUNNER_TEMP/market.json" --compiled "$RUNNER_TEMP/aqua/AquaStrategyWallet.json" --manifest "$RUNNER_TEMP/aqua-${MATRIX_MARKET#aqua-protected-}-create.json"
       - if: matrix.market == 'ambient-ethereum-wallet'
         run: |
           npm ci --prefix contracts --no-audit --no-fund
@@ -1373,6 +1373,7 @@ jobs:
           path: |
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
+            ${{ runner.temp }}/aqua-*-create.json
             ${{ runner.temp }}/uniswap-v1-create.json
             ${{ runner.temp }}/llamma-*-create.json
             ${{ runner.temp }}/mooniswap-*-create.json

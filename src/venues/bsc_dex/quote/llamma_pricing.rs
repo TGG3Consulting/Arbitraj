@@ -49,8 +49,8 @@ pub(super) async fn paid(
     .filter(|x| !x.is_zero())
     .ok_or_else(fail)?;
     let at = h.selector();
-    let balance = dagrow::balance(&q.ctx, src, payer, &at).await?;
     let amount = if buy {
+        let balance = dagrow::balance(&q.ctx, src, payer, &at).await?;
         let quoted = llamma_quotes::official(&q.ctx, e, src, qty, true, &at).await;
         if let Ok(point) = quoted {
             let hard = quote_stage::buy_budget(q.ctx.place.id, src)

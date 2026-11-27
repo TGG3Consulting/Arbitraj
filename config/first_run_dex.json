@@ -1290,7 +1290,8 @@
       "dex.sub_dex": [
         "curve-twocrypto-ng",
         "curve-tricrypto-ng",
-        "curve-plain"
+        "curve-plain",
+        "curve-crvusd-cash"
       ]
     }
   },
@@ -1463,6 +1464,22 @@
       "dex.factory": "0x5ef72230578b3e399e6c6f4f6360edf95e83bbfd",
       "dex.curve_crypto_v1_templates": [
         "0x0cd5a1e9e19af1f1b910ac3c3452a16b2b37155b"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "curve-crvusd-cash",
+    "source": "https://docs.curve.finance/developer/factory/overview · https://etherscan.io/address/0x67fe41a94e779ccfa22cff02cc2957dc9c0e4286#code · tests/data/first_run_dex_2026-11-26/crvusd_cash_ethereum.json",
+    "settings": {
+      "dex.kind": "curve_stableswap_plain",
+      "dex.factory": "0x4f8846ae9380b90d2e71d5e3d042dff3e7ebb40d",
+      "dex.stable_pools": [
+        "0x390f3595bca2df7d23783dfd126427cceb997bf4"
+      ],
+      "dex.curve_plain_implementations": [
+        "0x67fe41a94e779ccfa22cff02cc2957dc9c0e4286"
       ]
     }
   },

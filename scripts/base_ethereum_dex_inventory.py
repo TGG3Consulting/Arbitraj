@@ -1895,6 +1895,31 @@ def tables(network, snapshots, profiles):
                 task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
             elif kind == "absent":
                 task = "В сетевой записи этого адаптера нет данной сети. Отдельные развёртывания проверяются по своему реестру."
+        if not base and str(row["id"]) == "4321":
+            def archive(name):
+                return json.loads(gzip.decompress((data_dir/f"llamma_ethereum_{name}.json.gz").read_bytes()))
+            registry, wallets, module = map(archive, ("registry", "wallets", "module"))
+            bridge = read(data_dir/"crvusd_cash_ethereum.json")
+            assert module["selector"] == registry["selector"] == wallets["selector"] == bridge["selector"]
+            candidates = [registry["factories"]["oneway"]]
+            kinds = ("oneway", "mint", "v2")
+            counts = "/".join(str(len(registry["markets"][k])) for k in kinds)
+            positives = "/".join(str(sum(int(q.get("spent", 0)) > 0 and int(q.get("received", 0)) > 0 for q in registry["quotes"][k])) for k in kinds)
+            v5 = {(r["kind"],r["index"],r["side"],r["result"]["cap"]): r["result"] for r in wallets["rows"] if r["mode"]=="v5"}
+            saves = [v5[r["kind"],r["index"],r["side"],r["cap"]]["gas"] - r["gas"] for r in module["rows"] if r["mode"]=="target"]
+            gas = [r["gas"] for r in wallets["usdt"]]
+            task = (f"На блоке {registry['activity']['last']} реестры one-way, mint и v2 содержали {counts} AMM, "
+                    f"из 260 котировок обе ненулевые стороны дали {positives}. Источник #4321 считает обмены one-way и доходы по займам, "
+                    "исключая vault 0x01144442… из собственной статистики. Mint и v2 проверены отдельно. "
+                    f"В архивной симуляции исходный контракт выплатил по {len(v5)} обменам с заданным входом и выходом, V5 — ещё {len(v5)}. "
+                    f"Модуль LlammaWallet провёл {len(module['rows'])} обмена; при фиксированном выходе в {sum(x>0 for x in saves)} случаях расход газа был ниже V5, максимально на {max(saves)}. "
+                    "При ограниченной ликвидности зачисляется фактический выход, неизрасходованный вход возвращается владельцу. "
+                    f"Профиль curve-crvusd-cash находит проверенный клон USDT/crvUSD. Четыре полных маршрута V5 через него и LLAMMA потратили {min(gas)}–{max(gas)} газа, "
+                    "вернули 0,000572650865518845 WETH за 1 USDT и 1,680198 USDT за 0,001 WETH. Остаток crvUSD равен нулю. "
+                    "Для такого графа нужны свой V5, dex.router_mode=graph, dex.intermediate_enabled, dex.route_max_hops ≥ 2, "
+                    "crvUSD в dex.intermediate_tokens и доступный способ оценки промежуточного актива. Для отдельного обмена модулем карточка DEX сохраняет адрес развёртывания в dex.router. "
+                    f"[Три реестра](../{(data_dir/'llamma_ethereum_registry.json.gz').as_posix()}) · [USDT и V5](../{(data_dir/'llamma_ethereum_wallets.json.gz').as_posix()}) · "
+                    f"[Модуль кошелька](../{(data_dir/'llamma_ethereum_module.json.gz').as_posix()}) · [Фабрика денежной ноги](../{(data_dir/'crvusd_cash_ethereum.json').as_posix()})")
         if not base and str(row["id"]) == "1053":
             generations=[]
             for era,slug in (("original","mooniswap"),("successor","oneinch-liquidity-protocol")):

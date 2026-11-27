@@ -1,0 +1,64 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "factory": "0x4f8846ae9380b90d2e71d5e3d042dff3e7ebb40d",
+  "pool": "0x390f3595bca2df7d23783dfd126427cceb997bf4",
+  "implementation": "0x67fe41a94e779ccfa22cff02cc2957dc9c0e4286",
+  "contracts": {
+    "0x4f8846ae9380b90d2e71d5e3d042dff3e7ebb40d": {
+      "bytes": 12912,
+      "keccak256": "0x638bb4a02329d2329c9ec96b64170a4bd5b94de365089dc9cfbcd98e6ccf1dfb"
+    },
+    "0x390f3595bca2df7d23783dfd126427cceb997bf4": {
+      "bytes": 45,
+      "keccak256": "0x06a0d9fefe2940f35a5e0b347ff8e2f8085c76ce487b5b234b2e3c831160e34f"
+    },
+    "0x67fe41a94e779ccfa22cff02cc2957dc9c0e4286": {
+      "bytes": 18267,
+      "keccak256": "0xf8b6ec0714326b3183e32c835b0ae5be7156bb248fface95fb6d83aa6abaa3c8"
+    }
+  },
+  "coins": [
+    "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "0xf939e0a03fb07f59a73314e73794be0e57ac1b4e"
+  ],
+  "count": 29,
+  "a": "200000",
+  "fee": "1000000",
+  "balances": [
+    "1630932483032",
+    "7220462377103384414967593"
+  ],
+  "decimals": [
+    6,
+    18
+  ],
+  "quotes": [
+    {
+      "i": 0,
+      "j": 1,
+      "dx": "1000000",
+      "dy": "1001645049264273740"
+    },
+    {
+      "i": 0,
+      "j": 1,
+      "dx": "10000000",
+      "dy": "10016450390026224122"
+    },
+    {
+      "i": 1,
+      "j": 0,
+      "dx": "1683299055288225169",
+      "dy": "1680198"
+    },
+    {
+      "i": 1,
+      "j": 0,
+      "dx": "16832844646340892579",
+      "dy": "16801838"
+    }
+  ]
+}

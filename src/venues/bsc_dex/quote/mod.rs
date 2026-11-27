@@ -196,6 +196,7 @@ mod vista_cash;
 pub(super) mod vista_pricing;
 pub mod warm;
 mod white_pricing;
+pub(in crate::venues::bsc_dex) mod wallet_rfq;
 pub(super) mod white_state;
 pub mod wombat_depth;
 

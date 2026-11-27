@@ -1,13 +1,13 @@
 //! Сравнение только действующих предложений, которые владелец заранее разрешил для торговли.
 use super::{LABEL, current, enabled, receipt::Saved};
 use crate::{
-    core::types::{Asset, Cost, CostKind, DexRoute, Quote, RouteMode, Side},
+    core::types::{Asset, Quote, Side},
     gateway::{
         errors::{ErrorCode, GatewayResult},
         quote_stage,
     },
     venues::bsc_dex::{
-        exec, gas_ticker, hashflow, num, parts::Parts, quote::white_state, send, wallet,
+        hashflow, num, parts::Parts, quote::white_state, send, wallet,
     },
 };
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -164,47 +164,8 @@ async fn quote(p: &Parts, a: &Asset, s: Side, qty: Decimal, t: &Ticket) -> Optio
     } else {
         t.gas
     };
-    let mut pricing = p.quoting();
-    pricing.gas = pricing.gas.for_quote(ctx, &p.heads).await.ok()?;
-    let bill = exec::cycle_gas::priced(
-        &pricing,
-        t.proof.call.payer,
-        (t.proof.call.module, t.data.clone()),
-    )
-    .await
-    .ok()?;
-    let charge = num::to_decimal(
-        exec::cycle_gas::simulated(&pricing, bill, gas, 0, 0)
-            .ok()?
-            .wei(),
-        18,
-    )?;
-    if charge > ctx.dec("textile.gas_budget_native").ok()? || !current(t.proof.expiry) {
-        return None;
-    }
-    Some(Quote {
-        venue: ctx.venue(),
-        asset: a.clone(),
-        side: s,
-        qty,
-        fillable_qty: qty,
-        avg_price: num::to_decimal(cash, sd)?.checked_div(qty)?,
-        costs: vec![Cost::new(
-            CostKind::Gas,
-            charge,
-            gas_ticker::read(ctx).ok()?,
-            false,
-        )],
-        route: Some(DexRoute {
-            mode: RouteMode::Rfq(t.proof.call.calldata),
-            legs: vec![],
-            block: head.number.to(),
-            gas_units: gas,
-            executable: true,
-            exec_note: Some(LABEL.into()),
-        }),
-        signal_route: None,
-        at: chrono::Utc::now(),
-        pick: Some(LABEL.into()),
-    })
+    if !current(t.proof.expiry){return None;}
+    use crate::venues::bsc_dex::quote::wallet_rfq::{quote,Terms};
+    quote(p,a,s,qty,Terms{call:&t.proof.call,data:&t.data,cash,cash_dec:sd,block:head.number.to(),gas,
+        gas_setting:"textile.gas_budget_native",label:LABEL}).await
 }

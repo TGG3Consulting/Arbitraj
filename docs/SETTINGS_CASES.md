@@ -7421,6 +7421,36 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Что ставить:** Для Base или Ethereum укажите https://api.textilecredit.com/v2. Публичный preview принимает точный вход или выход. [Документация Textile](https://api.textilecredit.com/v2/openapi.json)
 - **Если не задана:** Форма Textile не предлагается.
 
+### `airswap.contracts`
+
+- **Кейс:** Проверка кассы, реализации и владельца отдельного модуля.
+- **Что ставить:** По строке chainId v4|v5 exchange exchangeHash [module moduleHash]. Для каждого дополнительного оператора повторите кассу с его модулем.
+- **Источник:** [Протокол AirSwap RFQ](https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/protocols.md).
+
+### `airswap.makers`
+
+- **Кейс:** Поиск подписанной цены для своего кошелька.
+- **Что ставить:** Укажите согласованные HTTPS JSON-RPC URL. Для Ethereum одна регистрация HTTPS на архивном блоке ответила HTTP 503 в отдельном замере. Для Base на том блоке зарегистрированных RFQ maker не было.
+- **Источник:** [Протокол AirSwap RFQ](https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/protocols.md).
+
+### `airswap.trading`
+
+- **Кейс:** Сравнение доступного подписанного ордера с маршрутами того же физического актива.
+- **Что ставить:** Включите после регистрации своего адреса и проверки средств и разрешения. Прямой EOA допускает проверенные точные ERC20 из dex.router_exact_tokens области airswap. Для изменяемых токенов используйте проверенный собственный модуль.
+- **Источник:** [Протокол AirSwap RFQ](https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/protocols.md).
+
+### `airswap.min_validity_ms`
+
+- **Кейс:** Минимальный оставшийся срок ордера.
+- **Что ставить:** Укажите положительный запас в миллисекундах с учётом задержки maker, проверки и отправки.
+- **Источник:** [Протокол AirSwap RFQ](https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/protocols.md).
+
+### `airswap.gas_budget_native`
+
+- **Кейс:** Отбор по полной стоимости исполнения.
+- **Что ставить:** Укажите предельную сетевую комиссию в ETH. На Base учитывается также публикация данных. Ставка swap принадлежит расчёту maker.
+- **Источник:** [Протокол AirSwap RFQ](https://github.com/airswap/airswap-about/blob/6363ffe1c1efd06d35f11fe1832c5e504341faad/technology/protocols.md).
+
 ### `textile.contracts`
 
 - **Кейс:** Привязка обычного Reactor и двух его зависимостей в выбранной сети.

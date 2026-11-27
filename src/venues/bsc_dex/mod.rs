@@ -23,6 +23,7 @@ mod epsilon;
 pub mod hanji;
 mod source_quote;
 mod textile;
+mod airswap;
 mod keyed_price;
 mod fermi;
 mod clipper;

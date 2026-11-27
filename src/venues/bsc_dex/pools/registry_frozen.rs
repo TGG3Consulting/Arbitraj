@@ -93,7 +93,7 @@ impl Registry {
             has_ambient: Arc::new(std::sync::atomic::AtomicBool::new(
                 snap.entries
                     .iter()
-                    .any(|e| matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))),
+                    .any(|e| e.pool.state.singleton_stamp().is_some()),
             )),
             inner: Arc::new(std::sync::RwLock::new(Pools::from_arcs(
                 snap.entries.clone(),

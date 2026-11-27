@@ -112,6 +112,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::Mooniswap
             | Variant::Brokerbot
             | Variant::Temple
+            | Variant::FluidDexLite
             | Variant::Ambient
             | Variant::Llamma(_)
             | Variant::YieldBasis

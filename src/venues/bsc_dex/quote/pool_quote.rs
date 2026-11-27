@@ -532,6 +532,13 @@ pub fn swap(
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})
         }
+        (PoolState::FluidDexLite(s),PoolKind::V2)=>{
+            let points=s.points(token_in).ok_or_else(none)?;
+            let first=points.first().ok_or_else(none)?;
+            if amount.is_zero() || (exact_in && amount<first.amount_in){return Err(none())}
+            let (amount_in,amount_out)=if !exact_in && amount<=first.amount_out{(first.amount_in,first.amount_out)}else{super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?};
+            Ok(Swapped{amount_in,amount_out,complete:true})
+        }
         (PoolState::Ambient(s),PoolKind::V2)=>{
             let side=s.side(token_in).ok_or_else(none)?;
             let points=s.points(token_in).ok_or_else(none)?;

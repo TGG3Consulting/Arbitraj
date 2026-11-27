@@ -60,6 +60,8 @@ pub(super) mod aktionariat_wallet;
 pub(super) mod bancor_legacy_plan;
 pub(super) mod ambient_wallet;
 pub(super) mod ambient_plan;
+pub(super) mod fluid_lite_wallet;
+pub(super) mod fluid_lite_plan;
 pub(super) mod llamma_wallet;
 pub(super) mod llamma_plan;
 pub(super) mod mooniswap_wallet;

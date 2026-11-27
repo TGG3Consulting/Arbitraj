@@ -77,6 +77,7 @@ mod module_pricing;
 mod aktionariat_pricing;
 mod bancor_legacy_pricing;
 mod ambient_pricing;
+mod fluid_lite_pricing;
 mod llamma_pricing;
 mod aqua_sizing;
 mod aqua_pricing;

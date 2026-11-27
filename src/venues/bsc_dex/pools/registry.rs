@@ -232,7 +232,7 @@ impl Registry {
     pub(super) fn put_observed(&self, mut e: Entry)->bool {
         // Решение 339: достоверная запись — пул прочитан, отметка неудачи (pool_fail.rs) снимается; ревью t153 (Н5):
         // отметок нет (339 выключено) — без замка карты отметок (атомарный счётчик в Fails::clear).
-        let ambient=matches!(e.pool.state,crate::core::types::PoolState::Ambient(_));
+        let ambient=e.pool.state.singleton_stamp().is_some();
         if e.valid && !ambient {
             self.fails.clear(&e.pool.reference);
             // Решение 357 (ревью слияния, Б1): достоверная запись кладётся только полным чтением (lb_head.rs и
@@ -242,7 +242,7 @@ impl Registry {
         // Пул записан в реестр — экран видит его записью; отметка «ни разу не прочитан» (pool_unread.rs) долой.
         self.unread.clear(&e.pool.reference);
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
-        if let crate::core::types::PoolState::Ambient(s) = &e.pool.state && !s.stamp.current() {
+        if e.pool.state.singleton_stamp().is_some_and(|s|!s.current()) {
             if m.contains(&e.pool.reference) {return false;}
             // Первое чтение до первой наблюдаемой головы нужно для следующей подписки.
             e.valid=false;

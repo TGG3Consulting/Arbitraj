@@ -77,6 +77,7 @@ pub(super) async fn option(
     let ctx = &q.ctx;
     let decimals = (i.coin_dec, i.usdt_dec);
     let measured=if let Some(head)=h && e.family.variant.aqua(){Some(Box::pin(super::aqua_sizing::paid(q,i,&e,payer,&execution,head)).await?)}
+    else if let Some(head)=h && e.family.variant==super::super::pools::family_variant::Variant::FluidDexLite{Some(Box::pin(super::fluid_lite_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && e.family.variant==super::super::pools::family_variant::Variant::Ambient{Some(Box::pin(super::ambient_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && e.family.variant.llamma(){Some(Box::pin(super::llamma_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && matches!(&e.pool.state,crate::core::types::PoolState::YieldBasisPool(_)|crate::core::types::PoolState::BancorLegacy(_)){
@@ -149,6 +150,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Aktionariat(m)=>Some(RouterFeeMode::ProtectedWallet{target:m.module}),
         super::v2_wallet_sim::Wire::Aqua(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
         super::v2_wallet_sim::Wire::Angstrom(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
+        super::v2_wallet_sim::Wire::FluidDexLite(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Ambient(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Stabull(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Integral(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),

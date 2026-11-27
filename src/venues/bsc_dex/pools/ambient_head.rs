@@ -42,10 +42,10 @@ impl Registry {
                 let Some(entry) = pools.get(&hop.pool) else {
                     return false;
                 };
-                let crate::core::types::PoolState::Ambient(state) = &entry.pool.state else {
+                let Some(stamp)=entry.pool.state.singleton_stamp() else {
                     return false;
                 };
-                if !entry.valid || !state.stamp.current() || !start.is_some_and(|s| s.tip.current())
+                if !entry.valid || !stamp.current() || !start.is_some_and(|s| s.tip.current())
                 {
                     return false;
                 }

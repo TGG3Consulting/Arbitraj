@@ -151,6 +151,7 @@ pub enum Variant {
     RubiconClassic,
     YieldBasis,
     Ambient,
+    FluidDexLite,
     Llamma(super::llamma::Registry),
     BalancerV1,
     BancorLegacy,
@@ -235,6 +236,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn fluid_lite(self)->bool{ self==Self::FluidDexLite }
     pub(crate) fn euler(self)->bool {matches!(self,Self::EulerV1 | Self::EulerV2)}
     pub(crate) fn llamma(self)->bool{matches!(self,Self::Llamma(_))}
     pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
@@ -393,6 +395,7 @@ pub fn of(kind: &str) -> Variant {
         "surge_native" | "surge_v5" => Variant::Surge,
         "rubicon_classic" => Variant::RubiconClassic,
         "ambient_ethereum" => Variant::Ambient,
+        "fluid_dex_lite" => Variant::FluidDexLite,
         "llamma_lending" => Variant::Llamma(super::llamma::Registry::Lending),
         "llamma_mint" => Variant::Llamma(super::llamma::Registry::Mint),
         "llamma_v2" => Variant::Llamma(super::llamma::Registry::V2),

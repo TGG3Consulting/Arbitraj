@@ -12,6 +12,7 @@ pub mod defiplaza;
 pub mod bancor_legacy;
 pub mod balancer_v1;
 pub mod ambient;
+pub mod fluid_dex_lite;
 pub mod llamma;
 pub mod yield_basis;
 pub mod uniswap_v1;

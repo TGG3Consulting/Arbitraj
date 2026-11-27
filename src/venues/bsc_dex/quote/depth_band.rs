@@ -549,6 +549,12 @@ fn side(
             let (i,o,full)=super::pmm_ladder::depth(points,U256::from((factor*1e18) as u128)).ok_or("Bancor V2.1: недоступны измеренные ступени")?;
             Ok((pick(i,o),full))
         }
+        (PoolState::FluidDexLite(s),PoolKind::V2)=>{
+            let points=s.points(token_in).ok_or("Fluid DEX Lite: устаревший снимок или чужая валюта")?;
+            let factor=if buy{1.0/(1.0+b)}else{1.0-b};
+            let (i,o,full)=super::pmm_ladder::depth(points,U256::from((factor*1e18) as u128)).ok_or("Fluid DEX Lite: недоступны ступени")?;
+            Ok((pick(i,o),full))
+        }
         (PoolState::Ambient(s),PoolKind::V2)=>{
             let points=s.points(token_in).ok_or("Ambient: чужая валюта")?;
             let factor=if buy{1.0/(1.0+b)}else{1.0-b};

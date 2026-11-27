@@ -106,6 +106,7 @@ pub(super) async fn paid(
         return Err(fail());
     }
     let points = match &e.pool.state {
+        PoolState::FluidDexLite(s)=>s.points(input),
         PoolState::Ambient(s)=>s.points(input),
         PoolState::Llamma(s)=>s.points(input),
         PoolState::YieldBasisPool(s) => s.points(input),

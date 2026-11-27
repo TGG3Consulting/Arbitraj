@@ -243,6 +243,8 @@ pub mod supernova;
 mod nami_batch;
 pub(crate) mod cycle_cash;
 pub(crate) mod balancer_v1;
+pub(crate) mod fluid_dex_lite;
+pub(crate) mod fluid_lite_directory;
 pub(crate) mod ambient;
 pub(crate) mod ambient_directory;
 mod ambient_levels;

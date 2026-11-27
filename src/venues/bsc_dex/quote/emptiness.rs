@@ -53,6 +53,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),
         PoolState::BancorLegacy(s)=>s.levels.iter().all(Vec::is_empty),
+        PoolState::FluidDexLite(s)=>!s.stamp.current() || s.levels.iter().all(Vec::is_empty),
         PoolState::Ambient(s)=>!s.stamp.current() || s.levels.iter().all(Vec::is_empty),
         PoolState::Llamma(s)=>s.levels.iter().all(Vec::is_empty),
         PoolState::YieldBasisPool(s)=>s.levels.iter().all(Vec::is_empty),

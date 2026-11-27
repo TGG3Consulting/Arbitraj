@@ -42,7 +42,7 @@ impl Market {
     fn approval(self, mode: Option<RouterFeeMode>) -> Spender {
         use RouterFeeMode::*;
         match self {
-            Market::Ambient => match mode {
+            Market::Ambient | Market::FluidDexLite => match mode {
                 Some(WalletBounds {target,..}) => Spender::Selected(target),
                 _ => Spender::Missing,
             },

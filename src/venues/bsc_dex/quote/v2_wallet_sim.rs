@@ -56,6 +56,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Pendle(Address),
     Aktionariat(super::super::exec::aktionariat_wallet::Market),
     BancorLegacy(Box<super::super::exec::bancor_legacy_wallet::Terms>),
+    FluidDexLite(super::super::exec::fluid_lite_wallet::Terms),
     Ambient(super::super::exec::ambient_wallet::Terms),
     Llamma(super::super::exec::llamma_wallet::Terms),
     LlammaV5(V5Step,Address),
@@ -180,7 +181,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::FluidDexLite(_)|Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -224,7 +225,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
-    let exact_target=matches!(&o.wire,Wire::Ambient(t) if t.desired.is_some())||matches!(&o.wire,Wire::Llamma(t) if t.desired.is_some())||matches!(&o.wire,Wire::BalancerV1(t) if t.desired.is_some())||matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
+    let exact_target=matches!(&o.wire,Wire::FluidDexLite(t) if t.desired.is_some())||matches!(&o.wire,Wire::Ambient(t) if t.desired.is_some())||matches!(&o.wire,Wire::Llamma(t) if t.desired.is_some())||matches!(&o.wire,Wire::BalancerV1(t) if t.desired.is_some())||matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
     let bounded_input=matches!(&o.wire,Wire::Ambient(_)|Wire::Llamma(_)|Wire::LlammaV5(_,_)|Wire::Aktionariat(_)|Wire::AktionariatV5(_,_)) || matches!(&o.wire,Wire::RegisteredV3(m) if m.algebra_wallet.is_some());
     let charged=spent.ok_or_else(fail)?;
     if charged.is_zero() || charged>o.amount || (!exact_target && !bounded_input && charged!=o.amount) || received.is_zero() || received < o.minimum {
@@ -239,6 +240,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if let Wire::Aktionariat(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BancorLegacy(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::LlammaV5(step,zero)=&o.wire && super::super::exec::llamma_wallet::measured_v5(&o,step.pool,*zero,&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
+    if let Wire::FluidDexLite(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Ambient(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Llamma(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Mooniswap(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
@@ -296,6 +298,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
         let strict_carbon=match &o.wire{Wire::Carbon(c)=>Some(c.tighten(o.amount,received).ok_or_else(fail)?),_=>None};
         calls[offset + n + 2].input = match &o.wire {
+            Wire::FluidDexLite(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::Ambient(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::Llamma(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::BalancerV1(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.maximum=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
@@ -352,6 +355,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Aktionariat(m)=>m.proof(o,minimum,deadline).data(),
         Wire::BancorLegacy(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::FluidDexLite(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Ambient(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Llamma(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Mooniswap(t)=>t.proof(o,minimum,deadline).data(),

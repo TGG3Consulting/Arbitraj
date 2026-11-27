@@ -286,8 +286,8 @@ pub fn state<'a>(
             })
         });
     }
-    if f.variant==Variant::Ambient{return Box::pin(async move{let head=super::super::quote::white_state::head(ctx,&block_tag(block)).await?;
-        let state=super::ambient_levels::load(ctx,tokens,reg,f,reference,pair,usdt,head).await?;
+    if f.variant.fluid_lite() || f.variant==Variant::Ambient{return Box::pin(async move{let head=super::super::quote::white_state::head(ctx,&block_tag(block)).await?;
+        let state=if f.variant.fluid_lite(){Box::pin(super::fluid_dex_lite::load(ctx,tokens,reg,f,reference,pair,usdt,head)).await?}else{Box::pin(super::ambient_levels::load(ctx,tokens,reg,f,reference,pair,usdt,head)).await?};
         Ok(Loaded{state,ticks:None,bins:None,fee_pips:None})});}
     if f.variant.llamma(){return Box::pin(async move {let at=super::nami::block(ctx,&block_tag(block)).await?;
         let state=Box::pin(super::llamma_quotes::load(ctx,tokens,reg,f,reference,pair,usdt,&at)).await?;

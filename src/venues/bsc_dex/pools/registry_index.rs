@@ -92,8 +92,8 @@ impl Pools {
         let r = e.pool.reference.clone();
         if let Some(old) = self.map.get(&r).cloned() {
             if keys(&old) == keys(&e)
-                && matches!(old.pool.state, crate::core::types::PoolState::Ambient(_))
-                && matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))
+                && old.pool.state.singleton_stamp().is_some()
+                && e.pool.state.singleton_stamp().is_some()
             {
                 self.map.insert(r, Arc::new(e));
                 return;
@@ -140,7 +140,7 @@ impl Pools {
 
     /// Ставит пул в индексы. Ошибок нет.
     fn index(&mut self, r: &PoolRef, e: &Entry) {
-        if matches!(e.pool.state, crate::core::types::PoolState::Ambient(_))
+        if e.pool.state.singleton_stamp().is_some()
             && !self.ambient_refs.contains(r)
         {
             Arc::make_mut(&mut self.ambient_refs).insert(r.clone());
@@ -152,7 +152,7 @@ impl Pools {
 
     /// Снимает пул из индексов по записи. Ошибок нет.
     fn unindex(&mut self, r: &PoolRef, e: &Entry) {
-        if matches!(e.pool.state, crate::core::types::PoolState::Ambient(_)) {
+        if e.pool.state.singleton_stamp().is_some() {
             Arc::make_mut(&mut self.ambient_refs).remove(r);
         }
         let k = keys(e);

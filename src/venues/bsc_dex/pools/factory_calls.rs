@@ -91,7 +91,7 @@ pub fn plan(
             // Nomiswap Stable (решение 284): реестр фабрики getPair(a, b) — как у V2.
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
-            Proto::V2 if f.variant.llamma() || f.variant==super::family_variant::Variant::Ambient => continue,
+            Proto::V2 if f.variant.fluid_lite() || f.variant.llamma() || f.variant==super::family_variant::Variant::Ambient => continue,
             Proto::V2 if matches!(f.variant, super::family_variant::Variant::BancorLegacy | super::family_variant::Variant::BancorV3) => continue, // Dedicated Bancor registries enumerate these markets.
             Proto::V2 if f.variant.mooniswap() => vec![Q::Mooniswap],
             Proto::V2 if f.variant==super::family_variant::Variant::RubiconClassic => ctx.dex_addr("dex.factory",f.id)

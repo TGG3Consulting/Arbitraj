@@ -1,6 +1,8 @@
 use super::*;
 #[path = "ambient_silent_receipt.rs"]
 mod silent_receipt;
+#[path = "registry_path_tests.rs"]
+mod registry_paths;
 use crate::core::types::{
     DexRoute, Pool, PoolRef, PoolState, RouteHop, RouteLeg, RouteMode, VenueId,
     ambient::{Market, State},

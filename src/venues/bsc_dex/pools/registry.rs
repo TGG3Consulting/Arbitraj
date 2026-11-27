@@ -79,6 +79,8 @@ pub struct Registry {
     pub(super) venue: Option<&'static str>,
     /// Записи за `Arc` и индексы по паре и тикеру (registry_index.rs, решение 129).
     pub(super) inner: Arc<RwLock<Pools>>,
+    /// Наличие записей в path_refs, опубликованное под блокировкой записи до увеличения версии.
+    pub(super) has_market_paths: Arc<std::sync::atomic::AtomicBool>,
     pub(super) has_ambient: Arc<std::sync::atomic::AtomicBool>,
     /// Глубина пулов по направлениям (решение 73, depth_book.rs).
     pub(super) depth: super::depth_book::Book,
@@ -256,9 +258,8 @@ impl Registry {
         // Решение 308: отметка для фонового графа — под замком записи и до роста версии (graph_changes.rs, И4).
         self.graph.bg().changes.mark(&e.pool.reference);
         let pair = (e.coin, e.usdt);
-        let may_change_ambient=ambient || self.has_ambient.load(Ordering::Relaxed);
         m.insert(e);
-        if may_change_ambient {self.sync_ambient(&m);}
+        self.publish_market_indexes(&m);
         self.version.fetch_add(1, Ordering::AcqRel);
         drop(m);
         if let Some(r)=accepted_ambient{self.fails.clear(&r);self.holds.forget(&r);}
@@ -299,6 +300,7 @@ impl Registry {
         // Версия — до снятия блокировки: читатель, увидевший новое состояние, увидит и новую версию. Решение 301 (е3):
         // пула нет — реестр не изменился, версия прежняя.
         if out.is_some() {
+            self.publish_market_indexes(&m);
             // Решение 308: отметка для фонового графа — под замком записи и до роста версии (И4).
             self.graph.bg().changes.mark(r);
             self.version.fetch_add(1, Ordering::AcqRel);
@@ -381,7 +383,7 @@ impl Registry {
     pub fn retain(&self, keep: impl Fn(&Entry) -> bool) {
         let mut m = self.inner.write().unwrap_or_else(|p| p.into_inner());
         let gone = m.retain(keep);
-        if self.has_ambient.load(Ordering::Relaxed) {self.sync_ambient(&m);}
+        self.publish_market_indexes(&m);
         // Решение 308: удалённые пулы — отметка для фонового графа под замком записи и до роста версии (И4).
         self.graph.bg().changes.mark_all(&gone);
         self.version.fetch_add(1, Ordering::AcqRel);

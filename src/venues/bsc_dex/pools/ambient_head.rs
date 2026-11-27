@@ -8,11 +8,17 @@ pub(crate) struct QuoteStamp {
     refs: Arc<std::collections::HashSet<crate::core::types::PoolRef>>,
 }
 impl Registry {
-    pub(super) fn sync_ambient(&self, pools: &super::registry_index::Pools) {
+    pub(super) fn publish_market_indexes(&self, pools: &super::registry_index::Pools) {
         let enabled = !pools.ambient_refs.is_empty();
-        self.has_ambient.store(enabled, Ordering::Release);
-        if !enabled {
-            pools.ambient_clock.advance(None);
+        if self.has_ambient.load(Ordering::Relaxed) != enabled {
+            if !enabled {
+                pools.ambient_clock.advance(None);
+            }
+            self.has_ambient.store(enabled, Ordering::Release);
+        }
+        let has_paths = !pools.path_refs.is_empty();
+        if self.has_market_paths.load(Ordering::Relaxed) != has_paths {
+            self.has_market_paths.store(has_paths, Ordering::Release);
         }
     }
     pub(in crate::venues::bsc_dex) fn observed_ambient(&self) -> Option<QuoteStamp> {

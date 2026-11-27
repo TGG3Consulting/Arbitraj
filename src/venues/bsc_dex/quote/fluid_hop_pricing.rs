@@ -219,7 +219,7 @@ pub(in crate::venues::bsc_dex) async fn reprice(
     Ok(paid(v, &legs, qty, h, (target, Some(principal))).await?.0)
 }
 
-pub(super) async fn candidates(q: &Quoting, i: &Input, native: bool) -> Vec<OptionQuote> {
+pub(in crate::venues::bsc_dex) async fn candidates(q: &Quoting, i: &Input, native: bool) -> Vec<OptionQuote> {
     if native {
         return vec![];
     }

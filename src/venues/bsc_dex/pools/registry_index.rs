@@ -119,10 +119,19 @@ impl Pools {
         let slot = self.map.get_mut(r)?;
         let before = keys(slot);
         let was_path = path_market(slot);
+        let was_ambient = slot.pool.state.singleton_stamp().is_some();
         let e = Arc::make_mut(slot);
         let out = f(e);
         let after = keys(e);
         let now_path = path_market(e);
+        let now_ambient = e.pool.state.singleton_stamp().is_some();
+        if was_ambient != now_ambient {
+            if now_ambient {
+                Arc::make_mut(&mut self.ambient_refs).insert(r.clone());
+            } else {
+                Arc::make_mut(&mut self.ambient_refs).remove(r);
+            }
+        }
         if was_path != now_path {
             if now_path {
                 self.path_refs.insert(r.clone());

@@ -418,6 +418,9 @@ pub(crate) async fn hop_quote(
 
 impl Registry {
     pub(in crate::venues::bsc_dex) fn multi_market_edges(&self) -> Vec<std::sync::Arc<Entry>> {
+        if !self.has_market_paths.load(std::sync::atomic::Ordering::Acquire) {
+            return Vec::new();
+        }
         let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
         let mut edges: Vec<_> = inner
             .path_refs

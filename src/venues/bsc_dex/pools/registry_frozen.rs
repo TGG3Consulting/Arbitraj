@@ -88,16 +88,16 @@ impl Registry {
     /// и сигналов), кэш графа — с закреплённым набором путей монеты (если он был). Версия — 0 и не меняется.
     /// Принимает: снимок, закреплённые пути (ключ кэша и скелеты) или None. Возвращает: реестр. Ошибок нет.
     pub fn frozen_from(snap: &Snap, pinned: Option<(PathsKey, Arc<Vec<Skeleton>>)>) -> Registry {
+        let pools = Pools::from_arcs(snap.entries.clone());
         Registry {
             venue: None,
             has_ambient: Arc::new(std::sync::atomic::AtomicBool::new(
-                snap.entries
-                    .iter()
-                    .any(|e| e.pool.state.singleton_stamp().is_some()),
+                !pools.ambient_refs.is_empty(),
             )),
-            inner: Arc::new(std::sync::RwLock::new(Pools::from_arcs(
-                snap.entries.clone(),
-            ))),
+            has_market_paths: Arc::new(std::sync::atomic::AtomicBool::new(
+                !pools.path_refs.is_empty(),
+            )),
+            inner: Arc::new(std::sync::RwLock::new(pools)),
             depth: Book::seeded(snap.verdicts.clone()),
             version: Arc::new(AtomicU64::new(0)),
             graph: pinned.map_or_else(Cache::default, |(k, v)| Cache::pinned(k, v)),

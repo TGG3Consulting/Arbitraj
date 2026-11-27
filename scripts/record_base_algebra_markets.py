@@ -19,7 +19,7 @@ MARKETS={
     "treble-v4":("0x6e606cf94a4ddc01aeed2fce16d1b4f5b33e0a31","0x09f3805c6743d9d0548ffe5657a985a057f82a7b"),
 }
 ZERO="0x"+"00"*20
-def capture(dex,endpoint,market=None,holders=None):
+def capture(dex,endpoint,market=None,holders=None,keep_refusals=False):
     e=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())
     e["endpoint"]=endpoint;c=Capture(e);tag=e["selector"]
     header=rpc(endpoint,"eth_getBlockByHash",[tag["blockHash"],False])
@@ -70,8 +70,22 @@ def capture(dex,endpoint,market=None,holders=None):
     # 0.000001 and 0.00001 WETH; USDC 0.01 and 0.1. Sizes only describe this snapshot.
     sizes=[max(1,10**decimals//x) for x in ((10**6,10**5) if decimals==18 else (100,10))]
     runtime=RUNTIME.read_text().strip().removeprefix("0x");virt=VIRTUAL_FILE.read_text().strip().removeprefix("0x")
-    cases=[round_trip(e,pool,token,other,size,int(header["timestamp"],16)+120,runtime,kind=2,
-                      owner=payers[token],algebra=(VIRTUAL,virt,a),time=(oracle["timestamp"]+oracle["block_step"] if oracle else None)) for size in sizes]
+    cases=[]
+    for size in sizes:
+        try:
+            cases.append(round_trip(e,pool,token,other,size,int(header["timestamp"],16)+120,runtime,kind=2,
+                         owner=payers[token],algebra=(VIRTUAL,virt,a),
+                         time=(oracle["timestamp"]+oracle["block_step"] if oracle else None)))
+        except ValueError as exc:
+            details=exc.args[0] if exc.args else None
+            if not keep_refusals or not isinstance(details,tuple) or details[0]!=pool:
+                raise
+            if len(details)==4 and details[2] in ("quote_buy","quote_sell","buy","sell") and details[3]:
+                cases.append(dict(amount=str(size),stage=details[2],revert=details[3]))
+            elif len(details)==3 and details[-1]=="incomplete exact input":
+                cases.append(dict(amount=str(size),stage=details[1],reason=details[-1]))
+            else:
+                raise
     return dict(id=dex,oracle=oracle,chain_id=8453,selector=tag,state_root=header["stateRoot"],roles=verified,reads=reads,raw=c.calls,
                 tokens=[a,b],global_state=list(gs),liquidity=str(liquidity),tick_spacing=spacing,cases=cases,
                 v5="0x"+keccak(hexstr=runtime).hex(),virtual="0x"+keccak(hexstr=virt).hex())

@@ -11,6 +11,17 @@ from record_solidly_v3 import HOLDERS
 def record(group,ep):
     d=json.loads((DATA/"base_recovered_markets.json").read_bytes())
     selector=d["selector"]
+    if group=="treble-limit":
+        with gzip.open(DATA/"treble_limit_epochs.json.gz") as stream: catalogue=json.load(stream)
+        if catalogue["selector"]!=selector:raise ValueError("Treble limits refer to another block")
+        markets=[]
+        for row in catalogue["markets"]:
+            if row["indexer_id"]!="treble-v4":raise ValueError("unidentified limit market")
+            replayed=algebra("treble-v4",ep,(catalogue["factory"],row["pool"]),keep_refusals=True)
+            if replayed["roles"]["limit_order_manager"]["address"]!=catalogue["manager"]:
+                raise ValueError("the pool plugin uses a different order manager")
+            markets.append(replayed)
+        return dict(group=group,selector=selector,markets=markets)
     if group=="baseline":
         b=d["baseline"]
         directory=dict(selector=selector,state_root=d["state_root"],height=d["height"],manager=b["initialize"]["address"],
@@ -26,7 +37,7 @@ def record(group,ep):
     return dict(group=group,selector=selector,markets=markets)
 
 if __name__=="__main__":
-    args=argparse.ArgumentParser(description=__doc__);args.add_argument("group",choices=["thirdfy","baseline"]);args.add_argument("output",type=Path);a=args.parse_args()
+    args=argparse.ArgumentParser(description=__doc__);args.add_argument("group",choices=["thirdfy","baseline","treble-limit"]);args.add_argument("output",type=Path);a=args.parse_args()
     for ep in ENDPOINTS:
         try:
             r=record(a.group,ep);a.output.write_text(json.dumps(r,indent=2)+"\n",encoding="utf8");break

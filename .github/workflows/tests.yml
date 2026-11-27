@@ -1227,7 +1227,27 @@ jobs:
           MARKET: ${{ matrix.market }}
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/euler" EulerSwapWallet
-          python scripts/export_eulerswap_create.py "${MARKET##*-}" "$RUNNER_TEMP/euler/EulerSwapWallet.json" "$RUNNER_TEMP/market.json"
+          network="${MARKET##*-}"
+          fixture="tests/data/first_run_dex_2026-11-26/eulerswap_${network}_wallets.json.gz"
+          python scripts/record_eulerswap_wallets.py "$network" "$RUNNER_TEMP/euler/EulerSwapWallet.json" "$RUNNER_TEMP/payments.json"
+          gzip -nc "$RUNNER_TEMP/payments.json" > "$fixture"
+          python scripts/export_eulerswap_create.py "$network" "$RUNNER_TEMP/euler/EulerSwapWallet.json" "$RUNNER_TEMP/manifest.json"
+          python - "$RUNNER_TEMP" "ui/src/assets/eulerswap-$network.json" <<'PY'
+          import json,sys
+          from pathlib import Path
+          tmp=Path(sys.argv[1])
+          old=json.loads(Path(sys.argv[2]).read_bytes())
+          new=json.loads((tmp/'manifest.json').read_bytes())
+          def split(data):
+              b=bytes.fromhex(data[2:]); args=b[-64:]; code=b[:-64]; n=2+int.from_bytes(code[-2:], 'big')
+              assert 4 < n < 128 and b'ipfs' in code[-n:]
+              return code[:-n],code[-n:],args
+          c0,m0,a0=split(old['data'])
+          c1,m1,a1=split(new['data'])
+          assert c0==c1 and a0==a1 and m0!=m1 and old['runtimeKeccak']!=new['runtimeKeccak']
+          doc={'manifest':new,'payments':json.loads((tmp/'payments.json').read_bytes()),'identicalCreationPrefixBytes':len(c0),'identicalConstructorBytes':len(a0),'metadataBytes':len(m1)}
+          (tmp/'market.json').write_text(json.dumps(doc,separators=(',',':')))
+          PY
       - if: startsWith(matrix.market, 'eulerswap-wallet-')
         env:
           MARKET: ${{ matrix.market }}

@@ -103,6 +103,7 @@ pub struct Registry {
 impl Entry {
     /// Разные монеты ElfomoFi используют общий vault и меняют состояние одного pricing-контракта.
     pub fn shared_market(&self) -> Option<PoolRef> {
+        if let crate::core::types::PoolState::DefiPlaza(s)=&self.pool.state{return Some(PoolRef::Member{contract:s.pool,coin:s.physical[0]});}
         if self.family.variant==super::family_variant::Variant::YieldBasis && let PoolRef::Singleton{manager,..}=&self.pool.reference{return Some(PoolRef::Contract(*manager));}
         if let crate::core::types::PoolState::BancorLegacy(s)=&self.pool.state {return Some(PoolRef::Contract(s.converter));}
         if let crate::core::types::PoolState::BancorV3(s)=&self.pool.state {
@@ -130,6 +131,7 @@ impl Entry {
 
     /// A V1 token-to-token edge draws from two independently registered ETH exchanges.
     pub fn second_liquidity_site(&self) -> Option<PoolRef> {
+        if let crate::core::types::PoolState::DefiPlaza(s)=&self.pool.state{return Some(PoolRef::Member{contract:s.pool,coin:s.physical[1]});}
         if let crate::core::types::PoolState::YieldBasisLev(s)=&self.pool.state{return Some(PoolRef::Contract(s.amm));}
         if let crate::core::types::PoolState::YieldBasisPool(s)=&self.pool.state && super::yield_basis::key(s.id).is_some_and(|(_,role,_)|role==2){return Some(PoolRef::Contract(s.amm));}
         if let crate::core::types::PoolState::BancorLegacy(s)=&self.pool.state {return s.second.as_ref().map(|v|PoolRef::Contract(v.converter));}

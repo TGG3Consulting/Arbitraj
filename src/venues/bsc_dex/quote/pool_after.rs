@@ -36,6 +36,7 @@ pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
         (PoolState::VaultPool(d),PoolKind::VaultPool)=>super::super::math::ranges_sequence::supported(d),
         (PoolState::UmbraeDamm(_) | PoolState::ToonSwap(_), PoolKind::V2) => true,
+        (PoolState::DefiPlaza(_),PoolKind::V2)=>true,
         (PoolState::Mooniswap(s),PoolKind::V2)=>!s.successor,
         (PoolState::Brokerbot(_),PoolKind::V2)=>true,
         (PoolState::Empire(s),PoolKind::V2)=>s.exact_tokens,
@@ -113,6 +114,11 @@ pub fn apply(
         (PoolState::Memebox(s),PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,true,amount)
             .map(|(fill,next)|(fill,PoolState::Memebox(Box::new(next))))
             .ok_or_else(||no("Memebox: объём не обеспечен")),
+        (PoolState::DefiPlaza(s),PoolKind::V2)=>{
+            let fill=s.swap(token_in,true,amount).ok_or_else(||no("DefiPlaza: нет выплаты"))?;
+            let next=s.after(token_in,fill.amount_in,fill.amount_out).ok_or_else(||no("DefiPlaza: остаток"))?;
+            Ok((fill,PoolState::DefiPlaza(Box::new(next))))
+        }
         (PoolState::Mooniswap(s),PoolKind::V2) if !s.successor =>{
             let bad=||ctx.err(ErrorCode::NoRoute,"Mooniswap: состояние после обмена недоступно");
             let fill=s.swap(token_in,true,amount).ok_or_else(bad)?;

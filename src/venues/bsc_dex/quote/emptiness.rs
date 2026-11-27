@@ -42,6 +42,7 @@ pub fn has_ticks(e: &Entry) -> bool {
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
         PoolState::Surge(s) => s.liquidity.is_zero() || s.stock.is_zero() || s.invariant.is_zero(),
+        PoolState::DefiPlaza(s) => s.reserves.iter().all(U256::is_zero) || s.balances.iter().all(U256::is_zero),
         PoolState::Dagrow(s) => s.reserves.contains(&U256::ZERO) || s.fees.iter().all(Option::is_none),
         PoolState::UmbraeDamm(s) => s.reserves.contains(&U256::ZERO),
         PoolState::Bundles(s) => s.market.supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),

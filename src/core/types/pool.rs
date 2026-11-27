@@ -567,6 +567,7 @@ pub enum PoolState {
     BancorV3(Box<super::bancor_v3::BancorState>),
     UniswapV1(Box<super::uniswap_v1::UniswapV1State>),
     Temple(Box<TempleState>),
+    DefiPlaza(Box<super::defiplaza::DefiPlazaState>),
     Dagrow(Box<DagrowState>),
     Surge(Box<super::surge::SurgeState>),
     Antfarm(Box<AntfarmBook>),

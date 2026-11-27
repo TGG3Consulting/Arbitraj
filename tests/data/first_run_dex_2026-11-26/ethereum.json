@@ -7,6 +7,8 @@
   },
   "endpoint": "https://eth.drpc.org",
   "contracts": {
+    "0x3a2b8cc91af8bf45f3ec61e779ee1c2ba6b7e694": {"bytes": 18198, "keccak256": "0x0ae93461bd36cbd88745720e67c65f566cf1b239c169697e7e8a52b9040fed20"},
+    "0xe68c1d72340aeefe5be76eda63ae2f4bc7514110": {"bytes": 19064, "keccak256": "0x326fdd232797589c98f3c79b927d9b6375680e16f970c0536494cb2f45454787"},
     "0x71cd6666064c3a1354a3b4dca5fa1e2d3ee7d303": {"bytes": 18980, "keccak256": "0xe758f5a1019d8d7453e5d2600dbd0ea2408eeb2fc415fc3cc502d0e1b4754000"},
     "0xbaf9a5d4b0052359326a6cdab54babaa3a3a9643": {"bytes": 12801, "keccak256": "0x42fbc41dde2a7e8d817822abc14c60eeed5d29b1aeea9368532406d64f6aaa77"},
     "0xcb3e482df38d62e73a7ae0e15a2605cadcc5ae98": {"bytes": 902, "keccak256": "0x9150419eb9b3636e6a0239dc2d0ef66a9295148238749a006566fb830af1fde0"},

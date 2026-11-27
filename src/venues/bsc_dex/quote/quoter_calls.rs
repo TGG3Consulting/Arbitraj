@@ -55,6 +55,7 @@ pub fn request(
         return (quoter.request)(ctx, e, token_in, amount);
     }
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::request(ctx,e,token_in,amount);}
+    if let PoolState::DefiPlaza(s)=&e.pool.state{return super::super::pools::defiplaza::request(ctx,s,token_in,amount);}
     if let PoolState::Dagrow(s)=&e.pool.state {
         let output=if token_in==s.stable{s.dagr}else if token_in==s.dagr{s.stable}else{return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: неизвестная валюта"))};
         return Ok((s.pool,super::super::pools::dagrow::ISsp::getAmountsOutCall{n:amount,path:vec![token_in,output],payer:s.payer}.abi_encode().into()));
@@ -558,6 +559,7 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
     if matches!(e.pool.state,PoolState::BancorV3(_)){return super::super::pools::bancor_v3::decode(out);}
     if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{return super::super::pools::uniswap_v1_quotes::decode(e,out,token_in,amount);}
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
+    if let PoolState::DefiPlaza(s)=&e.pool.state{return (out.len()==32).then(||U256::from_be_slice(out)).filter(|q|s.swap(token_in,true,amount).is_some_and(|v|v.amount_out==*q));}
     if let PoolState::Dagrow(_)=&e.pool.state {
         let values=super::super::pools::dagrow::ISsp::getAmountsOutCall::abi_decode_returns(out).ok()?;
         let [paid,got]=values.as_slice() else{return None};

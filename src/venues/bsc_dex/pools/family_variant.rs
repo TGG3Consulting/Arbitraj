@@ -140,6 +140,8 @@ pub enum Variant {
     Temple,
     Brokerbot,
     Mooniswap,
+    DefiPlazaMulti,
+    DefiPlazaStable,
     Dagrow,
     IntegralSize,
     PropVenue,
@@ -226,6 +228,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
     pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
     pub fn launch(self)->bool {matches!(self,Self::Angstrom|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
@@ -379,6 +382,8 @@ pub fn of(kind: &str) -> Variant {
         "lambda_propamm" => Variant::PropVenue,
         "integral_size" | "integral_size_v5" => Variant::IntegralSize,
         "pendle_market" | "pendle_market_v5" => Variant::Pendle,
+        "defiplaza_multi" => Variant::DefiPlazaMulti,
+        "defiplaza_stable" => Variant::DefiPlazaStable,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,
         "mooniswap_v1" | "mooniswap_v2" => Variant::Mooniswap,
         "aktionariat" => Variant::Brokerbot,

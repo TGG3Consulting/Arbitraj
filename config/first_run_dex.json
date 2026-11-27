@@ -6718,5 +6718,33 @@
       "dex.factory_runtime_hash": "0x42fbc41dde2a7e8d817822abc14c60eeed5d29b1aeea9368532406d64f6aaa77",
       "dex.module_runtime_hashes": ["0x4c5ee9ac11b967a03bd8ae533e7f9370f2b1b4735c9bfb1c189548e51f315782"]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "defiplaza-multi-ethereum",
+    "source": "https://github.com/OmegaSyndicate/defiplaza-subgraph/blob/e443f996ea6fb785ec61b1c5762133f01b36f894/subgraph.yaml · tests/data/first_run_dex_2026-11-26/defiplaza_multi_protected_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "defiplaza_multi",
+      "dex.factory": "0xe68c1d72340aeefe5be76eda63ae2f4bc7514110",
+      "dex.factory_runtime_hash": "0x326fdd232797589c98f3c79b927d9b6375680e16f970c0536494cb2f45454787",
+      "dex.module_runtime_hashes": [
+        "0xd4104b0c2c57e6246384f5a218f1ea43d8d237fca51cadb2fe38da08b05893d3"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "defiplaza-stable-ethereum",
+    "source": "https://github.com/OmegaSyndicate/defiplaza-website/blob/cf3f4804a31bddd80ee35d0d9e9be901a38a7368/src/_stats/pools/stableplaza.njk · tests/data/first_run_dex_2026-11-26/defiplaza_stable_protected_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "defiplaza_stable",
+      "dex.factory": "0x3a2b8cc91af8bf45f3ec61e779ee1c2ba6b7e694",
+      "dex.factory_runtime_hash": "0x0ae93461bd36cbd88745720e67c65f566cf1b239c169697e7e8a52b9040fed20",
+      "dex.module_runtime_hashes": [
+        "0x1f1d8b681c902f0a57a5c9d1b6d6073403033fd8e1e6e9bdc4c81969358076bb"
+      ]
+    }
   }
 ]

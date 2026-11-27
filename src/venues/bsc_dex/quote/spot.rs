@@ -45,6 +45,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
         PoolState::Surge(s) => {
             if e.coin==s.token {mul_div(amount,s.stock,s.liquidity)} else {mul_div(amount,s.liquidity,s.stock)}
         }
+        PoolState::DefiPlaza(s)=>s.swap(e.coin,false,amount).map(|f|f.amount_in),
         PoolState::Dagrow(s) => {
             let stable=s.reserves[0].checked_div(s.stable_scale)?;
             let balances=if e.coin==s.stable{[stable,s.reserves[1]]}else{[s.reserves[1],stable]};

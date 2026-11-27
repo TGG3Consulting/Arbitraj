@@ -455,7 +455,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "empire_module" | "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
         "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
-        "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
+        "defiplaza_multi" | "defiplaza_stable" | "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         "empire_v2" | "empire_nominal" | "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "safeswap_v2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
@@ -771,7 +771,7 @@ pub fn classify(ctx: &Ctx, id: &str) -> Result<&'static Family, String> {
         ));
     }
     if (f.direct_module() && f.fork)
-        || (f.variant == Variant::FraxTwamm && f.executor_kind.is_some())
+        || (f.variant == Variant::FraxTwamm && f.executor_kind.is_some()) || f.variant.defiplaza()
     {
         super::direct_module::configured(ctx, id).map_err(|e| no(e.message))?;
     }
@@ -875,6 +875,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::V2 if f.variant==Variant::PropVenue=>{list.extend(["dex.factory","dex.quoter","dex.propamm_roles","dex.propamm_pairs","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::IntegralSize=>{list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.integral_delay","dex.pmm_ladder_usd"]);}
         Proto::V2 if f.variant==Variant::Pendle=>{list.extend(["dex.pendle_roles","dex.pendle_markets","dex.quoter"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
+        Proto::V2 if f.variant.defiplaza()=>list.extend(["dex.factory","dex.factory_runtime_hash","dex.router","dex.module_runtime_hashes"]),
         Proto::V2 if f.variant==Variant::Dagrow=>{
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}

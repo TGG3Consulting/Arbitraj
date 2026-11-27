@@ -19,6 +19,12 @@ pub(super) fn by_volume(
         let multiplier=if token_in==s.wrapped{s.buy_mul}else{s.sell_mul};
         return Some(Ok(Decimal::from(100u8-multiplier)));
     }
+    if let PoolState::DefiPlaza(s)=&e.pool.state {
+        use crate::core::types::defiplaza::DefiPlazaCurve;
+        let pct=match s.curve{DefiPlazaCurve::Stable{fee_bps,..}=>Decimal::new(i64::from(fee_bps),2),
+            DefiPlazaCurve::Multi{one_minus_fee}=>Decimal::from((1u128<<64)-u128::from(one_minus_fee))/Decimal::from(1u128<<64)*Decimal::from(100)};
+        return Some(Ok(pct));
+    }
     if let PoolState::Dagrow(s)=&e.pool.state {
         let side=usize::from(token_in==s.dagr);
         return Some(s.fees[side].map(|n|Decimal::new(i64::from(n),2)).ok_or_else(||ctx.err(ErrorCode::NoRoute,"DAGrow: направление остановлено")));
@@ -64,6 +70,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
         PoolState::UniswapV1(s)=>Some(Ok(if s.dual(){Decimal::new(5991,4)}else{Decimal::new(3,1)})),
         PoolState::Antfarm(_)
         | PoolState::Surge(_)
+        | PoolState::DefiPlaza(_)
         | PoolState::Dagrow(_)
         | PoolState::Temple(_)
         | PoolState::Rubicon(_)

@@ -284,6 +284,13 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
         return Ok((Params::Basin,module));
     }
+    if let PoolState::DefiPlaza(s)=&e.pool.state {
+        let module=ctx.dex_addr("dex.router",e.family.id)?;
+        if k!=ExecKind::Basin || module!=s.module || pool!=s.pool || !s.tokens.contains(&token_in){
+            return Err(ctx.err(ErrorCode::NoRoute,"DefiPlaza: сменились касса, токен или адрес модуля"));
+        }
+        return Ok((Params::Basin,module));
+    }
     if let PoolState::Dagrow(s)=&e.pool.state {
         let module=ctx.dex_addr("dex.router",e.family.id)?;
         if k!=ExecKind::Basin || pool!=s.pool || module!=s.payer || (token_in!=s.stable && token_in!=s.dagr){

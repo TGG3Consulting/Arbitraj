@@ -427,6 +427,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant.defiplaza() {
+        return Box::pin(async move {
+            let at=super::nami::block(ctx,&block_tag(block)).await?;
+            let s=Box::pin(super::defiplaza::state(ctx,f,reference.address(),pair,&at)).await?;
+            Ok(Loaded{state:PoolState::DefiPlaza(Box::new(s)),ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::Dagrow {
         return Box::pin(async move {
             let tag = block_tag(block);

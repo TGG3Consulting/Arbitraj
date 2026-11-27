@@ -72,6 +72,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
         if c.family.variant==super::family_variant::Variant::PropVenue {out.push(Box::pin(super::prop_venue::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::IntegralSize {out.push(Box::pin(super::integral_size::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Pendle {out.push(Box::pin(super::pendle::verify(ctx,c)).await);continue;}
+        if c.family.variant.defiplaza(){out.push(Box::pin(super::defiplaza::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Dagrow {out.push(Box::pin(super::dagrow::verify(ctx,c)).await);continue;}
         if c.family.variant.mooniswap() {out.push(Box::pin(super::mooniswap::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Brokerbot {out.push(Box::pin(super::brokerbot_directory::verify(ctx,c)).await);continue;}

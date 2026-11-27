@@ -140,6 +140,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             }
             continue;
         }
+        if f.variant.defiplaza(){
+            let at=match &role_block{Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::defiplaza::state(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            continue;
+        }
         if f.variant==Variant::Dagrow {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             let state=Box::pin(super::super::pools::dagrow::state(ctx,f,e.pool.reference.address(),Some((e.pool.token0,e.pool.token1)),at)).await?;

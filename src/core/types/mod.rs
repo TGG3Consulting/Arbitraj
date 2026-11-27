@@ -8,6 +8,7 @@
 
 pub mod rubicon;
 pub mod bancor_v3;
+pub mod defiplaza;
 pub mod bancor_legacy;
 pub mod balancer_v1;
 pub mod yield_basis;

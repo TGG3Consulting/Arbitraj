@@ -38,6 +38,18 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if let crate::core::types::PoolState::DefiPlaza(s)=&e.pool.state{
+        use super::super::pools::defiplaza::IPlaza;
+        if log.address!=s.pool{return false;}
+        let pair=match s.curve{
+            crate::core::types::defiplaza::DefiPlazaCurve::Multi{..}=>IPlaza::Swapped::decode_raw_log(log.topics.iter().copied(),&log.data).ok()
+                .filter(|v|v.sender==s.module && !v.inputAmount.is_zero() && !v.outputAmount.is_zero()).map(|v|[v.inputToken,v.outputToken]),
+            crate::core::types::defiplaza::DefiPlazaCurve::Stable{..}=>IPlaza::Swap::decode_raw_log(log.topics.iter().copied(),&log.data).ok()
+                .filter(|v|v.sender==s.module && v.destination==s.module && !v.inputAmount.is_zero() && !v.outputAmount.is_zero()).map(|v|[v.inputToken,v.outputToken]),
+        };
+        return pair.is_some_and(|p|p==s.physical || p==[s.physical[1],s.physical[0]]);
+    }
+
     if let crate::core::types::PoolState::Mooniswap(s)=&e.pool.state {
         use super::super::exec::mooniswap_wallet::abi::{IOriginal,ISuccessor};
         if log.address!=e.pool.reference.address(){return false;}

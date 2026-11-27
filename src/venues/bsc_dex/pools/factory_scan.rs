@@ -159,10 +159,13 @@ async fn pass(
     for (coin,rows) in pendle.found{found.entry(coin).or_default().extend(rows);}
     let surge=super::surge::scan(ctx,coins,&quote_list);
     for (coin,rows) in surge.found{found.entry(coin).or_default().extend(rows);}
+    let plaza=Box::pin(super::defiplaza::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in plaza.found{found.entry(coin).or_default().extend(rows);}
+    notes.extend(plaza.notes);no_answer+=plaza.no_answer;
     let dag=Box::pin(super::dagrow::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in dag.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(dag.notes);no_answer+=dag.no_answer;
-    let n_calls = bv1.calls + bancor.calls + integral.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
+    let n_calls = bv1.calls + bancor.calls + integral.calls + plaza.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

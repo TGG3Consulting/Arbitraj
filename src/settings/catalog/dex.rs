@@ -71,6 +71,8 @@ pub const DEX_KINDS: &[&str] = &[
     "bunnyswap_module",
     "surge_native", "surge_v5", "dagrow",
     "dagrow_v5",
+    "defiplaza_multi",
+    "defiplaza_stable",
     "lambda_propamm",
     "integral_size",
     "integral_size_v5",

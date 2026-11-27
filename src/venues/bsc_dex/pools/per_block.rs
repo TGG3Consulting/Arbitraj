@@ -105,6 +105,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::IntegralSize
             | Variant::Pendle
             | Variant::SafeSwapTrade | Variant::DegenSwap
+            | Variant::DefiPlazaMulti | Variant::DefiPlazaStable
             | Variant::Dagrow
             | Variant::Mooniswap
             | Variant::Brokerbot

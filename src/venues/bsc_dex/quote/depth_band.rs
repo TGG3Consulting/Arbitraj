@@ -289,6 +289,13 @@ fn side(
             let sweep=s.swap(token_in,true,wanted).or_else(||s.swap(token_in,false,cap));
             Ok((sweep.filter(|x|x.amount_in<=wanted).map_or(U256::ZERO,|x|pick(x.amount_in,x.amount_out)),false))
         }
+        (PoolState::DefiPlaza(s),PoolKind::V2)=>{
+            let i=s.tokens.iter().position(|a|*a==token_in).ok_or("DefiPlaza: неизвестная валюта")?;
+            let (x,y)=(s.effective(i).ok_or("DefiPlaza: вход")?,s.effective(1-i).ok_or("DefiPlaza: выход")?);
+            let (budget,_)=xy_band(x,y,b,true)?;
+            let v=s.swap(token_in,true,budget).map_or(U256::ZERO,|f|pick(f.amount_in,f.amount_out));
+            Ok((v,false))
+        }
         (PoolState::Dagrow(s), PoolKind::V2) => {
             let side=usize::from(token_in==s.dagr);
             if s.fees[side].is_none() || s.stable_scale.is_zero() {return Ok((U256::ZERO,true));}

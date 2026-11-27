@@ -104,6 +104,12 @@ async fn eval(
             let head=super::super::quote::white_state::head(ctx,&tag).await?;
             Box::pin(super::super::pools::sectorone::check(ctx,&e,&head.selector(),direct_mode)).await?;
         }
+        if e.family.variant.defiplaza(){
+            let tag=super::quoter_refetch::block(q).map(|b|format!("{b:#x}")).unwrap_or_else(||"latest".into());
+            let at=super::super::pools::nami::block(ctx,&tag).await?;
+            let fresh=Box::pin(super::super::pools::defiplaza::state(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&at)).await?;
+            e.pool.state=crate::core::types::PoolState::DefiPlaza(Box::new(fresh));
+        }
         if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
             let at=super::quoter_refetch::block(q).map(|b|format!("{b:#x}")).unwrap_or_else(||"latest".into());
             let head=super::super::quote::white_state::head(ctx,&at).await?;

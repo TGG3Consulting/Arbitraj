@@ -322,6 +322,29 @@ mod tests {
     }
 
     #[test]
+    fn physical_output_caps_the_protected_payment_after_rounding() {
+        let state = AmmalgamState {
+            reserves: [U256::from(100), U256::from(1_000_000)],
+            reference: [U256::from(100), U256::from(1_000_000)],
+            cash: [U256::from(100), U256::from(1000)],
+            missing: [U256::ZERO; 2],
+        };
+        assert_eq!(
+            state.band(0, false, U256::from(3), U256::from(100)),
+            Some((U256::from(1000), false))
+        );
+        assert!(state.swap(true, true, U256::ONE).is_none());
+        assert_eq!(
+            state.swap(true, true, U256::from(2)).unwrap().amount_out,
+            U256::from(1000)
+        );
+        assert_eq!(
+            state.swap(true, false, U256::from(1000)).unwrap().amount_in,
+            U256::from(2)
+        );
+    }
+
+    #[test]
     fn rounded_fee_can_lower_the_payout_when_input_increases_by_one() {
         // Both calls recorded from computeExpectedSwapAmountOut on Ethereum. The reserve
         // arrangement fits the deployed ABI and deliberately lands on a Q64 fee step.

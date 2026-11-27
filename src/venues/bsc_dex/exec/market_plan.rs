@@ -16,6 +16,7 @@ use alloy_primitives::{Address, B256, Bytes};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) enum Market {
+    Ammalgam,
     Ranges,
     RegisteredV3,
     SolidlyRouter,
@@ -110,6 +111,7 @@ impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
             _ if e.family.variant.classic_wallet() || matches!(e.family.variant,Variant::EmpireNominal|Variant::V2ExactRouter) => Some(Self::SolidlyRouter),
+            _ if e.family.variant.ammalgam()=>Some(Self::Ammalgam),
             _ if e.family.variant==Variant::PuzzleRanges=>Some(Self::Ranges),
             _ if matches!(e.family.variant, Variant::RegisteredUniV3 | Variant::RegisteredSlipstream | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2 | Variant::CypherIntegral | Variant::TheoremIntegral | Variant::SlipstreamUniversal | Variant::MaverickTwoRouter) => Some(Self::RegisteredV3),
             _ if super::o1_wallet::enabled(e) => Some(Self::O1),
@@ -159,6 +161,7 @@ impl Market {
     pub(super) fn missing_selection(self) -> &'static str {
         match self {
             Self::SolidlyRouter => "Solidly Router01: требуется исходный адрес исполнения",
+            Self::Ammalgam=>"Ammalgam: требуется выбранный модуль кошелька",
             Self::Ranges=>"Ranges: требуется исходный адрес исполнения",
             Self::RegisteredV3 => "V3 Router: требуется исходный адрес исполнения",
             Self::O1 => "o1: выберите проверенный модуль для расчёта WETH",
@@ -193,6 +196,7 @@ impl Market {
     pub(super) fn name(self) -> &'static str {
         match self {
             Self::SolidlyRouter => "Solidly Router01",
+            Self::Ammalgam=>"Ammalgam",
             Self::Ranges=>"Ranges",
             Self::RegisteredV3 => "V3 Router",
             Self::O1 => "o1 Standard WETH",
@@ -233,6 +237,7 @@ impl Market {
     ) -> GatewayResult<Plan> {
         match self {
             Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::Ammalgam=>Box::pin(super::solidly_direct::ammalgam(ctx,s,wallet,height,selected.target)).await,
             Self::Ranges=>Box::pin(super::ranges_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::O1 if s.entry.family.variant.flux_native() && selected.flux_eth=> Box::pin(super::flux_eth_plan::plan(ctx,s,wallet,height,selected.target)).await,

@@ -106,6 +106,31 @@ pub(crate) fn request(
         call.abi_encode().into(),
     ))
 }
-pub(crate) fn payout(_: &super::registry::Entry, _: Address, _: U256, raw: &[u8]) -> Option<U256> {
-    IAmmalgam::computeExpectedSwapAmountOutCall::abi_decode_returns_validate(raw).ok()
+pub(crate) fn payout(
+    e: &super::registry::Entry,
+    input: Address,
+    _: U256,
+    raw: &[u8],
+) -> Option<U256> {
+    let crate::core::types::PoolState::Ammalgam(state) = &e.pool.state else {
+        return None;
+    };
+    let i = if input == e.pool.token0 {
+        1
+    } else if input == e.pool.token1 {
+        0
+    } else {
+        return None;
+    };
+    let quoted =
+        IAmmalgam::computeExpectedSwapAmountOutCall::abi_decode_returns_validate(raw).ok()?;
+    // The original helper returns the invariant projection; the protected wallet
+    // pays only transferable inventory while leaving one atom above uncovered debt.
+    Some(
+        quoted.min(state.cash[i]).min(
+            state.reserves[i]
+                .checked_sub(state.missing[i])?
+                .saturating_sub(U256::ONE),
+        ),
+    )
 }

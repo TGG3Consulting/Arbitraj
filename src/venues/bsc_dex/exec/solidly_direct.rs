@@ -12,6 +12,33 @@ use std::future::Future;
 
 tokio::task_local! { pub(super) static SENDING: (); }
 
+/// Build only the wallet form actually selected by the funded quotation.
+pub(super) async fn ammalgam(
+    ctx:&Ctx, step:&Step, wallet:Address, height:u64, selected:Option<Address>
+)->GatewayResult<Plan>{
+    let generation=ctx.settings.generation();
+    let bad=||ctx.err(ErrorCode::NoRoute,"Ammalgam: исходный модуль или параметры кошелька изменились");
+    let e=&step.entry;
+    let order=&step.order;
+    let module=super::super::pools::ammalgam::graph_target(ctx,e)
+        .filter(|target|selected==Some(*target) && e.family.tradable && step.from_wallet && step.to_wallet)
+        .ok_or_else(bad)?;
+    let pool=direct_module::market(ctx,e)?;
+    let head=super::super::quote::white_state::head(ctx,&format!("{height:#x}")).await?;
+    let at=head.selector();
+    let ((),approvals)=tokio::try_join!(
+        super::super::pools::ammalgam::check_step(ctx,e,order.token_in,&at),
+        approve::fork_missing(ctx,order.token_in,wallet,module,order.amount_in)
+    )?;
+    if ctx.settings.generation()!=generation {return Err(bad());}
+    let deadline=U256::from(head.timestamp.to::<u64>().checked_add(ctx.int("dex.deadline_s")?).ok_or_else(bad)?);
+    let proof=super::empire_wallet::Proof{chain:super::super::node::chain_id::chain_id(ctx)?,module,pool,payer:wallet,
+        input:order.token_in,output:order.token_out,amount:order.amount_in,minimum:order.min_out,deadline};
+    let mut plan=Plan::new(ctx,(approvals,module,wallet),order.token_out,Vec::new(),order.min_out,deadline)?;
+    plan.set_direct_market(super::plan::DirectCall::Ammalgam(std::sync::Arc::new(proof)));
+    Ok(plan)
+}
+
 pub(super) async fn plan(
     ctx: &Ctx,
     steps: &[Step],
@@ -33,10 +60,7 @@ pub(super) async fn plan(
     }
     let pool = direct_module::market(ctx, &step.entry)?;
     let router = ctx.dex_addr("dex.router", step.entry.family.id)?;
-    if step.entry.family.variant.ammalgam(){
-        let at=super::super::pools::nami::block(ctx,"latest").await?;
-        Box::pin(super::super::pools::ammalgam::check_step(ctx,&step.entry,step.order.token_in,&at)).await?;
-    } else if step.entry.family.variant.empire_module() {
+    if step.entry.family.variant.empire_module() {
         let at = super::super::pools::nami::block(ctx, "latest").await?;
         tokio::try_join!(
             super::super::pools::empire::fresh(ctx, &step.entry, &at),
@@ -61,8 +85,9 @@ pub(super) async fn plan(
         order.min_out,
         deadline,
     )?;
-    if step.entry.family.variant.empire_module() || step.entry.family.variant.ammalgam() {
-        let cash=std::sync::Arc::new(super::empire_wallet::Proof {
+    if step.entry.family.variant.empire_module() {
+        plan.set_direct_market(super::plan::DirectCall::Empire(std::sync::Arc::new(
+            super::empire_wallet::Proof {
             chain: crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,
                 module: router,
                 pool,
@@ -72,8 +97,8 @@ pub(super) async fn plan(
                 amount: order.amount_in,
                 minimum: order.min_out,
                 deadline,
-            });
-        plan.set_direct_market(if step.entry.family.variant.ammalgam(){super::plan::DirectCall::Ammalgam(cash)}else{super::plan::DirectCall::Empire(cash)});
+            },
+        )));
         return Ok(plan);
     }
     if step.entry.family.variant.shiba_v2() {

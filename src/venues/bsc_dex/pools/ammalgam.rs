@@ -35,6 +35,11 @@ pub(super) fn bad(ctx: &Ctx) -> GatewayError {
 fn slot_address(raw: &[u8]) -> Option<Address> {
     (raw.len() == 32 && raw[..12].iter().all(|x| *x == 0)).then(|| Address::from_slice(&raw[12..]))
 }
+// Identical on every pair at a given Ethereum block. Failed reads never initialize
+// the cell. Each pair still verifies the exact block and both proxy slots independently.
+type RoleKey = (B256, u64, [(Address, B256); 4]);
+static DEPLOYMENT: std::sync::LazyLock<super::deployment_at_head::Cache<(), RoleKey>> =
+    std::sync::LazyLock::new(Default::default);
 pub(crate) async fn market(
     ctx: &Ctx,
     f: &Family,
@@ -84,53 +89,80 @@ pub(crate) async fn market(
         a: pair.1,
         b: pair.0,
     };
-    let req = [
-        batch::view(at, factory, lookup.clone()),
-        batch::view(at, factory, reverse.clone()),
-        batch::view(at, pool, IAmmalgam::underlyingTokensCall {}),
-        batch::view(at, factory, IAmmalgam::pairBeaconCall {}),
-        batch::view(at, beacon, IAmmalgam::implementationCall {}),
-        ("eth_getStorageAt", json!([pool, BEACON_SLOT, at])),
+    let deployment = [
         (
-            "eth_getStorageAt",
-            json!([pool, super::abi_woo::implementation_slot(), at]),
+            factory,
+            super::v2_pair_binding::expected(ctx, id, "dex.factory_runtime_hash")?,
         ),
-        ("eth_getCode", json!([beacon, at])),
-        ("eth_getCode", json!([implementation, at])),
-        ("eth_getCode", json!([helper, at])),
+        (
+            helper,
+            super::v2_pair_binding::expected(ctx, id, "dex.quoter_runtime_hash")?,
+        ),
+        (beacon, beacon_hash),
+        (implementation, impl_hash),
     ];
-    let (
-        (),
-        [
-            ab,
-            ba,
-            coins,
+    let block: B256 = at["blockHash"]
+        .as_str()
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| bad(ctx))?;
+    let cell = DEPLOYMENT.at((block, gen_at_start, deployment));
+    let common = cell.get_or_try_init(|| async {
+        let [
+            factory_code,
+            helper_code,
+            beacon_code,
+            impl_code,
             owner,
             current,
-            beacon_slot,
-            impl_slot,
-            bcode,
-            icode,
-            hcode,
+        ] = batch::read(
+            ctx,
+            [
+                ("eth_getCode", json!([factory, at])),
+                ("eth_getCode", json!([helper, at])),
+                ("eth_getCode", json!([beacon, at])),
+                ("eth_getCode", json!([implementation, at])),
+                batch::view(at, factory, IAmmalgam::pairBeaconCall {}),
+                batch::view(at, beacon, IAmmalgam::implementationCall {}),
+            ],
+        )
+        .await?;
+        let code = [factory_code, helper_code, beacon_code, impl_code];
+        if !code
+            .iter()
+            .zip(deployment)
+            .all(|(raw, (_, hash))| !raw.is_empty() && keccak256(raw) == hash)
+            || batch::decode(&owner, IAmmalgam::pairBeaconCall {})? != beacon
+            || batch::decode(&current, IAmmalgam::implementationCall {})? != implementation
+        {
+            return Err(bad(ctx));
+        }
+        Ok(())
+    });
+    let per_pool = batch::read(
+        ctx,
+        [
+            batch::view(at, factory, lookup.clone()),
+            batch::view(at, factory, reverse.clone()),
+            batch::view(at, pool, IAmmalgam::underlyingTokensCall {}),
+            ("eth_getStorageAt", json!([pool, BEACON_SLOT, at])),
+            (
+                "eth_getStorageAt",
+                json!([pool, super::abi_woo::implementation_slot(), at]),
+            ),
+            ("eth_getCode", json!([pool, at])),
         ],
-    ) = tokio::try_join!(
-        super::v2_pair_binding::code(ctx, id, pool, at),
-        batch::read(ctx, req)
-    )?;
+    );
+    let (_, [ab, ba, coins, beacon_slot, impl_slot, pool_code]) =
+        tokio::try_join!(common, per_pool)?;
     let coins = batch::decode(&coins, IAmmalgam::underlyingTokensCall {})?;
     if batch::decode(&ab, lookup)? != pool
         || batch::decode(&ba, reverse)? != pool
         || super::discover::sorted(coins.x, coins.y) != super::discover::sorted(pair.0, pair.1)
-        || batch::decode(&owner, IAmmalgam::pairBeaconCall {})? != beacon
         || slot_address(&beacon_slot) != Some(beacon)
-        || batch::decode(&current, IAmmalgam::implementationCall {})? != implementation
         || slot_address(&impl_slot) != Some(implementation)
-        || bcode.is_empty()
-        || icode.is_empty()
-        || hcode.is_empty()
-        || keccak256(bcode) != beacon_hash
-        || keccak256(icode) != impl_hash
-        || keccak256(hcode) != super::v2_pair_binding::expected(ctx, id, "dex.quoter_runtime_hash")?
+        || pool_code.is_empty()
+        || keccak256(pool_code)
+            != super::v2_pair_binding::expected(ctx, id, "dex.pair_runtime_hash")?
         || gen_at_start != ctx.settings.generation()
     {
         return Err(bad(ctx));
@@ -154,6 +186,6 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
 }
 pub(super) use super::ammalgam_state::state;
-pub(crate) use super::ammalgam_state::{payout, request,state_at};
+pub(crate) use super::ammalgam_state::{payout, request, state_at};
 
 pub(crate) use super::ammalgam_step::{check_step, graph_target};

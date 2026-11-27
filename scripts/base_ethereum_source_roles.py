@@ -304,12 +304,10 @@ def describe(network,source_id,adapter,configured,candidates):
         ("base","5458","dexs/pinto/index.ts"):("pinto-exchange-base","pinto_base"),
         ("ethereum","4703","dexs/basin/index.ts"):("basin-wells-ethereum","basin_ethereum"),
     }.get((network,source_id,path))
-    if network == "ethereum" and source_id == "1700" and "wombat-exchange" not in configured:
-        return "оборот < 5 000 USD, отложено"
     if basin:
         profile,stem=basin
         if profile not in configured:
-            return "оборот < 5 000 USD, отложено"
+            return None
         folder=Path("tests/data/first_run_dex_2026-11-26")
         registry=json.loads(gzip.decompress((folder/f"{stem}_wells.json.gz").read_bytes()))
         payments=json.loads(gzip.decompress((folder/f"{stem}_payments.json.gz").read_bytes()))

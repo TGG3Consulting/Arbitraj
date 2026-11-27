@@ -1978,6 +1978,15 @@ def tables(network, snapshots, profiles):
             directory = read(Path("tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json"))
             candidates = [directory["factory"]]
             task = "[Подтверждено командой CommunityV3](https://forum.cow.fi/t/communityv3-liquidity-source-integration-proposal/3647)"
+        if base and str(row["id"]) == "6625":
+            snapshot = json.loads(gzip.decompress((data_dir / "sportfun_base_players.json.gz").read_bytes()))
+            candidates = [p["address"] for p in snapshot["pairs"]]
+            players = sum(p["funded"] for p in snapshot["pairs"])
+            task = (f"Sport.fun Pro · {players} ID игроков ERC-1155 с резервом USDC на двух площадках. "
+                    "В последних 1000 блоках записаны четыре события покупки, продажи и обмена. "
+                    "Две записи одного обмена относятся к одной транзакции. Игрок получает доли по ID через назначенный пул "
+                    "с подписью котировки. Условия ограничивают передачу долей и автоматизированный доступ. "
+                    f"[Правила Sport.fun, §§ 2 и 11]({snapshot['rules']})")
         if not base and str(row["id"]) == "382":
             directory = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz").read_bytes()))
             candidates = [r["address"] for name, r in directory["roles"].items() if name.startswith("marketFactory")]

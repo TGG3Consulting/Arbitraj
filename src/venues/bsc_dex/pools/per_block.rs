@@ -107,6 +107,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::SafeSwapTrade | Variant::DegenSwap
             | Variant::Dagrow
             | Variant::Temple
+            | Variant::YieldBasis
             | Variant::BalancerV1
             | Variant::BancorV3
             | Variant::UniswapV1

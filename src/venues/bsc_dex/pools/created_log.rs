@@ -69,6 +69,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Carbon => ("dex.factory",super::carbon::ICarbon::PairCreated::SIGNATURE_HASH,false),
+            Proto::V2 if f.variant==super::family_variant::Variant::YieldBasis => ("dex.factory",super::yield_basis::IYieldBasis::MarketParameters::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BalancerV1 => ("dex.factory",super::balancer_v1::IBPool::LOG_NEW_POOL::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BancorV3 => ("dex.factory",super::bancor_v3::IBancor::PoolAdded::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::UniswapV1 => ("dex.factory",super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH,false),
@@ -305,6 +306,12 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
 /// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
 async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
     // Решение 453: событие фабрики crypto-пулов Curve — до двух пар пула (Tricrypto) или поиск по фабрике (v1).
+    if f.variant == super::family_variant::Variant::YieldBasis {
+        for candidate in Box::pin(super::yield_basis_directory::created(&p.ctx,f,log,w.usdt)).await.map_err(|e|e.message)? {
+            if w.coins.contains_key(&candidate.coin){take(p,w,f,candidate).await?;}
+        }
+        return Ok(());
+    }
     if f.variant == super::family_variant::Variant::BalancerV1 {
         let made=super::balancer_v1::IBPool::LOG_NEW_POOL::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
         return Box::pin(balancer_created(p,w,f,made.pool)).await;

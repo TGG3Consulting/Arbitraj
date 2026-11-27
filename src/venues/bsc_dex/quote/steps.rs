@@ -99,7 +99,11 @@ pub fn path_costs(
             names.gas,
             false,
         );
-        if let PoolState::BancorV3(s)=&h.entry.pool.state{
+        if let PoolState::YieldBasisLev(s)=&h.entry.pool.state{
+            let fee=s.output_fee(h.token_in,h.swapped.amount_in).and_then(|raw|num::to_decimal(raw,h.dec_out))
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"YieldBasis: комиссия LEVAMM в валюте выплаты недоступна"))?;
+            add(&mut out,CostKind::PoolFee,fee,&to,true);
+        } else if let PoolState::BancorV3(s)=&h.entry.pool.state{
             let (paid,got)=(h.swapped.amount_in,h.swapped.amount_out);
             let by_input=|by|s.swap(h.token_in,by,if by{paid}else{got},false).filter(|f|f.spent==paid && f.received==got);
             let fee=by_input(side==Side::Sell).or_else(||by_input(side==Side::Buy)).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Bancor V3: размеры не соответствуют способу расчёта"))?;

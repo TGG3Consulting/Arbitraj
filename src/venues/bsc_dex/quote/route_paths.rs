@@ -131,7 +131,7 @@ fn dfs<'g>(
             return;
         }
         let multi = [edge.entry.shared_market(), edge.entry.second_liquidity_site()];
-        if multi.iter().flatten().any(|s| sites.contains(s)) {
+        if multi.iter().flatten().any(|s| sites.contains(s)) || route_hops::physical_overlap(edge, steps, sites) {
             continue;
         }
         let next = edge.other(node);

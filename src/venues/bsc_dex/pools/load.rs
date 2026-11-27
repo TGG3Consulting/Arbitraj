@@ -265,6 +265,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant == Variant::YieldBasis {
+        return Box::pin(async move {
+            let at=super::nami::block(ctx,&block_tag(block)).await?;
+            let state=Box::pin(super::yield_basis_quotes::load(ctx,tokens,reg,f,reference,pair,usdt,&at)).await?;
+            Ok(Loaded{state,ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::BalancerV1 {
         return Box::pin(async move {
             let tag = block_tag(block);

@@ -511,6 +511,7 @@ pub enum PoolState {
     UmbraeDamm(Box<UmbraeDammState>),
     Carbon(Box<CarbonState>),
     Rubicon(Box<super::rubicon::Book>),
+    YieldBasisLev(Box<super::yield_basis::LevState>),
     BalancerV1(Box<super::balancer_v1::State>),
     BancorV3(Box<super::bancor_v3::BancorState>),
     UniswapV1(Box<super::uniswap_v1::UniswapV1State>),

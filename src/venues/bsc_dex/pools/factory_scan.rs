@@ -124,6 +124,9 @@ async fn pass(
     }
     notes.extend(metric.notes);
     no_answer += metric.no_answer;
+    let yb=Box::pin(super::yield_basis_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in yb.found {found.entry(coin).or_default().extend(rows);}
+    notes.extend(yb.notes);no_answer+=yb.no_answer;
     let bv1=Box::pin(super::balancer_v1_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in bv1.found {found.entry(coin).or_default().extend(rows);}
     notes.extend(bv1.notes);no_answer+=bv1.no_answer;

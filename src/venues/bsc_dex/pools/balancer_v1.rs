@@ -58,7 +58,7 @@ pub(crate) async fn factory(ctx: &Ctx, f: &Family, at: &Value) -> GatewayResult<
 pub(super) fn data<C: SolCall>(to: Address, c: C) -> (Address, Bytes) {
     (to, c.abi_encode().into())
 }
-async fn individual(
+pub(super) async fn individual(
     ctx: &Ctx,
     calls: &[(Address, Bytes)],
     at: &Value,

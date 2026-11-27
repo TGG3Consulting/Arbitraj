@@ -16,6 +16,22 @@ use super::route_paths::{RoutePath, Step};
 /// Шаг перебора без копии ребра: ребро графа, токен входа, токен выхода.
 pub type Hop<'g> = (&'g Edge, Address, Address);
 
+/// Multi-role markets share state with standalone Curve pools even when that earlier
+/// ordinary contract did not itself declare a second liquidity site.
+pub(super) fn physical_overlap(
+    edge: &Edge,
+    steps: &[Hop<'_>],
+    sites: &super::super::fast_hash::FastSet<crate::core::types::PoolRef>,
+) -> bool {
+    if !sites.is_empty() && sites.contains(&edge.entry.pool.reference) {
+        return true;
+    }
+    edge.entry.family.variant == super::super::pools::family_variant::Variant::YieldBasis
+        && steps
+            .iter()
+            .any(|(prior, _, _)| edge.entry.shares_liquidity(&prior.entry))
+}
+
 /// Что делает: путь из стека шагов перебора и замыкающего шага — копия каждого ребра в шаг пути, порядок стека.
 /// Принимает: пройденные шаги, последний шаг. Возвращает: путь (те же шаги, что раньше давала копия стека Step).
 /// Ошибок нет.

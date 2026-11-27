@@ -191,6 +191,12 @@ fn side(
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
             Ok((super::super::math::temple::band(s,token_in,out,U256::from((grow*SCALE) as u128),U256::from(SCALE as u128),buy),true))
         }
+        (PoolState::YieldBasisLev(s),PoolKind::V2)=>{
+            let (x,y)=s.reserves(token_in).ok_or("YieldBasis: виртуальные резервы недоступны")?;
+            let (budget,_)=xy_band(x,y,b,true)?;
+            let qty=if buy{budget}else{super::super::math::full_math::mul_div(x,U256::from(((1.0/(1.0-b).sqrt()-1.0)*SCALE) as u128),U256::from(SCALE as u128)).ok_or("YieldBasis: переполнение полосы")?};
+            Ok((s.swap(token_in,qty).map_or(U256::ZERO,|f|pick(f.spent,f.received)),false))
+        }
         (PoolState::BalancerV1(s),PoolKind::V2)=>{
             let output=if zfo{e.pool.token1}else{e.pool.token0};
             let width=U256::from((b*SCALE) as u64);
@@ -481,7 +487,7 @@ fn side(
         // Лесенка цен пула (quote/pmm_ladder.rs): покупка — вход котируемой, средняя цена (выход за вход) не ниже цены
         // первой точки /(1 + b); продажа — вход базовой, не ниже ×(1 − b). Ответы квотера — с комиссией пула (глубина
         // чуть занижена против «чистого объёма»). Лесенка кончилась раньше полосы — full = false.
-        (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
+        (PoolState::OraclePmm(d), k) if k==PoolKind::OraclePmm || e.family.variant==super::super::pools::family_variant::Variant::YieldBasis => {
             let (points, factor) = if buy {
                 (&d.ladder_quote_in, 1.0 / (1.0 + b))
             } else {

@@ -103,6 +103,7 @@ pub struct Registry {
 impl Entry {
     /// Разные монеты ElfomoFi используют общий vault и меняют состояние одного pricing-контракта.
     pub fn shared_market(&self) -> Option<PoolRef> {
+        if self.family.variant==super::family_variant::Variant::YieldBasis && let PoolRef::Singleton{manager,..}=&self.pool.reference{return Some(PoolRef::Contract(*manager));}
         if let crate::core::types::PoolState::BancorV3(s)=&self.pool.state {
             return s.markets.iter().flatten().next().map(|m|PoolRef::Member{contract:s.network,coin:m.token});
         }
@@ -128,6 +129,7 @@ impl Entry {
 
     /// A V1 token-to-token edge draws from two independently registered ETH exchanges.
     pub fn second_liquidity_site(&self) -> Option<PoolRef> {
+        if let crate::core::types::PoolState::YieldBasisLev(s)=&self.pool.state{return Some(PoolRef::Contract(s.amm));}
         if let crate::core::types::PoolState::BancorV3(s)=&self.pool.state {
             return s.markets.iter().flatten().nth(1).map(|m|PoolRef::Member{contract:s.network,coin:m.token});
         }

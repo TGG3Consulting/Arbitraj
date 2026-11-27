@@ -76,6 +76,8 @@ pub fn swap(
             super::super::math::temple::quote(s,token_in,out,exact_in,amount)
                 .ok_or_else(||why("TempleDAO: объём, фактическая валюта выплаты или обеспечение не подходят для этой стороны"))
         }
+        (PoolState::YieldBasisLev(s),PoolKind::V2)=>(if exact_in{s.swap(token_in,amount)}else{s.forward_for_output(token_in,amount)})
+            .map(|f|Swapped{amount_in:f.spent,amount_out:f.received,complete:true}).ok_or_else(none),
         (PoolState::BalancerV1(s),PoolKind::V2)=>{
             let output=if zero_for_one{e.pool.token1}else{e.pool.token0};
             let fill=if exact_in{s.swap(token_in,output,amount,true,U256::MAX)}else{s.forward_for_output(token_in,output,amount)};
@@ -506,7 +508,7 @@ pub fn swap(
         // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт) — выход по лесенке
         // ответов квотера контракта на блоке (quote/pmm_ladder.rs): точно в точках, между ними — средняя цена линейно,
         // выше последней точки — неисполнимо. Только точный вход.
-        (PoolState::OraclePmm(d), PoolKind::OraclePmm) if super::uses_wallet_quoter(e.family.variant) => {
+        (PoolState::OraclePmm(d), kind) if (kind==PoolKind::OraclePmm && super::uses_wallet_quoter(e.family.variant)) || e.family.variant==Variant::YieldBasis => {
             let points=if zero_for_one==d.base_is_token0 {&d.ladder_base_in} else {&d.ladder_quote_in};
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})

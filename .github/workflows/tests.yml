@@ -587,8 +587,10 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/airswap" AirSwapWallet
           python -m pip install --quiet eth-keys==0.7.0
-          python scripts/record_airswap_markets.py "${MARKET#airswap-markets-}" "$RUNNER_TEMP/market.json" --payments
+          python scripts/record_airswap_markets.py "${MARKET#airswap-markets-}" "$RUNNER_TEMP/market.json" --payments --compiled "$RUNNER_TEMP/airswap/AirSwapWallet.json"
       - if: matrix.market == 'ammalgam-ethereum-quotes'
         run: python scripts/record_ammalgam_quotes.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ammalgam-ethereum-wallet'

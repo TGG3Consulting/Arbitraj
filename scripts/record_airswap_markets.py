@@ -17,12 +17,12 @@ SWAP = "0xd82e10b9a4107939e55fcca9b53a9ede6cf2fc46"
 LEGACY = "0xd82fa167727a4dc6d6f55830a2c47abbb4b3a0f8"
 PROTOCOL = bytes.fromhex("02ad05d3")
 ENDPOINTS = {
-    "ethereum":["https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com"],
-    "base":["https://mainnet.base.org","https://base-rpc.publicnode.com"],
+    "ethereum":["https://rpc.mevblocker.io","https://eth.drpc.org","https://ethereum-rpc.publicnode.com"],
+    "base":["https://mainnet.base.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"],
 }
 
 
-def acquire(network, url, payments=False):
+def acquire(network, url, payments=False, compiled=None):
     chain = json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())[network]
     at = {"blockHash":chain["hash"],"requireCanonical":True}
     header = rpc(url,"eth_getBlockByHash",[chain["hash"],False])
@@ -52,25 +52,27 @@ def acquire(network, url, payments=False):
         cash[generation]={"fee":getter(target,"protocolFee()","uint256"),
                           "fee_light":getter(target,"protocolFeeLight()","uint256"),
                           "fee_wallet":getter(target,"protocolFeeWallet()","address")}
-    fills={}
+    fills,modules={},{}
     if payments:
         from record_airswap_orders import funded
         for version,target in [("v5",SWAP),("v4",LEGACY)]:
             if version in cash:
-                fills[version]=funded(url,network,at,int(header["timestamp"],16)+900,target,version,getter)
-    return dict(funded_fixture_orders=fills,chain_id=chain["chain"],height=chain["block"],selector=at,roles=roles,
+                fills[version],modules[version]=funded(url,network,at,int(header["timestamp"],16)+900,target,version,getter,compiled)
+    return dict(funded_fixture_orders=fills,modules=modules,chain_id=chain["chain"],height=chain["block"],selector=at,roles=roles,
                 protocol="0x"+PROTOCOL.hex(),terms=cash,makers=result)
 
 if __name__=="__main__":
     arg=argparse.ArgumentParser()
     arg.add_argument("network",choices=ENDPOINTS);arg.add_argument("output",type=Path)
     arg.add_argument("--payments",action="store_true")
+    arg.add_argument("--compiled",type=Path)
     options=arg.parse_args()
     for url in ENDPOINTS[options.network]:
         try:
-            snapshot=acquire(options.network,url,options.payments)
+            snapshot=acquire(options.network,url,options.payments,json.loads(options.compiled.read_bytes()) if options.compiled else None)
             break
         except (ValueError,requests.RequestException,RuntimeError) as error:
+            print(f"{url}: {str(error)[:180]}",flush=True)
             last=error
     else:
         raise RuntimeError("AirSwap canonical roles and makers could not be read") from last

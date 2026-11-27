@@ -1688,6 +1688,9 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if str(row["id"]) == "4752":
+            import maverick_two_inventory
+            ref, candidates, task = maverick_two_inventory.inventory(network)
         if str(row["id"]) == "5221":
             import base_raindex_markets
             candidates, task = base_raindex_markets.inventory(network)

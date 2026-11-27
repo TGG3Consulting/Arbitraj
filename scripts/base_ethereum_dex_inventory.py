@@ -1066,6 +1066,7 @@ def tables(network, snapshots, profiles):
                    f"вернули TR5A во всех {len(integral['atomic_checks'])} вызовах. Токены оставались на обоих балансах {sum(all(int(n)>0 for n in m['pool_balances']) for m in integral['markets'])} пар. "
                    f"На блоке {ih['block']} релеер выплатил получателю 39 186,890298 USDT за 16,168011965784978830 WETH в исходной транзакции. "
                    f"Связанную заявку релеера №{ih['order']} контракт Delay исполнил через {ih['lag_seconds']} с. Собственная заявка через Delay блокирует входные средства до отдельного исполнения. "
+                   "Автоматическое отслеживание PairEnabledSet и повторный допуск рынка в торговом боте остаются открытой доработкой. "
                    "Для возврата мгновенного пути нужно включение пары, достаточный запас выходной валюты и ETH у релеера, "
                    "исполнение для суммы и подтверждение чистой выплаты получателю. [Реестр, балансы и квитанции](../tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz).")
         integral_wallet_path=integral_path.with_name("integral_size_ethereum_wallets.json.gz")

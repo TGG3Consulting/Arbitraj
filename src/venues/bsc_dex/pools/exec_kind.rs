@@ -201,6 +201,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (RamsesV2Pool.sol L944), обратный вызов ramsesV2SwapCallback (L1238) — проверка dex.v3_swap_callback
         // (exec_callback.rs); Ramses CL V2 — тот же swap и uniswapV3SwapCallback (RamsesV3Pool.sol L436-L442, L662).
         "hello_v3"
+        | "registered_uni_v3"
         | "pancakeswap_v3"
         | "uniswap_v3"
         | "v3_fork"
@@ -282,7 +283,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "smardex" | "smardex_exact_equality" => ExecKind::Smardex,
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
-        "balancer_v2" | "registered_v3_module" => ExecKind::Balancer,
+        "balancer_v2" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" => ExecKind::Balancer,
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
@@ -428,7 +429,7 @@ mod tests {
             "carbon_v1", // официальный Controller, без шага в ArbExecutor
             "mint_club_v2", // native Bond mint/burn
             "ekubo_v2_router", // официальный multicall, ABI V2
-            "registered_v3",
+            "registered_v3", "umbrae_damm", "umbrae_dlmm",
             "balancer_v2_wallet",
             "bunnyswap",
             "memebox",

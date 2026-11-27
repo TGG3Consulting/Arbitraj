@@ -126,7 +126,7 @@ pub(crate) async fn fresh(ctx: &Ctx, e: &Entry, at: &Value) -> GatewayResult<()>
         at,
     )
     .await?;
-    if e.family.variant == super::family_variant::Variant::HelloV3 { return Ok(()); }
+    if e.family.variant != super::family_variant::Variant::RegisteredV3 { return Ok(()); }
     super::direct_module::verify_factory(
         ctx,
         e.family,

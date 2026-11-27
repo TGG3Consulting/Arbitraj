@@ -38,6 +38,7 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if e.family.variant.umbrae(){return e.pool.reference.address()==log.address && log.topics.first()==Some(&super::super::pools::umbrae::swap_topic(e.family.variant));}
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
         return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
     }

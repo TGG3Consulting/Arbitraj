@@ -471,7 +471,11 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
             (PoolKind::V3, Proto::UniswapV3, true, false, true)
         }
         "hello_v3" => (PoolKind::V3,Proto::PancakeV3,true,false,true),
-        "registered_v3" => (PoolKind::V3,Proto::UniswapV3,true,false,true),
+        "registered_uni_v3" | "registered_v3" => (PoolKind::V3,Proto::UniswapV3,true,false,true),
+        "umbrae_dlmm" => (PoolKind::OraclePmm,Proto::V2,true,false,true),
+        "umbrae_dlmm_module" => (PoolKind::OraclePmm,Proto::V2,true,true,true),
+        "umbrae_damm" => (PoolKind::V2,Proto::V2,true,false,true),
+        "umbrae_damm_module" => (PoolKind::V2,Proto::V2,true,true,true),
         "registered_v3_module" => (PoolKind::V3,Proto::UniswapV3,true,true,true),
         "base_native_v3" => (PoolKind::V3, Proto::PancakeV3, true, false, false),
         "base_native_v3_module" => (PoolKind::V3, Proto::PancakeV3, true, true, true),
@@ -824,6 +828,12 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant.umbrae() => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.umbrae_roles"]);
+            if f.variant==Variant::UmbraeDlmm {list.extend(["dex.quoter","dex.pmm_ladder_usd"]);}
+            else {list.extend(["dex.proxy_implementations","dex.proxy_runtime_hashes"]);}
+            if f.tradable {list.extend(["dex.router","dex.module_runtime_hashes"]);}
+        }
         Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter"]),
         Proto::V2 if f.variant == Variant::Temple => {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
@@ -894,9 +904,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::UniswapV3 if f.variant == Variant::RamsesCl => {
             list.extend(["dex.factory", "dex.quoter", "dex.v3_swap_callback"])
         }
-        Proto::UniswapV3 | Proto::PancakeV3 if matches!(f.variant, Variant::RegisteredV3 | Variant::HelloV3) => {
+        Proto::UniswapV3 | Proto::PancakeV3 if f.variant.registered_v3() => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.pool_code_hashes","dex.tick_lens","dex.quoter","dex.quoter_runtime_hash","dex.v3_quoter_method"]);
-            if f.variant == Variant::HelloV3 { list.push("dex.v3_swap_callback"); }
+            if matches!(f.variant, Variant::HelloV3 | Variant::RegisteredUniV3) { list.push("dex.v3_swap_callback"); }
             if f.tradable {list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::PancakeV3 if f.variant == Variant::BaseNativeV3 => {

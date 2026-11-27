@@ -40,6 +40,7 @@ pub enum Applied {
 pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
         _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if f.variant == super::family_variant::Variant::SolidlyCl => {
@@ -111,6 +112,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use super::abi_v4::{IInfinityBin, IInfinityCl, IUniswapV4};
     use alloy::sol_types::SolEvent;
     match f.proto {
+        _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
         _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
         _ if super::ramses::handles(f) => super::ramses::liquidity_topics(f),
@@ -166,6 +168,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     use super::solidly_v3::ISolidlyV3::SetFee;
     use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
+        _ if e.family.variant.umbrae() => {e.valid=false;Applied::Refresh("Обновлено состояние рынка Umbrae".into())}
         _ if e.family.variant.deli() => {e.valid=false;Applied::Refresh("Изменили состояние Deli и внешних контрактов".into())}
         _ if e.family.variant==super::family_variant::Variant::Antfarm => {e.valid=false;Applied::Refresh("Изменилось состояние пары Antfarm".into())}
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}

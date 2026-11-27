@@ -55,6 +55,7 @@ pub mod cycle_tally;
 pub mod cycle_view;
 mod delta_pricing;
 mod sectorone;
+mod umbrae;
 pub mod depth_band;
 pub mod depth_band_algebra;
 pub mod depth_ekubo;

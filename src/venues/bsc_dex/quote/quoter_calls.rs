@@ -44,6 +44,7 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::request(ctx,e,token_in,amount);}
     if matches!(e.pool.state, PoolState::Antfarm(_)) {return super::super::pools::antfarm_probe::request(ctx,e);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::request(ctx,e,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
@@ -530,6 +531,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
     if let PoolState::Antfarm(book)=&e.pool.state {return super::super::pools::antfarm_probe::expected(book,out,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::payout(e,token_in,amount,out);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {

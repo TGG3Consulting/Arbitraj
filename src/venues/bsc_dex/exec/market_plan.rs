@@ -16,6 +16,7 @@ use alloy_primitives::{Address, B256, Bytes};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) enum Market {
+    Umbrae,
     Antfarm,
     Temple,
     Carbon,
@@ -25,6 +26,7 @@ pub(in crate::venues::bsc_dex) enum Market {
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
+            _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             PoolState::Carbon(_) => Some(Self::Carbon),
@@ -43,6 +45,7 @@ impl Market {
     }
     pub(super) fn name(self) -> &'static str {
         match self {
+            Self::Umbrae => "Umbrae",
             Self::Antfarm => "Antfarm",
             Self::Temple => "TempleDAO",
             Self::Carbon => "Carbon",
@@ -59,6 +62,7 @@ impl Market {
         selected: (Option<Address>, Option<B256>),
     ) -> GatewayResult<Plan> {
         match self {
+            Self::Umbrae => Box::pin(super::umbrae::plan(ctx,s,wallet,height,selected.0)).await,
             Self::Antfarm => {
                 Box::pin(super::antfarm_wallet::plan(
                     ctx, s, wallet, height, selected.0,

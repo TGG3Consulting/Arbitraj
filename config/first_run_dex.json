@@ -3974,7 +3974,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "concave",
-    "source": "https://github.com/ConcaveFi/concave-frontend/blob/267bfde0775e9daef88564bfdc0aa58c3e4da244/libs/core/src/constants/addresses.ts \u00b7 tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz",
+    "source": "https://github.com/ConcaveFi/concave-frontend/blob/267bfde0775e9daef88564bfdc0aa58c3e4da244/libs/core/src/constants/addresses.ts · tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz",
     "settings": {
       "dex.kind": "gemswap_v2",
       "dex.factory": "0x066a5cb7ddc6d55384e2f6ca13d5dd2cd2685cbd",
@@ -3987,6 +3987,51 @@
       ],
       "dex.router": "0x0a3e1c20b5384eb97d2ccff9a96bc91f0c77e7db",
       "dex.router_runtime_hash": "0x7cdc96c6035f5789974d9189d0bb14804b0bb40e75ac8a4dd2d2450e52fe8708"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "umbrae-damm",
+    "source": "https://www.umbrae.io/docs/dev/contracts.json · tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json · tests/data/first_run_dex_2026-11-26/umbrae_damm_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "umbrae_damm",
+      "dex.factory": "0xd14322b444415d78dbbf646bb369ec325a1acd5c",
+      "dex.factory_runtime_hash": "0x23af222f7afc38a93dca6e1e6733294ee051b72ef314dbea173579f98c28c8f1",
+      "dex.pair_runtime_hash": "0x9bc530fd294b0210a1c01cc4c8b662bef9590c4f3da1f89b3307f6fa10f92f40",
+      "dex.umbrae_roles": [
+        "0xb6363f6091d185b431ad51f7cc0ef49797fa8569 0xa0afd71d40cc54f0f9fc9630ee879133b41e7f1cbc83b19f07d8fed7ac4ade76 0x1d8752a8533668fbc49e4721790592f3111a3d0a 0x590d2ba6294702bfe56d91282b5f2983d88a5103e72c711ac2af91fefe5ae8e2"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xa2be3bb0b8b7b341eeaf301a7f815f5ec86057e95951b841b8525d98fdfbba45"
+      ],
+      "dex.proxy_implementations": [
+        "0x5491e26dbff761c10478e43d0d5c289cc8816630"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xae4a2647f6aff1f1c85c1568d35f67d2d312251b28c6f9655d0d7218e88abe28"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "umbrae-dlmm",
+    "source": "https://www.umbrae.io/docs/dev/contracts.json · tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json · tests/data/first_run_dex_2026-11-26/umbrae_dlmm_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "umbrae_dlmm",
+      "dex.factory": "0x9dbb9289d0d75508b5d8ee01ffe4eb7c412f733b",
+      "dex.factory_runtime_hash": "0x3d5937c30e4bef59d792b28b377ba08051d5d2c58f4a714ea1b8085ef449ad73",
+      "dex.pair_runtime_hash": "0xda0f51daa3d621226b32374abcefd7546a468475d2aab1a8ebeaef3ba4689ec5",
+      "dex.umbrae_roles": [
+        "0xf74ca4e58da6f4f8d1dc1d9ff087b1bed1d9a573 0x7354b1a0f71dd1614b23f7d744a65b94be342314260f52ba244302e4d2f9c07a 0x2d7c648f6d33a89550c72218003d0c683f25af5a 0x1937791611b4e7e30083d9f01986ea1601cb8c973a8ba5eb6cd4824442c17d62",
+        "0x5a7673d413f510f4b5c191d96837694c5942bf38 0x2c32c32e01d4d32f6e4772c83ec9655b4a606c8db6f5f9dad30fed12cf7fdf10 0x9cf4eba914c67966de2a20e44ed8d864ff306e38 0x4ea033b1b36e532969914fe5f58b6e108522c438c38c1b0cb333cabc1d00d31b",
+        "0xeabc5b163bf79cdce31027e722361802fabbe8fd 0x2c32c32e01d4d32f6e4772c83ec9655b4a606c8db6f5f9dad30fed12cf7fdf10 0xdd21bb9d0807a6d3ef15fd8011c14962782a6a73 0x46cea7781d1cc575d0c493a8de99a90a6d342cf46f53a76a19022a1e788e60d2"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xa2be3bb0b8b7b341eeaf301a7f815f5ec86057e95951b841b8525d98fdfbba45"
+      ],
+      "dex.quoter": "0xeabc5b163bf79cdce31027e722361802fabbe8fd"
     }
   }
 ]

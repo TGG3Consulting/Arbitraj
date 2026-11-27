@@ -180,3 +180,7 @@ pub fn band(s: &UmbraeDammState, i: usize, target: U256, buy: bool) -> Option<(U
 #[cfg(test)]
 #[path = "umbrae_damm_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "umbrae_damm_wallet_tests.rs"]
+mod wallet_tests;

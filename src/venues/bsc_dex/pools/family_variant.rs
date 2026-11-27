@@ -28,8 +28,11 @@ pub enum Variant {
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
     BaseNativeV3,
     IziModules,
+    UmbraeDamm,
+    UmbraeDlmm,
     HelloV3,
     RegisteredV3,
+    RegisteredUniV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
     /// Lista StableSwap с проверенной реализацией EIP-1967 на каждом чтении состояния.
@@ -173,8 +176,10 @@ pub enum Variant {
 
 impl Variant {
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
-    pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3|Self::HelloV3) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
+    pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3) }
+    pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
+    pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -230,7 +235,10 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
         "izi_static_modules" => Variant::IziModules,
+        "umbrae_dlmm" | "umbrae_dlmm_module" => Variant::UmbraeDlmm,
+        "umbrae_damm" | "umbrae_damm_module" => Variant::UmbraeDamm,
         "hello_v3" => Variant::HelloV3,
+        "registered_uni_v3" => Variant::RegisteredUniV3,
         "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,

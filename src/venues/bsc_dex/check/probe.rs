@@ -385,6 +385,14 @@ async fn part(
         ))
         .await;
     }
+    if e.family.variant.umbrae() {
+        let h=super::super::quote::white_state::head(ctx,"latest").await?;
+        let target=super::super::pools::umbrae::native(ctx,e.family).or_else(||e.family.tradable.then(||ctx.dex_addr("dex.router",e.family.id).ok()).flatten());
+        let steps=plan::single(e,order);
+        let p=Box::pin(super::super::exec::umbrae::plan(ctx,&steps[0],wallet,h.number.to::<u64>(),target)).await?;
+        let data=p.data(alloy_primitives::U256::ZERO);
+        return Ok((p.approvals,p.router,data));
+    }
     if super::super::pools::sectorone::enabled(e) {
         let steps=plan::single(e,order);
         let plan=Box::pin(super::super::exec::sectorone::plan(ctx,&steps,wallet,now,true)).await?;

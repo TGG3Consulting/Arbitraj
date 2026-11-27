@@ -52,6 +52,7 @@ pub(super) enum DirectCall {
         rebate: bool,
     },
     Vault { id: alloy_primitives::B256, input: Address, amount: U256 },
+    Umbrae {path:super::umbrae::Path,input:Address,amount:U256},
     SectorLb { path:super::sectorone::Path,input:Address,amount:U256 },
     V2SupportingFee {
         input: Address,
@@ -207,6 +208,7 @@ impl Plan {
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
+                DirectCall::Umbrae{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
                     amount,
@@ -262,6 +264,7 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if e.family.variant.umbrae(){return Err(ctx.err(ErrorCode::NoRoute,"Umbrae: требуется выбранный адрес исполнения"));}
     if super::antfarm_wallet::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется подтверждённый бюджет комиссии"));}
     if super::temple_wallet::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется выбранный модуль денежного маршрута"));}
     if super::carbon_direct::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется подтвержденный вектор действий контроллера"));}

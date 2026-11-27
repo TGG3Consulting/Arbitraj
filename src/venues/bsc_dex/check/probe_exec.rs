@@ -139,6 +139,10 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
+    if e.family.variant.umbrae(){
+        let topic=super::super::pools::umbrae::swap_topic(e.family.variant);
+        return logs.iter().any(|l|l.address==e.pool.reference.address() && l.topics.first()==Some(&topic)).then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"У проверенной пары Umbrae нет события Swap"));
+    }
     if super::super::pools::sectorone::enabled(e) {
         let swap=if e.family.proto==super::super::pools::families::Proto::LbV20 {
             super::super::pools::abi_lb20::ILBPairV20::Swap::SIGNATURE_HASH

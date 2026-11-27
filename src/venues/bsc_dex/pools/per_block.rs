@@ -94,6 +94,7 @@ pub fn needs(f: &Family) -> bool {
         super::family_variant::Variant::SlipstreamDynamicFee
             | Variant::DeliCl
             | Variant::DeliConstant
+            | Variant::UmbraeDamm | Variant::UmbraeDlmm
             | Variant::Antfarm
             | Variant::Temple
             | Variant::Carbon

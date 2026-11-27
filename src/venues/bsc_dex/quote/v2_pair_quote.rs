@@ -38,7 +38,7 @@ use super::v2_pair_sim::{Sim, judge};
 
 /// Вид без своего роутера: протокол V2 и нет своего пути исполнения (v2_fork_executor). Ошибок нет.
 pub fn kind_on(f: &Family) -> bool {
-    f.proto == Proto::V2 && (!f.tradable || f.variant.dual_v2_execution() || f.variant == super::super::pools::family_variant::Variant::OmniV2) && !f.variant.frax_twamm()
+    !f.variant.umbrae() && f.proto == Proto::V2 && (!f.tradable || f.variant.dual_v2_execution() || f.variant == super::super::pools::family_variant::Variant::OmniV2) && !f.variant.frax_twamm()
         && !matches!(f.variant,super::super::pools::family_variant::Variant::Antfarm | super::super::pools::family_variant::Variant::Temple | super::super::pools::family_variant::Variant::Carbon | super::super::pools::family_variant::Variant::MintClub | super::super::pools::family_variant::Variant::Virtuals | super::super::pools::family_variant::Variant::BunnySwap | super::super::pools::family_variant::Variant::Memebox | super::super::pools::family_variant::Variant::Oasis | super::super::pools::family_variant::Variant::EtherVista)
 }
 

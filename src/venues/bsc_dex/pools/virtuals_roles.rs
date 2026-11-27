@@ -9,15 +9,15 @@ use alloy_primitives::{Address, B256, keccak256};
 use serde_json::Value;
 
 #[derive(Clone, Copy)]
-struct Role {
-    address: Address,
-    runtime: B256,
-    implementation: Address,
-    implementation_hash: B256,
+pub(super) struct Role {
+    pub(super) address: Address,
+    pub(super) runtime: B256,
+    pub(super) implementation: Address,
+    pub(super) implementation_hash: B256,
 }
 
 impl Role {
-    fn parse(row: &str) -> Option<Self> {
+    pub(super) fn parse(row: &str) -> Option<Self> {
         let mut words = row.split_whitespace();
         let role = Self {
             address: words.next()?.parse().ok()?,
@@ -33,7 +33,7 @@ impl Role {
             && role.implementation_hash != keccak256([]))
         .then_some(role)
     }
-    async fn check(self, ctx: &Ctx, at: &Value) -> GatewayResult<()> {
+    pub(super) async fn check(self, ctx: &Ctx, at: &Value) -> GatewayResult<()> {
         solidly_classic_factory::bind(
             ctx,
             self.address,

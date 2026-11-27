@@ -64,7 +64,18 @@ def pay(c, key, forward, exact_input, end):
     if any(row["status"] != "0x1" for row in quote_run[:-1]):
         raise ValueError(("funding failed", source, [(i,r.get("error")) for i,r in enumerate(quote_run[:-1]) if r["status"] != "0x1"]))
     if quote_run[-1]["status"] != "0x1":
-        return dict(source=source,target=target,exact_input=exact_input,requested=str(qty),quote_error=quote_run[-1].get("error"))
+        # A failed resolver alone cannot rule out a payable venue. Try the original, funded
+        # swap with a permissive terminal minimum or the amount actually available to the owner.
+        cap = 1 if exact_input else 4 * 10**(18 if source == USDE else 6)
+        original = tx(CORE,method("swapSingle",SWAP_ARGS),SWAP_ARGS,[*request,cap,OWNER,False,b"",b""])
+        views = [balance(source,OWNER),balance(target,OWNER)]
+        paid = replay(prep+views+[original]+views)
+        i = len(prep)+2
+        if [j for j,r in enumerate(paid) if r["status"]!="0x1"] != [i]:
+            raise ValueError(("failed quote with different funded result",source,target,exact_input,paid[i].get("error")))
+        assert [v["returnData"] for v in paid[i-2:i]] == [v["returnData"] for v in paid[i+1:i+3]]
+        return dict(source=source,target=target,exact_input=exact_input,requested=str(qty),quote_error=quote_run[-1]["error"],
+                    funded_error=paid[i]["error"],original=original)
     price = int(quote_run[-1]["returnData"], 16)
     assert price > 0
     def order(limit):
@@ -99,8 +110,7 @@ def pay(c, key, forward, exact_input, end):
                 tx=attempt,logs=paid["logs"],gas=int(paid["gasUsed"],16),strict=error)
 
 
-def acquire(url):
-    cfg = json.loads((ROOT / "tests/data/base_ethereum_networks.json").read_bytes())["ethereum"]
+def acquire(url, cfg):
     tag = {"blockHash": cfg["hash"], "requireCanonical": True}
     header = rpc(url, "eth_getBlockByHash", [cfg["hash"], False])
     assert header["hash"] == cfg["hash"] and int(header["number"], 16) == cfg["block"] and int(rpc(url,"eth_chainId",[]),16)==1
@@ -123,19 +133,27 @@ def acquire(url):
         roles[address] = "0x" + keccak(code).hex()
     results = []
     for key in markets:
-        values = c.one(RESOLVER,method("getPricesAndReserves",[DEX_KEY]),[DEX_KEY],[key],
-                       ["(uint256,uint256,uint256,uint256,uint256,uint256)", "(uint256,uint256,uint256,uint256)"])
+        # All getDexState fields are static. The first 16 words are DexVariables in the official ABI.
+        keytype = [DEX_KEY]
+        state, = c.batch([(RESOLVER, method("getDexState",keytype), keytype, [key])])
+        if not state or len(state) < 16*32:
+            raise ValueError("missing original Fluid DEX Lite accounting")
+        amounts = decode(["uint256","uint256"],state[14*32:16*32])
+        response, = c.batch([(RESOLVER,method("getPricesAndReserves",keytype),keytype,[key])])
+        values = decode(["(uint256,uint256,uint256,uint256,uint256,uint256)", "(uint256,uint256,uint256,uint256)"],response) if response else ([],[])
         payments = [pay(c,key,direction,exact_input,int(header["timestamp"],16)+600)
                     for direction in (True,False) for exact_input in (True,False)]
         results.append(dict(token0=key[0],token1=key[1],salt="0x"+key[2].hex(),pool_id="0x"+keccak(encode([DEX_KEY],[key]))[:8].hex(),
-                            prices=[str(v) for v in values[0]],reserves=[str(v) for v in values[1]],payments=payments))
+                            adjusted_supply=[str(v) for v in amounts],prices=[str(v) for v in values[0]],reserves=[str(v) for v in values[1]],payments=payments))
     return dict(height=cfg["block"],head=tag,roles=roles,pools=results)
 
 
 if __name__ == "__main__":
     for url in ("https://eth.drpc.org", "https://ethereum-rpc.publicnode.com", "https://rpc.mevblocker.io"):
         try:
-            report = acquire(url)
+            reference = json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())["ethereum"]
+            active = {"block":25928919,"hash":"0xffea1eeb857655999f2906d97141717d005deffe4f938bc2264dba8ed1a0608d"}
+            report = {"reference":acquire(url,reference),"active":acquire(url,active)}
             break
         except (requests.RequestException, RuntimeError) as err:
             print(url, str(err)[:200], flush=True)

@@ -78,6 +78,53 @@ def capture(url, d, runtime):
         # Only the new module is injected. Balances, allowances, oracles, pools and Vault remain canonical.
         return simulate_block(url, tag, {MODULE: {"code": "0x" + runtime}}, calls)
 
+    uni = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"
+    usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7"
+
+    def exit_value(prefix, path, size):
+        # A measured secondary sale for accounting; no signed multi-transaction guarantee is implied.
+        prepared = [*prefix, grant(path[0], uni, 0), grant(path[0], uni, size)]
+        getter = tx(uni, "getAmountsOut(uint256,address[])", ["uint256", "address[]"], [size, path])
+        raw = run([*prepared, getter])[-1]
+        if raw["status"] != "0x1":
+            raise ValueError("missing settlement bid")
+        minimum = decode(["uint256[]"], bytes.fromhex(raw["returnData"][2:]))[0][-1]
+
+        def sale(floor):
+            return tx(
+                uni,
+                "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+                ["uint256", "uint256", "address[]", "address", "uint256"],
+                [size, floor, path, PAYER, deadline],
+            )
+
+        calls = [
+            *prepared,
+            bal(path[0], PAYER),
+            bal(path[-1], PAYER),
+            sale(minimum + 1),
+            sale(minimum),
+            bal(path[0], PAYER),
+            bal(path[-1], PAYER),
+        ]
+        rs = run(calls)
+        if (
+            rs[-4]["status"] != "0x0"
+            or rs[-3]["status"] != "0x1"
+            or read(rs[-6]) - read(rs[-2]) != size
+            or read(rs[-1]) - read(rs[-5]) != minimum
+        ):
+            raise ValueError(("cash settlement", path, size, minimum, rs[-3].get("error")))
+        return dict(
+            path=path,
+            amount=str(size),
+            credit_usdt=str(minimum),
+            gas=int(rs[-3]["gasUsed"], 16),
+            approvals_gas=sum(int(r["gasUsed"], 16) for r in rs[len(prefix) : len(prepared)]),
+            calls=calls,
+            results=rs,
+        )
+
     vaults = sorted({t for p in d["pairs"] for t in p["tokens"]})
     collect = tx(VAULT, "getProtocolFeesCollector()")
     collector = "0x" + run([collect])[0]["returnData"][-40:]
@@ -114,6 +161,7 @@ def capture(url, d, runtime):
             sides.append(dict(input_token=x, output_token=y, amounts=proposals))
         rows.append(dict(pair=m["pair"], tokens=m["tokens"], class_name="separate fee", sides=sides))
     cases = []
+    alternatives = []
     abi = "execute(" + ORDER + ")"
     # Two separate-token markets whose input has no registered ATF pair. Reserves and payer tokens are actual.
     for pair, qtys in [
@@ -132,6 +180,8 @@ def capture(url, d, runtime):
             cost = funding["cost"]
             tier = funding["tier"]
             premium = (cost * fees + 10**18 - 1) // 10**18
+            benchmark = exit_value([], [x, WETH, usdt], qty)
+            alternatives.append(dict(pair=pair, input=str(qty), cash=benchmark))
             for loan in (False, True):
                 seed = []
                 if not loan:
@@ -178,7 +228,8 @@ def capture(url, d, runtime):
                     )
 
                 balances = [bal(asset, who) for who in (PAYER, MODULE) for asset in (x, y, ATF)] + [
-                    bal(y, VAULT)
+                    bal(y, VAULT),
+                    bal(y, collector),
                 ]
                 callback = tx(
                     MODULE,
@@ -234,7 +285,7 @@ def capture(url, d, runtime):
                 before = list(map(read, rs[n : n + k]))
                 after = list(map(read, rs[-k:]))
                 delta = [b - a for a, b in zip(before, after)]
-                if delta != [-qty, expected, 0, 0, 0, 0, premium if loan else 0]:
+                if delta != [-qty, expected, 0, 0, 0, 0, 0, premium if loan else 0]:
                     raise ValueError(("wallet delta", delta))
                 logs = [
                     l for l in result["logs"] if l["address"].lower() == MODULE and l["topics"][0] == EVENT
@@ -268,6 +319,7 @@ def capture(url, d, runtime):
                         calls=calls,
                         results=rs,
                         controls=tested,
+                        settlement_cash=exit_value([*pre, exact], [y, usdt], expected),
                     )
                 )
     return dict(
@@ -281,6 +333,8 @@ def capture(url, d, runtime):
         vault_balances={k: str(v) for k, v in vault_bal.items()},
         fee_percentage=str(fees),
         coverage=rows,
+        competing_cash=alternatives,
+        block_base_fee_wei=str(int(head["baseFeePerGas"], 16)),
         cases=cases,
     )
 

@@ -12,6 +12,7 @@ mod deli_cl_tests;
 pub mod temple;
 pub mod antfarm;
 pub mod antfarm_route;
+pub mod antfarm_output;
 pub mod adaptive_fee;
 pub mod algebra_fee;
 pub mod balancer_linear;

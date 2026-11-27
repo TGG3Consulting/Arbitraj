@@ -187,3 +187,113 @@ fn both_router_methods_match_owner_receipts_in_both_directions() {
     }
     assert_eq!((yes, no), (98, 24));
 }
+
+#[test]
+fn paying_fees_from_proceeds_matches_eight_atomic_wallet_fills() {
+    use crate::core::types::AntfarmBook;
+    use crate::venues::bsc_dex::math::antfarm_output::Funds;
+    let reg = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz"
+    );
+    let paid = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"
+    );
+    let d: Value = serde_json::from_reader(GzDecoder::new(reg.as_slice())).unwrap();
+    let result: Value = serde_json::from_reader(GzDecoder::new(paid.as_slice())).unwrap();
+    let markets = d["pairs"].as_array().unwrap();
+    let mut count = 0;
+    for r in result["cases"].as_array().unwrap() {
+        let primary = from_row(&d, markets.iter().find(|m| m["pair"] == r["pair"]).unwrap());
+        let event = r["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v["logs"].as_array())
+            .flatten()
+            .find(|l| l["address"] == result["module"])
+            .unwrap();
+        let token =
+            |i: usize| Address::from_word(event["topics"][i].as_str().unwrap().parse().unwrap());
+        let (source, output) = (token(2), token(3));
+        let tier = r["tier"].as_u64().unwrap() as u16;
+        let fee_asset = primary.atf;
+        let fund = from_row(
+            &d,
+            markets
+                .iter()
+                .find(|m| {
+                    m["fee"] == tier
+                        && addr(&m["tokens"][0]) == fee_asset
+                        && addr(&m["tokens"][1]) == output
+                })
+                .unwrap(),
+        );
+        let book = AntfarmBook {
+            market: primary,
+            funding: vec![(fund, None)],
+        };
+        let q = integer(&r["qty"]);
+        let cost = integer(&r["cost"]);
+        let fee = integer(&r["atf"]);
+        let loan = r["loan"].as_bool().unwrap();
+        let balances = if loan {
+            Funds::Vault {
+                output_balance: cost,
+                fee_per_1e18: integer(&result["fee_percentage"]),
+            }
+        } else {
+            Funds::Wallet { atf: fee }
+        };
+        let fill = book.paid_from_output(source, q, tier, balances).unwrap();
+        assert_eq!(
+            (
+                fill.primary.debit,
+                fill.primary.output,
+                fill.refill.debit,
+                fill.refill.output
+            ),
+            (q, integer(&r["gross"]), cost, fee)
+        );
+        assert_eq!(
+            (fill.credit, fill.loan_fee),
+            (integer(&r["credit"]), U256::ZERO)
+        );
+        assert!(
+            book.paid_from_output(
+                source,
+                q,
+                tier,
+                Funds::Vault {
+                    output_balance: cost - U256::ONE,
+                    fee_per_1e18: U256::ZERO
+                }
+            )
+            .is_none()
+        );
+        assert!(
+            book.paid_from_output(
+                source,
+                q,
+                tier,
+                Funds::Wallet {
+                    atf: fee - U256::ONE
+                }
+            )
+            .is_none()
+        );
+        let interest = book
+            .paid_from_output(
+                source,
+                q,
+                tier,
+                Funds::Vault {
+                    output_balance: cost,
+                    fee_per_1e18: U256::ONE,
+                },
+            )
+            .unwrap();
+        assert_eq!(interest.credit + U256::ONE, fill.credit);
+        count += 1;
+    }
+    assert_eq!(count, 8);
+}

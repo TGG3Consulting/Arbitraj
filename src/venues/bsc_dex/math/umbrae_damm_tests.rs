@@ -54,7 +54,13 @@ fn donations_sync_only_after_the_original_payout() {
     assert_eq!(base.swapped, f.swapped);
     assert_eq!(base.fee, f.fee);
     assert_eq!(base.after.reserves[0] + n(50_000), f.after.reserves[0]);
-    assert_eq!(f.after.volatility, 10000);
+    assert_eq!(f.after.reserves, [n(59_091), n(11_000)]);
+    assert_eq!(f.after.volatility, 8138);
+    let mut higher_price = s.clone();
+    higher_price.balances[1] += n(50_000);
+    let rising = fill(&higher_price, s.tokens[1], true, n(1000)).unwrap();
+    assert_eq!(rising.swapped, base.swapped);
+    assert_eq!(rising.after.volatility, 10_000);
     assert_eq!(rate(&f.after), Some(150));
     changed.balances[0] = n(100);
     assert!(fill(&changed, s.tokens[1], true, n(1000)).is_none());

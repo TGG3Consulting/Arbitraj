@@ -2,6 +2,7 @@
 //! https://docs.titanbuilder.xyz/propamms · https://buildernet.org/docs/api
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
+pub(super) mod bopamm;
 mod deployment;
 mod frame;
 pub(super) mod markets;
@@ -101,7 +102,7 @@ async fn verify_router(ctx: &Ctx, head: &Head, deployment: Deployment) -> Gatewa
     Ok(())
 }
 
-async fn frame(ctx: &Ctx, builder: Builder, deployment: Deployment) -> GatewayResult<Frame> {
+async fn builder_snapshot(ctx: &Ctx, builder: Builder) -> GatewayResult<Value> {
     let (url, method) = builder.data();
     let mut limits = ctx.limits()?;
     limits.max_bytes = limits.max_bytes.min(1_048_576);
@@ -112,22 +113,30 @@ async fn frame(ctx: &Ctx, builder: Builder, deployment: Deployment) -> GatewayRe
     let (status, body) = http::exchange(request, limits).await.map_err(|_| {
         ctx.err(
             ErrorCode::Unreachable,
-            "Fermi: не получено состояние строителя",
+            "Не получено состояние строителя Ethereum",
         )
     })?;
     let parsed = serde_json::from_str::<Value>(&body).ok();
     parsed
-        .as_ref()
         .filter(|r| {
             status.is_success() && r["id"] == 1 && r["jsonrpc"] == "2.0" && r.get("error").is_none()
         })
-        .and_then(|r| Frame::read(builder, &r["result"], deployment))
+        .and_then(|mut r| r.get_mut("result").map(Value::take))
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::BadResponse,
-                "Fermi: некорректный ответ строителя или нет состояния оракула",
+                "Некорректный ответ строителя Ethereum",
             )
         })
+}
+
+async fn frame(ctx: &Ctx, builder: Builder, deployment: Deployment) -> GatewayResult<Frame> {
+    Frame::read(builder, &builder_snapshot(ctx, builder).await?, deployment).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "В кадре строителя нет оракула Fermi",
+        )
+    })
 }
 
 fn exact_amount(raw: Option<&str>, tokens: Option<&str>, precision: u8) -> Option<U256> {

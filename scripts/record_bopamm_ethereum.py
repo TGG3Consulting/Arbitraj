@@ -64,7 +64,11 @@ def directory(reader,snap):
     for lo in range(start,snap["block"]+1,1800):
         logs+=reader.one("eth_getLogs",[{"address":VENUES,"topics":[[MARKET_EVENT,LEGACY_EVENT]],"fromBlock":hex(lo),"toBlock":hex(min(lo+1799,snap["block"]))}])
     assert all(not x.get("removed") for x in logs) and len({(v["blockHash"],v["logIndex"]) for v in logs})==len(logs)
-    return dict(selector=reader.tag,height=snap["block"],state_root=reader.header["stateRoot"],roles=roles,
+    pricing_roles={}
+    for address,code in zip((PAMM,REGISTRY),reader.many(("eth_getCode",[v,reader.tag]) for v in (PAMM,REGISTRY)),strict=True):
+        assert code!="0x"
+        pricing_roles[address]="0x"+keccak(hexstr=code).hex()
+    return dict(selector=reader.tag,height=snap["block"],state_root=reader.header["stateRoot"],roles=roles,pricing_roles=pricing_roles,
                 start=start,logs=logs,source="DefiLlama/dimension-adapters@be9967c3 dexs/bebop/index.ts")
 
 def capture_frame(reader,digest):

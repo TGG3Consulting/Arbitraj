@@ -3567,6 +3567,19 @@ rationale = "Перебор слотов маппинга balances 0..N−1 (Sol
 prefill = { kind = "Venue", id = "bsc_dex" }
 
 [[section]]
+title = "bopAMM на Ethereum"
+intro = "Адреса и код для проверки публичного кадра Titan или BuilderNet. Адрес развёрнутого модуля кошелька добавляет его владелец."
+
+[[section.rec]]
+name = "bopamm.roles"
+area = "площадка eth_dex"
+unit = "контракты Ethereum"
+value = "market 0xb09aaa8933626d7e4c48d65dad2d77021cfbca9a 0xbae2a8ec2d449ec965078332fda882eec8d2097ea034a177cc2860a7b43e46d0,pricing 0xb09999a44e3240193193be9dd99cc73c8cc945a6 0xbb16459ebfa29a02df6e294c624a56a5081e170a7f91c90650f04ca5b56b3dba,registry 0xda7afeed021eafc1c1af9c362de477dad0396b81 0xcc6b013888e9bc9bb487c5301fff645b5d91007cf88053d145963921f6e2d026"
+source = "https://buildernet.org/docs/api#state-stream и eth_getCode на каноническом блоке Ethereum 26494988."
+rationale = "market.pricing() связывает рынок и его оракул. Из опубликованного кадра в расчёт попадает только изменение хранилища настроенного реестра."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
 title = "FermiSwap на Ethereum — адреса и хеши"
 intro = "Данные размещения для сверки с узлом. Исполнитель кошелька и включение торговли задаются отдельно."
 

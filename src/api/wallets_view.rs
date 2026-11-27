@@ -66,6 +66,7 @@ pub async fn view(st: &AppState) -> Value {
     // Решение 432: площадки DEX сетей (две и больше; одна — пусто, экран прежний) — исполнитель кошелька по сети.
     let nets = super::wallets_chain::chains(st).await;
     let single_source=|key:&str|dex.as_deref().is_some_and(|v| st.settings.text(key,crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty()));
+    let bopamm = dex.as_deref().is_some_and(|id| bopamm_configured(st, id));
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -92,6 +93,7 @@ pub async fn view(st: &AppState) -> Value {
         wallets.push(json!({
             "id": w.id,
             "fynd": single_source("fynd.network"),
+            "bopamm": bopamm,
             "kipseli": single_source("kipseli.base_url"),
             "zeroex": single_source("zeroex.base_url"),
             "name": w.name,
@@ -157,6 +159,7 @@ async fn by_chain(
             "venue": v.0,
             "chain": chain,
             "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
+            "bopamm": bopamm_configured(st, &v.0),
             "kipseli": st.settings.text("kipseli.base_url",at).is_ok_and(|s|!s.is_empty()),
             "zeroex": st.settings.text("zeroex.base_url",at).is_ok_and(|s|!s.is_empty()),
             "home": w.home() == v.0,
@@ -169,4 +172,11 @@ async fn by_chain(
         }));
     }
     out
+}
+
+fn bopamm_configured(st: &AppState, venue: &str) -> bool {
+    let at = crate::settings::read::At { venue: Some(venue), coin: None };
+    st.settings.integer("dex.evm_chain_id", at).ok() == Some(1)
+        && st.settings.get_exact("bopamm.roles", &crate::settings::scope::Scope::Venue(venue.into()))
+            .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
 }

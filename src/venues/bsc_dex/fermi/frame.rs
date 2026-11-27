@@ -83,6 +83,15 @@ impl Frame {
                 result.get("slot")?.as_u64()?,
             ),
         };
+        Self::from_row(row, target, slot, deployment)
+    }
+
+    pub(super) fn from_row(
+        row: &Value,
+        target: u64,
+        slot: u64,
+        deployment: Deployment,
+    ) -> Option<Self> {
         let overrides = row.get("stateOverride")?.as_object()?;
         let engine = overrides.get(&deployment.engine.to_string().to_lowercase())?;
         let diff = serde_json::from_value::<Diff>(engine.clone())

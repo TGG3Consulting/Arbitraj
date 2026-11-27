@@ -6,6 +6,7 @@ from pathlib import Path
 
 from eth_abi import decode, encode
 from eth_utils import keccak
+from mooniswap_decay import capture as delayed_quotes
 from mooniswap_observe import frame, decode_frame
 from fork_fee_rpc import Reader
 from record_base_slipstream_executor import OWNER, ROOT, simulate_block
@@ -200,8 +201,10 @@ def capture(generation):
             market["trials"].extend(trials(reader, generation, p, a, b, n) for n in sizes)
         markets.append(market)
     code = reader.one("eth_getCode", [factory, reader.tag])
-    return dict(generation=generation, chain=1, head=head["block"], selector=reader.tag, state_root=reader.header["stateRoot"],
-                source=source, factory=factory, activity=activity(reader, registry, generation), runtime="0x"+keccak(hexstr=code).hex(), registry=registry, markets=markets)
+    tape=activity(reader,registry,generation)
+    delay=delayed_quotes(reader,tape["transactions"],targets,generation=="successor",aggregate,MULTI)
+    return dict(delay=delay,generation=generation, chain=1, head=head["block"], selector=reader.tag, state_root=reader.header["stateRoot"],
+                source=source, factory=factory, activity=tape, runtime="0x"+keccak(hexstr=code).hex(), registry=registry, markets=markets)
 
 
 if __name__ == "__main__":

@@ -59,6 +59,7 @@ pub fn call_of(
         min_out: U256::from(1u8),
         deadline: U256::from(now + ctx.int("dex.deadline_s")?),
         steps: vec![step],
+        first_step_llamma: e.family.variant.llamma(),
         native: None,
         gated: Vec::new(),
     })

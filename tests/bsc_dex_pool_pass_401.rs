@@ -304,6 +304,7 @@ fn exec_call(executor: Address, gated: Vec<Gated>) -> ExecCall {
         min_out: U256::from(1u8),
         deadline: U256::from(1u8),
         steps: Vec::new(),
+        first_step_llamma: false,
         native: None,
         gated,
     }

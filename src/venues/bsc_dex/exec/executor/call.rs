@@ -34,6 +34,8 @@ pub struct ExecCall {
     pub min_out: U256,
     pub deadline: U256,
     pub steps: Vec<ArbExecutor::Step>,
+    /// Семейство первой ноги из реестра. Не входит в calldata исполнителя.
+    pub first_step_llamma: bool,
     /// Решение 272: Some((обёртка, wrapIn)) — вызов executeNative исполнителя v2 (монета сделки — нативный BNB);
     /// None — execute, как раньше. Обёртка (dex.native_wrapped) в данные не идёт (ревью 272 А1: у контракта она из
     /// конструктора) — по ней with_native сверяет край маршрута.
@@ -196,6 +198,7 @@ pub fn build(
         min_out,
         deadline: U256::from(now + ctx.int("dex.deadline_s")?),
         steps,
+        first_step_llamma: first.entry.family.variant.llamma(),
         native: None,
         gated,
     })

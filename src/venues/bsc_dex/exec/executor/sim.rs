@@ -120,10 +120,11 @@ pub fn received(ctx: &Ctx, r: &CallResult) -> GatewayResult<U256> {
 
 /// Сверка с худшей ценой: покупка — USDT входа / монет получено, продажа — USDT получено / монет входа.
 /// Ошибки: QuoteMismatch (хуже req.worst_price), NoRoute (монет 0), BadResponse (числа).
-/// Only the proven source refund of an original LLAMMA first step can lower the input used for the price limit.
+/// Возврат входной монеты учитывается только для первой ноги LLAMMA, подтверждённой реестром.
 fn llamma_debit(c:&ExecCall,wallet:Address,logs:&[super::super::super::check::simulate::SimLog])->Option<U256>{
     use alloy::sol_types::{SolEvent,SolValue};
     use crate::venues::bsc_dex::{exec::{fill,signed_call},pools::llamma::ILlama};
+    if !c.first_step_llamma { return None; }
     let first=c.steps.first()?;
     if c.native.is_some()||first.kind!=9||first.tokenIn!=c.token_in||first.shareBps!=10_000||
         c.steps.iter().skip(1).any(|s|s.tokenIn==c.token_in||s.tokenOut==c.token_in){return None}
@@ -200,3 +201,7 @@ pub fn explain(mut e: GatewayError, legs: &str) -> GatewayError {
     }
     e
 }
+
+#[cfg(test)]
+#[path = "llamma_debit_tests.rs"]
+mod llamma_debit_tests;

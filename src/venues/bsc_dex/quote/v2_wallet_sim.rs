@@ -425,6 +425,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
                 min_out: minimum,
                 deadline,
                 steps: vec![step],
+                first_step_llamma: matches!(&o.wire, Wire::LlammaV5(..)),
                 native: v5.native,
                 gated: vec![],
             }

@@ -120,6 +120,7 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
+        super::v2_wallet_sim::Wire::YieldBasis(t)=>Some(RouterFeeMode::YieldBasis{target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::BalancerV1(t)=>Some(RouterFeeMode::BalancerV1{
             target:t.target,native:t.native,native_cash:t.native && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt),desired:t.desired}),
         super::v2_wallet_sim::Wire::BancorV3(t)=>Some(RouterFeeMode::BancorV3{target:t.contract,module:t.module_hash.is_some(),exempt:t.exemption,desired:t.desired,native:t.native_wallet,native_cash:t.native_wallet && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
@@ -247,7 +248,7 @@ pub(super) async fn option(
         {
             super::router_pricing::checked(ctx, &c.entry, input, amount, head).await?;
         }
-        let vista_value = if let super::v2_wallet_sim::Wire::BalancerV1(t)=&execution.wire{Some(t.value(input,amount))}else if let super::v2_wallet_sim::Wire::BancorV3(t)=&execution.wire{Some(t.value(amount))}else if let super::v2_wallet_sim::Wire::UniswapV1(t)=&execution.wire{Some(t.value(amount))}else if let super::v2_wallet_sim::Wire::NativeFlat(t)=&execution.wire{Some(t.wei)}else if let super::v2_wallet_sim::Wire::FluxEth(m)=&execution.wire{Some(if input==m.wrapped{amount}else{U256::ZERO})} else if let super::v2_wallet_sim::Wire::Carbon(c)=&execution.wire{Some(c.value())}else if let super::v2_wallet_sim::Wire::EkuboV2(key,Some(_))=&execution.wire {Some(if key.side{U256::ZERO}else{amount})}else if super::vista_pricing::is_vista(&c.entry) || matches!(&execution.wire,super::v2_wallet_sim::Wire::Vista(_)) {
+        let vista_value = if let super::v2_wallet_sim::Wire::YieldBasis(t)=&execution.wire{Some(t.value(input,amount))}else if let super::v2_wallet_sim::Wire::BalancerV1(t)=&execution.wire{Some(t.value(input,amount))}else if let super::v2_wallet_sim::Wire::BancorV3(t)=&execution.wire{Some(t.value(amount))}else if let super::v2_wallet_sim::Wire::UniswapV1(t)=&execution.wire{Some(t.value(amount))}else if let super::v2_wallet_sim::Wire::NativeFlat(t)=&execution.wire{Some(t.wei)}else if let super::v2_wallet_sim::Wire::FluxEth(m)=&execution.wire{Some(if input==m.wrapped{amount}else{U256::ZERO})} else if let super::v2_wallet_sim::Wire::Carbon(c)=&execution.wire{Some(c.value())}else if let super::v2_wallet_sim::Wire::EkuboV2(key,Some(_))=&execution.wire {Some(if key.side{U256::ZERO}else{amount})}else if super::vista_pricing::is_vista(&c.entry) || matches!(&execution.wire,super::v2_wallet_sim::Wire::Vista(_)) {
             Some(match &execution.wire {
                 super::v2_wallet_sim::Wire::Vista(call) => call.value(amount),
                 super::v2_wallet_sim::Wire::V5(v) if matches!(v.native, Some((_, true))) => amount,

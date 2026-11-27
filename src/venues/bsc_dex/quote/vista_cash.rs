@@ -16,7 +16,7 @@ pub(in crate::venues::bsc_dex) fn cash_market(p: &super::super::parts::Parts)->b
 pub(in crate::venues::bsc_dex) fn marked(mode: Option<crate::core::types::RouterFeeMode>) -> bool {
     use crate::core::types::RouterFeeMode::*;
     matches!(mode, Some(NativeSettlement{..} | NativeWallet{native_cash:true,..}
-        | BalancerV1{native_cash:true,..} | BancorV3{native_cash:true,..} | UniswapV1{native_cash:true,..} | FluxEth{native_cash:true,..} | CarbonWallet{native_cash:true,..}))
+        | YieldBasis{native_cash:true,..} | BalancerV1{native_cash:true,..} | BancorV3{native_cash:true,..} | UniswapV1{native_cash:true,..} | FluxEth{native_cash:true,..} | CarbonWallet{native_cash:true,..}))
 }
 
 /// Native cash may use the graph executor only when its own quote pinned that exact recipient.
@@ -45,7 +45,7 @@ pub(in crate::venues::bsc_dex) fn terminal_cash(
     if graph_target(r).is_some() {
         return e.family.variant==super::super::pools::family_variant::Variant::PuzzleRanges;
     }
-    r.mode==RouteMode::Direct && marked(h.fee_mode) && (matches!(e.family.variant,super::super::pools::family_variant::Variant::BalancerV1|super::super::pools::family_variant::Variant::BancorV3|super::super::pools::family_variant::Variant::UniswapV1) || e.family.variant.flux_native()
+    r.mode==RouteMode::Direct && marked(h.fee_mode) && (matches!(e.family.variant,super::super::pools::family_variant::Variant::YieldBasis|super::super::pools::family_variant::Variant::BalancerV1|super::super::pools::family_variant::Variant::BancorV3|super::super::pools::family_variant::Variant::UniswapV1) || e.family.variant.flux_native()
         || native_router(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::carbon_direct::enabled(&e))
 }
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.

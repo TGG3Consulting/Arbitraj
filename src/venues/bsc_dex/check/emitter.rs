@@ -42,6 +42,13 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
         return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
     }
+    if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis {
+        use super::super::exec::yield_basis_wallet::abi::{IUnderlyingSwap,IVirtualSwap};
+        let PoolRef::Singleton{id,..}=&e.pool.reference else{return false;};
+        let Some((_,role,venue))=super::super::pools::yield_basis::key(*id) else{return false;};
+        let topic=if role==2 {IVirtualSwap::TokenExchange::SIGNATURE_HASH}else{IUnderlyingSwap::TokenExchange::SIGNATURE_HASH};
+        return log.address==venue && log.topics.len()==2 && log.topics[0]==topic;
+    }
     if let crate::core::types::PoolState::BalancerV1(s)=&e.pool.state {
         use super::super::exec::balancer_v1_wallet::IBPoolWallet;
         return log.address==s.pool && log.topics.len()==4 && log.topics[0]==IBPoolWallet::LOG_SWAP::SIGNATURE_HASH &&

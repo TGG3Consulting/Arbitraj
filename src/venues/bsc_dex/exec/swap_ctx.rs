@@ -59,6 +59,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub prop:Option<Box<super::prop_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub yield_basis:Option<Box<super::yield_basis_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub balancer_v1:Option<Box<super::balancer_v1_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub bancor_v3:Option<Box<super::bancor_v3_wallet::Proof>>,

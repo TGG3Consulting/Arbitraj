@@ -155,6 +155,8 @@ pub enum RouterFeeMode {
     Rebate,
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
+    /// Original YieldBasis market paid through a module bound to its Ethereum factory.
+    YieldBasis {target:alloy_primitives::Address, native:bool, native_cash:bool},
     /// Protected BPool with explicit exact-output budget and native/WETH settlement mode.
     BalancerV1 {target:alloy_primitives::Address, native:bool, native_cash:bool, desired:Option<alloy_primitives::U256>},
     /// Original Bancor amount mode and the fee class verified for the actual caller.

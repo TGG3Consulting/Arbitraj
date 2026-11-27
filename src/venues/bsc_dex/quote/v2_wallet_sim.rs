@@ -54,6 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
+    YieldBasis(super::super::exec::yield_basis_wallet::Terms),
     BalancerV1(super::super::exec::balancer_v1_wallet::Terms),
     BancorV3(Box<super::super::exec::bancor_v3_wallet::Terms>),
     UniswapV1(Box<super::super::exec::uniswap_v1_wallet::Terms>),
@@ -120,6 +121,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     };
     let (wrapped, value) = match &o.wire {
         Wire::FluxEth(m)=>(Some(m.wrapped),if o.input==m.wrapped{o.amount}else{U256::ZERO}),
+        Wire::YieldBasis(t)=>(t.native.then_some(t.wrapped),t.value(o.input,o.amount)),
         Wire::BalancerV1(t)=>(t.native.then_some(t.wrapped),t.value(o.input,o.amount)),
         Wire::BancorV3(t)=>(t.native(),t.value(o.amount)),
         Wire::UniswapV1(t)=>(t.native(),t.value(o.amount)),
@@ -165,7 +167,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Stabull(_))||matches!(&o.wire,Wire::NativeFlat(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::Stabull(_))||matches!(&o.wire,Wire::NativeFlat(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -215,6 +217,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::YieldBasis(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BalancerV1(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BancorV3(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::UniswapV1(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
@@ -317,6 +320,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::YieldBasis(t)=>t.proof(o,minimum,deadline).data(),
         Wire::BalancerV1(t)=>t.proof(o,minimum,deadline).data(),
         Wire::BancorV3(t)=>t.proof(o,minimum,deadline).data(),
         Wire::UniswapV1(t)=>t.proof(o,minimum,deadline).data(),

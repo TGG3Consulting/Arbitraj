@@ -10,6 +10,7 @@ pub(super) enum DirectCall {
     O1(std::sync::Arc<super::o1_wallet::Proof>),
     FluxEth(std::sync::Arc<super::flux_eth::Proof>),
     Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
+    YieldBasis(std::sync::Arc<super::yield_basis_wallet::Proof>),
     BalancerV1(std::sync::Arc<super::balancer_v1_wallet::Proof>),
     BancorV3(std::sync::Arc<super::bancor_v3_wallet::Proof>),
     UniswapV1(std::sync::Arc<super::uniswap_v1_wallet::Proof>),
@@ -72,6 +73,7 @@ impl DirectCall {
             Self::Ranges(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::FluxEth(p) => std::sync::Arc::make_mut(p).minimum = minimum,
             Self::Bundles(p) => std::sync::Arc::make_mut(p).minimum = minimum,
+            Self::YieldBasis(p)=>std::sync::Arc::make_mut(p).minimum=minimum,
             Self::BalancerV1(p)=>std::sync::Arc::make_mut(p).minimum=minimum,
             Self::BancorV3(p)=>std::sync::Arc::make_mut(p).minimum=minimum,
             Self::UniswapV1(p)=>std::sync::Arc::make_mut(p).minimum=minimum,
@@ -112,6 +114,7 @@ impl DirectCall {
 
     pub(super) fn native_value(self) -> Option<U256> {
         match self {
+            Self::YieldBasis(p)=>Some(p.terms.value(p.input,p.maximum)),
             Self::BalancerV1(p)=>Some(p.terms.value(p.input,p.maximum)),
             Self::BancorV3(p)=>Some(p.terms.value(p.maximum)),
             Self::UniswapV1(p)=>Some(p.terms.value(p.amount)),
@@ -155,6 +158,7 @@ impl DirectCall {
             Self::Carbon(c) => c.data(),
             Self::O1(t) => t.data(),
             Self::Bundles(t) => t.data(),
+            Self::YieldBasis(t)=>t.data(),
             Self::BalancerV1(t)=>t.data(),
             Self::BancorV3(t)=>t.data(),
             Self::UniswapV1(t)=>t.data(),

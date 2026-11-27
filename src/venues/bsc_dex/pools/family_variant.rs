@@ -31,6 +31,7 @@ pub enum Variant {
     BaseNativeV3,
     /// Кривая Curve торгует IBT и зарегистрированным PT Spectra.
     Spectra,
+    WombatVolatile,
     IziModules,
     UmbraeDamm,
     UmbraeDlmm,
@@ -344,6 +345,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
+        "wombat_volatile" => Variant::WombatVolatile,
         "spectra_stableswap_ng" | "spectra_crypto_v1" => Variant::Spectra,
         "izi_static_modules" => Variant::IziModules,
         "umbrae_dlmm" | "umbrae_dlmm_module" => Variant::UmbraeDlmm,

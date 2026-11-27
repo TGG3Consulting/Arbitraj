@@ -187,6 +187,7 @@ pub fn groups(wants: &[Want<'_>]) -> Vec<(Address, Vec<usize>)> {
     for (i, w) in wants.iter().enumerate() {
         // A registered pair can reference two independent markets at one Network/factory.
         // Only a shared multicoin pool can be decoded from the contract without the raw pair.
+        if w.family.variant == Variant::WombatVolatile {continue;}
         if !w.family.proto.is_multi_coin() && super::load_batch::one_by_one(w.family){continue;}
         let PoolRef::Multi { contract, .. } = w.reference else {
             continue;

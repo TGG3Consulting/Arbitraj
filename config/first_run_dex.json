@@ -1968,7 +1968,9 @@
         "0x3161f40ea6c0c4cc8b2433d6d530ef255816e854",
         "0xf8e32ca46ac28799c8fb7dce1ac11a4541160734",
         "0x647cc8816c2d60a5ff4d1ffef27a5b3637d5ac81",
-        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32"
+        "0x05a33c0eaf81367ce953d2dcd4ea1be8758f4d32",
+        "0xcf2e56e086fcd21eab3614a5a78c8ae27c2f0536",
+        "0xe43c1695df76cca4d6079061924d7150fd553c21"
       ],
       "dex.wombat_implementations": [
         "0x4705b477d35112f7b7ca2bc5059ed9b78bb46134"
@@ -1976,6 +1978,35 @@
       "dex.wombat_dynamic_implementations": [
         "0x5fabce763446344a912d5cbf84b0e6541a376454"
       ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "wombat-volatile-ethereum",
+    "source": "https://raw.githubusercontent.com/DefiLlama/dimension-adapters/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/wombat-exchange/index.ts",
+    "settings": {
+      "dex.kind": "wombat_volatile",
+      "dex.stable_pools": [
+        "0x89b88a45e23978b38a14695b63f475d4e4ccaf95"
+      ],
+      "dex.multi_pair": true,
+      "dex.pool_implementation": "0x9d40cfec47b60b8ebdb9eaf5a2bb1b41eef9002f",
+      "dex.proxy_runtime_hashes": [
+        "0xc149efd25f462694586676e4ffb1db9fb58ff9fb619399a16ed7d74d127237fc",
+        "0x587ce30c47749c04a0f620b47f2174a7af429a3f0d536b083bb7e0fe51c0e295"
+      ],
+      "dex.pmm_ladder_usd": [
+        "0.001",
+        "0.01",
+        "0.1",
+        "1",
+        "5",
+        "10",
+        "25",
+        "50"
+      ],
+      "dex.pmm_ladder_counter": true
     }
   },
   {

@@ -403,6 +403,7 @@ pub mod load_stable_u;
 pub mod load_v2v3;
 pub mod load_v3_once;
 pub mod load_wombat;
+pub(in crate::venues::bsc_dex) mod wombat_volatile;
 pub mod load_wombat_build;
 pub mod load_wombat_calls;
 pub mod load_wombat_memo;

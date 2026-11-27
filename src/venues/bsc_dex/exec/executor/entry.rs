@@ -653,6 +653,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         // Решение 484: пул Wombat — шаг без данных (approve + swap пула); пул на паузе или актив монеты входа на паузе
         // (StableData.wombat.asset_paused) — обмен откатился бы, шаг не строится.
         ExecKind::Wombat => match &e.pool.state {
+            PoolState::OraclePmm(d) if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::WombatVolatile && d.feasible && !d.paused && [e.pool.token0,e.pool.token1].contains(&token_in) => Params::Wombat,
             PoolState::StableSwap(d) if !d.halted && wombat_open(d, e, token_in) => Params::Wombat,
             _ => {
                 let why = format!("{}: Wombat не прочитан или на паузе", e.family.id);

@@ -326,7 +326,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "ekubo" => ExecKind::Ekubo,
         // Решение 484: PoolV2.swap — вызывающий не ограничен (nonReentrant, whenNotPaused, срок, пауза актива входа;
         // PoolV2.sol L843-L876), вход — safeTransferFrom(msg.sender) по разрешению пулу; шаг 30, только v5.
-        "wombat" => ExecKind::Wombat,
+        "wombat" | "wombat_volatile" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
         "ammalgam_dlex" | "empire_module" | "integral_size_v5" | "degenswap_module" | "safeswap_trade_module" | "surge_v5" | "dagrow_v5" | "defiplaza_multi" | "defiplaza_stable" | "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,

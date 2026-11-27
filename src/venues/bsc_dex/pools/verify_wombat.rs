@@ -78,6 +78,14 @@ async fn one(ctx: &Ctx, c: &Candidate) -> Result<Result<super::discover::Found, 
             c.coin, c.quote
         )));
     }
+    if c.family.variant == super::family_variant::Variant::WombatVolatile {
+        let at=super::nami::block(ctx,"latest").await.map_err(|e|e.message)?;
+        if let Err(e)=super::wombat_volatile::market(ctx,c.family,pool,(c.coin,c.quote),&at).await {
+            if e.code==crate::gateway::errors::ErrorCode::NotApplicable{return Ok(Err(e.message));}
+            return Err(e.message);
+        }
+        return Ok(Ok(multi_pair::adopt(ctx,verify_woo::found(c,PoolRef::Contract(pool)),&tokens)));
+    }
     let word: B256 = rpc::call(
         ctx,
         "eth_getStorageAt",

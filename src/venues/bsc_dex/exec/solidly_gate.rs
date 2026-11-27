@@ -67,6 +67,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant==Variant::WombatVolatile {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            if !Box::pin(super::super::pools::wombat_volatile::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await? {return Err(ctx.err(ErrorCode::NoRoute,"Wombat: пул на паузе"));}
+            continue;
+        }
         if f.variant.issuer_shares() {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             let market=super::aktionariat_plan::terms(ctx,e)?;

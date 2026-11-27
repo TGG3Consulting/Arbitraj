@@ -68,6 +68,13 @@ pub fn state<'a>(
 ) -> futures_util::future::BoxFuture<'a, GatewayResult<Loaded>> {
     // Construct and poll only this family's fallible RPC sequence. In debug builds
     // unused arms of one async function otherwise consume real stack in poll().
+    if f.variant == Variant::WombatVolatile {
+        return Box::pin(async move {
+            let at=super::nami::block(ctx,&block_tag(block)).await?;
+            let state=super::wombat_volatile::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at).await?;
+            Ok(Loaded {state,ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant.aqua() {return Box::pin(super::aqua_ladder::load(ctx,tokens,reg,f,reference,pair,usdt,block));}
     if f.variant.launch()
         && let PoolRef::Singleton { manager, id } = reference

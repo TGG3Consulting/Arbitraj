@@ -637,6 +637,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "woofi_v2" => (PoolKind::OraclePmm, Proto::WooPP, true, false, false),
         // Решение 484: Wombat Exchange — в графе и сигналах (порт CoreV2 + haircut + высокое покрытие); исполнение — шаг
         // WOMBAT исполнителя v5 (exec_kind.rs).
+        "wombat_volatile" => (PoolKind::OraclePmm, Proto::Wombat, true, false, false),
         "wombat" => (PoolKind::StableSwap, Proto::Wombat, true, false, false),
         // Fluid DEX T1 (решение 440): в графе и сигналах (порт _swapIn); исполнение — шаг FLUID исполнителя.
         "fluid_t1" => (PoolKind::SmartColDebt, Proto::FluidT1, true, false, false),
@@ -1217,6 +1218,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // Решение 484: Wombat — фабрики нет: пулы — список dex.stable_pools (docs.wombat.exchange), реализации пула —
         // сверенные с исходником (dex.wombat_dynamic_implementations — необязательная: без неё динамические пулы не
         // читаются).
+        Proto::Wombat if f.variant == Variant::WombatVolatile => list.extend(["dex.stable_pools","dex.pool_implementation","dex.proxy_runtime_hashes","dex.pmm_ladder_usd"]),
         Proto::Wombat => list.extend(["dex.stable_pools", "dex.wombat_implementations"]),
         // WooFi: общий контракт, оракул и закреплённая реализация прокси (сменилась — семейство стоит до сверки).
         Proto::Lunar => {

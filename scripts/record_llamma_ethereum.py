@@ -114,9 +114,11 @@ def capture():
     reader=Reader("ethereum",head)
     cap=CanonicalCalls(reader)
     rows={kind:markets(cap,kind,factory) for kind,factory in FACTORIES.items()}
+    from llamma_runtime import capture as executable_classes
     last=int(reader.header["number"],16)
     result=dict(selector=reader.tag,root=reader.header["stateRoot"],factories=FACTORIES,markets=rows,
-                quotes={k:quotes(cap,v) for k,v in rows.items()},activity=evidence(reader,rows,last))
+                quotes={k:quotes(cap,v) for k,v in rows.items()},activity=evidence(reader,rows,last),
+                runtimes=executable_classes(reader,rows,FACTORIES))
     end=reader.one("eth_getBlockByNumber",[hex(last),False])
     if (end["hash"],end["stateRoot"])!=(reader.tag["blockHash"],result["root"]):
         raise ValueError("directory or event range reorganized")

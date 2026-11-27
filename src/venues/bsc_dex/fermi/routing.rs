@@ -1,24 +1,13 @@
 //! Оценка объёма по книге выбранного строителя и перепроверка кошелька, предела и полной стоимости в его слоте.
-use super::super::{
-    gas_ticker, hashflow, num,
-    parts::Parts,
-    send::{tx, tx_1559::Fees},
-};
-use super::{
-    Head,
-    indicative::{Candidate, candidate},
-    markets::Books,
-    slot::{self, Proof},
-};
-use crate::core::types::{Asset, Cost, CostKind, Quote, RouteMode, Side};
+use super::super::{hashflow, parts::Parts, send::tx_1559::Fees};
+use super::{firm::firm, indicative::candidate, markets::Books, slot::Proof};
+use crate::core::types::{Asset, Quote, RouteMode, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::{
-    primitives::{Address, B256, U64, U256, keccak256},
+    primitives::{Address, B256, U256, keccak256},
     sol_types::SolValue,
 };
-use chrono::Utc;
 use rust_decimal::Decimal;
-use serde_json::json;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -66,7 +55,7 @@ impl Tickets {
 pub(in crate::venues::bsc_dex) fn active(p: &Parts) -> bool {
     p.ctx.chain_id() == Some(1)
         && p.ctx.flag("fermi.trading").unwrap_or(false)
-        && p.slot_markets.current(p).is_some()
+        && !p.slot_markets.current(p).is_empty()
 }
 pub(in crate::venues::bsc_dex) fn breaks(
     p: &Parts,
@@ -74,100 +63,16 @@ pub(in crate::venues::bsc_dex) fn breaks(
     side: Side,
     max: Decimal,
 ) -> Vec<Decimal> {
-    let f = || {
-        p.slot_markets
-            .current(p)?
-            .sides
-            .get(&(asset.contract?, side == Side::Buy))
-            .map(|levels| levels.breaks(max))
+    let Some(coin) = asset.contract else {
+        return Vec::new();
     };
-    f().unwrap_or_default()
-}
-async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
-    let b = c.book;
-    let h = &b.head;
-    let f = &b.frame;
-    let ctx = &p.ctx;
-    let who = c.who;
-    let (fees, base) = p.gas.fees(ctx, &p.heads).await.ok()?;
-    let executor = b.config.executor;
-    let (s, r) = slot::amounts(ctx, h, f, executor, c.input, c.output, c.amount)
-        .await
-        .ok()?;
-    let leg = keccak256((h.hash, who, c.input, c.output, c.amount).abi_encode());
-    let proof = Proof {
-        builder: b.config.builder.name().into(),
-        parent: h.hash,
-        target: f.target,
-        timestamp: f.timestamp,
-        executor,
-        router: Some(f.deployment.router),
-        payer: who,
-        input: c.input,
-        output: c.output,
-        amount: c.amount,
-        limit: if c.amount.is_negative() { s } else { r },
-        leg,
-    };
-    let (spent, received, gas) = slot::simulate(ctx, h, f, &proof, Some((fees.max_fee, fees.tip)))
-        .await
-        .ok()?;
-    let limit = tx::with_margin(
-        ctx,
-        U64::from(gas),
-        ctx.dec("send.gas_limit_margin_pct").ok()?,
-    )
-    .ok()?;
-    let reserve = U256::from(fees.max_fee).checked_mul(U256::from(limit))?;
-    if reserve > num::to_units(b.config.gas, 18)? {
-        return None;
+    let mut points = std::collections::BTreeSet::new();
+    for book in p.slot_markets.current(p) {
+        if let Some(side) = book.sides.get(&(coin, side == Side::Buy)) {
+            points.extend(side.breaks(max));
+        }
     }
-    let latest: Head = super::rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false]))
-        .await
-        .ok()?;
-    if latest.hash != h.hash
-        || !b.current()
-        || super::markets::Config::read(p).as_ref() != Some(&b.config)
-    {
-        return None;
-    }
-    let mut quote = c.quote;
-    let gross = num::to_decimal(
-        if quote.side == Side::Buy {
-            spent
-        } else {
-            received
-        },
-        c.decs.1,
-    )?;
-    quote.avg_price = gross.checked_div(quote.qty)?;
-    // До подписания допускаем стоимость газа вплоть до потолка типа 2; отдельного перевода чаевых нет.
-    let cost = num::to_decimal(U256::from(fees.max_fee).checked_mul(U256::from(gas))?, 18)?;
-    quote.costs = vec![Cost::new(
-        CostKind::Gas,
-        cost,
-        gas_ticker::read(ctx).ok()?,
-        false,
-    )];
-    if let Some(route) = quote.route.as_mut() {
-        route.gas_units = gas;
-        route.executable = true;
-        route.exec_note = None;
-    }
-    quote.at = Utc::now();
-    Some((
-        Prepared {
-            book: b,
-            proof,
-            fees,
-            base,
-            gas_limit: limit,
-            spent,
-            received,
-            decs: c.decs,
-        },
-        quote,
-    ))
+    points.into_iter().collect()
 }
 pub(in crate::venues::bsc_dex) async fn consider(
     p: &Parts,
@@ -184,9 +89,15 @@ pub(in crate::venues::bsc_dex) async fn consider(
     {
         return baseline;
     }
-    let Some(c) = candidate(p, asset, side, qty) else {
+    let candidates: Vec<_> = p
+        .slot_markets
+        .current(p)
+        .into_iter()
+        .filter_map(|b| candidate(p, b, asset, side, qty))
+        .collect();
+    if candidates.is_empty() {
         return baseline;
-    };
+    }
     let old = if let Ok(b) = &baseline
         && b.fillable_qty == qty
         && b.qty == qty
@@ -200,34 +111,51 @@ pub(in crate::venues::bsc_dex) async fn consider(
     } else {
         None
     };
-    let improves =
-        |net: Decimal| old.is_none_or(|v| if side == Side::Buy { net < v } else { net > v });
-    let Some(pre) = hashflow::routing::total(p, &c.quote).await else {
-        return baseline;
-    };
-    if !improves(pre) {
+    let final_quote = crate::gateway::quote_stage::is_final();
+    if final_quote && p.ctx.account.is_none() {
         return baseline;
     }
-    if !crate::gateway::quote_stage::is_final() {
-        return Ok(c.quote);
+    let options = futures_util::future::join_all(candidates.into_iter().map(|c| async move {
+        if final_quote {
+            let timeout = Duration::from_millis(c.book.config.timeout);
+            let (p, q) = tokio::time::timeout(timeout, firm(p, c)).await.ok()??;
+            Some((Some(p), q))
+        } else {
+            Some((None, c.quote))
+        }
+    }))
+    .await;
+    let mut best = baseline;
+    let mut value = old;
+    let mut ticket = None;
+    for (prepared, q) in options.into_iter().flatten() {
+        let Some(net) = hashflow::routing::total(p, &q).await else {
+            continue;
+        };
+        if value.is_some_and(|v| {
+            if side == Side::Buy {
+                net >= v
+            } else {
+                net <= v
+            }
+        }) {
+            continue;
+        }
+        if prepared
+            .as_ref()
+            .is_some_and(|v| !super::slot_config::timely(p, &v.book))
+        {
+            continue;
+        }
+        best = Ok(q);
+        value = Some(net);
+        ticket = prepared;
     }
-    if p.ctx.account.is_none() {
-        return baseline;
-    }
-    let timeout = Duration::from_millis(c.book.config.timeout);
-    let Ok(Some((prepared, mut quote))) = tokio::time::timeout(timeout, firm(p, c)).await else {
-        return baseline;
-    };
-    if !hashflow::routing::total(p, &quote)
-        .await
-        .is_some_and(improves)
-        || !prepared.book.current()
+    if let Some(prepared) = ticket
+        && let Ok(q) = best.as_mut()
+        && let Some(route) = q.route.as_mut()
     {
-        return baseline;
+        route.mode = RouteMode::Slot(p.slot_markets.tickets.save(prepared));
     }
-    let id = p.slot_markets.tickets.save(prepared);
-    if let Some(route) = quote.route.as_mut() {
-        route.mode = RouteMode::Slot(id);
-    }
-    Ok(quote)
+    best
 }

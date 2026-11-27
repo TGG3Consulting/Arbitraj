@@ -14,6 +14,9 @@ mod dispatch;
 mod execute;
 mod indicative;
 mod prop_slot;
+mod slot_config;
+mod prop_levels;
+mod firm;
 mod levels;
 mod missed;
 mod receipt;
@@ -227,6 +230,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     let (received, gas_used) = if let Some(executor) = executor {
         let leg = keccak256((head.hash, who, req.input, req.output, amount).abi_encode());
         let proof = slot::Proof {
+            prop: None,
             builder: builder.name().into(),
             parent: head.hash,
             target: frame.target,

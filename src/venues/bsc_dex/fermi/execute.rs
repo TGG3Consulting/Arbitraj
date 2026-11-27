@@ -1,12 +1,6 @@
 //! Устойчивое поручение Fermi. Подпись относится к одному плательщику и слоту; восстановление читает только сохранённый хеш.
 use super::super::{exec, num, parts::Parts, resolve, send, wallet};
-use super::{
-    Head, dispatch,
-    markets::Config,
-    recovery::reconcile,
-    routing::Prepared,
-    slot::{self, Proof},
-};
+use super::{dispatch, recovery::reconcile, routing::Prepared, slot::Proof};
 use crate::{
     core::types::{Side, TradeRequest, TradeResult},
     gateway::{
@@ -65,7 +59,7 @@ pub(super) fn same_request(r: &TradeRequest, t: &TradeRequest) -> bool {
         && r.asset.chain == t.asset.chain
 }
 fn timely(p: &Parts, q: &Prepared) -> bool {
-    q.book.current() && Config::read(p).as_ref() == Some(&q.book.config)
+    super::slot_config::timely(p, &q.book)
 }
 fn check(p: &Parts, r: &TradeRequest, q: &Prepared, who: Address) -> GatewayResult<()> {
     let bad = || {
@@ -129,6 +123,11 @@ pub(in crate::venues::bsc_dex) async fn trade(
         {
             return Err(pending(&entry.lookup));
         }
+        if original.as_ref().is_some_and(|m| m.order.prop.is_some()) {
+            return reconcile(p, req, &entry.lookup)
+                .await?
+                .ok_or_else(|| pending(&entry.lookup));
+        }
         if let Some(intent::Outcome::Order(out)) = entry.result
             && same_request(&req, &out.trade.request)
         {
@@ -162,15 +161,10 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let nonce = nonce_slot.nonce(ctx).await?;
     let mut proof = q.proof.clone();
     proof.leg = keccak256(key.as_bytes());
-    let (amount, proceeds, gas) = slot::simulate(
-        ctx,
-        &q.book.head,
-        &q.book.frame,
-        &proof,
-        Some((q.fees.max_fee, q.fees.tip)),
-    )
-    .await?;
-    if amount > q.spent || proceeds < q.received || gas > q.gas_limit {
+    let (amount, proceeds, gas) =
+        super::slot_config::simulate(ctx, &q.book, &proof, (q.fees.max_fee, q.fees.tip)).await?;
+    let required = proof.prop.as_ref().map_or(q.received, |r| r.minimum);
+    if amount > q.spent || proceeds < required || gas > q.gas_limit {
         return Err(ctx.err(
             ErrorCode::QuoteMismatch,
             "Fermi: повторная симуляция превысила пределы цены или газа",
@@ -178,9 +172,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     }
     let need = U256::from(q.gas_limit) * U256::from(q.fees.max_fee);
     exec::gas_fund::ensure(ctx, who, need).await?;
-    let latest: Head =
-        super::rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])).await?;
-    if latest.hash != proof.parent || !timely(p, &q) {
+    if !super::slot_config::fresh(p, &q.book).await {
         return Err(ctx.err(ErrorCode::StaleData, "Fermi: кадр закрыт до подписи"));
     }
     let tx = send::tx_price::TxPrice::Eip1559(q.fees, q.base).sign(

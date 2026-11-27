@@ -126,3 +126,59 @@ pub(super) async fn simulate(
     }
     Ok((spent, received, swap.gas_used.to()))
 }
+
+/// Сравнивает реальные цены точного входа. Для покупки проверяет и соседние измеренные бюджеты;
+/// точное количество осталось нижней границей выплаты, весь расход относится к требуемой позиции.
+pub(super) async fn candidate(
+    ctx: &Ctx,
+    c: &super::indicative::Candidate,
+    t: prop_wallet::Terms,
+    leg: B256,
+) -> Option<slot::Proof> {
+    let b = &c.book;
+    let buy = c.amount.is_negative();
+    let wanted = c.amount.unsigned_abs();
+    let mut sizes = std::collections::BTreeSet::new();
+    if buy {
+        let levels = b.sides.get(&(c.output, true))?;
+        let estimated = levels.price(c.quote.qty, true)?;
+        let raw = super::super::num::to_units(estimated, c.decs.1)?;
+        sizes.insert(raw);
+        if let Some(up) = raw.checked_add(U256::ONE) {
+            sizes.insert(up);
+        }
+        for (qty, cash) in &levels.0 {
+            if *qty >= c.quote.qty
+                && let Some(v) = super::super::num::to_units(*cash, c.decs.1)
+            {
+                sizes.insert(v);
+            }
+        }
+    } else {
+        sizes.insert(wanted);
+    }
+    let rows = super::prop_levels::quotes(
+        ctx,
+        &b.head,
+        &b.frame,
+        t,
+        c.input,
+        c.output,
+        &sizes.into_iter().collect::<Vec<_>>(),
+    )
+    .await
+    .ok()?;
+    let (spent, output) = rows.into_iter().find(|(_, out)| !buy || *out >= wanted)?;
+    Some(
+        Order {
+            terms: t,
+            payer: c.who,
+            tokens: (c.input, c.output),
+            specified: c.amount,
+            paid: spent,
+            minimum: if buy { wanted } else { output },
+            leg,
+        }
+        .proof(&b.head, &b.frame, b.config.builder),
+    )
+}

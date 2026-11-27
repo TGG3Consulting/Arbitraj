@@ -12,39 +12,50 @@ use alloy::{
 };
 use chrono::Utc;
 use rust_decimal::Decimal;
-use serde_json::json;
+use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-pub(super) async fn levels(p: &Parts, config: Config) -> GatewayResult<Books> {
+pub(super) async fn levels(
+    p: &Parts,
+    config: Config,
+    h: &Head,
+    snapshot: &Value,
+    revision: u64,
+) -> GatewayResult<Books> {
+    use super::slot_config::Source;
     let ctx = &p.ctx;
-    let (network, head, frame): (U64, Head, Frame) = tokio::try_join!(
-        rpc::call(ctx, "eth_chainId", json!([])),
-        rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])),
-        super::frame(ctx, config.builder, config.deployment)
-    )?;
+    let head = h.clone();
+    let frame = match &config.source {
+        Source::Fermi { .. } => Frame::read(config.builder, snapshot, config.deployment),
+        Source::Prop { oracle, .. } => oracle.frame(config.builder, snapshot),
+    }
+    .ok_or_else(|| {
+        ctx.err(
+            ErrorCode::StaleData,
+            "Нет актуального кадра рынка у строителя",
+        )
+    })?;
     let stale = || {
         ctx.err(
             ErrorCode::StaleData,
             "Fermi: сменился родитель или истёк кадр строителя",
         )
     };
-    if network != U64::from(1)
-        || !frame.current(
-            head.number.to(),
-            head.timestamp.to(),
-            Utc::now().timestamp().max(0) as u64,
-        )
-    {
+    if !frame.current(
+        head.number.to(),
+        head.timestamp.to(),
+        Utc::now().timestamp().max(0) as u64,
+    ) {
         return Err(stale());
     }
+    let runtime = match &config.source {
+        Source::Prop { .. } => {
+            return super::prop_levels::levels(p, config, head, frame, revision).await;
+        }
+        Source::Fermi { runtime } => *runtime,
+    };
     let (_, _, pairs, dc) = tokio::try_join!(
         super::verify_router(ctx, &head, config.deployment),
-        slot::verify_executor(
-            ctx,
-            &head,
-            config.executor,
-            config.deployment,
-            config.executor_runtime
-        ),
+        slot::verify_executor(ctx, &head, config.executor, config.deployment, runtime),
         canonical(ctx, head.hash, config.deployment.router, getPairsCall {}),
         canonical(ctx, head.hash, config.cash, decimalsCall {})
     )?;
@@ -129,7 +140,8 @@ pub(super) async fn levels(p: &Parts, config: Config) -> GatewayResult<Books> {
     let latest: Head = rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])).await?;
     let books = Books {
         config,
-        revision: std::sync::atomic::AtomicU64::new(u64::MAX),
+        revision,
+        prop: None,
         head,
         frame,
         sides,

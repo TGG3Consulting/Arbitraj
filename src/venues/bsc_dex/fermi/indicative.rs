@@ -15,11 +15,16 @@ pub(super) struct Candidate {
     pub amount: I256,
     pub decs: (u8, u8),
 }
-pub(super) fn candidate(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Option<Candidate> {
+pub(super) fn candidate(
+    p: &Parts,
+    b: Arc<Books>,
+    asset: &Asset,
+    side: Side,
+    qty: Decimal,
+) -> Option<Candidate> {
     if qty <= Decimal::ZERO || exec::native::is_native(&p.ctx, asset) {
         return None;
     }
-    let b = p.slot_markets.current(p)?;
     let coin = asset.contract?;
     let cash = b.config.cash;
     let buy = side == Side::Buy;
@@ -74,7 +79,11 @@ pub(super) fn candidate(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> O
         signal_route: None,
         at: Utc::now(),
         pick: Some(format!(
-            "Fermi {}, слот {}",
+            "{} {}, слот {}",
+            match &b.config.source {
+                super::slot_config::Source::Fermi { .. } => "Fermi",
+                super::slot_config::Source::Prop { id, .. } => id,
+            },
             b.config.builder.name(),
             b.frame.slot
         )),

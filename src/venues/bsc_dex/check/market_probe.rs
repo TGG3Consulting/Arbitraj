@@ -315,7 +315,7 @@ impl Market {
             return Ok(Leg { entry: None, call });
         }
         if let Venue::Aqua(target)=self.venue{
-            let call=super::super::exec::aqua_plan::probe_at(ctx,e,order,wallet,now,target)?;
+            let call=super::super::exec::aqua_plan::probe_at(ctx,e,&order,wallet,now,target)?;
             return Ok(Leg{entry:None, call});
         }
         if let Venue::WalletRouter(router) = self.venue {

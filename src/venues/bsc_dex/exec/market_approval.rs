@@ -55,7 +55,7 @@ impl Market {
             },
             Market::BancorLegacy | Market::Mooniswap | Market::DefiPlaza | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
-            Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
+            Market::Aqua | Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Missing,
             },
@@ -106,6 +106,7 @@ mod tests {
         let target = Address::with_last_byte(9);
         let protected = Some(RouterFeeMode::ProtectedWallet { target });
         for m in [
+            Market::Aqua,
             Market::Aktionariat,
             Market::RegisteredV3,
             Market::SolidlyRouter,

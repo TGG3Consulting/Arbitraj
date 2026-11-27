@@ -1,24 +1,11 @@
 //! Поручение включает полные байты программы, способ оплаты, две валюты, минимум, получателя и срок.
 use super::{fill,signed_call};
-use crate::venues::bsc_dex::{pools::aqua::{self,IAqua,Program},quote::v2_wallet_sim::Order};
+use crate::venues::bsc_dex::{pools::aqua::{self,IAqua},quote::v2_wallet_sim::Order};
 use alloy::{rpc::types::Log,sol_types::{SolCall,SolEvent}};
 use alloy_primitives::{Address,B256,Bytes,U256,keccak256};
 use serde::{Deserialize,Serialize};
-alloy::sol! {
-    interface IGuard {
-        struct Limits {address input;address output;uint256 amount;uint256 minimum;uint256 deadline;bool inputFirst;}
-        function execute(Program order,Limits terms) external returns(uint256);
-        function preview(Program order,Limits terms,address recipient) external view returns(uint256);
-        function engine() external view returns(address);
-        function registry() external view returns(address);
-        function v5Code() external view returns(bytes32);
-        function orderForKey(bytes32 key) external view returns(bytes32);
-        event Settled(bytes32 indexed orderHash,address indexed payer,address indexed recipient,address input,address output,uint256 paid,uint256 received,bool inputFirst);
-    }
-    interface ISwap {
-        function swap(Program order,address src,address dst,uint256 amount,bytes taker) external returns(uint256,uint256,bytes32);
-    }
-}
+pub(in crate::venues::bsc_dex) use aqua::IGuard;
+use aqua::ISwap;
 #[derive(Debug,Clone,Serialize,Deserialize)]
 pub struct Terms{pub chain:u64,pub target:Address,pub engine:Address,pub maker:Address,pub hash:B256,pub raw:Bytes,pub first:bool}
 #[derive(Debug,Clone,Serialize,Deserialize)]

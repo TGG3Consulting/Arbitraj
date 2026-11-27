@@ -20,6 +20,20 @@ alloy::sol! {
         function rawBalances(address maker,address app,bytes32 orderHash,address token) external view returns(uint248 amount,uint8 count);
         function quote(Program order,address tokenIn,address tokenOut,uint256 amount,bytes taker) external view returns(uint256 paid,uint256 net,bytes32 h);
     }
+    interface IGuard {
+        struct Limits {address input;address output;uint256 amount;uint256 minimum;uint256 deadline;bool inputFirst;}
+        function execute(Program order,Limits terms) external returns(uint256);
+        function preview(Program order,Limits terms,address recipient) external view returns(uint256);
+        function engine() external view returns(address);
+        function registry() external view returns(address);
+        function v5Code() external view returns(bytes32);
+        function orderForKey(bytes32 key) external view returns(bytes32);
+        event Settled(bytes32 indexed orderHash,address indexed payer,address indexed recipient,address input,address output,uint256 paid,uint256 received,bool inputFirst);
+    }
+    interface ISwap {
+        function swap(Program order,address src,address dst,uint256 amount,bytes taker) external returns(uint256,uint256,bytes32);
+    }
+
 }
 
 pub(in crate::venues::bsc_dex) fn bad(ctx:&Ctx)->crate::gateway::errors::GatewayError {

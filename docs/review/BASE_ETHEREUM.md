@@ -63,7 +63,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    Arbitrum в этот релиз не делаем (решение 8).
 >    Качество не снижается: тесты на записанных данных, проверка контрактов, закреплённые хеши, запрет регрессии BSC — как раньше.
 
-Последний просмотренный коммит: `2349328a` (27.11.2026).
+Последний просмотренный коммит: `ffe06aa0` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -3029,7 +3029,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-54~~ ✅ 98d0d53c | c10b80f5 | Motoswap (Ethereum). (1) R-42: прямые `== Variant::Motoswap` в общих файлах: `exec/market_plan.rs:144,441`, `exec/vista_gate.rs:51`, `pools/load.rs:555`, `pools/load_batch.rs:264`, `quote/v2_pair_quote.rs:41`. Завести предикат, как сделано для `fluid_lite()`. (2) Размер: `pools/motoswap.rs` — 355 строк, `exec/motoswap_wallet.rs` — 289, `exec/motoswap_plan.rs` — 214, `math/motoswap.rs` — 208, ориентир 200. |
 | ~~О-55~~ ✅ ca24d3a6 | 9822faad | `src/venues/bsc_dex/fermi/prop_slot.rs` (PropAMM, только Ethereum). (1) `version != U256::from(2)` — безымянное число версии модуля слота; назвать константой со ссылкой на источник (контракт `PropSlotVenueAdapter.sol`, `slotVersion`). (2) Шапка файла без «кто вызывает, от чего зависит»; у `terms`, `Order::proof`, `simulate` нет комментариев «что принимает / что возвращает / какие ошибки» (CLAUDE.md, «Код»). |
 | ~~О-56~~ ✅ 2349328a | abcd1812 | Восстановление выплат PropAMM в слоте (`fermi/recovery.rs`, `exec/prop_wallet.rs`, `fermi/slot.rs`). (1) `recovery.rs`: при покупке PropAMM принимается `coins > req.qty` — лишние монеты зачисляются в сделку. CLAUDE.md, «Что система делает» п. 5: «сверяет план с фактом и останавливается при любых отклонениях». Нужна ссылка на принятое решение, разрешающее выгодное отклонение, либо остановка как у Fermi; если разрешено — тест, что дальнейшие шаги сделки (перевод, продажа, сверка баланса) идут по фактическому `filled_qty`. (2) Новые комментарии на английском (`prop_wallet.rs` «Kaliber and Taurus may pay…», `recovery.rs` «On a revert…», «A bounded exact-input…») — язык проекта русский. (3) Размер: `exec/prop_wallet.rs` 329, `fermi/recovery.rs` 363, `fermi/slot.rs` 236, `fermi/execute.rs` 249 строк, ориентир 200. |
-| О-57 | cac6b21d | R-42 для PropAMM: прямые `== / != Variant::PropVenue` в общих файлах — `fermi/slot_config.rs:80`, `pools/load.rs:381`. Завести предикат семейства (как `fluid_lite()`), в своём файле `pools/prop_venue.rs` сравнение допустимо. |
+| ~~О-57~~ ✅ ffe06aa0 | cac6b21d | R-42 для PropAMM: прямые `== / != Variant::PropVenue` в общих файлах — `fermi/slot_config.rs:80`, `pools/load.rs:381`. Завести предикат семейства (как `fluid_lite()`), в своём файле `pools/prop_venue.rs` сравнение допустимо. |
 | О-58 | 169d544d | `src/venues/bsc_dex/pools/motoswap_frame.rs` (Motoswap, Ethereum). (1) `if cache.len() >= 16` — зашитый размер кэша кадров, CLAUDE.md «ни одного зашитого числа, лимита». Вынести в настройку с записью в `docs/SETTINGS_CASES.md` или обосновать как константу протокола со ссылкой. (2) Шапка файла на английском и без «кто вызывает, от чего зависит»; у `read`/`load` нет комментариев «принимает / возвращает / ошибки». (3) `pools/motoswap.rs` уменьшился 355→312, О-54 (размер) остаётся. |
 | О-59 | 028affbe | `contracts/MotoswapWallet.sol` изменён (добавлен `executePath`), а карточка `ui/src/assets/motoswap-ethereum.json` (`runtimeKeccak 0xd397cb5f…`, `creationSha256 386e4e7a…`) и `dex.module_runtime_hashes` в `config/first_run_dex.json` не пересобраны — metadata solc меняет runtime при любой правке. Пересобрать в CI, подтвердить хеш записанными данными (`motoswap_ethereum_wallets.json.gz`). До этого Motoswap **не размещать**. Мелко: `pathVersion()` возвращает безымянное `1` — назвать константой. |
 | О-60 | 73577960 | Fermi/PropAMM. (1) Размер: `fermi/slot_config.rs` 226 строк (`markets.rs` в 914c1130 уменьшен до 127 — снято), ориентир 200. (2) Новый комментарий на английском в `markets.rs` («One public snapshot for each selected builder…») — язык проекта русский. |
@@ -4917,3 +4917,8 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - (2) Английские комментарии убраны. (3) Размеры: `recovery.rs` 363 → 202 (+ `recovery_order.rs` 113, `recovery_origin.rs` 53), `slot.rs` 236 → 108 (+ `slot_simulation.rs` 137), `execute.rs` 135. Принято.
 
 Открыто: О-57, О-58, О-59 (только `pathVersion`), О-60, О-61, О-62, О-63, О-66, О-67, О-68, О-69.
+
+### ffe06aa0 — О-57 закрыто
+- Единый предикат семейства PropAMM; прямых `Variant::PropVenue` вне определения и собственного файла семейства не осталось (18 файлов: загрузка, проверка, исполнение, котировка). Логика эквивалентна. BSC не задет. Принято.
+
+Открыто: О-58, О-59 (только `pathVersion`), О-60, О-61, О-62, О-63, О-66, О-67, О-68, О-69.

@@ -19,7 +19,7 @@ use flate2::read::GzDecoder;
 use rust_decimal::Decimal;
 use serde_json::Value;
 
-fn marker() -> Marker {
+pub(super) fn marker() -> Marker {
     let profiles: Value = serde_json::from_str(include_str!(
         "../../../../tests/data/first_run_dex_2026-11-26/pancakex_profiles.json"
     ))

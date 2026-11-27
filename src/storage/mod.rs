@@ -19,6 +19,7 @@ pub mod journal_op;
 pub mod journal_queue;
 mod journal_writer;
 pub mod ledger_db;
+pub(crate) mod pancakex_orders;
 mod ledger_move;
 pub mod notify_mirror;
 pub mod raw_log;

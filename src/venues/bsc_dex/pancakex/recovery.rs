@@ -120,18 +120,41 @@ pub(in crate::venues::bsc_dex) async fn prior(
     p: &Parts,
     r: &TradeRequest,
 ) -> GatewayResult<Option<TradeResult>> {
-    let Some(key) = ledger::identity(&p.ctx, r) else {
+    let ctx = &p.ctx;
+    if r.deal_id.is_empty() {
+        return Ok(None);
+    }
+    let db = ctx.journal.db();
+    let orders = db.ledger().pancakex_orders.orders(|| ctx.chain_id());
+    // Обычный маршрут BSC завершается до чтения настроек PCSX, создания ключа и обращения к SQLite.
+    let current = r.route.as_ref().is_some_and(super::market::is_route)
+        && ctx.flag("pancakex.trading").unwrap_or(false)
+        && super::profile::Profile::read(ctx).is_some();
+    if orders.is_none() && !current {
+        return Ok(None);
+    }
+    let Some(key) = ledger::identity(ctx, r) else {
         return Ok(None);
     };
-    let record = intent::load(p.ctx.journal.db(), &key)
+    let recorded = orders.is_some_and(|orders| orders.contains(&key));
+    if !current && !recorded {
+        return Ok(None);
+    }
+    let record = intent::load(db, &key)
         .await
-        .map_err(|e| p.ctx.err(ErrorCode::OutcomeUnknown, e))?;
+        .map_err(|e| ctx.err(ErrorCode::OutcomeUnknown, e))?;
     let Some(entry) = record.filter(|e| {
         e.lookup
             .parse
             .as_ref()
             .is_some_and(|v| v.get("pancakex").is_some())
     }) else {
+        if recorded {
+            return Err(ctx.err(
+                ErrorCode::OutcomeUnknown,
+                "PCSX: ключ зарезервирован, исходная запись ещё не подтверждена",
+            ));
+        }
         return Ok(None);
     };
     reconcile(p, r.clone(), &entry.lookup)

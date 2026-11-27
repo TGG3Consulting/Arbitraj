@@ -119,6 +119,7 @@ impl Drop for Writer {
 /// ждёт (решение 397, Writer::drop).
 #[derive(Clone)]
 pub struct LedgerDb {
+    pub(crate) pancakex_orders: Arc<super::pancakex_orders::Index>,
     pub cash_watch: super::cex_funds_watch::Watch,
     /// Поток писателя (бот); None — прямой режим: запись тем же соединением, что чтение.
     writer: Option<Arc<Writer>>,
@@ -153,6 +154,7 @@ impl LedgerDb {
         w.execute_batch("CREATE INDEX IF NOT EXISTS cash_legacy_orders ON core_state(json_extract(body,'$.direction.buy_on')) WHERE kind='deal' AND json_valid(body) AND json_extract(body,'$.plan.cash_legacy_ioc') IS NOT NULL")?;
         let sync0: i64 = w.pragma_query_value(None, "synchronous", |r| r.get(0))?;
         let moved = super::ledger_move::from_main(main, &mut w)?;
+        let pancakex_orders = Arc::new(super::pancakex_orders::Index::restore(&w)?);
         let cash_watch = super::cex_funds_watch::Watch::restore(&w)?;
         let read = Connection::open(path)?;
         read.execute_batch("PRAGMA query_only=ON;")?;
@@ -179,6 +181,7 @@ impl LedgerDb {
             })),
             read: Arc::new(Mutex::new(read)),
             cash_watch,
+            pancakex_orders,
             sync0: Some(sync0),
             moved,
         })
@@ -188,8 +191,11 @@ impl LedgerDb {
     /// учёта, открытый как основная база, или сама основная база, если файла учёта ещё нет). Принимает: соединение.
     /// Ошибок нет.
     pub fn direct(conn: Arc<Mutex<Connection>>) -> Self {
+        let pancakex_orders = conn.lock().ok().and_then(|c|super::pancakex_orders::Index::restore(&c).ok())
+            .unwrap_or_else(super::pancakex_orders::Index::unavailable);
         Self {
             writer: None,
+            pancakex_orders: Arc::new(pancakex_orders),
             cash_watch: Default::default(), // автономные CLI не отправляют ордера
             read: conn,
             sync0: None,

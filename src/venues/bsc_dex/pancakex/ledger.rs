@@ -61,7 +61,8 @@ impl Marker {
     }
     pub async fn holder(&self, db: &Db, t: &Terms) -> Result<Option<String>, String> {
         let slot = self.slot(t);
-        db.ledger()
+        let body: Option<String> = db
+            .ledger()
             .read(move |c| {
                 c.query_row(
                     "SELECT body FROM core_state WHERE kind='pancakex_permit' AND id=?1",
@@ -71,7 +72,16 @@ impl Marker {
                 .optional()
             })
             .await
-            .map_err(|e| e.to_string())
+            .map_err(|e| e.to_string())?;
+        body.map(|raw| {
+            let (key, digest): (String, B256) =
+                serde_json::from_str(&raw).map_err(|e| e.to_string())?;
+            if key.is_empty() {
+                return Err("PCSX: в брони Permit2 отсутствует ключ денежного шага".to_owned());
+            }
+            Ok(json!([key, digest]).to_string())
+        })
+        .transpose()
     }
     pub async fn reserve(&self, db: &Db, t: &Terms) -> Result<bool, String> {
         let slot = self.slot(t);

@@ -100,6 +100,17 @@ pub(in crate::venues::bsc_dex) async fn trade(
     if ctx.settings.generation() != generation || !ticket.timely(now()) {
         return Err(bad());
     }
+    // Регистрация в памяти предшествует любому await записи и публикации подписи.
+    let writing = db
+        .ledger()
+        .pancakex_orders
+        .begin(ticket.cfg.p.chain, &key)
+        .ok_or_else(|| {
+            ctx.err(
+                ErrorCode::OutcomeUnknown,
+                "PCSX: поручение уже регистрируется либо повреждена бронь Permit2",
+            )
+        })?;
     let signature = wallet.sign_hash_sync(&t.digest).map_err(|_| bad())?;
     let limits = ctx.limits()?;
     let marker = Marker {
@@ -125,6 +136,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
         intent::before_send(&pending),
     )
     .await?;
+    writing.recorded();
     let reserved = marker.reserve(db, &t).await.map_err(|_| unknown())?;
     if reserved && ctx.settings.generation() == generation && marker.ticket.timely(now()) {
         let _reply = client::publish(

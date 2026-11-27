@@ -23,15 +23,18 @@ def capture(url):
     assert registry["selector"]==native["selector"]==tag and rpc(url,"eth_chainId",[])=="0x1"
     block=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
     assert block["stateRoot"]==registry["state_root"] and m["sourceBlock"]==block["hash"]
-    code=rpc(url,"eth_call",[{"from":OWNER,"data":m["data"],"gas":hex(6000000)},tag])
-    assert m["runtimeKeccak"]=="0x"+keccak(hexstr=code).hex()
+    assert rpc(url,"eth_getTransactionCount",[OWNER,tag])=="0x0"
+    deploy={"from":OWNER,"data":m["data"],"gas":hex(6000000)}
     assert all(rpc(url,"eth_getCode",[a,tag])=="0x" for a in (EXEC,OWNER,MODULE))
     word=lambda x: "0x"+format(x,"064x")
-    env={OWNER:{"balance":hex(100*10**18)},MODULE:{"code":code},
+    env={OWNER:{"balance":hex(100*10**18)},
          EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     end=int(block["timestamp"],16)+900
-    def run(calls):return simulate_block(url,tag,env,calls)
+    def run(calls):
+        created,*result=simulate_block(url,tag,env,[deploy,*calls])
+        assert created["status"]=="0x1" and "0x"+keccak(hexstr=created["returnData"]).hex()==m["runtimeKeccak"]
+        return result
     def pool(x,y,fee):
         res,=run([tx(FACTORY,"getPool(address,address,uint24)",["address","address","uint24"],[x,y,fee])])
         assert res["status"]=="0x1" and int(res["returnData"],16)
@@ -62,7 +65,7 @@ def capture(url):
             accounts=[balance(t,OWNER) for t in [USDT,WETH,cash,share]]
             before=[*fund,approve(USDT,EXEC,budget),approve(share,EXEC,units),*accounts]
             r=run([*before,buy,*accounts,sell,*accounts])
-            assert all(x["status"]=="0x1" for x in r)
+            assert all(x["status"]=="0x1" for x in r), (broker,units,[(i,x.get("error")) for i,x in enumerate(r) if x["status"]!="0x1"])
             start=len(before);buy_receipt=r[start];sell_receipt=r[start+5]
             have=lambda p:[int(x["returnData"],16) for x in r[p:p+4]]
             old,mid,new=have(start-4),have(start+1),have(start+6)

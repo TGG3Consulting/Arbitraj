@@ -28,7 +28,10 @@ pub(super) struct Funding {
     pub vault: Contract,
     pub vault_implementation: Contract,
 }
-mod abi {
+// Третий параметр swapWithContractBalance — minAmountOut в единицах выхода этапа.
+// Проверенная реализация src/LiquidFiEntry.sol: https://repo.sourcify.dev/8453/0xEc772b4019a21aF2edD567136072B90fEFf59bC0
+// OpenOcean задаёт здесь и ноль. EpsilonApiWallet отдельно проверяет чистую выплату своему владельцу.
+pub(super) mod abi {
     alloy::sol! {
         function swapWithContractBalance(address input,address output,uint256 minimum,address receiver,bytes terms) returns(uint256);
         event PropAMMTrade(address initiator,address executor,address receiver,address fromToken,address toToken,uint256 fromAmount,uint256 toAmount);

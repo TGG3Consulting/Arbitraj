@@ -1,4 +1,10 @@
-//! Привязки Theorem и ответ QuoterV2. ABI опубликован в клиенте https://app.theorem.markets/markets.
+//! Привязки Theorem на Ethereum. QuoterV2 возвращает фактически израсходованный вход во втором слове.
+//! ABI: [IQuoterV2.sol, Algebra Integral v1.2.3](https://github.com/cryptoalgebra/Algebra/blob/1ff43e11407872f7c09b001cdeee1a59d2c334ec/src/periphery/contracts/interfaces/IQuoterV2.sol).
+//! Адрес квотера взят из [клиента Theorem](https://app.theorem.markets/assets/index-V4IkL7Qa.js);
+//! фактические ответы контракта на H26494988 записаны в theorem_ethereum.json.gz.
+//! getPool(): [исходник AlgebraUpgradeablePlugin](https://eth.blockscout.com/address/0xaaa81db3cb943c20b032d16d9cbf471a3757931d?tab=contract).
+//! implementation() и beacon slot: [EIP-1967](https://eips.ethereum.org/EIPS/eip-1967#beacon-contract-address).
+//! router(): исходный public immutable router в contracts/AlgebraRouterWallet.sol этого репозитория.
 use super::{families::Family, nami_batch as batch, solidly_classic_factory::plain};
 use crate::{
     gateway::errors::{ErrorCode, GatewayResult},

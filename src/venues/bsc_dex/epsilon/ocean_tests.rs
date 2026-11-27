@@ -92,6 +92,18 @@ fn check(raw: &[u8], counts: [usize; 2], missing: usize) {
         if let Some(f) = &raw.ocean.as_ref().unwrap().funding
             && raw.ocean.as_ref().unwrap().prepaid(&raw) == Some(true)
         {
+            use alloy::sol_types::SolCall;
+            let outer = super::ocean_wire::abi::swapCall::abi_decode_validate(
+                &raw.ocean.as_ref().unwrap().payload,
+            ).unwrap();
+            let provider = super::ocean_funding::abi::swapWithContractBalanceCall::abi_decode_validate(
+                &outer.steps[0].data,
+            ).unwrap();
+            assert!(provider.minimum.is_zero());
+            assert_eq!(outer.trade.minimum, num(&row["firm"]["minimum"]));
+            assert!(outer.trade.minimum > U256::ZERO && correct.1 >= outer.trade.minimum);
+            assert_eq!(raw.minimum, correct.1);
+            assert_eq!(row["controls"][0]["code"], 3);
             let mut missing = logs.clone();
             missing.retain(|x| x.address() != f.entry.address);
             assert!(proof.amounts(&missing).is_none());

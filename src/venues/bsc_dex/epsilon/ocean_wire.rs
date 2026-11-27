@@ -11,7 +11,7 @@ use alloy_primitives::{Address, Bytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 
 #[allow(clippy::too_many_arguments)]
-mod abi {
+pub(super) mod abi {
     alloy::sol! {
         struct Description{address src;address dst;address from;address receiver;uint256 amount;uint256 minimum;uint256 guaranteed;uint256 flags;address referrer;bytes permit;}
         struct Call{uint256 target;uint256 gasLimit;uint256 value;bytes data;}

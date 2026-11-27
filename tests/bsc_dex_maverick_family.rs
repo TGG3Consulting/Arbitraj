@@ -5,10 +5,9 @@
 //! цикла обмена (math/maverick_swap.rs — порт команды Maverick, paraswap-dex-lib 4f74b83 maverick-pool-math.ts): откат
 //! за пределом тика, точный выход больше резерва, MVP-03M аудита Omniscia (несколько пустых тиков подряд и упор в
 //! предел — активный тик откатывается только на ±1), остановка на непрочитанном тике; (4) сверка порта с ответами
-//! MaverickV2Quoter.calculateSwap на ЖИВОЙ записи своего узла — ждёт tests/data/maverick_v2/responses.json (что записать
-//! — tests/README.md), пока записи нет — #[ignore].
+//! MaverickV2Quoter.calculateSwap на канонических блоках Base и Ethereum для точного входа и выхода.
 //! Состояния в (3) — входные числа чистой функции (поведение ветвей порта), не подмена ответа площадки.
-//! Кто вызывает: cargo test (четвёртый — cargo test --test bsc_dex_maverick_family -- --ignored, когда запись есть).
+//! Кто вызывает: обычный интеграционный тест GitHub Actions.
 //! От чего зависит: arb::venues::bsc_dex (families, exec_kind, verify_maverick, abi_maverick, math::maverick_swap).
 
 use alloy::sol_types::SolCall;
@@ -146,10 +145,8 @@ fn stops_at_unread_tick() {
     assert!(r.amount_in < e18(1_000_000));
 }
 
-/// Сверка порта с MaverickV2Quoter.calculateSwap на записи своего узла (один блок; формат — tests/README.md):
-/// расхождение не больше 1 единицы токена (точность, заявленная портом @yldfi/maverick-v2-math — ±1 wei).
+/// Обе суммы портированной математики сверяются в атомах с ответом контракта на записанном блоке.
 #[test]
-#[ignore = "нет записи tests/data/maverick_v2/responses.json — запросы в tests/README.md"]
 fn maverick_port_matches_live_quoter() {
     let raw = std::fs::read_to_string("tests/data/maverick_v2/responses.json").expect("запись");
     let v: Value = serde_json::from_str(&raw).unwrap();
@@ -181,23 +178,18 @@ fn maverick_port_matches_live_quoter() {
         for q in p["quotes"].as_array().unwrap() {
             let a_in = q["tokenAIn"].as_bool().unwrap();
             let limit = if a_in { i32::MAX } else { i32::MIN };
-            let local = swap(&st, n(&q["amount"]), a_in, false, limit).expect("расчёт");
+            let exact_out = q["exactOutput"].as_bool().unwrap();
+            let local = swap(&st, n(&q["amount"]), a_in, exact_out, limit).expect("расчёт");
             assert!(
                 local.complete,
                 "{}: расчёт неполный — увеличить tickRadius записи",
                 p["pool"]
             );
-            let remote = n(&q["amountOut"]);
-            let d = if local.amount_out > remote {
-                local.amount_out - remote
-            } else {
-                remote - local.amount_out
-            };
-            assert!(
-                d <= U256::from(1u8),
-                "{} {q}: порт {} против квотера {remote}",
-                p["pool"],
-                local.amount_out
+            assert_eq!(
+                (local.amount_in, local.amount_out),
+                (n(&q["amountIn"]), n(&q["amountOut"])),
+                "{} {q}",
+                p["pool"]
             );
         }
     }

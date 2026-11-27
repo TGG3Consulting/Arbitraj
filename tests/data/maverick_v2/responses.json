@@ -1,0 +1,1234 @@
+{
+  "pools": [
+    {
+      "network": "base",
+      "pool": "0xdf033790907c60c9b81ae355f76f74f52f92114a",
+      "selector": {
+        "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "requireCanonical": true
+      },
+      "tokens": [
+        "0x4200000000000000000000000000000000000006",
+        "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913"
+      ],
+      "tickRadius": 32,
+      "activeTick": -29,
+      "reserveA": "9684241634209442453",
+      "reserveB": "684543431",
+      "protocolFeeRatioD3": 0,
+      "tickSpacing": "2632",
+      "feeAIn": "100000000000000",
+      "feeBIn": "100000000000000",
+      "tokenAScale": "1",
+      "tokenBScale": "1000000000000",
+      "ticks": [
+        {
+          "tick": -53,
+          "reserveA": "93548",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -52,
+          "reserveA": "106705",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -51,
+          "reserveA": "121713",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -50,
+          "reserveA": "138831",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -49,
+          "reserveA": "158357",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -48,
+          "reserveA": "180629",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -47,
+          "reserveA": "206033",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -46,
+          "reserveA": "235012",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -45,
+          "reserveA": "268065",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -44,
+          "reserveA": "305765",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -43,
+          "reserveA": "348770",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -42,
+          "reserveA": "397822",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -41,
+          "reserveA": "453774",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -40,
+          "reserveA": "517594",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -39,
+          "reserveA": "590392",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -38,
+          "reserveA": "673427",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -37,
+          "reserveA": "768141",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -36,
+          "reserveA": "412769928490906",
+          "reserveB": "0",
+          "totalSupply": "47110604823127939"
+        },
+        {
+          "tick": -35,
+          "reserveA": "8306560623599640",
+          "reserveB": "0",
+          "totalSupply": "831154214373782450"
+        },
+        {
+          "tick": -34,
+          "reserveA": "63534233254535331",
+          "reserveB": "0",
+          "totalSupply": "5573369916512778980"
+        },
+        {
+          "tick": -33,
+          "reserveA": "151821049996671280",
+          "reserveB": "0",
+          "totalSupply": "10011463361150984427"
+        },
+        {
+          "tick": -32,
+          "reserveA": "2892949229473635743",
+          "reserveB": "0",
+          "totalSupply": "120582188221973864841"
+        },
+        {
+          "tick": -31,
+          "reserveA": "4764724867376463340",
+          "reserveB": "0",
+          "totalSupply": "125100300666356593276"
+        },
+        {
+          "tick": -30,
+          "reserveA": "1323900947043304576",
+          "reserveB": "0",
+          "totalSupply": "19081816895089154643"
+        },
+        {
+          "tick": -29,
+          "reserveA": "478591976507167979",
+          "reserveB": "258811337772456489379",
+          "totalSupply": "15241152597102796019"
+        },
+        {
+          "tick": -28,
+          "reserveA": "0",
+          "reserveB": "292031857189709268641",
+          "totalSupply": "8076014828080582968"
+        },
+        {
+          "tick": -27,
+          "reserveA": "0",
+          "reserveB": "97987252097650711460",
+          "totalSupply": "3200824580984104729"
+        },
+        {
+          "tick": -26,
+          "reserveA": "0",
+          "reserveB": "32404327389283055122",
+          "totalSupply": "1207384517526600048"
+        },
+        {
+          "tick": -25,
+          "reserveA": "0",
+          "reserveB": "609954002352920081",
+          "totalSupply": "25923281325469438"
+        },
+        {
+          "tick": -24,
+          "reserveA": "0",
+          "reserveB": "2062798547",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -23,
+          "reserveA": "0",
+          "reserveB": "1808450061",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -22,
+          "reserveA": "0",
+          "reserveB": "1585463346",
+          "totalSupply": "99999996"
+        },
+        {
+          "tick": -21,
+          "reserveA": "0",
+          "reserveB": "1389971601",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -20,
+          "reserveA": "0",
+          "reserveB": "1218584450",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -19,
+          "reserveA": "0",
+          "reserveB": "13019796164809828",
+          "totalSupply": "1218583227922795"
+        },
+        {
+          "tick": -18,
+          "reserveA": "0",
+          "reserveB": "936601911",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -17,
+          "reserveA": "0",
+          "reserveB": "821116429",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -16,
+          "reserveA": "0",
+          "reserveB": "719870614",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -15,
+          "reserveA": "0",
+          "reserveB": "631108674",
+          "totalSupply": "100000000"
+        }
+      ],
+      "quotes": [
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "168803",
+          "gas": "78186"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "1687727",
+          "gas": "78186"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "100",
+          "amountIn": "59239426570",
+          "amountOut": "100",
+          "gas": "77737"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "1000",
+          "amountIn": "592394328778",
+          "amountOut": "1000",
+          "gas": "77737"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "100",
+          "amountIn": "100",
+          "amountOut": "59227577874",
+          "gas": "67663"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "1000",
+          "amountIn": "1000",
+          "amountOut": "592275715677",
+          "gas": "67663"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "168844",
+          "amountOut": "100000000000000",
+          "gas": "67099"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "1688740",
+          "amountOut": "1000000000000000",
+          "gas": "67099"
+        }
+      ]
+    },
+    {
+      "network": "base",
+      "pool": "0xb6e91d9b24092d6cf422c37aff8ccaa9f95abe4e",
+      "selector": {
+        "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "requireCanonical": true
+      },
+      "tokens": [
+        "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+        "0x4200000000000000000000000000000000000006"
+      ],
+      "tickRadius": 32,
+      "activeTick": -1352,
+      "reserveA": "5363534911059588513",
+      "reserveB": "4423724948502923339",
+      "protocolFeeRatioD3": 0,
+      "tickSpacing": "1",
+      "feeAIn": "40000000000000",
+      "feeBIn": "40000000000000",
+      "tokenAScale": "1",
+      "tokenBScale": "1",
+      "ticks": [
+        {
+          "tick": -1352,
+          "reserveA": "5363534911059588513",
+          "reserveB": "4390352697107742434",
+          "totalSupply": "9839716445439621031"
+        },
+        {
+          "tick": -1351,
+          "reserveA": "0",
+          "reserveB": "107170666",
+          "totalSupply": "99999992"
+        },
+        {
+          "tick": -1350,
+          "reserveA": "0",
+          "reserveB": "107140173",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1349,
+          "reserveA": "0",
+          "reserveB": "107157585",
+          "totalSupply": "99999999"
+        },
+        {
+          "tick": -1348,
+          "reserveA": "0",
+          "reserveB": "107016653",
+          "totalSupply": "99999997"
+        },
+        {
+          "tick": -1347,
+          "reserveA": "0",
+          "reserveB": "107027177",
+          "totalSupply": "99999971"
+        },
+        {
+          "tick": -1346,
+          "reserveA": "0",
+          "reserveB": "58415702",
+          "totalSupply": "54475055"
+        },
+        {
+          "tick": -1345,
+          "reserveA": "0",
+          "reserveB": "107010970",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1344,
+          "reserveA": "0",
+          "reserveB": "107020310",
+          "totalSupply": "99999998"
+        },
+        {
+          "tick": -1343,
+          "reserveA": "0",
+          "reserveB": "107163670",
+          "totalSupply": "99999999"
+        },
+        {
+          "tick": -1342,
+          "reserveA": "0",
+          "reserveB": "107013065",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1341,
+          "reserveA": "0",
+          "reserveB": "107326264",
+          "totalSupply": "99999979"
+        },
+        {
+          "tick": -1340,
+          "reserveA": "0",
+          "reserveB": "107356210",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1339,
+          "reserveA": "0",
+          "reserveB": "33298707237544170",
+          "totalSupply": "31025081041747833"
+        },
+        {
+          "tick": -1338,
+          "reserveA": "0",
+          "reserveB": "107029772",
+          "totalSupply": "99999989"
+        },
+        {
+          "tick": -1337,
+          "reserveA": "0",
+          "reserveB": "107000655",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1336,
+          "reserveA": "0",
+          "reserveB": "107077868",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1335,
+          "reserveA": "0",
+          "reserveB": "107146903",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1334,
+          "reserveA": "0",
+          "reserveB": "107160761",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1333,
+          "reserveA": "0",
+          "reserveB": "107257757",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1332,
+          "reserveA": "0",
+          "reserveB": "107228723",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1331,
+          "reserveA": "0",
+          "reserveB": "107227045",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1330,
+          "reserveA": "0",
+          "reserveB": "107043209",
+          "totalSupply": "99999999"
+        },
+        {
+          "tick": -1329,
+          "reserveA": "0",
+          "reserveB": "107156547",
+          "totalSupply": "99998942"
+        },
+        {
+          "tick": -1328,
+          "reserveA": "0",
+          "reserveB": "106925465",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1327,
+          "reserveA": "0",
+          "reserveB": "107156314",
+          "totalSupply": "99999992"
+        },
+        {
+          "tick": -1326,
+          "reserveA": "0",
+          "reserveB": "106933267",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1325,
+          "reserveA": "0",
+          "reserveB": "107201687",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1324,
+          "reserveA": "0",
+          "reserveB": "107034875",
+          "totalSupply": "99999999"
+        },
+        {
+          "tick": -1323,
+          "reserveA": "0",
+          "reserveB": "106915974",
+          "totalSupply": "99999999"
+        },
+        {
+          "tick": -1322,
+          "reserveA": "0",
+          "reserveB": "107109663",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1321,
+          "reserveA": "0",
+          "reserveB": "106915058",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": -1320,
+          "reserveA": "0",
+          "reserveB": "107012306",
+          "totalSupply": "100000000"
+        }
+      ],
+      "quotes": [
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "114464544713940",
+          "gas": "67047"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "1144645441540528",
+          "gas": "67047"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "87363296855847",
+          "amountOut": "100000000000000",
+          "gas": "66543"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "873632972291715",
+          "amountOut": "1000000000000000",
+          "gas": "66543"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "87356307848925",
+          "gas": "72474"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "873563074756441",
+          "gas": "72474"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "114473702551410",
+          "amountOut": "100000000000000",
+          "gas": "71997"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "1144737031113643",
+          "amountOut": "1000000000000000",
+          "gas": "71997"
+        }
+      ]
+    },
+    {
+      "network": "ethereum",
+      "pool": "0xeb1da432d5c1a9fdf52aa5d37698f34706f91397",
+      "selector": {
+        "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "requireCanonical": true
+      },
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "tickRadius": 32,
+      "activeTick": 33,
+      "reserveA": "3491972",
+      "reserveB": "3169855630263388659",
+      "protocolFeeRatioD3": 0,
+      "tickSpacing": "2232",
+      "feeAIn": "100000000000000",
+      "feeBIn": "100000000000000",
+      "tokenAScale": "1000000000000",
+      "tokenBScale": "1",
+      "ticks": [
+        {
+          "tick": 1,
+          "reserveA": "114546540",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 2,
+          "reserveA": "128119452",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 3,
+          "reserveA": "143245161",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 4,
+          "reserveA": "160156626",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 5,
+          "reserveA": "179100399",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 6,
+          "reserveA": "200244997",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 7,
+          "reserveA": "223930547",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 8,
+          "reserveA": "250367809",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 9,
+          "reserveA": "279983899",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 10,
+          "reserveA": "313161960",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 11,
+          "reserveA": "350133778",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 12,
+          "reserveA": "391470994",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 13,
+          "reserveA": "437775150",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 14,
+          "reserveA": "489458869",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 15,
+          "reserveA": "547244432",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 16,
+          "reserveA": "611852237",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 17,
+          "reserveA": "684087825",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 18,
+          "reserveA": "764907274",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 19,
+          "reserveA": "855500300",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 20,
+          "reserveA": "956684462",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 21,
+          "reserveA": "1069745129",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 22,
+          "reserveA": "1196153243",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 23,
+          "reserveA": "1337372356",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 24,
+          "reserveA": "1495265267",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 25,
+          "reserveA": "1672024037",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 26,
+          "reserveA": "1869925477",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 27,
+          "reserveA": "2090895207",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 28,
+          "reserveA": "2338564359",
+          "reserveB": "0",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 29,
+          "reserveA": "115373002703715065",
+          "reserveB": "0",
+          "totalSupply": "4411139094746558"
+        },
+        {
+          "tick": 30,
+          "reserveA": "296811003129288500",
+          "reserveB": "0",
+          "totalSupply": "10142389008043936"
+        },
+        {
+          "tick": 31,
+          "reserveA": "763586003276103978",
+          "reserveB": "0",
+          "totalSupply": "23307746447441562"
+        },
+        {
+          "tick": 32,
+          "reserveA": "1964821507131455961",
+          "reserveB": "0",
+          "totalSupply": "53507156378972102"
+        },
+        {
+          "tick": 33,
+          "reserveA": "290093126979122844",
+          "reserveB": "364127358670980",
+          "totalSupply": "23195851835854442"
+        },
+        {
+          "tick": 34,
+          "reserveA": "0",
+          "reserveB": "210208339290003",
+          "totalSupply": "9913592342343938"
+        },
+        {
+          "tick": 35,
+          "reserveA": "0",
+          "reserveB": "81668711032286",
+          "totalSupply": "4232200187502301"
+        },
+        {
+          "tick": 36,
+          "reserveA": "0",
+          "reserveB": "3062947691778258969",
+          "totalSupply": "174902879537209690226"
+        },
+        {
+          "tick": 37,
+          "reserveA": "0",
+          "reserveB": "57662631444229083",
+          "totalSupply": "3659865884212789650"
+        },
+        {
+          "tick": 38,
+          "reserveA": "0",
+          "reserveB": "48589302620921481",
+          "totalSupply": "3660821732570683091"
+        },
+        {
+          "tick": 39,
+          "reserveA": "0",
+          "reserveB": "1174339",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 40,
+          "reserveA": "0",
+          "reserveB": "1043588",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 41,
+          "reserveA": "0",
+          "reserveB": "928886",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 42,
+          "reserveA": "0",
+          "reserveB": "830018",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 43,
+          "reserveA": "0",
+          "reserveB": "741758",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 44,
+          "reserveA": "0",
+          "reserveB": "662636",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 45,
+          "reserveA": "0",
+          "reserveB": "592558",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 46,
+          "reserveA": "0",
+          "reserveB": "529865",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 47,
+          "reserveA": "0",
+          "reserveB": "473940",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 48,
+          "reserveA": "0",
+          "reserveB": "423817",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 49,
+          "reserveA": "0",
+          "reserveB": "379009",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 50,
+          "reserveA": "0",
+          "reserveB": "338955",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 51,
+          "reserveA": "0",
+          "reserveB": "303184",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 52,
+          "reserveA": "0",
+          "reserveB": "271131",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 53,
+          "reserveA": "0",
+          "reserveB": "242500",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 54,
+          "reserveA": "0",
+          "reserveB": "216881",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 55,
+          "reserveA": "0",
+          "reserveB": "193992",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 56,
+          "reserveA": "0",
+          "reserveB": "173514",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 57,
+          "reserveA": "0",
+          "reserveB": "155189",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 58,
+          "reserveA": "0",
+          "reserveB": "138791",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 59,
+          "reserveA": "0",
+          "reserveB": "124154",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 60,
+          "reserveA": "0",
+          "reserveB": "111060",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 61,
+          "reserveA": "0",
+          "reserveB": "99305",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 62,
+          "reserveA": "0",
+          "reserveB": "88821",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 63,
+          "reserveA": "0",
+          "reserveB": "79424",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 64,
+          "reserveA": "0",
+          "reserveB": "71070",
+          "totalSupply": "100000000"
+        },
+        {
+          "tick": 65,
+          "reserveA": "0",
+          "reserveB": "63560",
+          "totalSupply": "100000000"
+        }
+      ],
+      "quotes": [
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "100",
+          "amountIn": "100",
+          "amountOut": "58981019152",
+          "gas": "67498"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "1000",
+          "amountIn": "1000",
+          "amountOut": "589746944775",
+          "gas": "67498"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "173040",
+          "amountOut": "100000000000000",
+          "gas": "66907"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "2417989",
+          "amountOut": "1000000000000000",
+          "gas": "101787"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "166153",
+          "gas": "78387"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "1505077",
+          "gas": "90865"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "100",
+          "amountIn": "58994223147",
+          "amountOut": "100",
+          "gas": "77965"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "1000",
+          "amountIn": "590005513778",
+          "amountOut": "1000",
+          "gas": "77965"
+        }
+      ]
+    },
+    {
+      "network": "ethereum",
+      "pool": "0xc2f2ad178a1f07d349cf8349b74fce3cb69975de",
+      "selector": {
+        "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+        "requireCanonical": true
+      },
+      "tokens": [
+        "0x56072c95faa701256059aa122697b133aded9279",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "tickRadius": 32,
+      "activeTick": 26,
+      "reserveA": "713583653239637295993",
+      "reserveB": "15529740500249839",
+      "protocolFeeRatioD3": 0,
+      "tickSpacing": "4055",
+      "feeAIn": "10000000000000000",
+      "feeBIn": "10000000000000000",
+      "tokenAScale": "1",
+      "tokenBScale": "1",
+      "ticks": [
+        {
+          "tick": 22,
+          "reserveA": "108770589355332683191",
+          "reserveB": "0",
+          "totalSupply": "1257296762419269457"
+        },
+        {
+          "tick": 23,
+          "reserveA": "133217195168314894265",
+          "reserveB": "0",
+          "totalSupply": "1257296762419269056"
+        },
+        {
+          "tick": 24,
+          "reserveA": "163158269102849626638",
+          "reserveB": "0",
+          "totalSupply": "1257296762419270058"
+        },
+        {
+          "tick": 25,
+          "reserveA": "250020555150172548125",
+          "reserveB": "0",
+          "totalSupply": "1245078950259660499"
+        },
+        {
+          "tick": 26,
+          "reserveA": "58417044462967543774",
+          "reserveB": "4564415347641707",
+          "totalSupply": "1257296762419272436"
+        },
+        {
+          "tick": 27,
+          "reserveA": "0",
+          "reserveB": "4578932099725091",
+          "totalSupply": "1257296762419271599"
+        },
+        {
+          "tick": 28,
+          "reserveA": "0",
+          "reserveB": "3515786432865792",
+          "totalSupply": "1257296762419272551"
+        },
+        {
+          "tick": 29,
+          "reserveA": "0",
+          "reserveB": "2870606620017249",
+          "totalSupply": "1257296762419271744"
+        }
+      ],
+      "quotes": [
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "2384062097",
+          "gas": "67503"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "23840604700",
+          "gas": "67503"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "4207911460227577518",
+          "amountOut": "100000000000000",
+          "gas": "66999"
+        },
+        {
+          "tokenAIn": true,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "43323838193007990709",
+          "amountOut": "1000000000000000",
+          "gas": "66999"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "100000000000000",
+          "amountIn": "100000000000000",
+          "amountOut": "4098139875937181619",
+          "gas": "67571"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": false,
+          "amount": "1000000000000000",
+          "amountIn": "1000000000000000",
+          "amountOut": "39854945427304993539",
+          "gas": "67571"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "100000000000000",
+          "amountIn": "2432468587",
+          "amountOut": "100000000000000",
+          "gas": "67094"
+        },
+        {
+          "tokenAIn": false,
+          "exactOutput": true,
+          "amount": "1000000000000000",
+          "amountIn": "24324702640",
+          "amountOut": "1000000000000000",
+          "gas": "67094"
+        }
+      ]
+    }
+  ]
+}

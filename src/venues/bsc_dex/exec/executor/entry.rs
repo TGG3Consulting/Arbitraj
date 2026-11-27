@@ -76,7 +76,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
     let k = f
         .executor_kind
         .ok_or_else(|| format!("{}: у вида пула нет шага исполнителя", f.id))?;
-    if f.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Mooniswap{
+    if f.variant.mooniswap(){
         if k==ExecKind::Balancer && let PoolRef::Contract(pool)=pool && !pool.is_zero(){return Ok((k,*pool));}
         return Err("Mooniswap: неверный вид шага или адрес пула".into());
     }
@@ -125,7 +125,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     if e.family.variant.issuer_shares() {
         return super::super::aktionariat_plan::terms(ctx,e).map(|m|(k,m.module)).map_err(|e|e.message);
     }
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Mooniswap{
+    if e.family.variant.mooniswap(){
         let target=super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).ok_or_else(||"Mooniswap: не подтверждены пул, валюты или модуль".to_string())?;
         return Ok((k,target.1));
     }
@@ -160,7 +160,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
         return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some_and(|s|s.second.is_none()) && pinned_module_target(ctx,e).is_some();
     }
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Mooniswap{return k==ExecKind::Balancer && super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).is_some();}
+    if e.family.variant.mooniswap(){return k==ExecKind::Balancer && super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).is_some();}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {
         // Решение 441 (ревью, п. 2): BALANCER_V3 — то же правило, что в fits.
@@ -239,7 +239,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         let target=pinned_module_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"Bancor V2.1: отсутствует модуль шага"))?;
         return Ok((Params::Balancer{pool_id},target));
     }
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Mooniswap{
+    if e.family.variant.mooniswap(){
         let (pool_id,target)=super::super::mooniswap_plan::graph_target(ctx,e,token_in).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Mooniswap: не подтверждены пул, валюты или модуль"))?;
         return Ok((Params::Balancer{pool_id},target));
     }

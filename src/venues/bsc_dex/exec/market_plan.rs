@@ -121,7 +121,7 @@ impl Market {
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             _ if e.family.variant.issuer_shares()=>Some(Self::Aktionariat),
             _ if e.family.variant==Variant::BancorLegacy=>Some(Self::BancorLegacy),
-            _ if e.family.variant==Variant::Mooniswap=>Some(Self::Mooniswap),
+            _ if e.family.variant.mooniswap()=>Some(Self::Mooniswap),
             _ if e.family.variant==Variant::YieldBasis=>Some(Self::YieldBasis),
             PoolState::BalancerV1(_) => Some(Self::BalancerV1),
             PoolState::BancorV3(_) => Some(Self::BancorV3),
@@ -138,7 +138,7 @@ impl Market {
     pub(super) fn currency(self, e: &Entry, native: bool) -> bool {
         match (&e.pool.state, self) {
             (_,Self::BancorLegacy)=>e.family.variant==Variant::BancorLegacy,
-            (_,Self::Mooniswap)=>e.family.variant==Variant::Mooniswap,
+            (_,Self::Mooniswap)=>e.family.variant.mooniswap(),
             (_,Self::YieldBasis)=>e.family.variant==Variant::YieldBasis,
             (PoolState::BalancerV1(_),Self::BalancerV1)=>true,
             (PoolState::BancorV3(_),Self::BancorV3)=>true,

@@ -9,7 +9,7 @@ use crate::{
     venues::bsc_dex::{
         ctx::Ctx,
         node::call::canonical,
-        pools::{dagrow, direct_module, family_variant::Variant, mooniswap, registry::Entry},
+        pools::{dagrow, direct_module, mooniswap, registry::Entry},
         quote::{v2_wallet_sim as sim, white_state},
         wallet::approve,
     },
@@ -72,7 +72,7 @@ pub(crate) fn terms(
     let crate::core::types::PoolState::Mooniswap(state) = &e.pool.state else {
         return Err(bad(ctx));
     };
-    if e.family.variant != Variant::Mooniswap
+    if !e.family.variant.mooniswap()
         || target != ctx.dex_addr("dex.router", e.family.id)?
         || target.is_zero()
         || native && ![e.pool.token0, e.pool.token1].contains(&wrapped)

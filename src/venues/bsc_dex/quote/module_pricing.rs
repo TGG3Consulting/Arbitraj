@@ -36,7 +36,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.extend(Box::pin(super::bancor_legacy_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;
         }
-        if e.family.variant==Variant::Mooniswap {
+        if e.family.variant.mooniswap() {
             quotes.extend(Box::pin(super::mooniswap_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;
         }

@@ -37,7 +37,7 @@ pub(super) async fn check(
             Box::pin(super::bancor_legacy_plan::check_step(ctx,e,input,&head.selector())).await?;
             continue;
         }
-        if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Mooniswap {
+        if e.family.variant.mooniswap() {
             Box::pin(super::mooniswap_plan::check_step(ctx,e,input,&head.selector())).await?;
             continue;
         }

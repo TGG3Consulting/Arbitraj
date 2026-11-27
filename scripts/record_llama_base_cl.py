@@ -17,7 +17,13 @@ WETH = "0x4200000000000000000000000000000000000006"
 CREATE = "0x" + keccak(text="PoolCreated(address,address,uint24,int24,address)").hex()
 WAGMI = "https://github.com/RealWagmi/"
 THICK = "https://docs.equalizer.exchange/equal-fantom/contracts/"
+KINETIX_GRAPH = "https://api.studio.thegraph.com/query/55804/kinetixfi-base-v3/version/latest"
 VENUES = {
+    "kinetix": (14195510, "0xddf5a3259a88ab79d5530eb3eb14c1c92cd97fcf",
+                "0x4548d4ea048729b560cdc89d87eef57abb756e7f", "0xbbd8dd47dbec68412ac3f93c102a6ac45c5c7644",
+                [KINETIX_GRAPH,
+                 "https://repo.sourcify.dev/8453/0x4548d4ea048729b560cdc89d87eef57abb756e7f",
+                 "https://repo.sourcify.dev/8453/0xbbd8dd47dbec68412ac3f93c102a6ac45c5c7644"]),
     "goblins": (21481309, "0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8",
                 "0xe29a829a1c86516b1d24b7966af14eb1be2cd5d4", "0xcbf872c837bad15b0a0283a5c5936fbd1b66beaf",
                 ["https://repo.sourcify.dev/8453/0xe82fa4d4ff25bad8b07c4d1ebd50e83180dd5eb8",
@@ -49,7 +55,7 @@ class CanonicalCalls:
 
 def registry(reader, cap, name, head):
     start, factory, router, quoter, origins = VENUES[name]
-    lens = {"goblins":"0xdea74cd879a3b11cb849a07bbe76b68f50d531f8","thick":"0xb80a72281c76464cc0e1fbf2431a897393e0d757",
+    lens = {"kinetix":"0xcbd2f2407538d046b34f4226585c710aa0f50574","goblins":"0xdea74cd879a3b11cb849a07bbe76b68f50d531f8","thick":"0xb80a72281c76464cc0e1fbf2431a897393e0d757",
             "2thick":"0x547db6759b0af9e050855106993e3cefc16e937e"}.get(name,"0x0cdee061c75d43c82520ed998c23ac2991c9ac6d")
     roles = {"factory":factory, "router":router, "quoter":quoter, "lens":lens}
     code = reader.many(("eth_getCode", [a,cap.selector]) for a in roles.values())
@@ -61,6 +67,7 @@ def registry(reader, cap, name, head):
         assert cap.one(address,"WETH9()",returns=["address"]) == (WETH,)
     keytype = "int24" if name=="2thick" else "uint24"
     published_init = {
+        "kinetix": "e34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54",
         "wagmi": "30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb",
         "goblins": "e34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54",
     }
@@ -210,7 +217,7 @@ def wallet(reader,cap,book,artifact=None,*,selected_targets=None,funding_source=
                                           else fund_quote_asset(cap,run,seed,deadline,base_token))
                 book.setdefault("funding",[]).append(funding)
             for wire in wires:
-                target = ADAPTER if wire == "module" else (router if wire in ("router02","slipstream") else EXEC)
+                target = ADAPTER if wire == "module" else (router if wire in ("router02","router01","slipstream") else EXEC)
                 prefix=initial.copy();amount=available
                 for a,b in ((base_token,other),(other,base_token)):
                     quotesig="(address,address,uint256,"+kind+",uint160)"
@@ -223,8 +230,8 @@ def wallet(reader,cap,book,artifact=None,*,selected_targets=None,funding_source=
                         if wire=="v5":
                             step=(1,market["pool"],a,b,10000,b"")
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,expiry,[step]])
-                        if wire=="slipstream":
-                            shape="(address,address,int24,address,uint256,uint256,uint256,uint160)"
+                        if wire in ("router01", "slipstream"):
+                            shape="(address,address,"+kind+",address,uint256,uint256,uint256,uint160)"
                             return tx(router,"exactInputSingle("+shape+")",[shape],[(a,b,market["key"],OWNER,expiry,amount,minimum,0)])
                         shape="(address,address,"+kind+",address,uint256,uint256,uint160)"
                         inner=tx(router,"exactInputSingle("+shape+")",[shape],[(a,b,market["key"],OWNER,amount,minimum,0)])
@@ -274,5 +281,8 @@ if __name__=="__main__":
         assert native and checked.keys() == native.keys()
         assert all(c["received"] == native[k]["received"] for k,c in checked.items())
     else:
-        book=wallet(reader,cap,registry(reader,cap,a.name,snap))
+        book=registry(reader,cap,a.name,snap)
+        if a.name=="kinetix":
+            book["native_wire"]="router01"
+        book=wallet(reader,cap,book)
     a.output.write_bytes(json.dumps(book,separators=(",",":")).encode())

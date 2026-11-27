@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `6d747239` (27.11.2026).
+Последний просмотренный коммит: `35426952` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1482,3 +1482,18 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   Получатель разрешения для каждого рынка тот же, что был. Единственное изменение — Pendle (только Ethereum): теперь берётся выбранный адрес исполнения вместо `deltaswap::router`, без него — отказ. Это и было целью. Для BSC поведение то же. `approve_gas.rs` уменьшился с 206 до 184 строк. ✅
 - 💡 из c3e85153 (ETH на `trade`) закрыт по существу. Вместо требования `trade.balance == 0` теперь снимок `publicBefore` и проверка, что после сделки баланс не изменился. Покупка при чужом ETH идёт через нативный селектор: он отправляет ровно `principal + fee`. Продажа при чужом ETH по-прежнему отклоняется: токеновый селектор SafeSwap пересылает весь баланс, так что иначе нельзя. Простой возможен только на продажах. Это особенность контракта SafeSwap, не наша ошибка. Остатки WETH/ETH на нативном пути сходятся: снятие `fee + principal` равно отправленному `value`. ✅
 - 💡 `exec/market_approval.rs` и `quote/direct_allowance.rs` — новые модули, записей в `ARCHITECTURE.md` нет (часть 5 готовой фичи). Добавить строку рядом с `market_plan.rs`.
+
+### 35426952 — проверено
+
+- 💡 из 6d747239 (ARCHITECTURE для `market_approval` / `direct_allowance`) закрыт. ✅
+- `quote/vault_pricing.rs`: сверил старый путь `BalancerVaultWallet` с новым `forms()`. Отказ `checked` → пропуск, `exact_output` по тому же выходному токену (Buy → coin, Sell → usdt), тот же `V5Step kind 17`, ветка settlement по-прежнему только для `vault_direct::enabled`. Эквивалентно. Ranges добавлены отдельной веткой по `Variant::PuzzleRanges`. ✅
+- `wallet/approve.rs`: чтение ERC20 + Permit2 вынесено в `approve::at_block` без изменения смысла. `direct_allowance::permit_router` срабатывает только для `Direct` + `PuzzleRanges`, а выбранный роутер обязан совпасть с `ProtectedWallet.target`. ✅
+- `SafeSwapAdapter.sol`: только перенос в `_swap` и структуру `Opening` (stack too deep), все проверки остатков те же. ✅
+- Новые `ranges_wallet.rs`, `safeswap_wallet.rs`, `safeswap_quotes.rs`, `safeswap_trade.rs` — зашитых адресов и чисел нет.
+  - 💡 `safeswap_trade.rs:138`: слот хранилища прокси `0xb2101b…` — константа из исходника `OptimizedTransparentUpgradeableProxy`, допустимо (как EIP-1967). Но в комментарий нужна ссылка на верифицированный исходник (Etherscan, адрес и строка), по правилу «ссылка на источник у каждой функции адаптера».
+- Все новые ветки закрыты `Variant::SafeSwapTrade` / `PuzzleRanges` → для BSC поведение то же.
+- **R-51 (R-42).** Дрейф продолжается:
+  - `exec/plan.rs` — 401 строка (на прошлой проверке 378, в main 296): добавлены `DirectCall::Ranges/SafeSwap`. Обработку `data()` / `minimum` для прямых вызовов рынков вынести в `market_plan.rs`, чтобы `plan.rs` не рос с каждым DEX.
+  - `quote/quoter_calls.rs` и `quote/v2_pair_quote.rs` получили ранние `if variant==SafeSwapTrade { return safeswap_quotes::… }` — то же через диспетчер рынка (`quote/market_selection` или `Market`), а не через if в общем V2-пути.
+
+  Дописывание варианта в уже существующие списки `matches!` (`families`, `load_batch`, `verify`, `v2_wallet_sim`) не считаю за R — это сложившийся реестр. Но сами ветки с логикой должны жить в файле DEX.

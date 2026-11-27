@@ -601,6 +601,11 @@ jobs:
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/dexalot" DexalotWallet
           python scripts/record_dexalot_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/dexalot/DexalotWallet.json"
+      - if: matrix.market == 'fluid-lite-wallet'
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/fluid-lite" FluidDexLiteWallet
+          python scripts/record_fluid_dex_lite_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/fluid-lite/FluidDexLiteWallet.json"
       - if: matrix.market == 'fluid-lite-ethereum'
         run: python scripts/record_fluid_dex_lite.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'dexalot-base-markets'

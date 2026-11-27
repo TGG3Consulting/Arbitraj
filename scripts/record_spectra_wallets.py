@@ -11,9 +11,9 @@ from record_omni_v2_base import ENDPOINTS
 from record_woo_base import WETH
 
 
-def wallet(endpoint, snapshot, market, budget, mode):
+def wallet(endpoint, snapshot, market, budget, mode, funding):
     asset, ibt, pt = (market[k] for k in ("underlying", "coin0", "coin1"))
-    owner = PAYER[asset]
+    method, owner = funding
     pool = market["pool"]
     curve_index = "int128" if market["kind"] == "sng" else "uint256"
     at = snapshot["selector"]
@@ -46,19 +46,27 @@ def wallet(endpoint, snapshot, market, budget, mode):
     def good(result):
         return result["status"] == "0x1"
 
-    init = [balance(asset), balance(ibt), approve(asset,ibt,budget),
-            tx(ibt,"deposit(uint256,address)",["uint256","address"],[budget,owner]),balance(ibt),balance(asset)]
+    if method=="owned_ibt":
+        init=[balance(ibt)]
+    else:
+        init = [balance(asset), balance(ibt), approve(asset,ibt,budget),
+                tx(ibt,"deposit(uint256,address)",["uint256","address"],[budget,owner]),balance(ibt),balance(asset)]
     result = simulate(init)
-    record = dict(owner=owner, mode=mode, underlying=asset, budget=str(budget), funding={"calls":init,"results":result})
-    if not all(map(good,result)) or amount(result[0])-amount(result[-1])!=budget:
+    record = dict(owner=owner, mode=mode, underlying=asset, budget=str(budget), funding={"method":method,"calls":init,"results":result})
+    if not all(map(good,result)):
         return dict(record,stage="funding")
-    qty = amount(result[-2]) - amount(result[1])
-    if qty <= 0:
-        return dict(record,stage="zero shares")
-    prefix = [init[2], init[3]]
+    if method=="owned_ibt":
+        if amount(result[0])<budget:return dict(record,stage="funding")
+        qty,prefix=budget,[]
+    else:
+        if amount(result[0])-amount(result[-1])!=budget:return dict(record,stage="funding")
+        qty = amount(result[-2]) - amount(result[1])
+        if qty <= 0:return dict(record,stage="zero shares")
+        prefix = [init[2], init[3]]
     record["legs"] = []
     for i, (token, out) in enumerate(((ibt,pt),(pt,ibt))):
-        base = prefix + [approve(token, EXEC if mode=="v5" else pool, qty), balance(token), balance(out)]
+        spender = {"v5": EXEC, "router": snapshot["router"], "pool": pool}[mode]
+        base = prefix + [approve(token, spender, qty), balance(token), balance(out)]
         args = [curve_index,curve_index,"uint256"]
         quote = tx(pool, f"get_dy({','.join(args)})",args,[i,1-i,qty])
         initial = simulate(base + [quote])
@@ -70,12 +78,18 @@ def wallet(endpoint, snapshot, market, budget, mode):
             if mode == "pool":
                 full = args + ["uint256"]
                 return tx(pool,f"exchange({','.join(full)})",full,[i,1-i,qty,floor])
+            if mode == "router":
+                actions = bytes([0, 30 if curve_index=="int128" else 3, 15])
+                body = [encode(["address","uint256"], [token,qty]),
+                        encode(["address","uint256","uint256","uint256","uint256","address"], [pool,i,1-i,qty,floor,owner]),
+                        encode(["address","address","uint256"], [out,owner,amount(initial[-2])+floor])]
+                return tx(spender,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[actions,body,deadline])
             kind = 4 if curve_index=="int128" else 9
             step = (kind,pool,token,out,10000,encode([curve_index,curve_index],[i,1-i]))
             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                       ["address","uint256","address","uint256","uint256",STEP+"[]"],[token,qty,out,floor,deadline,[step]])
         trial = [trade(gross+1,expiry)]
-        if mode == "v5":
+        if mode != "pool":
             trial.append(trade(gross,0))
         real = trade(gross,expiry)
         calls = base + trial + [real,balance(token),balance(out),balance(token,EXEC),balance(out,EXEC)]
@@ -100,15 +114,22 @@ def replay(endpoint):
     head = rpc(endpoint,"eth_getBlockByHash",[snapshot["selector"]["blockHash"],False])
     if head["stateRoot"] != snapshot["state_root"]:
         raise ValueError("другой корень состояния")
-    eligible = [r for r in snapshot["markets"] if r["underlying"] in PAYER and r["underlying"] != "0x"+"00"*20]
+    holders=json.loads((directory.parent/"spectra_base_funding.json").read_bytes())
+    if holders["selector"]!=snapshot["selector"]:raise ValueError("держатели с другого блока")
+    funds={**{r["token"]:r["owner"] for r in holders["holders"] if "owner" in r},**PAYER}
     rows = []
-    for r in eligible:
-        unit = 10**r["underlying_decimals"]
+    for r in snapshot["markets"]:
         pool = dict(pool=r["pool"],template=r["template"],kind=r["kind"],maturity=r["maturity"],wallets=[])
-        for denominator in (10000,1000):
-            for mode in ("pool","v5"):
-                pool["wallets"].append(wallet(endpoint,snapshot,r,unit//denominator,mode))
         rows.append(pool)
+        for method,token,decimals in [("owned_ibt",r["coin0"],r["decimals0"]),("deposit",r["underlying"],r["underlying_decimals"])]:
+            if token not in funds:continue
+            for denominator in (10000,1000):
+                for mode in ("pool","v5","router"):
+                    w=wallet(endpoint,snapshot,r,max(10**decimals//denominator,1),mode,(method,funds[token]))
+                    pool["wallets"].append(w)
+            if all(w.get("legs") and len(w["legs"])==2 and all(l["stage"]=="accepted" for l in w["legs"])
+                   for w in pool["wallets"][-6:]):
+                break
     return dict(selector=snapshot["selector"],state_root=snapshot["state_root"],endpoint=endpoint,markets=rows)
 
 

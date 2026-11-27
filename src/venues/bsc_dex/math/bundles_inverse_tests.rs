@@ -118,3 +118,26 @@ fn fee_pair_donation_does_not_cancel_the_market_minimum() {
     );
     assert!(result.amount_out >= target);
 }
+
+#[test]
+fn nearly_parallel_reserve_curves_skip_a_trillion_unit_plateau() {
+    let reserve = U256::from(10).pow(U256::from(24));
+    let x = reserve + U256::from(100_000);
+    let end = Market::gap_end(
+        reserve * reserve,
+        x,
+        U256::ONE,
+        reserve,
+        reserve,
+        U256::ZERO,
+        reserve * U256::from(2),
+    )
+    .unwrap();
+    assert!(end - x > U256::from(500_000_000_000u64));
+    // Over this interval ceil(R²/x) = 2R+1−x and (x−1)(2R+1−x) < R².
+    for t in [x, end] {
+        let y = div_up(reserve * reserve, t).unwrap();
+        assert_eq!(y, reserve * U256::from(2) + U256::ONE - t);
+        assert!((t - U256::ONE) * y < reserve * reserve);
+    }
+}

@@ -53,64 +53,6 @@ pub(in crate::venues::bsc_dex) async fn code(
     Ok(())
 }
 
-/// Both immutable pair code and the implementation resolving the factory registry must
-/// match at the same canonical block. This V5 step transfers straight to the pair.
-pub(in crate::venues::bsc_dex) async fn safe_proxy(
-    ctx: &Ctx,
-    f: &super::families::Family,
-    pool: Address,
-    (a, b): (Address, Address),
-    at: &Value,
-) -> GatewayResult<()> {
-    use super::{abi_check::IPoolImmutables, abi_v2v3::IV2Factory, solidly_classic_factory};
-    let generation = ctx.settings.generation();
-    let bad = || {
-        ctx.err(
-            ErrorCode::NotApplicable,
-            "SafeSwap: изменились проверенная фабрика, пара или комиссия",
-        )
-    };
-    let factory = ctx.dex_addr("dex.factory", f.id)?;
-    let fees = ctx.dex_dec("dex.v2_fee_pct", f.id)?;
-    let hashes = ctx.dex_list("dex.pool_code_hashes", f.id)?;
-    let [init] = hashes.as_slice() else {
-        return Err(bad());
-    };
-    if a >= b
-        || a.is_zero()
-        || ctx.dex_list("dex.proxy_implementations", f.id)?.len() != 1
-        || ctx.dex_text("dex.v2_fee_source", f.id)? != "fixed"
-        || fees != rust_decimal::Decimal::new(2, 1)
-        || super::verify::v2_create2(factory, a, b, init.parse().map_err(|_| bad())?) != pool
-    {
-        return Err(bad());
-    }
-    let listed = IV2Factory::getPairCall {
-        tokenA: a,
-        tokenB: b,
-    };
-    let owner = IPoolImmutables::factoryCall {};
-    let pair_hash = expected(ctx, f.id, "dex.pair_runtime_hash")?;
-    let (_, (), [registry, parent]) = tokio::try_join!(
-        solidly_classic_factory::at(ctx, f, at),
-        solidly_classic_factory::plain(ctx, pool, pair_hash, at),
-        batch::read(
-            ctx,
-            [
-                batch::view(at, factory, listed.clone()),
-                batch::view(at, pool, owner.clone())
-            ]
-        )
-    )?;
-    if batch::decode(&registry, listed)? != pool
-        || batch::decode(&parent, owner)? != factory
-        || generation != ctx.settings.generation()
-    {
-        return Err(bad());
-    }
-    Ok(())
-}
-
 fn funded(
     reserves: (U256, U256),
     balances: (U256, U256),

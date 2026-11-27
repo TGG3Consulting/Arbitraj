@@ -48,14 +48,20 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     }
     // Решение 473: у BPT линейного пула — виртуальный выпуск (в хранилище заранее выпущено 2^112 − 1).
     let bal_in = base(d, i)?;
-    let probe = bal_in / U256::from(PROBE_DIV);
-    if probe.is_zero() {
-        return Some((U256::ZERO, true));
-    }
-    let p_out = balancer_math::amount_out(&nf, i, j, probe)?;
-    if p_out.is_zero() {
-        return Some((U256::ZERO, true));
-    }
+    let usual = bal_in / U256::from(PROBE_DIV);
+    let ranges = super::super::math::puzzle_ranges::active(&nf);
+    let (probe, p_out) = if ranges {
+        super::super::math::puzzle_ranges::probe(&nf, i, j, usual)?
+    } else {
+        if usual.is_zero() {
+            return Some((U256::ZERO, true));
+        }
+        let out = balancer_math::amount_out(&nf, i, j, usual)?;
+        if out.is_zero() {
+            return Some((U256::ZERO, true));
+        }
+        (usual, out)
+    };
     let bp = (b * 10_000.0) as u64;
     let lim = U256::from(if buy { 10_000 + bp } else { 10_000 - bp });
     let ten_k = U256::from(10_000u32);
@@ -73,6 +79,9 @@ pub fn side(d: &VaultPoolData, i: usize, j: usize, b: f64, buy: bool) -> Option<
     };
     // Верхняя граница поиска: весовой — 30 % баланса входа (больше пул откатит), стейблсвап — STABLE_CAP_BALANCES балансов.
     let cap = match &d.curve {
+        _ if ranges => {
+            super::super::math::puzzle_ranges::depth_cap(&nf, i, j, probe, p_out, lim, buy)?
+        }
         crate::core::types::VaultCurve::Weighted { .. }
         | crate::core::types::VaultCurve::WeightedV2 { .. } => weighted_cap(d, i, bal_in)?,
         // Решение 473: managed — весовой (30 % баланса входа); стейблсвап с курсами и линейный — потолок стейблсвапа

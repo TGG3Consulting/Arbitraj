@@ -298,7 +298,10 @@ mod tests {
                         let dep=&archive["deployments"][2];
                         assert_eq!(archive["selector"],snapshot["selector"]);
                         assert_eq!(dep["creation_code"]["hash"],text.as_str());
-                        assert_eq!(dep["pair_pips"],2000);
+                        let fee = u32::try_from(dep["pair_pips"].as_u64().unwrap()).unwrap();
+                        let h = crate::venues::bsc_dex::pools::safeswap::fee_rule(1,dep["roles"]["factory"]["address"].as_str().unwrap().parse().unwrap(),
+                            text.parse().unwrap(),dep["markets"][0]["runtime"].as_str().unwrap().parse().unwrap(),fee);
+                        assert!(matches!(p.settings.get("dex.v2_fee_rule_hash"),Some(Parameter::Text(v)) if v==&format!("{h:#x}")));
                         assert!(matches!(p.settings.get("dex.factory"),Some(Parameter::Text(a)) if a==dep["roles"]["factory"]["address"].as_str().unwrap()));
                         assert!(matches!(p.settings.get("dex.pair_runtime_hash"),Some(Parameter::Text(h)) if dep["markets"].as_array().unwrap().iter().all(|m|m["runtime"]==h.as_str())));
                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_v2") {

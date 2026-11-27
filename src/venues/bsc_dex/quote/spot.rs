@@ -133,7 +133,9 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let mut nf = (**d).clone();
             nf.fee = U256::ZERO;
             let probe = *d.balances.get(iu as usize)? / U256::from(super::vault_depth::PROBE_DIV);
-            let out = super::super::math::balancer_math::amount_out(&nf, iu.into(), ic.into(), probe)?;
+            let (probe,out)=if super::super::math::puzzle_ranges::active(&nf) {
+                super::super::math::puzzle_ranges::probe(&nf,iu.into(),ic.into(),probe)?
+            }else{(probe,super::super::math::balancer_math::amount_out(&nf,iu.into(),ic.into(),probe)?)};
             (!probe.is_zero()).then(|| mul_div(amount, out, probe)).flatten()
         }
         // Бины с изменчивой комиссией (Liquidity Book V2.1, решение 290): цена активного бина — сколько Y за 1 X, ·2^128

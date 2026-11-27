@@ -123,7 +123,7 @@ pub async fn details(
             || super::frax_pricing::is_frax(&e)
             || super::white_pricing::is_white(&e)
             || super::router_pricing::is_native(&e)
-            || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)) || super::super::exec::carbon_direct::enabled(&e) || super::super::exec::mint_club_direct::enabled(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::vault_direct::enabled(&e)
+            || super::super::exec::antfarm_wallet::enabled(&e) || (matches!(e.family.variant,super::super::pools::family_variant::Variant::Pendle|super::super::pools::family_variant::Variant::Dagrow|super::super::pools::family_variant::Variant::Bundles) || super::super::exec::temple_wallet::enabled(&e)) || super::super::exec::carbon_direct::enabled(&e) || super::super::exec::mint_club_direct::enabled(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::vault_direct::enabled(&e)
             || e.family.variant.exact_router()
             || super::super::exec::o1_wallet::enabled(&e) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e) || super::delta_pricing::is_delta(&e))
     {

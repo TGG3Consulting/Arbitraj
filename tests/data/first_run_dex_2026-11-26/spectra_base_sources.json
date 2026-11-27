@@ -68,5 +68,39 @@
         "+admin_fee: public(constant(uint256)) = 8000000000"
       ]
     }
-  ]
+  ],
+  "contracts": {
+    "0x04ec86bf37dfd77397bcc2e386cb37f175b4e106": {
+      "bytes": 4435,
+      "keccak256": "0x562acde205cf7d9f3c1ad7907a633d6e07baf0f3edac9074aaf7005e0a24e9b8"
+    },
+    "0x1c5ecca381961d92b6aaf7bc1656c37021b0f1d9": {
+      "bytes": 24113,
+      "keccak256": "0x81222cb99ad17da45cab7274a1519feb5697c0048c8f190f64704142a4f49975"
+    },
+    "0x2bbd14976753f9748b421bba87a47faa0e6f1983": {
+      "bytes": 23818,
+      "keccak256": "0x98465a4e7ca49bff67affd1002d97c1a31b39c7f900ebc5ce94c9219a8a0daf6"
+    },
+    "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378": {
+      "bytes": 1159,
+      "keccak256": "0xd6b92efbd77eeea0c03fdcd1ff00555973677344adf65946ed48676e7ace1aea"
+    },
+    "0x7ea3097e2af59ea705398544e0f58eddb7bd1852": {
+      "bytes": 4435,
+      "keccak256": "0x562acde205cf7d9f3c1ad7907a633d6e07baf0f3edac9074aaf7005e0a24e9b8"
+    },
+    "0x928d0c9443f49a0e33f877f4e1f19270691c2ad2": {
+      "bytes": 14084,
+      "keccak256": "0xa2360ff48b83e8eeb4a633f8f4c268a62c4f23c0d2da5b673423a2b58e7a78d2"
+    },
+    "0xb828b21ffb7873ea8a6b401b386192fcdbca16b8": {
+      "bytes": 24540,
+      "keccak256": "0xb7283520ec579d21cbcb603d7da789bccc5a7b1f48fe858af4ffd7dde9b16bc0"
+    },
+    "0xf6134998c7a4e4addf71e2ca1273a480e1d12d5d": {
+      "bytes": 24540,
+      "keccak256": "0x81618ec9edd9f7060b6ba9cba8ab1608587ad15d433b62d51639a33c0cd316b9"
+    }
+  }
 }

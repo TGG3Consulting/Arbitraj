@@ -1522,6 +1522,14 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "9157":
+            directory = read(Path("tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json"))
+            candidates = [directory["factory"]]
+            task = "[Подтверждено командой CommunityV3](https://forum.cow.fi/t/communityv3-liquidity-source-integration-proposal/3647)"
+        if not base and str(row["id"]) == "382":
+            directory = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz").read_bytes()))
+            candidates = [r["address"] for name, r in directory["roles"].items() if name.startswith("marketFactory")]
+            task = "Пять фабрик PT/SY и 690 регистраций, см. ETH-PENDLE"
         if not base and str(row["id"])=="2890":
             candidates=[carbon["roles"][0]]
             task="Carbon DeFi · официальный Analytics API агрегирует USD по сети. Приведённый контроллер v6 отдельно подтверждён событиями и кодом"

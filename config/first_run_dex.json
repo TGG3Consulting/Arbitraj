@@ -2452,7 +2452,8 @@
       "dex.pool_code_hashes": [
         "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
       ],
-      "dex.v3_quoter_method": "quoteExactInputSingle"
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)"
     }
   },
   {
@@ -4602,7 +4603,8 @@
       ],
       "dex.pair_runtime_hash": "0xe148487d2c0c0da7d5337720240a84d1899d70af4d08e8ee86b39de1e2905da1",
       "dex.v2_fee_source": "fixed",
-      "dex.v2_fee_pct": "0.2"
+      "dex.v2_fee_pct": "0.2",
+      "dex.v2_fee_rule_hash": "0x7137d211570f422cb483927e412293c1fa31a86f06f63cc25fa755366b4e59b2"
     }
   },
   {
@@ -4967,6 +4969,11 @@
       "dex.multi_pair": true,
       "dex.module_runtime_hashes": [
         "0xf857566ae350f6c5d6e330c5bbecaad2bafd363ad68c245af4f006e344ccfee5"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "1",
+        "10"
       ]
     }
   },

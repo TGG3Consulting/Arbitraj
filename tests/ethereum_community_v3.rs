@@ -89,7 +89,34 @@ fn registered_addresses_reproduce_and_wallets_settle_through_v5() {
         .find(|p| p["network"] == "ethereum" && p["id"] == "communityv3")
         .unwrap()["settings"];
     assert_eq!(data["registry"], p["dex.factory"]);
-    assert_eq!(data["tick_lens"], p["dex.tick_lens"]);
+    let official: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/community_v3_ethereum_router.json"
+    ))
+    .unwrap();
+    let chain: Value =
+        serde_json::from_str(include_str!("data/first_run_dex_2026-11-26/ethereum.json")).unwrap();
+    assert_eq!(data["selector"], official["selector"]);
+    assert_eq!(data["selector"], chain["selector"]);
+    let lens = &official["roles"]["lens"];
+    assert_eq!(p["dex.tick_lens"], lens["address"]);
+    // Исторический эксперимент использовал независимое размещение того же неизменяемого TickLens.
+    for addr in [&data["tick_lens"], &p["dex.tick_lens"]] {
+        let key = addr.as_str().unwrap().to_ascii_lowercase();
+        assert_eq!(chain["contracts"][&key]["bytes"], 1385);
+        assert_eq!(chain["contracts"][&key]["keccak256"], lens["runtime"]);
+    }
+    for (name, key) in [
+        ("factory", "dex.factory"),
+        ("router", "dex.router"),
+        ("quoter", "dex.quoter"),
+    ] {
+        let role = &official["roles"][name];
+        assert_eq!(p[key], role["address"]);
+        assert_eq!(
+            chain["contracts"][role["address"].as_str().unwrap()]["keccak256"],
+            role["runtime"]
+        );
+    }
     let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
     let uint = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
     let factory = addr(&data["registry"]);

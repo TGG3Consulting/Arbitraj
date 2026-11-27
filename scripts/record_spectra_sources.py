@@ -48,8 +48,20 @@ def capture():
         rows.append(dict(template=template,source_address=address,kind=r["kind"],runtime_hash="0x"+keccak(bytes.fromhex(runtime[2:])).hex(),
                          upstream=SOURCE[r["kind"]],verified=url,match=published["runtimeMatch"],
                          source_sha256=hashlib.sha256(source["content"].encode()).hexdigest(),statement_diff=delta))
-    return dict(selector=AT,implementations=rows)
+    addrs = {directory["registry"]} | {r[k] for r in directory["markets"] for k in ("template","factory")}
+    contracts = {}
+    for addr in sorted(addrs):
+        raw = bytes.fromhex(read("eth_getCode", [addr,AT])[2:])
+        if not raw:raise ValueError("пустой runtime "+addr)
+        contracts[addr] = dict(bytes=len(raw),keccak256="0x"+keccak(raw).hex())
+    return dict(selector=AT,implementations=rows,contracts=contracts)
 
 
 if __name__=="__main__":
-    (DATA/"spectra_base_sources.json").write_text(json.dumps(capture(),indent=2)+"\n",encoding="utf8")
+    report=capture()
+    (DATA/"spectra_base_sources.json").write_text(json.dumps(report,indent=2)+"\n",encoding="utf8")
+    path=DATA/"base.json"
+    base=json.loads(path.read_bytes())
+    if base["selector"]!=AT:raise ValueError("первичный реестр использует другой блок")
+    base["contracts"].update(report["contracts"])
+    path.write_text(json.dumps(base,indent=2,ensure_ascii=False)+"\n",encoding="utf8")

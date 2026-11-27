@@ -123,9 +123,90 @@ impl Market {
             if required <= n {
                 return Some(n);
             }
-            n = required;
+            let mut next = required;
+            if deficit && !loss.is_zero() {
+                let nominal = if i == 0 { n * unit / divisor } else { n };
+                let maximum_nominal = if i == 0 {
+                    maximum * unit / divisor
+                } else {
+                    maximum
+                };
+                let reserve = self.reserves[i];
+                let pad = if i == 0 { U256::ZERO } else { gain - U256::ONE };
+                if let Some(end) = Self::gap_end(
+                    k,
+                    reserve + nominal,
+                    loss,
+                    outgoing,
+                    self.reserves[1 - i],
+                    pad,
+                    reserve + maximum_nominal,
+                ) {
+                    let growth = end - reserve + U256::ONE;
+                    next = next.max(if i == 0 {
+                        mul_div_up(growth, divisor, unit)?
+                    } else {
+                        growth
+                    });
+                }
+            }
+            n = next;
         }
         None
+    }
+
+    /// Skip an entire interval near an integer slope of the reserve hyperbola.
+    /// For nominal x+d, convexity gives ceil(K/(x+d)) <= ceil(K/x)-slope*d
+    /// throughout an interval when this line dominates at both endpoints.
+    /// Multiplication by the physical input bound gives a concave quadratic;
+    /// checking its integer maximum excludes every input in the interval.
+    fn gap_end(
+        k: U256,
+        x: U256,
+        loss: U256,
+        physical_out: U256,
+        reserve_out: U256,
+        pad: U256,
+        max_x: U256,
+    ) -> Option<U256> {
+        let y = div_up(k, x)?;
+        let r = y
+            .checked_add(physical_out)?
+            .checked_add(pad)?
+            .checked_sub(reserve_out)?;
+        let l = x.checked_sub(loss)?;
+        if l.checked_mul(r)? >= k {
+            return None;
+        }
+        let square = x.checked_mul(x)?;
+        let slope = k.checked_add(square / U256::from(2))? / square;
+        if slope.is_zero() {
+            return None;
+        }
+        let peak = r.saturating_sub(slope.checked_mul(l)?) / (slope * U256::from(2));
+        let possible = |d: U256| -> Option<bool> {
+            let down = slope.checked_mul(d)?;
+            let z = y.checked_sub(down)?;
+            if (x + d).checked_mul(z)? < k {
+                return Some(false);
+            }
+            let product = |t: U256| (l + t).checked_mul(r.checked_sub(slope.checked_mul(t)?)?);
+            let a = peak.min(d);
+            let b = (peak + U256::ONE).min(d);
+            Some(product(a)?.max(product(b)?) < k)
+        };
+        let limit = max_x.checked_sub(x)?.min(y / slope).min(r / slope);
+        let mut safe = U256::ZERO;
+        let mut step = U256::ONE;
+        while step <= limit && possible(step) == Some(true) {
+            safe = step;
+            if step == limit {
+                break;
+            }
+            step = (step * U256::from(2)).min(limit);
+        }
+        // Even a shorter safe interval is useful; exactness is independent of its length.
+        (!safe.is_zero()).then_some(x + safe)
     }
 
     fn minimum_principal(&self, i: usize, credit: U256, embedded: bool) -> Option<U256> {

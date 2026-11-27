@@ -111,6 +111,10 @@ def spectra():
     d=evidence("spectra_base_directory.json.gz")
     active=sum(r["maturity"]>d["timestamp"] for r in d["markets"])
     both=sum(all(v for k,v in r.items() if k.startswith("quote_")) for r in d["markets"])
+    wallets=evidence("spectra_base_wallets.json.gz")
+    measured=[(m,w,l) for m in wallets["markets"] for w in m["wallets"] for l in w.get("legs",[]) if l["stage"]=="accepted"]
+    modes={mode:sum(w["mode"]==mode for _,w,_ in measured) for mode in ("pool","v5","router")}
+    markets={m["pool"] for m,_,_ in measured}; mature={m["pool"] for m,_,_ in measured if m["maturity"]<=d["timestamp"]}
     return ["","#### Spectra V2 на Base","",
             f"На блоке {d['block']} реестр Spectra хранит {len(d['markets'])} PT. Две фабрики CryptoSwap V1 перечисляют 24 и 22 пула, а StableSwap NG — 42. "
             f"Четыре положительных get_dy (обе стороны и два размера) получены на {both} пулах. У {active} PT срок погашения ещё впереди. Завершение срока меняет условия погашения PT, а возможность продажи IBT/PT определяется текущими резервами и фактической передачей токенов. "
@@ -118,4 +122,9 @@ def spectra():
             "У обоих шаблонов StableSwap NG версия v7.0.0. Первые семь пулов отдают администратору 50% комиссии, остальные 35 — 80%. "
             "Обмен CryptoSwap совпадает с исходником Curve; у второй фабрики есть дополнительная операция donate для администратора. Граф рассчитывает каждую из этих кривых один раз на физический пул. "
             "Профиль читает цену двух фактических монет IBT и PT. Для отдельного погашения в underlying понадобятся условия конкретного ERC4626, а до срока также встречные YT. "
-            f"[Разница проверенных исходников и хеши исполнения](../{DATA/'spectra_base_sources.json'}).",""]
+            f"[Разница проверенных исходников и хеши исполнения](../{DATA/'spectra_base_sources.json'}).","",
+            f"Архив оплат содержит {modes['pool']} исполненных направлений напрямую через пул и {modes['v5']} через V5. "
+            f"Среди {len(markets)} подтверждённых рынков у {len(mature)} срок PT уже истёк. "
+            + (f"Через штатный Spectra Router исполнено {modes['router']} ног. " if modes["router"] else "")
+            + "Штатный Router ограничивает абсолютный баланс получателя после выплаты. V5 проверяет прирост баланса за саму транзакцию и её срок. Для исполнения профиля нужны средства в физической монете и заданный владельцем проверенный V5. "
+            f"[Входы, выходы, газ и контрольные отказы](../{DATA/'spectra_base_wallets.json.gz'}).",""]

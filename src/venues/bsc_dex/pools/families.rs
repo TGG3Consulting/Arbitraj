@@ -897,7 +897,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             ) {
                 list.push(super::verify_algebra_dir::SETTING);
             }
-            if f.variant == Variant::SafeSwapProxy { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]); }
+            if f.variant == Variant::SafeSwapProxy { list.extend(["dex.v2_fee_rule_hash","dex.pair_runtime_hash","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]); }
             if f.variant == Variant::WhiteSwap {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }

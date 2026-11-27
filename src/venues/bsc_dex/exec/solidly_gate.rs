@@ -196,7 +196,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         }
         if f.variant == Variant::SafeSwapProxy {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
-            Box::pin(super::super::pools::v2_pair_binding::safe_proxy(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            Box::pin(super::super::pools::safeswap::pair(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
         if f.variant == Variant::V2DualCreate2LiveFee {

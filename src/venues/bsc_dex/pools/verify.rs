@@ -433,7 +433,7 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
-                Ok(at) if c.family.variant==Variant::SafeSwapProxy => Box::pin(super::v2_pair_binding::safe_proxy(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await,
+                Ok(at) if c.family.variant==Variant::SafeSwapProxy => Box::pin(super::safeswap::pair(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await,
                 Ok(at) if matches!(c.family.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,
                 Ok(at)=>super::kewl::pair(ctx,c.family.id,f.reference.address(),(f.token0,f.token1),at).await,
                 Err(e)=>Err(e.clone()),

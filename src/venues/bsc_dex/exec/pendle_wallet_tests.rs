@@ -53,5 +53,5 @@ fn accepted_wallet_orders_bind_all_assets_sender_and_deadline() {
             assert_eq!(inventory[0], inventory[1]);
         }
     }
-    assert_eq!(counts, [8, 7, 8, 8]);
+    assert_eq!(counts, [10, 9, 10, 10]);
 }

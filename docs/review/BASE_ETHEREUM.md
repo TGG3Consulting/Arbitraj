@@ -63,7 +63,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    Arbitrum в этот релиз не делаем (решение 8).
 >    Качество не снижается: тесты на записанных данных, проверка контрактов, закреплённые хеши, запрет регрессии BSC — как раньше.
 
-Последний просмотренный коммит: `569110a0` (27.11.2026).
+Последний просмотренный коммит: `69b545d3` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -3032,7 +3032,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-57~~ ✅ ffe06aa0 | cac6b21d | R-42 для PropAMM: прямые `== / != Variant::PropVenue` в общих файлах — `fermi/slot_config.rs:80`, `pools/load.rs:381`. Завести предикат семейства (как `fluid_lite()`), в своём файле `pools/prop_venue.rs` сравнение допустимо. |
 | ~~О-58~~ ✅ b6ff079e | 169d544d | `src/venues/bsc_dex/pools/motoswap_frame.rs` (Motoswap, Ethereum). (1) `if cache.len() >= 16` — зашитый размер кэша кадров, CLAUDE.md «ни одного зашитого числа, лимита». Вынести в настройку с записью в `docs/SETTINGS_CASES.md` или обосновать как константу протокола со ссылкой. (2) Шапка файла на английском и без «кто вызывает, от чего зависит»; у `read`/`load` нет комментариев «принимает / возвращает / ошибки». (3) `pools/motoswap.rs` уменьшился 355→312, О-54 (размер) остаётся. |
 | ~~О-59~~ ✅ 569110a0 | 028affbe | `contracts/MotoswapWallet.sol` изменён (добавлен `executePath`), а карточка `ui/src/assets/motoswap-ethereum.json` (`runtimeKeccak 0xd397cb5f…`, `creationSha256 386e4e7a…`) и `dex.module_runtime_hashes` в `config/first_run_dex.json` не пересобраны — metadata solc меняет runtime при любой правке. Пересобрать в CI, подтвердить хеш записанными данными (`motoswap_ethereum_wallets.json.gz`). До этого Motoswap **не размещать**. Мелко: `pathVersion()` возвращает безымянное `1` — назвать константой. |
-| О-60 | 73577960 | Fermi/PropAMM. (1) Размер: `fermi/slot_config.rs` 226 строк (`markets.rs` в 914c1130 уменьшен до 127 — снято), ориентир 200. (2) Новый комментарий на английском в `markets.rs` («One public snapshot for each selected builder…») — язык проекта русский. |
+| ~~О-60~~ ✅ 69b545d3 | 73577960 | Fermi/PropAMM. (1) Размер: `fermi/slot_config.rs` 226 строк (`markets.rs` в 914c1130 уменьшен до 127 — снято), ориентир 200. (2) Новый комментарий на английском в `markets.rs` («One public snapshot for each selected builder…») — язык проекта русский. |
 | О-61 | решение владельца 7 | Выполнить объём работ по DefiLlama ровно по решению 7: перечисленные строки довести до идеала, по остальным — только факт «нет спота» или «оборот < 5 000 USD» в таблице покрытия, без профилей. В ответе — таблица по каждой строке из решения 7: статус, профиль, тест. **Нарушение в 4826dde1:** Basin (Ethereum, 1,16 USD) и Pinto (Base, 20 USD) добавлены в `config/first_run_dex.json` — убрать из рекомендаций первого запуска, статус «оборот < 5 000 USD, отложено». Код не удалять. |
 | О-62 | 616e854e | `gateway/quote_stage.rs`: маршрут денежного шага PropAMM распознаётся по равенству текста `exec_note == "PropAMM: собственный однократный слот денежного шага"` (`prop_settlement_slot`), и по нему `exec/settlement_swap.rs` отправляет сделку в `fermi::trade_settlement`. Текст пояснения — не признак маршрута: правка формулировки молча меняет исполнение. По методу регрессии — отдельный признак (вариант `RouteMode` или поле маршрута), не строка. Размер: `fermi/execute.rs` 316 строк (в О-56 было 249). |
 | О-63 | de461023 | BaseStonk (Base). (1) R-42: прямые `== Variant::BaseStonk` в общих файлах — `pools/families.rs:1007`, `pools/launch_market.rs:56`, `quote/depth_band.rs:577`, `quote/emptiness.rs:105`, `quote/module_pricing.rs:67`, `quote/pool_quote.rs:572`, `quote/spot.rs:127`, `exec/market_plan.rs` (`_ if e.family.variant==Variant::BaseStonk`, 6aea2ef4). Завести предикат семейства. (2) `pools/basestonk.rs`: `SPACING = 60`, `TIERS = [0, 3000]` и маска флагов хука `0x2044` (`launch_keys.rs`) — без ссылки на источник (контракт launcher/hook BaseStonk, строки). У соседнего Umia ссылка есть — сделать так же. |
@@ -4932,3 +4932,8 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - `MotoswapWallet.sol`: `pathVersion()` возвращает именованную `PATH_VERSION = 1` (её проверяет `IMoto.pathVersion` в `pools/motoswap_frame.rs`). Карточка `0x8586e429…` = `config/first_run_dex.json`; пересчитал keccak `currentRuntime` из записанной сборки `motoswap_creation_v3.json.gz` — `0x8586e429…`, совпадает. Прежние размещения (`0x25224db8…`, одиночный путь `0xd397cb5f…`) сохранены отдельными карточками, выбор в UI с тестом. **Motoswap можно размещать.**
 
 Открыто: О-60, О-61, О-62, О-63, О-66, О-67, О-68, О-69.
+
+### 69b545d3 — О-60 закрыто
+- Проверки актуальности слотов вынесены в `fermi/slot_checks.rs` (55); `slot_config.rs` 226 → 183, `markets.rs` 128; английского комментария нет. Только Ethereum. Принято.
+
+Открыто: О-61, О-62, О-63, О-66, О-67, О-68, О-69.

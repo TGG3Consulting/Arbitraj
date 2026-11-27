@@ -65,6 +65,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub ammalgam:Option<Box<super::empire_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub aqua:Option<Box<super::aqua_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub angstrom:Option<Box<super::angstrom_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub stabull:Option<Box<super::stabull_wallet::Proof>>,

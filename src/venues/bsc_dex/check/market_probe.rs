@@ -26,6 +26,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 enum Venue {
     Regular,
     FollowingBlock(Head),
+    Aqua(Address),
     WalletRouter(Address),
     FundedExecutor,
     LlammaWallet,
@@ -55,7 +56,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant.llamma() || matches!(e.pool.state,PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.aqua() || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -75,6 +76,19 @@ impl Market {
         let mut vista = None;
         let venue = if e.family.variant == super::super::pools::family_variant::Variant::Surge {
             Venue::FollowingBlock(white_state::head(ctx, &format!("{number:#x}")).await?)
+        } else if e.family.variant.aqua(){
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let at=head.selector();
+            let module=ctx.dex_addr("dex.router",e.family.id).ok();
+            let valid=if let Some(target)=module{super::super::exec::aqua_plan::checked(ctx,e,target,&at).await.is_ok()}else{false};
+            let target=if let Some(target)=module.filter(|_|valid){target}else{
+                let original=ctx.dex_addr("dex.quoter",e.family.id)?;
+                super::super::exec::aqua_plan::checked(ctx,e,original,&at).await?;
+                original
+            };
+            Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
+            anchor=Some((head,Box::new(e.clone())));
+            Venue::Aqua(target)
         } else if e.family.variant.llamma(){
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             let at=head.selector();
@@ -270,7 +284,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::LlammaWallet | Venue::FundedExecutor
+            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::LlammaWallet | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -299,6 +313,10 @@ impl Market {
         if matches!(self.venue, Venue::FundedExecutor) {
             let call = Box::pin(super::probe_exec::part(ctx, e, order, wallet, now)).await?;
             return Ok(Leg { entry: None, call });
+        }
+        if let Venue::Aqua(target)=self.venue{
+            let call=super::super::exec::aqua_plan::probe_at(ctx,e,order,wallet,now,target)?;
+            return Ok(Leg{entry:None, call});
         }
         if let Venue::WalletRouter(router) = self.venue {
             let call = super::registered_v3::leg(ctx, e, router, wallet, order, now)?;
@@ -416,7 +434,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::LlammaWallet | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::Aqua(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::LlammaWallet | Venue::FundedExecutor => Ok(None),
         }
     }
 }

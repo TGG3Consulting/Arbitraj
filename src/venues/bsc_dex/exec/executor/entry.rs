@@ -59,7 +59,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
+    if f.variant.aqua() || f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -83,6 +83,10 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
     if f.variant.defiplaza(){
         if k==ExecKind::Basin && let PoolRef::Multi{contract,token0,token1}=pool && !contract.is_zero() && token0<token1{return Ok((k,*contract));}
         return Err("DefiPlaza: нужен зарегистрированный рынок кассы".into());
+    }
+    if f.variant.aqua(){
+        if k==ExecKind::Balancer && let PoolRef::Singleton{manager,id}=pool && !manager.is_zero() && !id.is_zero(){return Ok((k,*manager));}
+        return Err("Aqua: нет ключа программы SwapVM".into());
     }
     if f.variant.mooniswap(){
         if k==ExecKind::Balancer && let PoolRef::Contract(pool)=pool && !pool.is_zero(){return Ok((k,*pool));}
@@ -135,6 +139,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     if e.family.variant.issuer_shares() {
         return super::super::aktionariat_plan::terms(ctx,e).map(|m|(k,m.module)).map_err(|e|e.message);
     }
+    if e.family.variant.aqua(){return super::super::aqua_plan::graph(ctx,e).map(|(_,t)|(k,t)).ok_or_else(||"Aqua: модуль не настроен".into());}
     if e.family.variant.mooniswap(){
         let target=super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).ok_or_else(||"Mooniswap: не подтверждены пул, валюты или модуль".to_string())?;
         return Ok((k,target.1));
@@ -173,6 +178,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
         return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some_and(|s|s.second.is_none()) && pinned_module_target(ctx,e).is_some();
     }
+    if e.family.variant.aqua(){return k==ExecKind::Balancer && super::super::aqua_plan::graph(ctx,e).is_some();}
     if e.family.variant.mooniswap(){return k==ExecKind::Balancer && super::super::mooniswap_plan::graph_target(ctx,e,e.pool.token0).is_some();}
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {
@@ -260,6 +266,10 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         let pool_id=super::super::bancor_legacy_plan::step_id(e,token_in)
             .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bancor V2.1: конвертер, якорь или вход изменились"))?;
         let target=pinned_module_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"Bancor V2.1: отсутствует модуль шага"))?;
+        return Ok((Params::Balancer{pool_id},target));
+    }
+    if e.family.variant.aqua(){
+        let (pool_id,target)=super::super::aqua_plan::graph(ctx,e).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Aqua: нет модуля или ключа программы"))?;
         return Ok((Params::Balancer{pool_id},target));
     }
     if e.family.variant.mooniswap(){

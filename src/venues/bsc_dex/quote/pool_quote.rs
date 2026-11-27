@@ -546,6 +546,12 @@ pub fn swap(
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})
         }
+        (PoolState::OraclePmm(d), PoolKind::OraclePmm) if e.family.variant.aqua() => {
+            let levels=if zero_for_one==d.base_is_token0{&d.ladder_base_in}else{&d.ladder_quote_in};
+            let point=if exact_in{levels.iter().find(|p|p.amount_in==amount)}
+                else{levels.iter().filter(|p|p.amount_out>=amount).min_by_key(|p|p.amount_in)}.ok_or_else(none)?;
+            Ok(Swapped{amount_in:point.amount_in,amount_out:point.amount_out,complete:true})
+        }
         (PoolState::OraclePmm(d), PoolKind::OraclePmm) if super::uses_wallet_quoter(e.family.variant) => {
             let points=if zero_for_one==d.base_is_token0 {&d.ladder_base_in} else {&d.ladder_quote_in};
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;

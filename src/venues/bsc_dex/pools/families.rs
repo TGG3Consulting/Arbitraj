@@ -446,6 +446,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "omni_flux_native_cl" => (PoolKind::Cl, Proto::InfinityCl, true, false, true),
         "omni_flux_native_bin" => (PoolKind::Bin, Proto::InfinityBin, true, false, true),
+        "aqua_swapvm" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "angstrom_l1" => (PoolKind::Cl, Proto::UniswapV4, true, false, false),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
         "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
@@ -886,6 +887,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
         Proto::V2 if f.variant.ammalgam() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]),
+        Proto::V2 if f.variant.aqua() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash"]),
         Proto::V2 if f.variant.mooniswap() => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::Brokerbot => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.broker_markets"]),
         Proto::V2 if f.variant.llamma() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.llamma_runtime_classes"]),

@@ -115,6 +115,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::YieldBasis
             | Variant::BalancerV1
             | Variant::BancorLegacy
+            | Variant::Aqua
             | Variant::BancorV3
             | Variant::UniswapV1
             | Variant::RubiconClassic

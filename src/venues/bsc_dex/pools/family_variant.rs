@@ -81,6 +81,7 @@ pub enum Variant {
     DeliConstant,
     LaunchUmia,
     LaunchBaseline,
+    Aqua,
     Angstrom,
     LaunchDoppler,
     LaunchIndex,
@@ -266,6 +267,7 @@ impl Variant {
     /// Площадка торгует целыми акциями эмитента с отдельными правилами оплаты и выдачи.
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
     pub(crate) fn solidly_clone(self)->bool { self==Self::SolidlyClone }
+    pub(crate) fn aqua(self)->bool {self==Self::Aqua}
     pub(crate) fn mooniswap(self)->bool {self==Self::Mooniswap}
     pub(crate) fn ammalgam(self)->bool {self==Self::Ammalgam}
     pub(crate) fn classic_wallet(self)->bool { matches!(self,Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride) }
@@ -362,6 +364,7 @@ pub fn of(kind: &str) -> Variant {
         "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
         "launch_umia" => Variant::LaunchUmia,
         "launch_baseline" => Variant::LaunchBaseline,
+        "aqua_swapvm" => Variant::Aqua,
         "angstrom_l1" => Variant::Angstrom,
         "launch_doppler" => Variant::LaunchDoppler,
         "launch_index" => Variant::LaunchIndex,

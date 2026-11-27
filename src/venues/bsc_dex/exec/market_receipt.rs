@@ -35,6 +35,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::Shiba(t))=>c.shiba=Some(Box::new((*t).clone())),
         Some(DirectCall::Ammalgam(t))=>c.ammalgam=Some(Box::new((*t).clone())),
         Some(DirectCall::Empire(t))=>c.empire=Some(Box::new((*t).clone())),
+        Some(DirectCall::Aqua(t))=>c.aqua=Some(Box::new((*t).clone())),
         Some(DirectCall::Angstrom(t))=>c.angstrom=Some(Box::new((*t).clone())),
         Some(DirectCall::Stabull(t))=>c.stabull=Some(Box::new((*t).clone())),
         Some(DirectCall::Integral(t))=>c.integral=Some(Box::new((*t).clone())),
@@ -98,6 +99,7 @@ pub(super) enum Saved<'a> {
     Shiba(&'a super::shiba_payment::Proof),
     Ammalgam(&'a super::empire_wallet::Proof),
     Empire(&'a super::empire_wallet::Proof),
+    Aqua(&'a super::aqua_wallet::Proof),
     Angstrom(&'a super::angstrom_wallet::Proof),
     Stabull(&'a super::stabull_wallet::Proof),
     Integral(&'a super::integral_wallet::Proof),
@@ -140,6 +142,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.shiba.as_deref().map(Saved::Shiba),
         c.ammalgam.as_deref().map(Saved::Ammalgam),
         c.empire.as_deref().map(Saved::Empire),
+        c.aqua.as_deref().map(Saved::Aqua),
         c.angstrom.as_deref().map(Saved::Angstrom),
         c.stabull.as_deref().map(Saved::Stabull),
         c.integral.as_deref().map(Saved::Integral),
@@ -181,6 +184,12 @@ pub(in crate::venues::bsc_dex) async fn included(
         let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Модуль пула: нет исходного хеша или nonce");
         let nonce=nonce.or_else(||c.chain.as_ref().map(|v|v.nonce)).ok_or_else(bad)?;
         if c.chain.as_ref().is_some_and(|v|(v.hash,v.nonce)!=(hash,nonce)) {return Err(bad());}
+        return p.signed().included(ctx,hash,nonce,receipt).await;
+    }
+    if let Some(p)=c.aqua.as_deref() {
+        let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Aqua: исходная транзакция или блок выплаты не подтверждены");
+        let nonce=nonce.or_else(||c.chain.as_ref().map(|prior|prior.nonce)).ok_or_else(bad)?;
+        if c.chain.as_ref().is_some_and(|prior| (prior.hash,prior.nonce)!=(hash,nonce)){return Err(bad());}
         return p.signed().included(ctx,hash,nonce,receipt).await;
     }
     if let Some(p)=c.angstrom.as_deref() {
@@ -253,6 +262,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::Shiba(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"ShibaSwap: нет исходного подтверждённого поручения")),
             Saved::Ammalgam(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Ammalgam: нет подписанного поручения")),
             Saved::Empire(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Empire: нет исходного подтверждённого поручения")),
+            Saved::Aqua(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Aqua: нет исходного хеша для сверки подписанта")),
             Saved::Angstrom(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Angstrom: нет исходного хеша для сверки подписанта")),
             Saved::Stabull(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Integral(p)=>p.included(ctx,hash,receipt).await?,
@@ -309,6 +319,7 @@ impl Saved<'_> {
             Self::Shiba(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("ShibaSwap: исходная выплата кошельку не установлена"),
             Self::Ammalgam(p)=>super::ammalgam_receipt::amounts(p,&r.logs,wallet,input,output).ok_or("Ammalgam: рынок, денежные события или получатель не соответствуют поручению"),
             Self::Empire(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Empire: исходный рынок, участники или выплата расходятся с измерением модуля"),
+            Self::Aqua(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Aqua: фактическая оплата или программа расходятся с подписанным поручением"),
             Self::Angstrom(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Angstrom: фактическая оплата или PoolId расходятся с подписанным поручением"),
             Self::Stabull(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Stabull: поручение, Curve Trade и дельты кошелька не совпадают"),
             Self::Integral(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Integral SIZE: поручение, событие или дельты кошелька не совпадают"),

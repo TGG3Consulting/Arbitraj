@@ -166,6 +166,9 @@ pub async fn subscribe(
             late: late.clone(),
         })
         .collect();
+    for family in super::families::all(&p.ctx).into_iter().filter(|f|f.variant.aqua()){
+        tasks.push(tokio::spawn(scope(Class::Background, super::aqua_history::run(p.clone(), watches.clone(),family))));
+    }
     for w in &watches {
         tasks.push(tokio::spawn(created::run(p.clone(), w.clone())));
     }

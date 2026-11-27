@@ -56,6 +56,13 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
         if families::classify(ctx, f.id).is_err() {
             continue;
         }
+        if f.variant.aqua(){
+            use super::aqua::IAqua;
+            for (setting,topic) in [("dex.factory",IAqua::Shipped::SIGNATURE_HASH),("dex.factory",IAqua::Docked::SIGNATURE_HASH),("dex.factory",IAqua::Pushed::SIGNATURE_HASH),("dex.quoter",IAqua::Swapped::SIGNATURE_HASH)]{
+                if let Ok(addr)=ctx.dex_addr(setting,f.id){out.push((addr,topic,false,f));}
+            }
+            continue;
+        }
         let (setting, t0, v4) = match f.proto {
             _ if f.variant.spacing_keyed() => ("dex.factory",IV3Factory::PoolCreated::SIGNATURE_HASH,false),
             _ if f.variant == super::family_variant::Variant::SolidlyCl => (
@@ -308,6 +315,13 @@ pub async fn on_log(p: &Pools, w: &Watch, raw: &str) -> Result<(), String> {
 
 /// Событие одного вида DEX → проверка → подписка. Ошибка — текст (как у on_log).
 async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> Result<(), String> {
+    if f.variant.aqua(){
+        let ctx=&p.ctx;
+        let roles=super::aqua::Roles{registry:ctx.dex_addr("dex.factory",f.id).map_err(|e|e.message)?,engine:ctx.dex_addr("dex.quoter",f.id).map_err(|e|e.message)?};
+        let chain=ctx.chain_id().ok_or_else(||super::aqua::bad(ctx).message)?;
+        if let Some(h)=super::aqua_book::observed(chain,roles,log){aqua_attach(p,w,f,roles,&super::aqua_book::current(chain,roles),h).await?;}
+        return Ok(());
+    }
     // Решение 453: событие фабрики crypto-пулов Curve — до двух пар пула (Tricrypto) или поиск по фабрике (v1).
     if f.variant.llamma(){
         if let Some(c)=Box::pin(super::llamma_directory::created(&p.ctx,f,log,w.usdt)).await.map_err(|e|e.message)? && w.coins.contains_key(&c.coin){take(p,w,f,c).await?;}
@@ -426,6 +440,21 @@ async fn balancer_created(p:&Pools,w:&Watch,f:&'static Family,pool:Address)->Res
     for row in super::stable_list::candidates(f.id,pool,&tokens,&w.coins,&[w.usdt]){
         let c=Candidate{family:f,pool:row.pool,coin:row.base,quote:row.quote};
         take(p,w,f,c).await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn aqua_attach(p:&Pools,w:&Watch,f:&'static Family,roles:super::aqua::Roles,book:&super::aqua_book::Book,h:B256)->Result<(),String>{
+    let Some(assets)=book.assets(h).filter(|assets|assets.contains(&w.usdt)) else{return Ok(())};
+    for coin in assets.iter().filter(|coin|**coin!=w.usdt && w.coins.contains_key(*coin)){
+        let pair=super::discover::sorted(*coin,w.usdt);
+        for first in [false,true]{
+            let id=super::aqua::edge(h,pair,first);
+            let reference=crate::core::types::PoolRef::Singleton{manager:roles.engine,id};
+            if w.known.lock().unwrap_or_else(|e|e.into_inner()).contains(&reference){continue;}
+            let c=Candidate{family:f,pool:format!("{id:#x}"),coin:*coin,quote:w.usdt};
+            take(p,w,f,c).await?;
+        }
     }
     Ok(())
 }

@@ -11,7 +11,7 @@ use alloy_primitives::Address;
 
 pub(super) fn needs(e:&Entry)->bool{
     use crate::venues::bsc_dex::pools::family_variant::Variant;
-    e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
+    e.family.variant.aqua() || e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
 }
 pub(super) async fn check(
     ctx: &Ctx,
@@ -41,6 +41,10 @@ pub(super) async fn check(
         if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
             Box::pin(super::bancor_legacy_plan::check_step(ctx,e,input,&head.selector())).await?;
             continue;
+        }
+        if e.family.variant.aqua(){
+            let v5=super::executor::address(ctx)?.ok_or_else(||crate::venues::bsc_dex::pools::aqua::bad(ctx))?;
+            Box::pin(super::aqua_plan::cached(ctx,e,head,v5)).await?;continue;
         }
         if e.family.variant.mooniswap() {
             Box::pin(super::mooniswap_plan::check_step(ctx,e,input,&head.selector())).await?;

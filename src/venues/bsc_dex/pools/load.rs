@@ -103,6 +103,12 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant.ammalgam() {
+        return Box::pin(async move {
+            let state = super::ammalgam::state(ctx,f,reference.address(),pair,&block_tag(block)).await?;
+            Ok(Loaded {state:PoolState::Ammalgam(Box::new(state)),ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant.empire() {
         return Box::pin(async move {
             let at = super::nami::block(ctx, &block_tag(block)).await?;

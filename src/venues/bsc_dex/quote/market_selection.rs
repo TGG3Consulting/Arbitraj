@@ -54,6 +54,7 @@ pub(super) struct BookQuoter {
 pub(super) fn order_book_quoter(variant:Variant)->Option<BookQuoter>{
     use super::super::pools::{carbon_quote,rubicon};
     match variant {
+        Variant::Ammalgam=>Some(BookQuoter{request:super::super::pools::ammalgam::request,payout:super::super::pools::ammalgam::payout}),
         Variant::Mooniswap=>Some(BookQuoter{request:super::super::pools::mooniswap::request,payout:super::super::pools::mooniswap::payout}),
         Variant::Brokerbot=>Some(BookQuoter{request:super::super::pools::brokerbot_quotes::request,payout:super::super::pools::brokerbot_quotes::payout}),
         Variant::RubiconClassic=>Some(BookQuoter{request:rubicon::request,payout:rubicon::payout}),

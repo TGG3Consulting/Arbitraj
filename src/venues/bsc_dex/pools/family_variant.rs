@@ -139,6 +139,7 @@ pub enum Variant {
     Carbon,
     Temple,
     Brokerbot,
+    Ammalgam,
     Mooniswap,
     DefiPlazaMulti,
     DefiPlazaStable,
@@ -228,6 +229,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
     pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
     pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
@@ -260,6 +262,7 @@ impl Variant {
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
     pub(crate) fn solidly_clone(self)->bool { self==Self::SolidlyClone }
     pub(crate) fn mooniswap(self)->bool {self==Self::Mooniswap}
+    pub(crate) fn ammalgam(self)->bool {self==Self::Ammalgam}
     pub(crate) fn classic_wallet(self)->bool { matches!(self,Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyClone | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_quoter(self) -> bool { self.external_algebra_swap() || self.caller_algebra() }
@@ -385,6 +388,7 @@ pub fn of(kind: &str) -> Variant {
         "defiplaza_multi" => Variant::DefiPlazaMulti,
         "defiplaza_stable" => Variant::DefiPlazaStable,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,
+        "ammalgam_dlex" => Variant::Ammalgam,
         "mooniswap_v1" | "mooniswap_v2" => Variant::Mooniswap,
         "aktionariat" => Variant::Brokerbot,
         "temple" | "temple_v5" => Variant::Temple,

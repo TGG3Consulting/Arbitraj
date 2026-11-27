@@ -75,11 +75,11 @@ pub(crate) async fn market(
     let deployer = if matches!(f.variant,super::family_variant::Variant::HelloV3 | super::family_variant::Variant::VvsV3) {
         super::hello_v3::creator(ctx, f, factory, quoter, pool, at).await?
     } else { factory };
-    let by_spacing=f.variant==super::family_variant::Variant::RegisteredSpacingV3;
+    let by_spacing=f.variant.spacing_keyed();
     if a >= b
         || a.is_zero()
         || space.as_i32() <= 0
-        || fee.to::<u32>() >= 1_000_000
+        || fee.to::<u32>() >= super::super::math::swap_step::MAX_FEE
         || expected.is_some_and(|x| x != fee.to::<u32>())
         || batch::decode(&own, fa.clone())? != factory
         || batch::decode(&origin, fa)? != factory

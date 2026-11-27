@@ -55,7 +55,7 @@ pub async fn load(
             return Err(ctx.err(ErrorCode::Internal, why));
         }
     };
-    let (sqrt, tick) = if f.variant==Variant::RegisteredSpacingV3 {
+    let (sqrt, tick) = if f.variant.spacing_keyed() {
         let s=call::view(ctx,pool,&super::abi_v2v3::IUniswapV3Pool::slot0Call{},tag).await?;
         (U256::from(s.sqrtPriceX96),s.tick.as_i32())
     } else if v2line {

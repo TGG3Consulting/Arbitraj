@@ -1225,7 +1225,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
-        Proto::Slipstream if f.variant==Variant::RegisteredSpacingV3 => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.cl_tick_spacings","dex.v3_quoter_method",super::verify_algebra_dir::SETTING]),
+        Proto::Slipstream if f.variant.spacing_keyed() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.cl_tick_spacings","dex.v3_quoter_method",super::verify_algebra_dir::SETTING]),
         Proto::Slipstream if f.variant==Variant::TopazCl=>list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.cl_fee_module","dex.cl_fee_module_hash","dex.pair_runtime_hash"]),
         Proto::Slipstream if f.variant == Variant::SolidlyCl => {
             list.push("dex.factory");

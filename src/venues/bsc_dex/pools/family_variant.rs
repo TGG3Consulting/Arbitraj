@@ -227,6 +227,7 @@ impl Variant {
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
     pub fn origin_fee(self)->bool{self==Self::TopazCl}
     pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
+    pub(crate) fn spacing_keyed(self) -> bool { self == Self::RegisteredSpacingV3 }
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }

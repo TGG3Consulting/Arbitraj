@@ -33,4 +33,37 @@ fn spacing_is_the_registry_key_and_current_fee_is_observed_without_an_event() {
         changed += usize::from(fee != 10000);
     }
     assert_eq!(changed, 11);
+    let profiles: Value =
+        serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+    let settings = &profiles
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == "2thick-base")
+        .unwrap()["settings"];
+    assert_eq!(settings["dex.v3_wallet_router_abi"], "router02_spacing");
+    assert_eq!(settings["dex.pool_code_hashes"][0], data["init"]);
+    let vvv = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/2thick_venice_base_wallets.json.gz"
+    );
+    let funded: Value = serde_json::from_reader(GzDecoder::new(vvv.as_slice())).unwrap();
+    assert_eq!(funded["selector"], data["selector"]);
+    let bindings = settings["dex.router_exact_tokens"].as_array().unwrap();
+    for token in funded["market"]["tokens"].as_array().unwrap() {
+        assert!(
+            bindings
+                .iter()
+                .any(|row| row.as_str().unwrap().split_whitespace().next() == token.as_str())
+        );
+    }
+    let cases = funded["cases"].as_array().unwrap();
+    assert_eq!(cases.len(), 8);
+    for leg in cases.iter().filter(|c| c["wire"] == "router02") {
+        let peer = cases
+            .iter()
+            .find(|c| c["wire"] == "v5" && c["input"] == leg["input"] && c["spent"] == leg["spent"])
+            .unwrap();
+        assert_eq!(peer["received"], leg["received"]);
+        assert!(leg["gas"].as_u64().unwrap() > peer["gas"].as_u64().unwrap());
+    }
 }

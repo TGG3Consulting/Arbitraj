@@ -42,7 +42,7 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     }
     let tag = call::block_tag(block);
     for (fam, items) in by {
-        if fam.variant==super::family_variant::Variant::RegisteredSpacingV3 {
+        if fam.variant.spacing_keyed() {
             pool_fees(p,&items,&tag,block).await?;
             continue;
         }
@@ -96,7 +96,7 @@ async fn pool_fees(
     for (i, (found, address, _)) in items.iter().enumerate() {
         let fee = rows.get(i).and_then(|row| row.as_ref().ok())
             .and_then(|raw| call::decode::<super::abi_check::IPoolImmutables::feeCall>(raw).ok())
-            .map(|value| value.to::<u32>()).filter(|fee| *fee < 1_000_000);
+            .map(|value| value.to::<u32>()).filter(|fee| *fee < super::super::math::swap_step::MAX_FEE);
         if let Some(fee) = fee {
             put(p, found, aero_fee_seen::newest(p.ctx.place.id, *address, block, fee))?;
         } else {

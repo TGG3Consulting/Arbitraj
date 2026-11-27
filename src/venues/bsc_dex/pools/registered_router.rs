@@ -66,7 +66,7 @@ pub(crate) async fn checked(
             if e.family.variant == Variant::VvsV3 {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
             }
-            if e.family.variant == Variant::RegisteredSpacingV3 && ctx.dex_text("dex.v3_wallet_router_abi",id).ok().as_deref()!=Some("router02_spacing") {return Err(bad())}
+            if e.family.variant.spacing_keyed() && ctx.dex_text("dex.v3_wallet_router_abi",id).ok().as_deref()!=Some("router02_spacing") {return Err(bad())}
             if matches!(e.family.variant, Variant::RegisteredUniV3|Variant::RegisteredSpacingV3) {
                 return registered_v3::fresh(ctx,e,at).await;
             }

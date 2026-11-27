@@ -6309,5 +6309,37 @@
       "dex.quoter_runtime_hash": "0x9e9855e8c45abaf885df13ed7299e43771f5561b9ec3f01174f5fcf244ed8422",
       "dex.router_runtime_hash": "0xaf9bd3a2e0286a9471727d9477fa1f3a3ae94037d51a5576daa13b04e37a7ef9"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "2thick-base",
+    "source": "https://repo.sourcify.dev/8453/0x7ca1dccfb4f49564b8f13e18a67747fd428f1c40 · tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz",
+    "settings": {
+      "dex.kind": "registered_spacing_v3",
+      "dex.pool_code_hashes": [
+        "0x61b7f7bba7bced18e4ac1d564e48ecd10c82d2d51362ed2908c9d156a1027fd9"
+      ],
+      "dex.cl_tick_spacings": [
+        "1",
+        "8",
+        "64"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.quoter_virtual": false,
+      "dex.v3_wallet_router_abi": "router02_spacing",
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf 0x67f0ec6b769503efc2611b3566ffae158a1a9fd8ba3dc30ccf320436d8c5745d",
+        "0xf4d97f2da56e8c3098f3a8d538db630a2606a024 0x6e4cbffc1cd11100efa3de76dcab1038a050a6f4d0d0369e8bd3d28d2dc6de0d"
+      ],
+      "dex.factory": "0x7ca1dccfb4f49564b8f13e18a67747fd428f1c40",
+      "dex.factory_runtime_hash": "0xbc7fd4fc47b2b033294b4da716e5b85b714c3ca410954db8c1454d35d02b406d",
+      "dex.quoter": "0xc701e92db1ef14ab64f66f18536b1e07678db678",
+      "dex.quoter_runtime_hash": "0xa0ea0e1b667ea2e109db7645c3bf2bd9e04d425a2b3c81d0e3b7c7c44dae6667",
+      "dex.router": "0xe4ba08712c404042b8eefc3fdf3b603c977500df",
+      "dex.router_runtime_hash": "0x1cf0f4313c7e10563e8e59dc23fe2f8c285a0513f40a2372a2ca4133f9ae3ccd"
+    }
   }
 ]

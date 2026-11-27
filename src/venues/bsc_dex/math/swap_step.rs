@@ -17,7 +17,7 @@ use super::full_math::{mul_div, mul_div_up};
 use super::sqrt_price_math::{amount0_delta, amount1_delta, next_from_input, next_from_output};
 
 /// 1e6 — знаменатель комиссии в пипсах.
-const MAX_FEE: u32 = 1_000_000;
+pub(crate) const MAX_FEE: u32 = 1_000_000;
 
 /// Итог шага: (новая цена, вход без комиссии, выход, комиссия).
 pub type Step = (U256, U256, U256, U256);

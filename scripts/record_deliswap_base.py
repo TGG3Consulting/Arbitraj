@@ -33,7 +33,8 @@ def quantity(result):
     return int(result["returnData"], 16)
 
 
-def capture(endpoint):
+def capture(endpoint, concentrated=False):
+    hook = "0x570a48f96035c2874de1c0f13c5075a05683b0cc" if concentrated else HOOK
     snap = json.loads((DATA / "base.json").read_bytes())
     c = Capture(dict(snap, endpoint=endpoint))
     head = rpc(endpoint, "eth_getBlockByHash", [c.selector["blockHash"], False])
@@ -43,8 +44,8 @@ def capture(endpoint):
     deadline = int(head["timestamp"], 16) + 180
     if rpc(endpoint, "eth_getCode", [PAYER, c.selector]) != "0x" or rpc(endpoint, "eth_getCode", [EXEC,c.selector]) != "0x":
         raise ValueError("исходный держатель либо адрес изолированного исполнителя имеет код")
-    _, hook_code = role(c, HOOK)
-    roles = {k: c.one(HOOK, k+"()", returns=["address"])[0] for k in
+    _, hook_code = role(c, hook)
+    roles = {k: c.one(hook, k+"()", returns=["address"])[0] for k in
              ("poolManager", "WBLT", "BMX", "feeProcessor", "incentiveGauge", "dailyEpochGauge")}
     if (roles["poolManager"], roles["WBLT"], roles["BMX"]) != (mgr,WBLT,BMX):
         raise ValueError("размещение Deli изменилось")
@@ -91,17 +92,24 @@ def capture(endpoint):
                 commands = encode(["bytes","bytes[]"],[bytes([6,12,15]),[swap,settle,take]])
                 return tx(ur,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[bytes([16]),[commands],end])
         bal = [tx(t,"balanceOf(address)",["address"],[PAYER]) for t in (x,y)]
-        quoted = tx(HOOK,f"getAmountOut({KEY},bool,uint256)",[KEY,"bool","uint256"],[key,zero,size])
         pid = keccak(encode([KEY],[key]))
-        reserves = tx(HOOK,"getReserves(bytes32)",["bytes32"],[pid])
+        if concentrated:
+            params = f"({KEY},bool,uint128,bytes)"
+            quoted = tx(cfg["dex.quoter"],f"quoteExactInputSingle({params})",[params],[(key,zero,size,b"")])
+            reserves = tx(cfg["dex.state_view"],"getSlot0(bytes32)",["bytes32"],[pid])
+        else:
+            quoted = tx(hook,f"getAmountOut({KEY},bool,uint256)",[KEY,"bool","uint256"],[key,zero,size])
+            reserves = tx(hook,"getReserves(bytes32)",["bytes32"],[pid])
         pre = prefix+approvals+bal+[reserves, quoted]
         front = simulate(pre,mode)
         if any(r["status"]!="0x1" for r in front): raise ValueError(("setup",[(i,r.get("error",{}).get("message")) for i,r in enumerate(front) if r["status"]!="0x1"]))
-        out = quantity(front[-1])
-        rin,rout = decode(["uint256","uint256"],bytes.fromhex(front[-2]["returnData"][2:]))
-        if not zero: rin,rout=rout,rin
-        effective=size*(10**6-key[2])
-        if not out or out != effective*rout//(10**6*rin+effective):raise ValueError("котировка расходится с резервами hook")
+        out = int(front[-1]["returnData"][2:66],16)
+        if not out: raise ValueError("выход ниже одного атома")
+        if not concentrated:
+            rin,rout = decode(["uint128","uint128"],bytes.fromhex(front[-2]["returnData"][2:]))
+            if not zero: rin,rout=rout,rin
+            effective=size*(10**6-key[2])
+            if out != effective*rout//(10**6*rin+effective):raise ValueError("котировка расходится с резервами hook")
         # Каждый контроль начинается при той же высоте и на тех же резервах; откат не меняет состояние.
         calls = pre+[order(out+1,deadline),order(out,0),order(out,deadline)]+bal+[reserves]
         records = simulate(calls,mode)
@@ -111,17 +119,22 @@ def capture(endpoint):
             raise ValueError("расхождение выплаты с балансом кошелька")
         return prefix+approvals+[order(out,deadline)],out,dict(input=str(size),output=str(out),calls=calls,results=records)
     markets=[]
-    for init in json.loads((DATA/"deli_base_initializations.json").read_bytes()):
+    catalog = "deli_base_cl_initializations.json" if concentrated else "deli_base_initializations.json"
+    for init in json.loads((DATA/catalog).read_bytes()):
         fee,spacing,h,_,_=decode(["uint24","int24","address","uint160","int24"],bytes.fromhex(init["data"][2:]))
         key=["0x"+t[-40:] for t in init["topics"][2:4]]+[fee,spacing,h]
         pid="0x"+keccak(encode([KEY],[key])).hex()
-        if init["address"]!=mgr or pid!=init["topics"][1] or h!=HOOK or WBLT not in key[:2]:raise ValueError("чужой PoolKey")
+        if init["address"]!=mgr or pid!=init["topics"][1] or h!=hook or WBLT not in key[:2]:raise ValueError("чужой PoolKey")
         birth=rpc(endpoint,"eth_getBlockByHash",[init["blockHash"],False])
         if birth["number"]!=init["blockNumber"] or int(birth["number"],16)>int(head["number"],16):raise ValueError("поздняя запись")
         other=next(t for t in key[:2] if t!=WBLT)
-        balances = c.one(HOOK,"getReserves(bytes32)",["bytes32"],[bytes.fromhex(pid[2:])],["uint128","uint128"])
-        liquid = balances[key[:2].index(WBLT)]
-        sizes = sorted({min(10**12,max(1,liquid//1000)), min(10**13,max(2,liquid//100))})
+        if concentrated:
+            balances = c.one(cfg["dex.state_view"],"getLiquidity(bytes32)",["bytes32"],[bytes.fromhex(pid[2:])],["uint128"])
+            sizes = [quoted[-1]//20,quoted[-1]//5]
+        else:
+            balances = c.one(hook,"getReserves(bytes32)",["bytes32"],[bytes.fromhex(pid[2:])],["uint128","uint128"])
+            liquid = balances[key[:2].index(WBLT)]
+            sizes = sorted({min(10**12,max(1,liquid//1000)), min(10**13,max(2,liquid//100))})
         cases=[]
         for size in sizes:
             for mode in ("router","v5"):
@@ -132,7 +145,7 @@ def capture(endpoint):
                 except ValueError as e:
                     case["rejected"]=str(e)[:450]
                 cases.append(case)
-        markets.append(dict(pool_id=pid,key=key,reserves=list(map(str,balances)),cases=cases))
+        markets.append(dict(pool_id=pid,key=key,opening_state=list(map(str,balances)),cases=cases))
     if not any(all("sell" in case for case in row["cases"]) for row in markets):
         raise ValueError(str([m["cases"][0].get("rejected") for m in markets])[:900])
     return dict(selector=c.selector,owner=PAYER,initial_usdc=str(initial),funding=funding,hook=hook_code,roles=roles,
@@ -142,10 +155,11 @@ def capture(endpoint):
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
+    parser.add_argument("--cl",action="store_true")
     args=parser.parse_args()
     for endpoint in ENDPOINTS:
         try:
-            data=capture(endpoint)
+            data=capture(endpoint,args.cl)
             args.output.write_text(json.dumps(data,indent=2)+"\n",encoding="utf8",newline="\n")
             break
         except (ValueError,KeyError,OSError) as error:

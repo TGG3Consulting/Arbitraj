@@ -188,6 +188,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
     Some(match kind {
         "pancakeswap_v2"
         | "uniswap_v2"
+        | "v2_omni_universal"
         | "v2_fork"
         | "v2_whiteswap"
         | "v2_fork_executor"

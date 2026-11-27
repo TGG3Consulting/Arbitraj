@@ -40,6 +40,7 @@ pub fn has_ticks(e: &Entry) -> bool {
 /// Пуст ли пул (см. шапку). Bin без прочитанных бинов — не пуст (не прочитан — это решает достоверность). Ошибок нет.
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
+        PoolState::Carbon(s) => s.strategies.iter().flat_map(|st|&st.orders).all(|o|o.y==0 || (o.a==0 && o.b==0)),
         PoolState::MintClub(s) => s.steps.last().is_none_or(|&(end,_)| alloy_primitives::U256::from(end)<=s.supply && (s.bonded.is_zero() || s.available.is_zero())),
         PoolState::Memebox(s) => s.reserves.iter().any(|r|r.is_zero()),
         PoolState::CandySwap(s) => s.reserves.iter().any(|r|r.is_zero()),

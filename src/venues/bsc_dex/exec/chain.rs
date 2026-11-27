@@ -118,6 +118,12 @@ pub async fn routed_command(
     wallet: Address,
     target: (Address, Address),
 ) -> GatewayResult<(u8, Bytes)> {
+    if s.entry.family.variant == super::super::pools::family_variant::Variant::OmniV2 {
+        if f != Format::Uniswap20 {
+            return Err(ctx.err(ErrorCode::NoRoute, "Omni V2: другой формат команды Universal Router"));
+        }
+        Box::pin(super::super::pools::omni_ur::admitted(ctx, &s.entry, target)).await?;
+    }
     if s.entry.family.variant == super::super::pools::family_variant::Variant::RingFew {
         let layout = Box::pin(super::super::pools::ring_proof::admitted(ctx, &s.entry)).await?;
         if f != Format::RingFew || (layout.router, layout.permit) != target {

@@ -59,6 +59,8 @@ pub enum Variant {
     SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
     V2Create2,
+    /// V2 с проверенным Universal Router формата Omni и его собственным Permit2.
+    OmniV2,
     /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
     V2RouterCreate2,
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
@@ -228,6 +230,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
+        "v2_omni_universal" => Variant::OmniV2,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,

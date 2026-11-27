@@ -288,6 +288,18 @@ jobs:
         with:
           name: ring-registered-markets
           path: ${{ runner.temp }}/ring-markets.json
+  mint-club-evm:
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: contracts/evmtest/package-lock.json
+      - run: npm ci --prefix contracts/evmtest --no-audit --no-fund
+      - run: node contracts/evmtest/mint_club.mjs
   hanji-executor:
     if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
     runs-on: ubuntu-latest
@@ -298,7 +310,6 @@ jobs:
           node-version: '22'
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
-      - run: node contracts/evmtest/mint_club.mjs
       - id: compile_hanji
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
       - id: compile_fermi
@@ -417,7 +428,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, templedao-ethereum, carbon-ethereum, mint-club-base, mint-club-ethereum, omni-v2-base, marswap-base, marswap-ethereum, deliswap-base]
+        market: [x7-finance, x7-finance-ethereum, 9inch-ethereum, deltaswap-ethereum, supernova-cl, supernova-amm, ekubo-v2-ethereum, stelaxis-ethereum, swapr-ethereum, templedao-ethereum, carbon-ethereum, mint-club-base, mint-club-ethereum, omni-v2-base, marswap-base, marswap-ethereum, deliswap-base, deliswap-cl-base]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -428,6 +439,8 @@ jobs:
         env:
           FAMILY: ${{ matrix.market }}
         run: python scripts/record_marswap_wallets.py "${FAMILY#marswap-}" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'deliswap-cl-base'
+        run: python scripts/record_deliswap_base.py "$RUNNER_TEMP/market.json" --cl
       - if: matrix.market == 'deliswap-base'
         run: python scripts/record_deliswap_base.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'omni-v2-base'

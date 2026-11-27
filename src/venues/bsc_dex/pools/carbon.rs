@@ -12,9 +12,12 @@ use std::collections::HashSet;
 
 sol! {
     struct BookOrder { uint128 y;uint128 z;uint64 a;uint64 b; }
+    struct TradeAction {uint256 strategyId;uint128 amount;}
     struct BookStrategy {uint256 id;address owner;address[2] tokens;BookOrder[2] orders;}
     struct Pair {uint128 id;address[2] tokens;}
     interface ICarbon {
+        function calculateTradeTargetAmount(address sourceToken,address targetToken,TradeAction[] actions) external view returns(uint128);
+        function calculateTradeSourceAmount(address sourceToken,address targetToken,TradeAction[] actions) external view returns(uint128);
         function version() external view returns(uint16);
         function pairs() external view returns(address[2][] memory);
         function pair(address token0,address token1) external view returns(Pair memory);

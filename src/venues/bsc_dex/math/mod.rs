@@ -111,5 +111,7 @@ pub mod virtuals;
 pub mod mint_club;
 pub mod mint_club_depth;
 pub mod carbon;
+pub mod carbon_match;
+pub mod carbon_depth;
 pub mod wombat;
 pub mod wombat_core;

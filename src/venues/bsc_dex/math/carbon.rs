@@ -10,17 +10,28 @@ use alloy_primitives::U256;
 const ONE: u64 = 1 << 48;
 const PPM: u32 = 1_000_000;
 
-fn expand(rate: u64) -> Option<U256> {
+pub(super) fn expand(rate: u64) -> Option<U256> {
     let exp = rate / ONE;
     (exp < 48).then(|| U256::from(rate % ONE) << exp as usize)
 }
 
 // MathEx.minFactor uses the 512-bit product. Its result is at least one.
 fn factor(x: U256, y: U256) -> Option<U256> {
+    if x.checked_mul(y).is_some() {
+        return Some(U256::ONE);
+    }
     Some(mul_div_up(x, y, U256::MAX)?.max(U256::ONE))
 }
 
 pub fn amount(o: &CarbonOrder, by_target: bool, size: u128) -> Option<u128> {
+    let n = raw(o, by_target, size)?;
+    (n > 0 && (by_target || n <= o.y)).then_some(n)
+}
+
+pub(super) fn raw(o: &CarbonOrder, by_target: bool, size: u128) -> Option<u128> {
+    if size == 0 {
+        return Some(0);
+    }
     if size == 0 || o.y == 0 || o.z < o.y || (by_target && size > o.y) {
         return None;
     }
@@ -58,11 +69,7 @@ pub fn amount(o: &CarbonOrder, by_target: bool, size: u128) -> Option<u128> {
             }
         }
     };
-    let n = u128::try_from(result).ok()?;
-    if n == 0 || (!by_target && n > o.y) {
-        return None;
-    }
-    Some(n)
+    u128::try_from(result).ok()
 }
 
 /// Applies the pair fee once, after summing all legs of a controller transaction.

@@ -57,7 +57,7 @@ fn inventory_and_fixed_price_rounding_limit_both_sides() {
         y: 10,
         z: 10,
         a: 0,
-        b: ONE * 2,
+        b: ONE * 2 + ONE / 2,
     };
     assert_eq!(amount(&o, false, 2), Some(8));
     assert_eq!(amount(&o, false, 3), None);

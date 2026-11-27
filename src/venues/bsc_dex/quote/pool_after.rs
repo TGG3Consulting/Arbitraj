@@ -58,6 +58,12 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Carbon(s),PoolKind::V2) => {
+            let p=u128::try_from(amount).ok().and_then(|x|super::super::math::carbon_match::plan(s,token_in,false,x))
+                .ok_or_else(||no("Carbon: нет покрытия полного входа"))?;
+            let next=super::super::math::carbon_match::after(s,token_in,&p).ok_or_else(||no("Carbon: не подтверждён остаток стратегии"))?;
+            Ok((Swapped{amount_in:U256::from(p.spent),amount_out:U256::from(p.received),complete:true},PoolState::Carbon(Box::new(next))))
+        }
         (PoolState::MintClub(s),PoolKind::V2) => super::super::math::mint_club::after(s,token_in,amount)
             .map(|(fill,next)|(fill,PoolState::MintClub(Box::new(next))))
             .ok_or_else(||no("Mint Club: обмен выходит за предел ступеней или обеспечения")),

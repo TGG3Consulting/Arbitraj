@@ -65,6 +65,11 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Carbon(s),PoolKind::V2) => {
+            let size=u128::try_from(amount).map_err(|_|why("Carbon: размер превышает uint128"))?;
+            let p=super::super::math::carbon_match::plan(s,token_in,!exact_in,size).ok_or_else(none)?;
+            Ok(Swapped{amount_in:U256::from(p.spent),amount_out:U256::from(p.received),complete:true})
+        }
         (PoolState::MintClub(s), PoolKind::V2) => super::super::math::mint_club::fill(s,token_in,exact_in,amount).map(|f| f.swapped).ok_or_else(none),
         (PoolState::Virtuals(s), PoolKind::V2) => super::super::math::virtuals::quote(s,token_in,exact_in,amount).ok_or_else(none),
         (PoolState::Memebox(s), PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,exact_in,amount)

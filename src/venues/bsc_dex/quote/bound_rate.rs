@@ -49,6 +49,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Carbon(s),PoolKind::V2) => {
+            let r=super::super::math::carbon_depth::best(s,token_in).ok_or("Carbon: нет обеспеченной заявки")?;
+            pair(r,r,U256::from(1u64<<48),U256::from(1u64<<48))
+        }
         (PoolState::MintClub(s), PoolKind::V2) => {
             // Free initial mint steps make an ordinary spot-based upper bound unsound.
             let output=if token_in==s.reserve {

@@ -1,0 +1,35 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "router": {
+    "address": "0x423fae8ee58833f283e8845479bd705514110ec3",
+    "runtime": "0xac1df303e15821b5682718ca9e1d8907263d42eb1826ccbbf948ab6af6895a64",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x423fae8ee58833f283e8845479bd705514110ec3?fields=all",
+    "bytes": 21717
+  },
+  "permit2": {
+    "address": "0x72f857d13c5363fa89da61020d53a1ea26fddb8b",
+    "runtime": "0x2956e7281f89ef5cf1bf3a53d4eaa430a1a593a64bc5e78f95d765f968872a28",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x72f857d13c5363fa89da61020d53a1ea26fddb8b?fields=all",
+    "bytes": 9152
+  },
+  "references": {
+    "permit2": [
+      6349,
+      9762,
+      14078
+    ],
+    "factory": [
+      7226,
+      7798,
+      15181
+    ],
+    "init": [
+      7193,
+      7832,
+      15148
+    ]
+  }
+}

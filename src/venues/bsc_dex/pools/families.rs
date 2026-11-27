@@ -437,7 +437,7 @@ impl std::fmt::Debug for Family {
 pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
     //                                    graphable, tradable, fork
     Some(match kind {
-        "pancakeswap_v2" | "uniswap_v2" | "ring_few_v2" => {
+        "pancakeswap_v2" | "uniswap_v2" | "v2_omni_universal" | "ring_few_v2" => {
             (PoolKind::V2, Proto::V2, true, true, false)
         }
         "pancakeswap_v3" => (PoolKind::V3, Proto::PancakeV3, true, true, false),
@@ -793,6 +793,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]);
     }
     match f.proto {
+        Proto::V2 if f.variant == Variant::OmniV2 => {
+            list.extend(["dex.factory","dex.pool_code_hashes","dex.v2_fee_source","dex.v2_fee_pct",
+                         "dex.router_runtime_hash","dex.permit2_runtime_hash"]);
+        }
         Proto::V2 if f.variant == Variant::EtherVista => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.router_runtime_hash",super::verify_algebra_dir::SETTING]);
         }

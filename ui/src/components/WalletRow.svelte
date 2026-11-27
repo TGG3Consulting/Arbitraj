@@ -107,7 +107,7 @@
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
-  {#if w.address && dex && ['base', 'ethereum'].includes(w.chain)}<FyndQuote venue={dex} trader={w.address} />{/if}
+  {#if w.address && dex && w.fynd}<FyndQuote venue={dex} trader={w.address} />{/if}
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>

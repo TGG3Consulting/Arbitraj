@@ -65,8 +65,8 @@ pub async fn view(st: &AppState) -> Value {
     };
     // Решение 432: площадки DEX сетей (две и больше; одна — пусто, экран прежний) — исполнитель кошелька по сети.
     let nets = super::wallets_chain::chains(st).await;
-    let single_chain = dex.as_ref().and_then(|id| {
-        crate::core::chain::chain_at(&st.settings, &crate::core::types::VenueId(id.clone())).ok().map(|c| c.0)
+    let single_fynd = dex.as_deref().is_some_and(|v| {
+        st.settings.text("fynd.network",crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty())
     });
     let mut wallets = Vec::new();
     for w in a.wallets() {
@@ -93,7 +93,7 @@ pub async fn view(st: &AppState) -> Value {
         };
         wallets.push(json!({
             "id": w.id,
-            "chain": single_chain,
+            "fynd": single_fynd,
             "name": w.name,
             "secret": w.secret,
             "executor": w.executor,
@@ -156,6 +156,7 @@ async fn by_chain(
         out.push(json!({
             "venue": v.0,
             "chain": chain,
+            "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
             "home": w.home() == v.0,
             "executor": x.executor,
             "executor_version": x.executor_version,

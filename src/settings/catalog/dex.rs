@@ -224,6 +224,9 @@ pub const UR_FORMATS: &[&str] = &[
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
     d("Hanji", "hanji.trading", K::Bool, L::None, "да/нет", V, "Разрешить выбор Hanji на Base с отдельно проверенным контрактом исполнителя.").optional().dex_venue(),
+    d("Fynd", "fynd.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу.").optional().dex_venue(),
+    d("Fynd", "fynd.network", K::Text, L::None, "имя", V, "Имя сети в пути API. Бот сверяет chain_id этого сервера с настройкой площадки.").optional().dex_venue(),
+    d("Fynd", "fynd.pools", K::TextList, L::None, "пулы", V, "Список PoolId=token0=token1 данной сети для атрибуции собственных пулов Fynd AMM.").optional().dex_venue(),
     d("Hanji", "hanji.executor", K::Address, L::None, "адрес", V, "Адрес размещённого shared HanjiExecutor. Проверяются точный код и Base WETH.").optional().dex_venue(),
     d("Hanji", "hanji.markets", K::TextList, L::None, "адреса", V, "Разрешённые оператором прокси Hanji из активного реестра Base.").optional().dex_venue(),
     d("Hanji", "hanji.registry_refresh_s", K::Integer, L::Positive, "с", V, "Срок до повторной загрузки реестра рынков Hanji. Стаканы загружаются на новых блоках.").optional().dex_venue(),

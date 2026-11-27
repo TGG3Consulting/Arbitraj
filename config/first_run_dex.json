@@ -5355,6 +5355,7 @@
     "id": "degenswap-ethereum",
     "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x4bf3e2287d4ced7796bfab364c0401dfce4a4f7f · tests/data/first_run_dex_2026-11-26/degenswap_ethereum_directory.json.gz",
     "settings": {
+      "dex.indexer_id": "degenswap",
       "dex.kind": "degenswap_module",
       "dex.factory": "0x5c515455efb90308689579993c11a84fc41229c0",
       "dex.factory_runtime_hash": "0xefd6483cf5afc08727e0d99109913e314596604403249e189b36608b65574963",
@@ -5405,6 +5406,7 @@
     "id": "integral-size-ethereum",
     "source": "https://github.com/IntegralHQ/Integral-SIZE-Smart-Contracts · tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz",
     "settings": {
+      "dex.indexer_id": "integral_size",
       "dex.kind": "integral_size_v5",
       "dex.factory": "0xc480b33ee5229de3fbdfad1d2dcd3f3bad0c56c6",
       "dex.factory_runtime_hash": "0x61c59259b640ed2d79e2783e8fc1c4bc5c394e9d2830d31940916aff9ce57507",
@@ -5439,6 +5441,7 @@
     "id": "cypher-v4-ethereum",
     "source": "https://docs.cyphereth.com/docs/contracts/mainnet/ · tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz",
     "settings": {
+      "dex.indexer_id": "cypher",
       "dex.kind": "algebra_integral_cypher",
       "dex.factory": "0xfb8ed3485efa29a0e4bed93351dd51b59fc4b0f0",
       "dex.factory_runtime_hash": "0x8aa1025de417d1ac98ffbdea624db50cead85f6231640ff56434a6041e7e05a8",

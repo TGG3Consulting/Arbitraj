@@ -1,4 +1,45 @@
 {
+  "historical_intent_fees": [
+    {
+      "transaction": "0x377511e15584e680120c4375b5d10343ac98d805ee5616906438e9d4bdb25881",
+      "selector": {
+        "blockHash": "0xd346a57752ebab72f5f454c9ca5bfbb37aef9d17754e673e7b784931e044de8b",
+        "requireCanonical": true
+      },
+      "call": {
+        "to": "0x8e20a1534a204de569e9d62d410c19795b81df70",
+        "data": "0x10b7f7b8"
+      },
+      "raw": "0x000000000000000000000000000000000000000000000000002386f26fc10000",
+      "usd_wad": "10000000000000000"
+    },
+    {
+      "transaction": "0xb4ac83bd0496d7be8975554631484a770b7afce23d48ffe5d0a058e412374804",
+      "selector": {
+        "blockHash": "0xa519906c0216f4e83bc2a0b1cec3825d9267a90e583564d756cc12dddaa8edac",
+        "requireCanonical": true
+      },
+      "call": {
+        "to": "0x8e20a1534a204de569e9d62d410c19795b81df70",
+        "data": "0x10b7f7b8"
+      },
+      "raw": "0x000000000000000000000000000000000000000000000000002386f26fc10000",
+      "usd_wad": "10000000000000000"
+    },
+    {
+      "transaction": "0xdc5356393c01195e588adf09825477e0488943338b201d5111fad5cd446b9cd6",
+      "selector": {
+        "blockHash": "0xdbabd08403d5c7fabf26b6b63c9ca1ffb6c1ae5851e1643974a5e344a8147df6",
+        "requireCanonical": true
+      },
+      "call": {
+        "to": "0x8e20a1534a204de569e9d62d410c19795b81df70",
+        "data": "0x10b7f7b8"
+      },
+      "raw": "0x000000000000000000000000000000000000000000000000002386f26fc10000",
+      "usd_wad": "10000000000000000"
+    }
+  ],
   "chain": 8453,
   "height": 62262756,
   "selector": {

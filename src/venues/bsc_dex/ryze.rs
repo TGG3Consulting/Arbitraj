@@ -14,5 +14,9 @@ mod result;
 mod other;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod relay_tests;
+#[cfg(test)]
+mod price_tests;
 pub(crate) mod tokens;
 pub mod wire;

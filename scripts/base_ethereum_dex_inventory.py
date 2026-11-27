@@ -1514,9 +1514,10 @@ def tables(network, snapshots, profiles):
                 factory=degen["factory"]["address"]; roundtrip="allPairs → CREATE2 → getPair в обоих порядках"
                 status="профиль degenswap-ethereum; требуется проверенное размещение модуля владельца"
             elif id=="cypher":
-                pool=cypher["markets"][0]["pool"];factory=cypher["factory"]["address"]
-                roundtrip="официальный реестр Cypher V2, CREATE2, getPair в обоих порядках"
-                status="Cypher V2 · два пути; отдельный реестр V4 и проверки кошелька выше"
+                cypher_v4_public=json.loads(gzip.decompress((ds/"cypher_v4_ethereum_directory.json.gz").read_bytes()))
+                pool=cypher_v4_public["markets"][0]["pool"];factory=cypher_v4_public["factory"]["address"]
+                roundtrip="19 из 19 строк GeckoTerminal относятся к пулам фабрики Cypher V4"
+                status="dex.indexer_id = cypher у профиля cypher-v4-ethereum. Cypher V2 использует свой собственный реестр фабрики"
             else:
                 keyset=json.loads(gzip.decompress((ds/"baseline_ethereum_directory.json.gz").read_bytes()))
                 pool=baseline["markets"][0]["pool"]; factory=keyset["relay"];roundtrip="PoolId ↔ bToken в Relay, Initialize в PoolManager"
@@ -1524,7 +1525,7 @@ def tables(network, snapshots, profiles):
         if not base and id == "integral_size":
             market=next(m for m in integral["markets"] if set(m["tokens"])=={ih["input"],ih["output"]})
             pool,factory,roundtrip=market["pair"],integral["roles"]["factory"]["address"],"allPairs + getPair в обоих направлениях"
-            status="Integral SIZE · релеер отключил все 15 пар. Для публичной заявки Delay нужна отдельная транзакция исполнения"
+            status="профиль integral-size-ethereum, dex.indexer_id = integral_size; на контрольном блоке релеер отключил все 15 пар. Повторная проверка выполняется при новом блоке"
         if not base and id == "ring-exchange-ethereum" and ring_path.exists():
             status = "Ring Few · адресная проверка всех пар; котировки, обеспечение и контрольные обмены выше"
         if not base and id=="toonswap" and id in configured:

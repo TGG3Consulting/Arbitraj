@@ -1,0 +1,100 @@
+{
+  "cypher": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/cypher/pools",
+    "pages": [
+      {
+        "page": 1,
+        "rows": [
+          [
+            "0x915fd34cadd63907b51eb64dddc2eadd114a0bed",
+            "cypher"
+          ],
+          [
+            "0x76a278bd71f566ee6ba2fe438f6099c8d8f98f43",
+            "cypher"
+          ],
+          [
+            "0x177f07c0843776b2a6342ed6c488af64e6f2fd65",
+            "cypher"
+          ],
+          [
+            "0x17f72affce2e75342fb1126c4dcdf33261cf36a4",
+            "cypher"
+          ],
+          [
+            "0xf53dcd757f208fb4f3631d16d8c17ddb21a9d98d",
+            "cypher"
+          ],
+          [
+            "0xdb90e2723e998cf3072d1efbbcdaab4e24d8c640",
+            "cypher"
+          ],
+          [
+            "0x2dba10df7fe6973f1e2fdcf30647ee8748d72ec3",
+            "cypher"
+          ],
+          [
+            "0x7c52720a90904c0a1b45113cc887ae9fd81179e3",
+            "cypher"
+          ],
+          [
+            "0x922433311cb3a245c7bc21716a28d71b17c651b2",
+            "cypher"
+          ],
+          [
+            "0xc3746357f8d037d0ded0101b875d62aa7ea01c32",
+            "cypher"
+          ],
+          [
+            "0x80c37913149887310ff7f9c978856beae28f04e1",
+            "cypher"
+          ],
+          [
+            "0xff7b1ab7cfbf393d97aa1c3a1b26a80d9fa049dc",
+            "cypher"
+          ],
+          [
+            "0x6be75502140f9705a6f68a1fc57f902c0a743a4f",
+            "cypher"
+          ],
+          [
+            "0x1adce1b2f79086f2f099b6619e637f352935746a",
+            "cypher"
+          ],
+          [
+            "0x3073ada074f8b69d2597843b8c671184fe6b6926",
+            "cypher"
+          ],
+          [
+            "0xc0cf00079741ab9db6aceb5f7fe2f69c243c1aae",
+            "cypher"
+          ],
+          [
+            "0x7219cad4953aaa39b1bbc74c3679d9579d9d8bdd",
+            "cypher"
+          ],
+          [
+            "0x1b337491fb312c3500e1feef56d50bcacee6c7e3",
+            "cypher"
+          ],
+          [
+            "0xb62625523ac146cc809511dfd82dbb8637db5c96",
+            "cypher"
+          ]
+        ]
+      },
+      {
+        "page": 2,
+        "rows": []
+      }
+    ]
+  },
+  "degenswap": {
+    "id": "degenswap",
+    "label": "DegenSwap"
+  },
+  "integral_size": {
+    "id": "integral_size",
+    "label": "Integral SIZE"
+  }
+}

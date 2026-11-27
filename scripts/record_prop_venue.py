@@ -31,11 +31,14 @@ def rpc(c,method,params):
 def tx(to,sig,types=(),values=(),value=0):
     return {"from":OWNER,"to":to,"value":hex(value),"gas":hex(3_000_000),"data":"0x"+(keccak(text=sig)[:4]+encode(types,values)).hex()}
 
-def leg(c,code,venue,inp,out,n,t,strict,floor,prefix):
+def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback):
     dst=MODULE if strict else ROUTER
     apps=[tx(inp,"approve(address,uint256)",["address","uint256"],[dst,n])]
     bal=lambda token:tx(token,"balanceOf(address)",["address"],[OWNER])
-    if strict:
+    if strict=="guarded-fallback":
+        order=tx(MODULE,"executeWithFallback(address,address,address,uint256,uint256,uint256,address)",
+                 ["address","address","address","uint256","uint256","uint256","address"],[venue,inp,out,n,floor,t,fallback])
+    elif strict:
         order=tx(MODULE,"execute(address,address,address,uint256,uint256,uint256)",
                  ["address","address","address","uint256","uint256","uint256"],[venue,inp,out,n,floor,t])
     else:
@@ -57,7 +60,7 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix):
     sold,received,to,actual=decode(["uint256","uint256","address","address"],bytes.fromhex(events[0]["data"][2:]))
     expected=[MODULE if strict else OWNER,inp,out]
     if [str(x)[-40:].lower() for x in events[0]["topics"][1:]]!=[x[2:] for x in expected]:raise ValueError("wrong indexed wallet or currencies")
-    if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict and actual!=venue):raise ValueError("wallet settlement mismatch")
+    if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict is True and actual!=venue) or actual not in (venue,fallback):raise ValueError("wallet settlement mismatch")
     return {"status":"paid","paid":paid,"net":net,"actual":actual,"gas":int(swap["gasUsed"],16),"logs":swap["logs"],"order":order,"approvalGas":int(results[len(prefix)]["gasUsed"],16)}
 
 def capture(endpoint,art):
@@ -87,16 +90,16 @@ def capture(endpoint,art):
             if raw:
                 point,quoted=decode(["uint256","address"],bytes.fromhex(raw[2:]))
                 if quoted!=venue:raise ValueError("quote from another venue")
-            for strict in [False,True]:
-                observed=leg(c,code,venue,inp,out,n,deadline,strict,1,prefix)
+            for strict in [False,True,"guarded-fallback"]:
+                observed=leg(c,code,venue,inp,out,n,deadline,strict,1,prefix,fallback)
                 if observed["status"]=="paid":
-                    tighter=leg(c,code,venue,inp,out,n,deadline,strict,observed["net"]+1,prefix)
+                    tighter=leg(c,code,venue,inp,out,n,deadline,strict,observed["net"]+1,prefix,fallback)
                     if tighter["status"]=="paid" and tighter["net"]<observed["net"]+1:raise ValueError("signed floor")
-                    expired=leg(c,code,venue,inp,out,n,int(header["timestamp"],16),strict,1,prefix)
+                    expired=leg(c,code,venue,inp,out,n,int(header["timestamp"],16),strict,1,prefix,fallback)
                     if expired["status"]!="reverted":raise ValueError("expired order accepted")
                     observed.update(tighter=tighter,expired=expired)
                 result.append({"height":height,"selector":c.selector,"venue":venue,"fallback":fallback,"input":inp,"output":out,
-                               "amount":n,"strict":strict,"quote":q,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),**observed})
+                               "amount":n,"strict":strict is True,"form":("guarded-fallback" if strict=="guarded-fallback" else ("strict" if strict else "router")),"quote":q,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),**observed})
     return {"owner":OWNER,"module":MODULE,"rows":result}
 
 if __name__=="__main__":

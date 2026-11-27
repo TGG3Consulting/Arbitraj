@@ -38,19 +38,24 @@ contract PropVenueAdapter {
     function execute(address venue,address input,address output,uint256 amount,uint256 minimum,uint256 deadline)
         external returns(uint256) {
         if(minimum==0) revert InvalidOrder();
-        return _trade(venue,input,output,amount,minimum,msg.sender,deadline);
+        return _trade(venue,input,output,amount,minimum,msg.sender,deadline,address(0));
+    }
+    function executeWithFallback(address venue,address input,address output,uint256 amount,uint256 minimum,uint256 deadline,address fallbackRouter)
+        external returns(uint256) {
+        if(minimum==0||fallbackRouter==address(0)||fallbackRouter!=router.fallbackSwapRouter()) revert InvalidOrder();
+        return _trade(venue,input,output,amount,minimum,msg.sender,deadline,fallbackRouter);
     }
     function swap(IBalancerVault.SingleSwap calldata o,IBalancerVault.FundManagement calldata f,uint256 minimum,uint256 deadline)
         external payable returns(uint256) {
         if(msg.value!=0||o.kind!=0||o.userData.length!=0||f.sender!=msg.sender||f.fromInternalBalance||f.toInternalBalance||
             uint256(o.poolId)>type(uint160).max) revert InvalidOrder();
-        return _trade(address(uint160(uint256(o.poolId))),o.assetIn,o.assetOut,o.amount,minimum,f.recipient,deadline);
+        return _trade(address(uint160(uint256(o.poolId))),o.assetIn,o.assetOut,o.amount,minimum,f.recipient,deadline,address(0));
     }
     function move(address token,bytes memory callData) private {
         (bool ok,bytes memory result)=token.call(callData);
         if(!ok||(result.length!=0&&!abi.decode(result,(bool)))) revert Payment();
     }
-    function _trade(address venue,address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
+    function _trade(address venue,address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline,address fallbackRouter)
         private returns(uint256 net) {
         if(busy||amount==0||block.timestamp>deadline||input==output||input==address(0)||output==address(0)||
             recipient==address(0)||recipient==address(this)||venue==address(0)||venue==router.fallbackSwapRouter()||
@@ -69,12 +74,13 @@ contract PropVenueAdapter {
         uint256 vaultIn=coin.balanceOf(vault);
         uint256 vaultOut=IPropToken(output).balanceOf(vault);
         (uint256 quoteNet,address filled)=router.swapViaVenueV1(venue,input,output,funded,minimum,recipient,deadline);
-        if(filled!=venue) revert Payment();
+        if(filled!=venue&&(fallbackRouter==address(0)||filled!=fallbackRouter)) revert Payment();
         if(coin.allowance(address(this),address(router))!=0) move(input,abi.encodeCall(coin.approve,(address(router),0)));
         net=IPropToken(output).balanceOf(recipient)-outBefore;
-        if(net==0||net<minimum||net!=quoteNet||coin.balanceOf(vault)-vaultIn!=funded||vaultOut-IPropToken(output).balanceOf(vault)!=net||coin.balanceOf(address(this))!=balanceBefore||
+        if(filled==venue&&(coin.balanceOf(vault)-vaultIn!=funded||vaultOut-IPropToken(output).balanceOf(vault)!=net)) revert Payment();
+        if(net==0||net<minimum||net!=quoteNet||coin.balanceOf(address(this))!=balanceBefore||
             ownerBefore-coin.balanceOf(msg.sender)!=amount||coin.allowance(address(this),address(router))!=0) revert Payment();
-        emit Filled(msg.sender,recipient,venue,input,output,amount,net);
+        emit Filled(msg.sender,recipient,filled,input,output,amount,net);
         busy=false;
     }
 }

@@ -15,7 +15,7 @@ def collect():
     directory=json.loads((DATA/"base.json").read_bytes());tag=directory["selector"]
     ws=websocket.create_connection("wss://base-rpc.publicnode.com",timeout=16,suppress_origin=True)
     def rpc(method,params):
-        if method not in ("eth_getCode","eth_getStorageAt","eth_getBlockByNumber","eth_chainId"):raise ValueError(method)
+        if method not in ("eth_getCode","eth_getStorageAt","eth_getBlockByNumber","eth_chainId","eth_call"):raise ValueError(method)
         ws.send(json.dumps(dict(id=1,jsonrpc="2.0",method=method,params=params)));r=json.loads(ws.recv())
         if "result" not in r:raise RuntimeError(str(r.get("error"))[:180])
         return r["result"]
@@ -39,7 +39,14 @@ def collect():
                     if not 0<int(word,16)<2**160:raise ValueError("unexpected zero or packed proxy role")
                 row["implementation"]=contract("0x"+raw["implementation"][-40:]);row["admin"]="0x"+raw["admin"][-40:]
             result[name]=row
-        return dict(chain=8453,height=directory["block"],selector=tag,state_root=head["stateRoot"],slots=SLOTS,tokens=result)
+        history=json.loads(gzip.decompress((DATA/"ryze_base_verified_intents.json.gz").read_bytes()))["cases"]
+        fees=[]
+        for row in history:
+            at=dict(blockHash=row["parent_hash"],requireCanonical=True)
+            call={"to":row["router"],"data":"0x"+keccak(text="intentFee()")[:4].hex()}
+            raw=rpc("eth_call",[call,at])
+            fees.append(dict(transaction=row["transaction"],selector=at,call=call,raw=raw,usd_wad=str(int(raw,16))))
+        return dict(historical_intent_fees=fees,chain=8453,height=directory["block"],selector=tag,state_root=head["stateRoot"],slots=SLOTS,tokens=result)
     finally:ws.close()
 
 if __name__=="__main__":

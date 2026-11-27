@@ -102,7 +102,7 @@ def registry_row(network,id):
             return m["markets"][0]["pool"]["address"],m["factory"]["address"],"poolByPair для 6/6 рынков","DEX-41 · 24 ноги V5 на шести рынках, динамическая комиссия BasePluginV1"
         if id=="ryze":
             m=r["ryze"]
-            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","DEX-46 · две спотовые пары; персональная заявка EIP-712, собственный nonce роутера и сверка чистых выплат, 3 архивные сделки"
+            return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","RYZE-RECON · две спотовые пары; персональная заявка EIP-712, собственный nonce роутера и сверка чистых выплат, 3 архивные сделки"
         b=r["baseline"]
         return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; профиль Mercury сверяет действующие компоненты и их селекторы"
     if id=="omni-exchange-v4-base":
@@ -173,6 +173,7 @@ def fynd(network):
     shared=sorted({r["controller"] for r in markets})
     listing=", ".join(f"`{r['id']}` ({r['tokens'][0]} / {r['tokens'][1]})" for r in markets)
     return ["#### Fynd AMM · подписанная комиссия","",
+        f"Для этой площадки задайте `fynd.base_url = https://fynd-api.propellerheads.xyz/v1` и `fynd.network = {network}`. Для `fynd.pools` укажите строки `PoolId=token0=token1` из следующего списка. Значения также доступны в рекомендациях первого запуска.", "",
         f"На высоте {f['height']} проверены все {f['initialize_logs']} событий PoolInitialized ядра Ekubo с момента размещения расширения. "
         f"Расширения Fynd создали {len(markets)} физических ключей. {listing}.","",
         f"Контроллер на этом блоке {', '.join(shared)}. Для каждого ключа вызов beforeSwap вернул SwapMustHappenThroughForward. "

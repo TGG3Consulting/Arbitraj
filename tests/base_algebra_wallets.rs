@@ -22,11 +22,13 @@ fn word(results: &Value, key: &str) -> U256 {
 }
 #[test]
 fn limit_market_alias_reconciles_two_cash_sizes_on_each_underlying_pool() {
-    let read = |raw: &[u8]| -> Value {
-        serde_json::from_reader(GzDecoder::new(raw)).unwrap()
-    };
-    let replay = read(include_bytes!("data/first_run_dex_2026-11-26/treble_limit_wallets.json.gz"));
-    let registry = read(include_bytes!("data/first_run_dex_2026-11-26/treble_limit_epochs.json.gz"));
+    let read = |raw: &[u8]| -> Value { serde_json::from_reader(GzDecoder::new(raw)).unwrap() };
+    let replay = read(include_bytes!(
+        "data/first_run_dex_2026-11-26/treble_limit_wallets.json.gz"
+    ));
+    let registry = read(include_bytes!(
+        "data/first_run_dex_2026-11-26/treble_limit_epochs.json.gz"
+    ));
     assert_eq!(replay["selector"], registry["selector"]);
     let markets = replay["markets"].as_array().unwrap();
     let mut seen = std::collections::BTreeSet::new();
@@ -35,7 +37,13 @@ fn limit_market_alias_reconciles_two_cash_sizes_on_each_underlying_pool() {
     for market in markets {
         let pool = market["roles"]["pool"]["address"].as_str().unwrap();
         assert!(seen.insert(pool));
-        assert!(registry["markets"].as_array().unwrap().iter().any(|m| m["pool"] == pool && m["indexer_id"] == "treble-v4"));
+        assert!(
+            registry["markets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["pool"] == pool && m["indexer_id"] == "treble-v4")
+        );
         for leg in market["cases"].as_array().unwrap() {
             if leg["stage"] == "quote_buy" {
                 assert_eq!(pool, "0x7fa82d3060316654c681cb941995c7d6aa29ef3b");
@@ -45,10 +53,22 @@ fn limit_market_alias_reconciles_two_cash_sizes_on_each_underlying_pool() {
                 continue;
             }
             let r = &leg["results"];
-            assert_eq!(word(r, "before_in") - word(r, "buy_in"), number(&leg["amount"]));
-            assert_eq!(word(r, "buy_out") - word(r, "before_out"), number(&leg["bought"]));
-            assert_eq!(word(r, "buy_out") - word(r, "sell_in"), number(&leg["bought"]));
-            assert_eq!(word(r, "sell_out") - word(r, "buy_in"), number(&leg["sold"]));
+            assert_eq!(
+                word(r, "before_in") - word(r, "buy_in"),
+                number(&leg["amount"])
+            );
+            assert_eq!(
+                word(r, "buy_out") - word(r, "before_out"),
+                number(&leg["bought"])
+            );
+            assert_eq!(
+                word(r, "buy_out") - word(r, "sell_in"),
+                number(&leg["bought"])
+            );
+            assert_eq!(
+                word(r, "sell_out") - word(r, "buy_in"),
+                number(&leg["sold"])
+            );
             assert_eq!(r["above_buy"]["status"], "0x0");
             assert_eq!(r["above_sell"]["status"], "0x0");
             fully_sold += 1;

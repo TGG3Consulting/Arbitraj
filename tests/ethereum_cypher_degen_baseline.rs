@@ -128,3 +128,51 @@ fn degen_executor_preserves_the_full_wallet_debit_after_taxed_funding() {
         }
     }
 }
+
+#[test]
+fn external_ethereum_ids_bind_to_one_profile_and_cypher_page_to_the_matching_factory() {
+    let profiles: Value =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let index: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/ethereum_indexer_bindings.json"
+    ))
+    .unwrap();
+    for (external, profile) in [
+        ("cypher", "cypher-v4-ethereum"),
+        ("degenswap", "degenswap-ethereum"),
+        ("integral_size", "integral-size-ethereum"),
+    ] {
+        let claimants: Vec<_> = profiles
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|p| {
+                p["chain_id"] == 1
+                    && p["settings"].get("dex.indexer_id").unwrap_or(&p["id"]) == external
+            })
+            .collect();
+        assert_eq!(claimants.len(), 1);
+        assert_eq!(claimants[0]["id"], profile);
+    }
+    let directory = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz"
+    ));
+    let rows = index["cypher"]["pages"][0]["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 19);
+    assert!(
+        index["cypher"]["pages"][1]["rows"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    for row in rows {
+        assert_eq!(row[1], "cypher");
+        assert!(
+            directory["markets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["pool"] == row[0])
+        );
+    }
+}

@@ -3730,3 +3730,65 @@ value = "https://mainnet.relayer.ryze.pro/api/v1"
 source = "https://documentation.ryze.pro/prompts/full-integration"
 rationale = "Корень HTTPS API релея, включая /api/v1."
 prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Ручная котировка Fynd · base"
+intro = "Настройки источника для base_dex."
+
+[[section.rec]]
+name = "fynd.base_url"
+area = "площадка base_dex"
+unit = "URL"
+value = "https://fynd-api.propellerheads.xyz/v1"
+source = "https://docs.fynd.xyz/get-started/hosted-api.md"
+rationale = "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "fynd.network"
+area = "площадка base_dex"
+unit = "имя"
+value = "base"
+source = "https://docs.fynd.xyz/get-started/hosted-api.md"
+rationale = "Имя сети в пути API. Бот сверяет chain_id этого сервера с настройкой площадки."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "fynd.pools"
+area = "площадка base_dex"
+unit = "пулы"
+value = "0x34d55c244920f8e10638cab7086defe26974752142a894d52c9451e45c91d209=0x4200000000000000000000000000000000000006=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913,0x628dc44c0a6a6e4a6300db8faa081ed4f391fcac359cf494bf3bbe26b49cee3a=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913=0x9d0e8f5b25384c7310cb8c6ae32c8fbeb645d083"
+source = "tests/data/first_run_dex_2026-11-26/fynd_base_markets.json.gz"
+rationale = "Список PoolId=token0=token1 данной сети для атрибуции собственных пулов Fynd AMM."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Ручная котировка Fynd · ethereum"
+intro = "Настройки источника для eth_dex."
+
+[[section.rec]]
+name = "fynd.base_url"
+area = "площадка eth_dex"
+unit = "URL"
+value = "https://fynd-api.propellerheads.xyz/v1"
+source = "https://docs.fynd.xyz/get-started/hosted-api.md"
+rationale = "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fynd.network"
+area = "площадка eth_dex"
+unit = "имя"
+value = "ethereum"
+source = "https://docs.fynd.xyz/get-started/hosted-api.md"
+rationale = "Имя сети в пути API. Бот сверяет chain_id этого сервера с настройкой площадки."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fynd.pools"
+area = "площадка eth_dex"
+unit = "пулы"
+value = "0x22c2b655277ac0d151ab5844d49f3ddf6118e555e35be89d3cf3f476647af38b=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2,0x9efd723a29a4e7f40c955f7b968144a5e2a7261a4a0f1573fbb0e2653600e4a4=0x0000000000000000000000000000000000000000=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,0x158035970f75e9e11b86d8f6ac43e95d8c3b4a88faa1e77b41570ea0b8430360=0x0000000000000000000000000000000000000000=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+source = "tests/data/first_run_dex_2026-11-26/fynd_ethereum_markets.json.gz"
+rationale = "Список PoolId=token0=token1 данной сети для атрибуции собственных пулов Fynd AMM."
+prefill = { kind = "Venue", id = "eth_dex" }

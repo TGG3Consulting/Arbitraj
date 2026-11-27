@@ -63,10 +63,19 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback):
     if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict is True and actual!=venue) or actual not in (venue,fallback):raise ValueError("wallet settlement mismatch")
     return {"status":"paid","paid":paid,"net":net,"actual":actual,"gas":int(swap["gasUsed"],16),"logs":swap["logs"],"order":order,"approvalGas":int(results[len(prefix)]["gasUsed"],16)}
 
-def capture(endpoint,art,kipseli=False):
+def capture(endpoint,art,kipseli=False,market_name=None):
     result=[]
     market='0x71e790dd841c8a9061487cb3e78c288e75ce0b3d'
     heads=HEADS
+    vaults={GOLIATH:"0x93bf01ce743579f928d30d05695824886bd5f37a",
+            TEMPEST:"0xc9d748e601d9984a43da0b80e5b91dc28d31d9fb",
+            market:"0xbeeb9eee061925cc6d2122f05a4e6536f0feb000"}
+    if market_name:
+        from record_prop_cash_sources import CASES
+        venue,vault,heights=CASES[market_name]
+        vaults[venue]=vault
+        heads=[(h,venue,USDC) for h in heights]
+        ANCHORS.update(heights)
     if kipseli:
         heads=[(26487846,market,USDC),(26494988,market,USDC)]
         ANCHORS[26487846]='0x3238e9c17c5ae484f27f9e2cab7a749b243cce3cd250db16d0909d026e52ad47'
@@ -76,7 +85,7 @@ def capture(endpoint,art,kipseli=False):
         if header["hash"]!=ANCHORS[height] or rpc(c,"eth_chainId",[])["result"]!="0x1":raise ValueError("unexpected chain or head")
         for a in [OWNER,MODULE]:
             if rpc(c,"eth_getCode",[a,c.selector])["result"]!="0x":raise ValueError("test address in use")
-        vault={GOLIATH:"0x93bf01ce743579f928d30d05695824886bd5f37a",TEMPEST:"0xc9d748e601d9984a43da0b80e5b91dc28d31d9fb",market:"0xbeeb9eee061925cc6d2122f05a4e6536f0feb000"}[venue]
+        vault=vaults[venue]
         roles=[ROUTER,venue,vault]
         hashes=[keccak(bytes.fromhex(rpc(c,"eth_getCode",[role,c.selector])["result"][2:])) for role in roles]
         code=runtime_with_args(c,art,["address"]*3+["bytes32"]*3,roles+hashes)
@@ -108,10 +117,10 @@ def capture(endpoint,art,kipseli=False):
     return {"owner":OWNER,"module":MODULE,"rows":result}
 
 if __name__=="__main__":
-    ap=argparse.ArgumentParser();ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--kipseli",action="store_true");args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--kipseli",action="store_true");ap.add_argument("--source",choices=["kaliber","taurus"]);args=ap.parse_args()
     for endpoint in ENDPOINTS:
         try:
-            data=capture(endpoint,json.loads(args.artifact.read_text(encoding="utf8")),args.kipseli)
+            data=capture(endpoint,json.loads(args.artifact.read_text(encoding="utf8")),args.kipseli,args.source)
             args.output.write_text(json.dumps(data)+"\n",encoding="utf8");break
         except Exception as exc:
             print(type(exc).__name__,str(exc)[:240],flush=True)

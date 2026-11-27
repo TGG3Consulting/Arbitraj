@@ -601,6 +601,13 @@ jobs:
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/dexalot" DexalotWallet
           python scripts/record_dexalot_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/dexalot/DexalotWallet.json"
+      - if: startsWith(matrix.market, 'cash-source-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropVenueAdapter
+          python scripts/record_prop_venue.py "$RUNNER_TEMP/prop/PropVenueAdapter.json" "$RUNNER_TEMP/market.json" --source "${MARKET#cash-source-}"
       - if: matrix.market == 'fluid-lite-hops'
         run: |
           npm ci --prefix contracts --no-audit --no-fund

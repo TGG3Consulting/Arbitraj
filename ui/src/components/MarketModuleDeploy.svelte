@@ -7,7 +7,10 @@
   import {usesOriginalAktionariat} from '../lib/aktionariatDeploy.js';
   import ErrorText from './ErrorText.svelte';
   let {id, kind, venue} = $props();
-  const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
+  const stabullByChain = {
+    '8453':{file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')},
+    '1':{file:'stabull-ethereum',key:'stabull-create:1',name:'StabullAdapter в Ethereum',load:()=>import('../assets/stabull-ethereum.json')},
+  };
   const deployments = {
     algebra_integral_theorem:{file:'theorem-ethereum',key:'algebra-router-wallet:theorem:1',name:'AlgebraRouterWallet в Ethereum',load:()=>import('../assets/theorem-ethereum.json')},
     defiplaza_multi:{file:'defiplaza-multi',key:'defiplaza-multi:1',name:'DefiPlazaWallet для MultiPlaza',load:()=>import('../assets/defiplaza-multi-create.json')},
@@ -27,7 +30,6 @@
     bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
     yield_basis:{file:'yield-basis-ethereum',key:'yield-basis-create:1',name:'YieldBasisAdapter в Ethereum',load:()=>import('../assets/yield-basis-ethereum.json')},
     balancer_v1:{file:'balancer-v1-ethereum',key:'balancer-v1-create:1',name:'BalancerV1Adapter в Ethereum',load:()=>import('../assets/balancer-v1-ethereum.json')},
-    stabull:stabullPlan, stabull_module:stabullPlan,
     rubicon_classic:{file:'rubicon-classic-base',key:'rubicon-classic-create:8453',name:'RubiconClassicWallet на Base'},
   };
   const carbonByChain = {
@@ -42,7 +44,9 @@
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
   const deployment = $derived(kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
-    : kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
+    : ['stabull','stabull_module'].includes(kind)
+      ? stabullByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
+      : kind==='carbon_v1' ? carbonByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])] : deployments[kind]);
   const recoverable = $derived(!!deployment?.load);
   const file = $derived(deployment?.file);
   let manifest = $state(null), estimateSeen = $state(null), pending = $state(null), txHash = $state('');
@@ -205,7 +209,7 @@
       {#each ['adapter','hook','manager'] as role}<div>{role} <code>{manifest.roles[role].address}</code></div>{/each}
     {:else if kind === 'carbon_v1'}
       <p>Контроллер Carbon <code>{manifest.market}</code>. Реализация <code>{manifest.implementation}</code>. Сумма перевода при создании — 0 ETH.</p>
-    {:else if deployment === stabullPlan}
+    {:else if ['stabull','stabull_module'].includes(kind)}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
     {:else if kind === 'aktionariat'}
       <p>Реестр акций <code>{manifest.registry}</code>. Дополнительных брокеров эмитентов: {manifest.issuerMarkets.length}. При создании кошелёк отправляет 0 ETH.</p>

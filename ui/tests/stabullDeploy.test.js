@@ -38,3 +38,19 @@ test('Stabull checks the factory code at the exact canonical block and verifies 
   await assert.rejects(checkMarket(provider,plan,{...at,requireCanonical:false}),/канонический/);
   await assert.rejects(checkMarket({request:async()=> '0x1'},plan,at),/Base/);
 });
+
+test('Ethereum Stabull binds its own paid factory and refuses the Base wallet settings', async () => {
+  const eth = JSON.parse(read('../src/assets/stabull-ethereum.json'));
+  const replay = JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz')));
+  const profile = JSON.parse(read('../../config/first_run_dex.json')).find(p => p.id === 'stabull-ethereum');
+  const cfg = {chainId:profile.chain_id,kind:profile.settings['dex.kind'],market:profile.settings['dex.factory'],
+    factoryHash:profile.settings['dex.factory_runtime_hash'],hashes:profile.settings['dex.module_runtime_hashes']};
+  assert.equal(eth.runtimeKeccak, replay.module.runtime);
+  assert.equal(eth.market, replay.module.factory);
+  assert.equal(eth.archiveGas, replay.module.deployment_gas);
+  assert.equal(eth.blockHash, replay.selector.blockHash);
+  assert.deepEqual(unsigned(eth), {chainId:'0x1',data:eth.data,value:'0x0'});
+  for (const kind of ['stabull','stabull_module']) assert.equal(await loadPlan({...cfg,kind},eth),eth);
+  await assert.rejects(loadPlan(row,eth));
+  await assert.rejects(loadPlan(cfg,plan));
+});

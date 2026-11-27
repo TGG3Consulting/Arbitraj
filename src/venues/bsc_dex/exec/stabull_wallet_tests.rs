@@ -22,8 +22,20 @@ fn restore_cash_and_signed_request_for_exact_curve_router_and_module_orders() {
         )
         .as_slice(),
     ];
+    assert_eq!(restored(a), [40, 20, 40]);
+}
+
+#[test]
+fn restore_ethereum_protected_fills_and_the_original_signed_bounds() {
+    let a = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz"
+    );
+    assert_eq!(restored(&[a.as_slice()]), [0, 0, 12]);
+}
+
+fn restored(archives: &[&[u8]]) -> [usize; 3] {
     let mut seen = [0; 3];
-    for &raw in a {
+    for &raw in archives {
         let d: Value = serde_json::from_reader(GzDecoder::new(raw)).unwrap();
         for row in d["records"].as_array().unwrap() {
             for case in row["cases"].as_array().unwrap() {
@@ -84,5 +96,5 @@ fn restore_cash_and_signed_request_for_exact_curve_router_and_module_orders() {
             }
         }
     }
-    assert_eq!(seen, [40, 20, 40]);
+    seen
 }

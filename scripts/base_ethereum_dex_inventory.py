@@ -2041,7 +2041,8 @@ def tables(network, snapshots, profiles):
             task = (f"Stabull Ethereum · {len(book['pools'])} Curve подтверждены CREATE и getCurve. "
                     f"По 1 и 10 целых единиц положительные котировки в обе стороны: {', '.join(offered)}. "
                     "Один рынок заморожен. Семь базовых валют рассчитаны против USDC; фабрика и штатный Router закреплены в настройках. "
-                    "Для нового модуля ещё требуется архив с фактическими выплатами на Ethereum.")
+                    "Прямой StabullAdapter и V5 выплатили 18 ног; 0,001 USDC в GYEN отвергнут несмотря на положительную котировку. "
+                    "Сравнение учитывает фактический расход, возврат, разрешения и газ. Проверенный модуль размещает владелец через UI.")
         if base and str(row["id"]) == "7077":
             curve = base_launch_inventory.evidence("stabull_base_directory.json.gz")
             assert curve["factory"]["address"] in [addr.lower() for addr in candidates]
@@ -2573,6 +2574,21 @@ def main():
     lines.extend(raindex_markets())
     lines.extend(alien_alternative_fees())
     lines.extend(stabull_markets())
+    lines.extend([
+        "### Stabull Finance в Ethereum", "",
+        "На блоке 26 494 988 подтверждены все семь Curve по счётчику CREATE, getCurve и двум привязанным валютам. "
+        "NZDS и GYEN дали встречные выплаты из собственного USDC. Покупка за 1 USDC дала 2,081548 NZDS или 159,202432 GYEN. "
+        "При продаже всей покупки в том же изолированном состоянии плательщик получил соответственно 0,999697 и 0,999698 USDC до газа. "
+        "Четыре других открытых пула содержали по 2 атома USDC; poundtoken заморожен. Флаг и курсы проверяются заново при обращении к рынку.", "",
+        "Профиль `stabull-ethereum` использует `dex.kind=stabull` для котирования. Владелец может создать StabullAdapter "
+        "с закреплённой Ethereum-фабрикой через форму DEX, привязать `dex.router` и выбрать `stabull_module`. "
+        "Сценарий измерил 1 661 151 gas на CREATE. Прямой модуль принимает точный вход или целевую выплату с пределом расхода. "
+        "В исходном V5 тот же модуль использует шаг 17. Для 1 USDC покупки NZDS и GYEN потребовали 345 436 и 313 679 gas прямо, "
+        "401 272 и 376 292 через V5; разрешение USDC стоило ещё 55 558 gas. "
+        "Два токена с доказанным точным переводом нужны отдельному штатному входу Curve/Router. USDC — обновляемый контракт.", "",
+        "[Фабрика и исходные рынки](https://docs.stabull.finance/amm/contracts) · "
+        "[Архив кошелька, строгих границ и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46023325745)", ""
+    ])
     lines.extend(hashflow_market_observation())
     lines.extend(["### AirSwap на Base и Ethereum", "",
         "В Первом запуске сохраните строки `airswap.contracts` для площадки нужной сети. "

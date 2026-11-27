@@ -6034,7 +6034,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "stabull-ethereum",
-    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_ethereum_directory.json.gz",
+    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_ethereum_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_ethereum_protected_wallets.json.gz",
     "settings": {
       "dex.kind": "stabull",
       "dex.factory": "0x2e9e34b5af24b66f12721113c1c8ffcbb7bc8051",
@@ -6042,7 +6042,10 @@
       "dex.quoter": "0x871af97122d08890193e8d6465015f6d9e2889b2",
       "dex.quoter_runtime_hash": "0x625cb91e28ccd533177d897a115dba9f51568601d39ba34195ab050a71736507",
       "dex.quoter_virtual": false,
-      "dex.pmm_ladder_counter": true
+      "dex.pmm_ladder_counter": true,
+      "dex.module_runtime_hashes": [
+        "0x2ec09dfe1f96c2d2dc27002da9303f253d919a4de62c1c3e53620dae73501fe8"
+      ]
     }
   },
   {

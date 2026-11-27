@@ -918,9 +918,12 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_ethereum_x7.py "$MARKET" "$RUNNER_TEMP/market.json"
+      - name: Require the selected market recorder to produce evidence
+        run: test -s "$RUNNER_TEMP/market.json"
       - uses: actions/upload-artifact@v4
         with:
           name: ethereum-v2-${{ matrix.market }}
+          if-no-files-found: error
           path: |
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json

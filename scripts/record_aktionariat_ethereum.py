@@ -34,7 +34,9 @@ def original_logs(reader, height, topic, start=0, address=None):
         if not isinstance(entries,list):
             raise ValueError(("unexpected event response",str(entries)[:100]))
         for entry in entries:
-            key=(entry["blockHash"],int(entry["logIndex"],16))
+            # Routescan serializes a zero index as "0x". The canonical RPC log below authenticates it.
+            index = entry["logIndex"]
+            key=(entry["blockHash"],0 if index == "0x" else int(index,16))
             assert key not in matches and entry["topics"][0]==topic
             matches[key] = entry
         if len(entries)<query["offset"]:

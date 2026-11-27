@@ -22,7 +22,7 @@ HEADS=[(26480795,GOLIATH,USDC),(26487844,TEMPEST,USDT),(26494988,GOLIATH,USDC),(
 ANCHORS={26480795: '0xa76d204538aac92e1c8c12654bfcec22895375a8cf58be25a4bbed0868728a60', 26487844: '0x6a562bc5d13551d7272f0395a9a89298c104bdd252143d9283e2283495b7c03a', 26494988: '0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a'}
 
 def rpc(c,method,params):
-    if method not in {"eth_chainId","eth_getBlockByNumber","eth_getCode","eth_call","eth_simulateV1","eth_getTransactionReceipt","eth_getStorageAt"}:
+    if method not in {"eth_chainId","eth_getBlockByNumber","eth_getCode","eth_call","eth_simulateV1","eth_getTransactionReceipt","eth_getStorageAt","eth_getTransactionCount"}:
         raise ValueError(method)
     res=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":method,"params":params},timeout=60)
     res.raise_for_status()
@@ -31,7 +31,7 @@ def rpc(c,method,params):
 def tx(to,sig,types=(),values=(),value=0):
     return {"from":OWNER,"to":to,"value":hex(value),"gas":hex(3_000_000),"data":"0x"+(keccak(text=sig)[:4]+encode(types,values)).hex()}
 
-def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback):
+def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None):
     dst=MODULE if strict else ROUTER
     apps=[tx(inp,"approve(address,uint256)",["address","uint256"],[dst,n])]
     bal=lambda token:tx(token,"balanceOf(address)",["address"],[OWNER])
@@ -45,7 +45,9 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback):
         order=tx(ROUTER,"swapViaVenueV1(address,address,address,uint256,uint256,address,uint256)",
                  ["address","address","address","uint256","uint256","address","uint256"],[venue,inp,out,n,floor,OWNER,t])
     calls=prefix+apps+[bal(inp),bal(out),order,bal(inp),bal(out)]
-    info=rpc(c,"eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(2*10**18)},MODULE:{"code":code}},"calls":calls}]},c.selector])
+    frame={"stateOverrides":{OWNER:{"balance":hex(2*10**18)},MODULE:{"code":code}},"calls":calls}
+    if block is not None:frame["blockOverrides"]=block
+    info=rpc(c,"eth_simulateV1",[{"blockStateCalls":[frame]},c.selector])
     raw=info["result"][0]
     assert raw["parentHash"]==c.selector["blockHash"]
     results=raw["calls"];before=results[-5:-3];swap=results[-3];after=results[-2:]
@@ -63,7 +65,7 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback):
     if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict is True and actual!=venue) or actual not in (venue,fallback):raise ValueError("wallet settlement mismatch")
     return {"status":"paid","paid":paid,"net":net,"actual":actual,"gas":int(swap["gasUsed"],16),"logs":swap["logs"],"order":order,"approvalGas":int(results[len(prefix)]["gasUsed"],16)}
 
-def capture(endpoint,art,kipseli=False,market_name=None):
+def capture(endpoint,art,kipseli=False,market_name=None,price_slot=False):
     result=[]
     market='0x71e790dd841c8a9061487cb3e78c288e75ce0b3d'
     heads=HEADS
@@ -80,9 +82,14 @@ def capture(endpoint,art,kipseli=False,market_name=None):
         heads=[(26487846,market,USDC),(26494988,market,USDC)]
         ANCHORS[26487846]='0x3238e9c17c5ae484f27f9e2cab7a749b243cce3cd250db16d0909d026e52ad47'
     for height,venue,stable in heads:
+        from record_prop_price_slot import FRAMES,frame
+        if price_slot and height not in FRAMES:continue
         c=Capture({"endpoint":endpoint,"selector":{"blockHash":ANCHORS[height],"requireCanonical":True}})
         header=rpc(c,"eth_getBlockByNumber",[hex(height),False])["result"]
         if header["hash"]!=ANCHORS[height] or rpc(c,"eth_chainId",[])["result"]!="0x1":raise ValueError("unexpected chain or head")
+        block=None; updates=[]; slot=None
+        if price_slot:
+            c.selector,block,updates,slot=frame(c,rpc,height,ANCHORS[height])
         for a in [OWNER,MODULE]:
             if rpc(c,"eth_getCode",[a,c.selector])["result"]!="0x":raise ValueError("test address in use")
         vault=vaults[venue]
@@ -99,7 +106,7 @@ def capture(endpoint,art,kipseli=False,market_name=None):
             pairs = per_block.get(height, [(WETH,USDT),(USDC,USDT),(WETH,USDC)])
         orders = [(inp,out,amount) for a,b in pairs for inp,out in ((a,b),(b,a)) for amount in sizes[inp]]
         for inp,out,n in orders:
-            prefix=[tx(WETH,"deposit()",value=3*10**17)]
+            prefix=updates+[tx(WETH,"deposit()",value=3*10**17)]
             if inp!=WETH:
                 # Buy the initial stablecoin using only this wallet's WETH at the published Uni fallback.
                 prefix += [tx(WETH,"approve(address,uint256)",["address","uint256"],[ROUTER,10**17]),
@@ -111,15 +118,19 @@ def capture(endpoint,art,kipseli=False,market_name=None):
                 point,quoted=decode(["uint256","address"],bytes.fromhex(raw[2:]))
                 if quoted!=venue:raise ValueError("quote from another venue")
             for strict in [False,True,"guarded-fallback"]:
-                observed=leg(c,code,venue,inp,out,n,deadline,strict,1,prefix,fallback)
+                observed=leg(c,code,venue,inp,out,n,deadline,strict,1,prefix,fallback,block)
                 if observed["status"]=="paid":
-                    tighter=leg(c,code,venue,inp,out,n,deadline,strict,observed["net"]+1,prefix,fallback)
+                    tighter=leg(c,code,venue,inp,out,n,deadline,strict,observed["net"]+1,prefix,fallback,block)
                     if tighter["status"]=="paid" and tighter["net"]<observed["net"]+1:raise ValueError("signed floor")
-                    expired=leg(c,code,venue,inp,out,n,int(header["timestamp"],16),strict,1,prefix,fallback)
+                    expired=leg(c,code,venue,inp,out,n,int(header["timestamp"],16)-(1 if slot else 0),strict,1,prefix,fallback,block)
                     if expired["status"]!="reverted":raise ValueError("expired order accepted")
                     observed.update(tighter=tighter,expired=expired)
+                if slot:
+                    unchanged=leg(c,code,venue,inp,out,n,deadline,strict,1,prefix[len(updates):],fallback,block)
+                    observed["withoutUpdate"]={k:unchanged.get(k) for k in ("status","actual","paid","net","error")}
+                    observed["priceSlot"]=slot
                 result.append({"height":height,"selector":c.selector,"venue":venue,"fallback":fallback,"input":inp,"output":out,
-                               "amount":n,"strict":strict is True,"form":("guarded-fallback" if strict=="guarded-fallback" else ("strict" if strict else "router")),"quote":q,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),**observed})
+                               "amount":n,"strict":strict is True,"form":("guarded-fallback" if strict=="guarded-fallback" else ("strict" if strict else "router")),("parentQuote" if slot else "quote"):q,"runtime":"0x"+keccak(bytes.fromhex(code[2:])).hex(),**observed})
     evidence={"owner":OWNER,"module":MODULE,"rows":result}
     if market_name:
         from record_prop_cash_receipts import receipt_evidence
@@ -127,10 +138,10 @@ def capture(endpoint,art,kipseli=False,market_name=None):
     return evidence
 
 if __name__=="__main__":
-    ap=argparse.ArgumentParser();ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--kipseli",action="store_true");ap.add_argument("--source",choices=["kaliber","taurus"]);args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--kipseli",action="store_true");ap.add_argument("--source",choices=["kaliber","taurus"]);ap.add_argument("--price-slot",action="store_true");args=ap.parse_args()
     for endpoint in ENDPOINTS:
         try:
-            data=capture(endpoint,json.loads(args.artifact.read_text(encoding="utf8")),args.kipseli,args.source)
+            data=capture(endpoint,json.loads(args.artifact.read_text(encoding="utf8")),args.kipseli,args.source,args.price_slot)
             args.output.write_text(json.dumps(data)+"\n",encoding="utf8");break
         except Exception as exc:
             print(type(exc).__name__,str(exc)[:240],flush=True)

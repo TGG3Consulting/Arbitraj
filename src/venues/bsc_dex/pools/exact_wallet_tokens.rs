@@ -37,9 +37,7 @@ thread_local! {
     static PROFILES:std::cell::RefCell<Option<Profiles>>=const {std::cell::RefCell::new(None)};
 }
 fn pair(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> Option<(B256, B256)> {
-    if ctx.chain_id().is_none() {
-        return None;
-    }
+    ctx.chain_id()?;
     PROFILES.with_borrow_mut(|slot| {
         let generation = ctx.settings.generation();
         if slot

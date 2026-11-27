@@ -6,14 +6,15 @@ from pathlib import Path
 from record_base_launch_hooks import DATA, ENDPOINTS
 from record_base_launch_wallets import replay, WETH, USDC, ZERO
 
-def record(ep):
-    with gzip.open(DATA/"omni_flux_base_directory.json.gz") as f:directory=json.load(f)
+def record(ep,bin_pool=False):
+    source="omni_flux_bin_directory.json.gz" if bin_pool else "omni_flux_base_directory.json.gz"
+    with gzip.open(DATA/source) as f:directory=json.load(f)
     snapshot=json.loads((DATA/"base_recovered_markets.json").read_bytes())
     bindings=json.loads((DATA/"omni_flux_roles.json").read_bytes())
     if not directory["selector"]==snapshot["selector"]==bindings["selector"]: raise ValueError("другой блок")
-    r=bindings["roles"];group="omni-flux"
-    cfg={"dex.universal_router":r["router"],"dex.permit2":r["permit2"],"dex.pool_manager":r["clPoolManager"],
-         "dex.quoter":r["CLQuoter"],"dex.vault":r["vault"]}
+    r=bindings["roles"];group="omni-flux-bin" if bin_pool else "omni-flux"
+    cfg={"dex.universal_router":r["router"],"dex.permit2":r["permit2"],"dex.pool_manager":r["binPoolManager" if bin_pool else "clPoolManager"],
+         "dex.quoter":r["BinQuoter" if bin_pool else "CLQuoter"],"dex.vault":r["vault"]}
     rows=[]
     for m in directory["markets"]:
         key=m["key"]
@@ -24,9 +25,9 @@ def record(ep):
     return replay(group,ep,framed)
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("output",type=Path);a=p.parse_args()
+    p.add_argument("output",type=Path);p.add_argument("--bin",action="store_true");a=p.parse_args()
     for ep in ENDPOINTS:
         try:
-            data=record(ep);a.output.write_text(json.dumps(data,indent=2)+"\n",encoding="utf8");break
+            data=record(ep,a.bin);a.output.write_text(json.dumps(data,indent=2)+"\n",encoding="utf8");break
         except (ValueError,OSError) as e:print(ep,str(e)[:250],flush=True)
     else:raise ValueError("архив не ответил")

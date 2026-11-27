@@ -7,6 +7,7 @@ import {deploymentScope} from '../src/lib/deploymentScope.js';
 const read=file=>JSON.parse(readFileSync(new URL(file,import.meta.url)));
 const rows=read('../../config/first_run_dex.json');
 for(const [id,file,chain] of [
+  ['shibaswap-v2-ethereum','shibaswap-v2-ethereum',1],
   ['empire-module-ethereum','empire-ethereum',1],['wagmi-base','wagmi-community-base',8453],
   ['thick-base','thick-community-base',8453],['goblins-base','goblins-community-base',8453],
 ]){

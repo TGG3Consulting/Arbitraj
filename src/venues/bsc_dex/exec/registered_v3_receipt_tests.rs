@@ -284,3 +284,36 @@ fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
         assert_eq!(verified, count);
     }
 }
+
+#[test]
+fn shibaswap_original_router_reconciles_all_recorded_wallet_payments() {
+    const ARCHIVE: &[u8] = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/shibaswap_v2_ethereum_payments.json.gz");
+    let archive: Value = serde_json::from_reader(GzDecoder::new(ARCHIVE)).unwrap();
+    let address = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let amount = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    let mut matched = 0;
+    for row in archive["cases"].as_array().unwrap().iter().filter(|r| r["wire"] == "router") {
+        let signed = &row["signed"];
+        let calldata: Bytes = signed["data"].as_str().unwrap().parse().unwrap();
+        let order = IV3Router::exactInputSingleCall::abi_decode(&calldata).unwrap().params;
+        let market = archive["markets"].as_array().unwrap().iter().find(|m| m["pool"] == row["pool"]).unwrap();
+        let proof = Proof {
+            market: Market {
+                pool:address(&row["pool"]),fee:U24::from(market["fee"].as_u64().unwrap() as u32),
+                algebra_deployer:None,fee_event:false,wallet_module:false,maverick:false,maverick_chain:None,
+                slipstream:None,router02:None,
+            },
+            target:address(&signed["to"]),payer:address(&signed["from"]),input:address(&row["source"]),
+            output:address(&row["target"]),budget:amount(&row["spent"]),minimum:amount(&row["received"]),
+            deadline:order.deadline,
+        };
+        assert_eq!(proof.data(),calldata);
+        assert_eq!(proof.target,address(&archive["roles"]["router"]["address"]));
+        assert_eq!(amount(&row["quote"][0]),proof.minimum);
+        let logs:Vec<Log>=serde_json::from_value(row["logs"].clone()).unwrap();
+        assert_eq!(proof.amounts(&logs,proof.payer,proof.input,proof.output),Some((proof.budget,proof.minimum)));
+        assert!(row["minimum_plus_one"].is_object() && row["expired"].is_object());
+        matched+=1;
+    }
+    assert_eq!(matched,24);
+}

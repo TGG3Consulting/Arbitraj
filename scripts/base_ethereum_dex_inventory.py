@@ -1839,6 +1839,17 @@ def tables(network, snapshots, profiles):
                 task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
             elif kind == "absent":
                 task = "В сетевой записи этого адаптера нет данной сети. Отдельные развёртывания проверяются по своему реестру."
+        if not base and str(row["id"]) == "6815":
+            wallets = data_dir / "shibaswap_v2_ethereum_payments.json.gz"
+            book = json.loads(gzip.decompress(wallets.read_bytes()))
+            profile = configured["shibaswap-v2-ethereum"]["settings"]
+            assert profile["dex.factory"] == book["factory"] and profile["dex.module_runtime_hashes"] == [book["module_hash"]]
+            assert set(profile["dex.v3_fee_tiers"]) == set(book["tiers"])
+            task = (f"Профиль `shibaswap-v2-ethereum` · полный реестр {len(book['markets'])} пулов по корню хранилища. "
+                    f"На {len(book['sampled_markets'])} пулах получено {len(book['cases'])} выплат тремя путями. "
+                    f"Штатный роутер принимает активы из dex.router_exact_tokens. Для остальных есть проверка чистого прихода "
+                    f"через модуль кошелька или шаг 17 V5. Кнопка размещения сохраняет модуль в dex.router, "
+                    f"штатный роутер остаётся в dex.v3_native_router. [Суммы, расходы и квитанции](../{wallets.as_posix()})")
         if str(row["id"]) == "1447":
             assert hashflow["factory"] in {a.lower() for a in candidates}
             candidates = [hashflow["factory"], hashflow["router"]]

@@ -8,6 +8,7 @@
   let {id, kind, venue} = $props();
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
   const deployments = {
+    shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
     empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},

@@ -255,6 +255,11 @@ mod tests {
                 pairs.push(sample.clone());
             }
         }
+        let shiba_bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/shibaswap-v2_ethereum_directory.json.gz");
+        let shiba: Value = serde_json::from_reader(flate2::read::GzDecoder::new(shiba_bytes.as_slice())).unwrap();
+        assert_eq!(shiba["selector"],eth["selector"]);
+        assert_eq!(shiba["markets"].as_array().unwrap().len(),110);
+        pairs.push(serde_json::json!({"dex":"shibaswap-v2-ethereum","network":"ethereum","creation_code_hash":shiba["init"]}));
         let cl_bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz");
         let cl_books: std::collections::BTreeMap<String,Value> =
             serde_json::from_reader(flate2::read::GzDecoder::new(cl_bytes.as_slice())).unwrap();

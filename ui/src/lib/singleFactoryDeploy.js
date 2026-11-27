@@ -4,7 +4,7 @@ import {runtimeKeccak} from './uniswapV1Deploy.js';
 const address=/^0x[0-9a-f]{40}$/;
 const hash=/^0x[0-9a-f]{64}$/;
 const same=(left,right)=>typeof left==='string' && left.toLowerCase()===right;
-const chainByKind={empire_module:1,registered_uni_v3:8453};
+const chainByKind={empire_module:1,shibaswap_v2_module:1,registered_uni_v3:8453};
 export const singleFactory=kind=>Object.hasOwn(chainByKind,kind);
 export async function loadSingleFactory(settings,plan,sha){
   if(!singleFactory(settings.kind) || plan.kind!==settings.kind || plan.chainId!==chainByKind[settings.kind] ||

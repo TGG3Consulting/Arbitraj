@@ -683,6 +683,10 @@ pub fn make(id: &str, kind: &str) -> Option<&'static Family> {
 }
 
 fn configured(ctx: &Ctx, id: &str, kind: &str) -> Option<&'static Family> {
+    // Keep the original ShibaSwap router and catalogue available before the optional module is installed.
+    if kind == "shibaswap_v2_module" && !ctx.dex_addr("dex.router",id).is_ok_and(|a| !a.is_zero()) {
+        return make(id,"shibaswap_v2");
+    }
     if ctx.chain_id() == Some(8453) && kind == "solidly_v1" {
         return with_variant(id, kind, Variant::SolidlyClassic);
     }

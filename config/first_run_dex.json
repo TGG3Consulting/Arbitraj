@@ -6438,5 +6438,41 @@
       "dex.quoter_runtime_hash": "0xb5460e13fe1280a679bdc704ebfcb947cb268b48b05f2ff2731cd1d320676c1b",
       "dex.router_runtime_hash": "0xadf125f1da0361a339391978df3884589c3d7329a81974b10a1bf4f0ff6dd292"
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "shibaswap-v2-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0xd9ce49caf7299daf18fffcb2b84a44fd33412509 · tests/data/first_run_dex_2026-11-26/shibaswap_v2_ethereum_payments.json.gz",
+    "settings": {
+      "dex.kind": "shibaswap_v2_module",
+      "dex.factory": "0xd9ce49caf7299daf18fffcb2b84a44fd33412509",
+      "dex.factory_runtime_hash": "0xc2b906b796232afe4bbac57e7d9e92dafaaedb0f7d60d7587e9b3265105edbc0",
+      "dex.router_runtime_hash": "0x10359748b1e02033f9e18a82d9f7efca56925595e1bc71a788b858eec4ef207d",
+      "dex.v3_native_router": "0xb2ecc25c0b3af0039d4d9dddfcec19e958618963",
+      "dex.quoter": "0x486dd4ff6abd5b2f728192cda291d2ffb611cbd1",
+      "dex.quoter_runtime_hash": "0xea7f84604861fa14fd468cc1a72627113367df3a516f38e228eeaac5d9094454",
+      "dex.tick_lens": "0xbfd8137f7d1516d3ea5ca83523914859ec47f573",
+      "dex.pool_code_hashes": [
+        "0xc8dfcfe47b964d533bd0b6fab7c059ee742526851cc16a888cedeabd46ba7d62"
+      ],
+      "dex.v3_fee_tiers": [
+        "500",
+        "3000",
+        "10000"
+      ],
+      "dex.quoter_virtual": false,
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.router_exact_tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+        "0x514910771af9ca656af840dff83e8264ecf986ca 0x77c633ba07c8cb94cd4864092fd8b31e31cf9d065f6fb6acf617298bc0008785",
+        "0x6b175474e89094c44da98b954eedeac495271d0f 0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+        "0x95ad61b0a150d79219dcf64e1e6cc01f0b64c4ce 0xd0caa0f9bc744c523933d44e6d8d07f868803d10bf16c8129e12f670296175ad",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xde27deb7f8c8d7921d485f3ae74f60727e28c6f7ad655e3cddd741639f0094e0"
+      ]
+    }
   }
 ]

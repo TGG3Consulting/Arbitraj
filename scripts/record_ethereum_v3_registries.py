@@ -182,7 +182,8 @@ def capture(name, endpoint):
     extra={}
     if name == "shibaswap-v2":
         from v3_factory_storage import verify_directory
-        proof = rpc("eth_getProof", [factory, [], tag])
+        # The Merkle path below independently binds the returned proof to head.stateRoot.
+        proof = reader.one("eth_getProof", [factory, [], hex(snapshot["block"])])
         owner, = decode(["address"],views([(factory,"owner()",[],[])])[0])
         extra["directory_proof"] = dict(factory=factory,state_root=head["stateRoot"],nonce=nonce,
             storage_root=proof["storageHash"],account_proof=proof["accountProof"],owner=owner,

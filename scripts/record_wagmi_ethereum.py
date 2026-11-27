@@ -121,8 +121,9 @@ def registry(url,d,tag):
 
 
 def capture(url,venue,artifact=None):
-    expanded=venue in ("blueprint","vvs","community")
-    module=venue in ("vvs","community")
+    shiba = venue == "shibaswap-v2"
+    expanded = shiba or venue in ("blueprint","vvs","community")
+    module = shiba or venue in ("vvs","community")
     if venue=="community":
         from v3_factory_storage import verify_directory
         d=json.loads((DATA/"community_v3_ethereum_router.json").read_bytes())
@@ -154,7 +155,20 @@ def capture(url,venue,artifact=None):
     budgets={WETH:([10**14,10**16] if expanded else [10**12,10**14]),STABLE:([100_000,1_000_000] if expanded else [1000,100000]),usdc:[100_000,1_000_000],wbtc:[100,1000]}
     swap_signature=SWAP if venue!="vvs" else "0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)").hex()
     modes=("router","module","v5") if module else (("router","router02","v5") if "router02" in roles else ("router","v5"))
-    for m in d["markets"]:
+    selected = d["markets"]
+    if shiba:
+        # Keep every market in the catalogue. Replay the largest funded pool for each cash and tier.
+        samples = {}
+        for market in selected:
+            cash = next((asset for asset in budgets if asset in market["tokens"]),None)
+            if cash and int(market["liquidity"]) > 0 and all(int(v)>0 for v in market["balances"]):
+                key = (cash,market["fee"])
+                funds = int(market["balances"][market["tokens"].index(cash)])
+                if key not in samples or samples[key][0] < funds:
+                    samples[key] = funds,market
+        selected = [m for _,m in samples.values()]
+        d["sampled_markets"] = [m["pool"] for m in selected]
+    for m in selected:
         pool=m["pool"];fee=m["fee"]; cash=next((a for a in budgets if a in m["tokens"]),None)
         if expanded and (cash is None or not all(int(n)>0 for n in m["balances"])):
             missing.append(dict(pool=pool,reason="no measured funding source" if cash is None else "one reserve empty on captured block"));continue
@@ -166,12 +180,16 @@ def capture(url,venue,artifact=None):
                 spender=EXEC if wire=="v5" else (ADAPTER if wire=="module" else roles[wire]);prefix=[fund];amount=seed
                 for a,b in [(cash,other),(other,cash)]:
                     permit=approval(a,spender,amount)
-                    quote=tx(roles["quoter"],"quoteExactInputSingle("+QUOTE+")",[QUOTE],[(a,b,amount,fee,0)])
+                    if shiba:
+                        quote=tx(roles["quoter"],"quoteExactInputSingle(address,address,uint24,uint256,uint160)",
+                                 ["address","address","uint24","uint256","uint160"],[a,b,fee,amount,0])
+                    else:
+                        quote=tx(roles["quoter"],"quoteExactInputSingle("+QUOTE+")",[QUOTE],[(a,b,amount,fee,0)])
                     def order(minimum,deadline):
                         if wire=="module":
                             return tx(ADAPTER,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[pool,a,b,amount,minimum,deadline])
                         if wire=="v5":
-                            step=(17,ADAPTER,a,b,10000,encode(["address"],[pool])) if venue=="vvs" else (1,pool,a,b,10000,b"")
+                            step=(17,ADAPTER,a,b,10000,encode(["address"],[pool])) if venue=="vvs" or shiba else (1,pool,a,b,10000,b"")
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,deadline,[step]])
                         if wire=="router":
                             return tx(spender,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,fee,OWNER,deadline,amount,minimum,0)])
@@ -187,7 +205,7 @@ def capture(url,venue,artifact=None):
                     if any(v["status"]!="0x1" for v in trial[-width:]):raise ValueError("баланс после выплаты")
                     words=lambda rs:[int(v["returnData"],16) for v in rs]
                     before=words(trial[i-width-1:i-1]);after=words(trial[-width:]);spent=before[0]-after[0];out=after[1]-before[1]
-                    q=decode(["uint256","uint160","uint32","uint256"],bytes.fromhex(trial[i-1]["returnData"][2:]))
+                    q=decode(["uint256"] if shiba else ["uint256","uint160","uint32","uint256"],bytes.fromhex(trial[i-1]["returnData"][2:]))
                     if spent!=amount or out!=q[0] or out<=0 or before[2:]!=after[2:]:
                         missing.append(dict(pool=pool,wire=wire,source=a,amount=str(amount),spent=str(spent),net=str(out),quoted=str(q[0]),before=list(map(str,before)),after=list(map(str,after))));break
                     exact=order(out,end);rr=run(base+[order(out+1,end),order(out,1),*checks,exact,*checks])
@@ -198,7 +216,7 @@ def capture(url,venue,artifact=None):
                     if len(settlements)!=1:raise ValueError(("фактический Swap",wire,pool))
                     realized=decode(["int256","int256","uint160","uint128","int24"],bytes.fromhex(settlements[0]["data"][2:]))
                     side=m["tokens"].index(a)
-                    if realized[side]!=spent or realized[1-side]!=-out or realized[2]!=q[1]:
+                    if realized[side]!=spent or realized[1-side]!=-out or (not shiba and realized[2]!=q[1]):
                         raise ValueError(("реальные pool delta и sqrtPrice после сделки",wire,pool))
                     output.append(dict(pool=pool,wire=wire,source=a,target=b,spent=str(spent),received=str(out),quote=[str(n) for n in q],gas=int(result["gasUsed"],16),
                                        signed=exact,minimum_plus_one=rr[i].get("error"),expired=rr[i+1].get("error"),approval_gas=int(rr[len(prefix)]["gasUsed"],16),before=list(map(str,before)),after=list(map(str,after)),logs=result["logs"]))
@@ -209,7 +227,7 @@ def capture(url,venue,artifact=None):
     return d
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3","blueprint","vvs","community"],default="wagmi");cli.add_argument("--module",type=Path);args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3","blueprint","vvs","community","shibaswap-v2"],default="wagmi");cli.add_argument("--module",type=Path);args=cli.parse_args()
     errors=[]
     for url in ENDPOINTS:
         try:

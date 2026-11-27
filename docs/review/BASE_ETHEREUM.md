@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `ac35b37d` (27.11.2026).
+Последний просмотренный коммит: `13fbcc23` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2981,6 +2981,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-33 | 61b09537 | `contracts/AquaStrategyWallet.sol`: числа без имени и без ссылки на строку исходника SwapVM v1.0.2 — бит `1<<254` в `traits`, флаги `0x61`/`0x41`, границы `32`, `52`, `57` и цикл `i=2..10` в `stops`. Дать имена-константы со ссылкой на файл и строку taker-формата SwapVM. После правки пересобрать в CI, а когда появятся карточки и хеши — сверить с новым байткодом. `pragma ^0.8.24` заменить на точную версию, как в остальных контрактах (`0.8.37`). |
 | О-34 | 9bdfd68a | `src/settings/store.rs` `set_checked` и `src/api/settings.rs` `ExpectedValue`: комментарии на английском и без «принимает / возвращает / ошибки» (CODING_STANDARDS). Это общий модуль настроек всего бота: описать по-русски поле `compare` в PUT /api/settings (null — ключа не было) и ошибку конфликта. |
 | О-35 | указание владельца 27.11 | **Ryze — только по официальной документации, лимиты учесть именно для Ryze.** Факты из документации: (1) Relayer (`ryze.relayer_url`, `POST intents/submit`) — «100 requests per minute» на IP, при превышении HTTP 429 ([relayer/overview](https://documentation.ryze.pro/relayer/overview.html)). (2) Router `POST /quote` ([router/quote](https://documentation.ryze.pro/router/quote.html)) — лимит, кэш и срок действия котировки в документации не указаны. (3) API `mainnet.api.ryze.pro/api` — «Responses are cached for 60 seconds» ([api/overview](https://documentation.ryze.pro/api/overview.html)); бот котировки берёт с Router, не с API — подтвердить, что ни одна цена для торговли не идёт из кэшируемого API. Что сделать: (а) предел отправок в Relayer — настройкой (не хардкод) с записью в SETTINGS_CASES и источником-ссылкой выше; бот не отправляет сверх предела и показывает это в UI; (б) HTTP 429 от Relayer сейчас не различается (`execute.rs` `let _accepted = http::submit_once(...)` — ответ отброшен, дальше `reconcile`) — разбирать 429 отдельно: заявка не принята → сделки нет (правило «не исполнился — отменяем, больше не пробуем»), причина в журнале и UI; (в) для Router `/quote` лимиты не придумывать: нет в документации — спросить владельца; частоту опроса книги (`ryze.books_interval_ms` × число `ryze.quote_sizes` × 2 стороны) показать в UI. |
+| О-36 | b89cbd5b | Размер файлов AirSwap: `airswap/mod.rs` — 336 строк, `airswap/routing.rs` — 248, ориентир 200. Разделить. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3707,3 +3708,15 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 Разработка — только по официальной документации, здесь и везде. Для Ryze учесть лимит Relayer «100 запросов в минуту на IP» именно в этом направлении. Подробно — О-35.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35.
+
+### e508e66e, b89cbd5b, 13fbcc23 — AirSwap RFQ: цена, проверка и исполнение заявок maker
+
+- Новая площадка `airswap/*`. Настройки: `airswap.contracts`, `airswap.makers`, `airswap.trading`, `airswap.min_validity_ms`, `airswap.gas_budget_native`. Все записаны в SETTINGS_CASES. URL maker выбирает владелец, адреса из реестра бот сам не вызывает.
+- Регрессия BSC, проверено:
+  - `venue.rs`: `airswap::routing::consider` и `available()` вызываются на всех сетях. `available()` требует `airswap.trading`, непустой `airswap.makers` и профиль кассы. На BSC этого нет, поэтому `consider` сразу возвращает прежнюю котировку, а прежние ветки `return None` не меняются.
+  - `hashflow/dispatch.rs` и `hashflow/execute.rs`: добавлен `Gate::AirSwap` и проверки `c.airswap`. Если `airswap` отсутствует, прежний путь Hashflow тот же.
+  - `textile/routing.rs`: расчёт котировки вынесен в общий `quote/wallet_rfq.rs` с той же формулой газа и тем же `textile.gas_budget_native`. Проверка срока `current(expiry)` перенесена раньше расчёта газа, итог тот же (`None`).
+- `13fbcc23`: изменён только скрипт записи.
+- Новая правка: О-36 (размер файлов).
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36.

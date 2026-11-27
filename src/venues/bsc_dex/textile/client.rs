@@ -92,7 +92,7 @@ async fn post(ctx: &Ctx, firm: bool, q: &Query, profile: Option<&Profile>) -> Ga
                 nonce,
                 issuedAt: U256::from(issued),
             };
-            let domain = alloy::sol_types::eip712_domain! {name:"Textile Taker Control",version:"1",chain_id:chain};
+            let domain = alloy::sol_types::eip712_domain! {name:"Textile Taker Control",version:"1",chain_id:chain,};
             let signer = wallet::signer::signer(ctx)?;
             if signer.address() != p.taker {
                 return Err(fail(ctx, "Кошелёк Textile изменился"));

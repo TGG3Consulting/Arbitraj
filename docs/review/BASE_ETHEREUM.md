@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `52cc1ab5` (27.11.2026).
+Последний просмотренный коммит: `95d04d2e` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2969,7 +2969,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | ~~О-21~~ ✅ 0575dbcf | R-42 | Числа закрыты в 12a80965: `VIRTUAL_BALANCE_BITS = 216` со ссылкой, цикл `0..128` заменён точным расчётом. Предикат `mooniswap()` введён и применён в `factory_calls`, `load`, `quoter`. Осталось прямое `== Variant::Mooniswap` в `exec/executor/entry.rs:79, 128, 163, 242`, `quote/module_pricing.rs:39`, `exec/vista_gate.rs:40` — заменить на `mooniswap()`. |
 | О-22 | хардкод | `contracts/DefiPlazaWallet.sol` `quote()` (781a221b): `state != 3` (состояние «токен в списке» MultiPlaza) и сдвиг `<< 64` (формат `keep`) — голые числа. Назвать константы со ссылкой на исходник DefiPlaza. После правки пересобрать артефакт и обновить хеш, если он закреплён в совете. | **31421dc8: имена даны (`LISTED`, `Q64_FRACTION_BITS`). Нет ссылки на источник:** строка или файл MultiPlaza, где состояние 3 — «в листинге», а доля в Q64. Нужна ссылка над константами. |
 | О-23 | хардкод, R-42 | DefiPlaza в боте (801f2247): (1) `pools/defiplaza.rs:245` — `chunks(48)`, размер пачки RPC без имени и без настройки; (2) `math/defiplaza.rs:10` — `U256::ONE << 64` (формат `keep`) без имени, та же константа, что в О-22; (3) `pools/defiplaza.rs:111, 229` — прямые `== Variant::DefiPlazaStable`, нужен предикат. | **7c743f64: сравнения с `Variant::DefiPlazaStable` и `<< 64` закрыты (`defiplaza_stable()`, `MULTI_FEE_SCALE` с источником).** Осталось два пункта. (1) `REGISTRY_BATCH = 48` — это не константа протокола, а размер пакета RPC. По CLAUDE.md размер пакета задаётся настройкой: брать существующую `dex.verify_batch` или `dex.load_batch`. (2) У `LISTED = 3` в `pools/defiplaza.rs` нет ссылки на источник: строка MultiPlaza, где задан статус Listed. |
-| О-24 | 5a37bce3 | `pools/ammalgam.rs`: у `BEACON_SLOT` (0xa3f0…3d50) нет имени источника. Нужна ссылка на EIP-1967, слот beacon. У `SWAP_INTEREST_PERIOD` нет ссылки на исходник TokenController. Файл 238 строк, ориентир — 200: разделить. |
+| О-24 | 5a37bce3 | `pools/ammalgam.rs`: у `BEACON_SLOT` (0xa3f0…3d50) нет имени источника. Нужна ссылка на EIP-1967, слот beacon. У `SWAP_INTEREST_PERIOD` нет ссылки на исходник TokenController. Файл 238 строк, ориентир — 200: разделить. | **95d04d2e: файл вырос до 292 строк, источники по-прежнему не указаны.** |
 | О-25 | 7c743f64 | `exec/defiplaza_wallet.rs` — 234 строки, ориентир 200: разделить. |
 
 ### 650ce364, e0d22d6e — проверено
@@ -3329,5 +3329,13 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 
 - Шапки `mooniswap_inverse.rs` и `mooniswap_lattice.rs` дополнены по стандарту: что делает, кто вызывает, ссылка на исходник 1inch Mooniswap.sol@48d3db12.
 - Выгрузка фактических входов через `ARB_MOONISWAP_INVERSE_EXPORT` есть только в тестовом модуле. Логика не менялась. Замечаний нет.
+
+Открыто: О-22, О-23, О-24, О-25.
+
+### 95d04d2e — Ammalgam: модуль кошелька в UI и шаг V5
+
+- Все новые ветки в общих файлах (`entry.rs`, `vista_gate.rs`, `market_probe.rs`, `probe_exec.rs`, `emitter.rs`, `exec_kind.rs`) срабатывают только при `ammalgam()` или `PoolState::Ammalgam`. BSC не затронут.
+- Карточка развёртывания `ammalgam-ethereum-create.json` и тест UI добавлены. Модуль размещает владелец (решение 408).
+- О-24 стал тяжелее: в `pools/ammalgam.rs` уже 292 строки.
 
 Открыто: О-22, О-23, О-24, О-25.

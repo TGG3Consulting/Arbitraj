@@ -190,11 +190,11 @@ pub(super) async fn state(
         return Err(bad(ctx));
     }
     Ok(AmmalgamState {
-        reserves: order([reserves.x.into(), reserves.y.into()]),
-        reference: order([reference.x.into(), reference.y.into()]),
+        reserves: order([reserves.x.to::<U256>(), reserves.y.to::<U256>()]),
+        reference: order([reference.x.to::<U256>(), reference.y.to::<U256>()]),
         missing: order([
-            assets[4].saturating_sub(assets[1]).into(),
-            assets[5].saturating_sub(assets[2]).into(),
+            assets[4].saturating_sub(assets[1]).to::<U256>(),
+            assets[5].saturating_sub(assets[2]).to::<U256>(),
         ]),
         cash: [
             batch::decode(&cash0, bal.clone())?,

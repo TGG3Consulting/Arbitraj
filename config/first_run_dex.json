@@ -6698,6 +6698,31 @@
   {
     "network": "ethereum",
     "chain_id": 1,
+    "id": "ammalgam",
+    "source": "https://github.com/Ammalgam-Protocol/subgraph/blob/247d6aaa58052b8af779e98947cc3dce14976700/config.mainnet.yaml · tests/data/first_run_dex_2026-11-26/ammalgam_ethereum_wallet.json.gz",
+    "settings": {
+      "dex.kind": "ammalgam_dlex",
+      "dex.factory": "0x1a411b0fd1f368d2f413a8cbb6aad425c923015b",
+      "dex.factory_runtime_hash": "0xe7902f10a49ac09a7efce02399bdaf2287a149826a0d01751f3ae025f8820876",
+      "dex.quoter": "0x910068dfaac6aab0847057aff323045f46dd8468",
+      "dex.quoter_runtime_hash": "0x12bba6bb2bd234a537cd74f0b99f268e91696e188f6874315c9b1297d48ffe0b",
+      "dex.pair_runtime_hash": "0xe3b889bc11084bf4064b8062e4e7fbc36046436c9837f3e1ea3f4a0459f187bd",
+      "dex.proxy_implementations": [
+        "0xf6ef8febba67e70640d5f293c8fe3ea35906990a",
+        "0x5c0d819609eee2cdcf326f0e898a8447e06a45be"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0xf3c6d3e4bd44731ffab2678e24fd82cc20bcfd80b368d7864f037b6e9a9b396f",
+        "0x56fdf6a137b902e6fb44290c82b97b6fa2f1604cf9ba9caad7af3a12c11d6639"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xcf7d5d61a8b274c2291e1c671a4326a7a687656e8cc47bba642fd7524863c9c3"
+      ]
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
     "id": "mooniswap",
     "source": "https://github.com/1inch/mooniswap/tree/02dccfab2ddbb8a409400288cb13441763370350 · tests/data/first_run_dex_2026-11-26/mooniswap_original_ethereum.json.gz",
     "settings": {

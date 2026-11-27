@@ -29,6 +29,7 @@ fn virtual_tariffs_and_wallet_payments_follow_originals_in_both_directions() {
         ),
     ] {
         let tape = read(bytes);
+        historical_decay(&tape, successor);
         let mut count = 0;
         for pool in tape["markets"].as_array().unwrap() {
             for t in pool["trials"].as_array().unwrap() {
@@ -133,4 +134,50 @@ fn first_funded_input_matches_exhaustive_small_reserves_at_both_sides_of_price_p
             }
         }
     }
+}
+
+fn historical_decay(tape: &Value, successor: bool) {
+    let case = &tape["delay"];
+    let samples = case["frames"].as_array().unwrap();
+    assert_eq!(samples.len(), 4);
+    let pair: [Address; 2] = [
+        case["input"].as_str().unwrap().parse().unwrap(),
+        case["output"].as_str().unwrap().parse().unwrap(),
+    ];
+    let first = &samples[0];
+    let qty = n(&case["amount"]);
+    let mut s = MooniswapState {
+        physical: pair,
+        tokens: pair,
+        balances: [n(&first["balances"][0]), n(&first["balances"][1])],
+        addition: virtuals(&first["addition"]),
+        removal: virtuals(&first["removal"]),
+        timestamp: first["timestamp"].as_u64().unwrap(),
+        decay: n(&first["decay"]).to(),
+        fee: n(&first["fee"]),
+        slippage_fee: n(&first["slippage_fee"]),
+        successor,
+    };
+    let original = s.timestamp;
+    for row in samples {
+        assert!(
+            [
+                "addition",
+                "removal",
+                "balances",
+                "fee",
+                "slippage_fee",
+                "decay"
+            ]
+            .iter()
+            .all(|k| row[*k] == first[*k])
+        );
+        s.timestamp = row["timestamp"].as_u64().unwrap();
+        assert_eq!(
+            s.swap(pair[0], true, qty).unwrap().amount_out,
+            n(&row["quote"])
+        );
+    }
+    assert!(s.timestamp >= original + s.decay);
+    assert_ne!(samples[0]["quote"], samples[3]["quote"]);
 }

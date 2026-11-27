@@ -1881,11 +1881,15 @@ def tables(network, snapshots, profiles):
                 counts={m:sum(r["mode"]==m for r in wallet["cases"]) for m in ("wallet","wallet_wrapped","v5")}
                 present=[t for market in directory["markets"] for t in market["trials"] if "exact" in t]
                 gas=[r["gas"] for r in wallet["cases"]]
+                delay=directory["delay"]["frames"]
+                offsets="/".join(str(frame["timestamp"]-delay[0]["timestamp"]) for frame in delay)
+                delayed="/".join(frame["quote"] for frame in delay)
                 rates={k:[int(r["frame_before"][k]) for r in present] for k in ("fee","slippage_fee","decay")}
                 generations.append(f"`{slug}` — фабрика `{directory['factory']}`, {len(directory['registry'])} пар, {len(present)} прямых выплат пары; "
                                    f"собственный модуль {counts['wallet']} выплат, с WETH вместо ETH ещё {counts['wallet_wrapped']}, V5 {counts['v5']}. "
                                    f"На этих оплатах fee={min(rates['fee'])}…{max(rates['fee'])}, slippageFee={min(rates['slippage_fee'])}…{max(rates['slippage_fee'])} "
                                    f"(обе ставки в долях 10¹⁸); decayPeriod={min(rates['decay'])}…{max(rates['decay'])} секунд. "
+                                   f"На четырёх последовательных наблюдениях после сделки, через {offsets} с, неизменный вход дал {delayed} атомов выхода при тех же физических остатках. "
                                    f"Вызовы через модуль/V5 использовали {min(gas)}–{max(gas)} газа без разрешений. "
                                    f"[Реестр и виртуальные остатки](../{(data_dir/f'mooniswap_{era}_ethereum.json.gz').as_posix()}) · "
                                    f"[Платежи и границы minOut](../{(data_dir/f'mooniswap_{era}_wallets.json.gz').as_posix()})")

@@ -41,6 +41,19 @@ impl<V: Clone + Send + Sync + 'static> PricesAt<V> {
     where
         F: Future<Output = Option<V>> + Send + 'static,
     {
+        self.progress(key, ttl, wait, move |_| load).await
+    }
+    pub(in crate::venues::bsc_dex) async fn progress<L, F>(
+        &self,
+        key: (Direction, bool, Decimal),
+        ttl: Duration,
+        wait: bool,
+        load: L,
+    ) -> Option<V>
+    where
+        L: FnOnce(watch::Sender<Option<Option<V>>>) -> F + Send + 'static,
+        F: Future<Output = Option<V>> + Send + 'static,
+    {
         let now = Instant::now();
         let mut rx = {
             let mut prices = self.0.lock().ok()?;
@@ -50,7 +63,7 @@ impl<V: Clone + Send + Sync + 'static> PricesAt<V> {
             } else {
                 if prices
                     .values()
-                    .filter(|(_, r)| r.borrow().is_none())
+                    .filter(|(_, r)| r.has_changed().is_ok())
                     .count()
                     >= 4
                 {
@@ -59,8 +72,13 @@ impl<V: Clone + Send + Sync + 'static> PricesAt<V> {
                 let (tx, rx) = watch::channel(None);
                 prices.insert(key, (now + ttl + ttl, rx.clone()));
                 tokio::spawn(async move {
-                    let value = tokio::time::timeout(ttl, load).await.ok().flatten();
-                    let _ = tx.send(Some(value));
+                    let value = tokio::time::timeout(ttl, load(tx.clone()))
+                        .await
+                        .ok()
+                        .flatten();
+                    if value.is_some() || tx.borrow().is_none() {
+                        let _ = tx.send(Some(value));
+                    }
                 });
                 rx
             }
@@ -146,6 +164,33 @@ impl Endpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn first_responding_maker_survives_a_second_makers_failure() {
+        let levels = PricesAt::<u8>::default();
+        let key = (
+            ((1, 3, 4), Address::repeat_byte(1), Address::repeat_byte(2)),
+            false,
+            Decimal::ONE,
+        );
+        let ttl = Duration::from_secs(5);
+        let (proceed, rx) = tokio::sync::oneshot::channel();
+        let (done, finished) = tokio::sync::oneshot::channel();
+        let price = levels
+            .progress(key, ttl, true, move |updates| async move {
+                updates.send_replace(Some(Some(19)));
+                rx.await.ok()?;
+                let _ = done.send(());
+                None
+            })
+            .await;
+        assert_eq!(price, Some(19));
+        proceed.send(()).unwrap();
+        finished.await.unwrap();
+        assert_eq!(
+            levels.observe(key, ttl, false, async { None }).await,
+            Some(19)
+        );
+    }
     #[tokio::test]
     async fn healthy_alternative_returns_before_public_io_and_shared_reader_reuses_result() {
         let levels = PricesAt::<u8>::default();

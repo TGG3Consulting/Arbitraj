@@ -15,7 +15,12 @@ pub(super) struct Offer {
     pub paid: U256,
     pub net: U256,
 }
-async fn offers(p: &Parts, q: Query) -> GatewayResult<Vec<Offer>> {
+type Progress = tokio::sync::watch::Sender<Option<Option<Level>>>;
+async fn offers(
+    p: &Parts,
+    q: Query,
+    publish: Option<(Progress, (u8, u8))>,
+) -> GatewayResult<Vec<Offer>> {
     let c = &p.ctx;
     let jobs = Maker::endpoints(c).into_iter().map(|m| async move {
         let row = m.level(c, q).await?;
@@ -31,18 +36,28 @@ async fn offers(p: &Parts, q: Query) -> GatewayResult<Vec<Offer>> {
     let mut last = None;
     while let Ok(Some(row)) = tokio::time::timeout_at(deadline, stream.next()).await {
         match row {
-            Ok(Some(r)) => rows.push(r),
+            Ok(Some(r)) => {
+                rows.push(r);
+                rows.sort_by(|a, b| {
+                    if q.exact_out {
+                        a.paid.cmp(&b.paid)
+                    } else {
+                        b.net.cmp(&a.net)
+                    }
+                });
+                if let Some((tx, decs)) = &publish {
+                    tx.send_replace(Some(Some(Level {
+                        query: q,
+                        offers: rows.clone(),
+                        decimals: *decs,
+                    })));
+                }
+            }
+
             Err(e) => last = Some(e),
             _ => {}
         }
     }
-    rows.sort_by(|a, b| {
-        if q.exact_out {
-            a.paid.cmp(&b.paid)
-        } else {
-            b.net.cmp(&a.net)
-        }
-    });
     if rows.is_empty() {
         return Err(last
             .unwrap_or_else(|| super::no(c, "AirSwap: нет публичного уровня на заданный объём")));
@@ -50,7 +65,7 @@ async fn offers(p: &Parts, q: Query) -> GatewayResult<Vec<Offer>> {
     Ok(rows)
 }
 pub(super) async fn level(p: &Parts, q: Query) -> GatewayResult<(U256, U256)> {
-    let offers = offers(p, q).await?;
+    let offers = offers(p, q, None).await?;
     Ok((offers[0].paid, offers[0].net))
 }
 #[derive(Clone)]
@@ -73,7 +88,7 @@ pub(super) async fn observe(
     let parts = p.clone();
     p.airswap
         .prices
-        .observe(key, c.timeout().ok()?, wait, async move {
+        .progress(key, c.timeout().ok()?, wait, move |updates| async move {
             let c = &parts.ctx;
             let (di, dout) = tokio::try_join!(
                 parts.tokens.decimals(c, pair.0),
@@ -89,7 +104,9 @@ pub(super) async fn observe(
             };
             Some(Level {
                 query,
-                offers: offers(&parts, query).await.ok()?,
+                offers: offers(&parts, query, Some((updates, (di, dout))))
+                    .await
+                    .ok()?,
                 decimals: (di, dout),
             })
         })

@@ -70,17 +70,40 @@ def acquire():
     members=call(rr,at,ROUTER,"getAllowedRFQs()","address[]")
     assert len(members)==len(set(members)) and members
     roles={a:role(rr,a,at) for a in (ROUTER,*members)}
-    # Fixed 43,200 two-second block intervals before the snapshot, including both endpoints.
-    first=cfg["block"]-43200
+    # Resolve a day from block timestamps; the historical Base cadence is not constant.
+    cut=int(header["timestamp"],16)-86400
+    lo,hi=cfg["block"]-1,cfg["block"]
+    step=43200
+    while int(rr("eth_getBlockByNumber",[hex(lo),False])["timestamp"],16)>=cut:
+        lo=max(0,hi-step)
+        step*=2
+    while lo+1<hi:
+        mid=(lo+hi)//2
+        if int(rr("eth_getBlockByNumber",[hex(mid),False])["timestamp"],16)<cut:
+            lo=mid
+        else:
+            hi=mid
+    first=hi
     start=rr("eth_getBlockByNumber",[hex(first),False])
+    before={"blockHash":start["hash"],"requireCanonical":True}
+    initial=set(call(rr,before,ROUTER,"getAllowedRFQs()","address[]"))
+    venues=initial|set(members)
+    updated="0x"+keccak(text="AllowedRFQUpdated(address,bool)").hex()
+    transitions=[]
+    ranges=[(lo,min(lo+4999,cfg["block"])) for lo in range(first,cfg["block"]+1,5000)]
+    for lo,hi in ranges:
+        for row in rr("eth_getLogs",[{"fromBlock":hex(lo),"toBlock":hex(hi),"topics":[updated],"address":ROUTER}]):
+            address="0x"+row["topics"][1][-40:]
+            venues.add(address)
+            transitions.append(dict(block=int(row["blockNumber"],16),address=address,allowed=bool(int(row["data"],16))))
     events=[]
-    for lo in range(first,cfg["block"]+1,5000):
-        logs=rr("eth_getLogs",[{"fromBlock":hex(lo),"toBlock":hex(min(lo+4999,cfg["block"])),"topics":[EVENT],"address":list(members)}])
+    for lo,hi in ranges:
+        logs=rr("eth_getLogs",[{"fromBlock":hex(lo),"toBlock":hex(hi),"topics":[EVENT],"address":sorted(venues)}])
         events.extend(logs)
     assert rr("eth_getBlockByNumber",[hex(cfg["block"]),False])["hash"]==at["blockHash"]
     start_ts,end_ts=map(lambda h:int(h["timestamp"],16),(start,header))
     return dict(head=at,height=cfg["block"],roles=roles,router=ROUTER,members=members,
-                interval=dict(first=first,last=cfg["block"],start_time=start_ts,end_time=end_ts,swap_events=len(events)),
+                interval=dict(first=first,last=cfg["block"],start_time=start_ts,end_time=end_ts,swap_events=len(events),observed_members=sorted(venues),membership_changes=transitions),
                 witness=payment(rr))
 
 

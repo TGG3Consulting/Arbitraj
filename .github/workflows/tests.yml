@@ -596,6 +596,11 @@ jobs:
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/ambient" AmbientWallet
           python scripts/record_ambient_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/ambient/AmbientWallet.json"
+      - if: matrix.market == 'dexalot-base-wallet'
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/dexalot" DexalotWallet
+          python scripts/record_dexalot_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/dexalot/DexalotWallet.json"
       - if: matrix.market == 'dexalot-base-markets'
         run: python scripts/record_dexalot_base.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ambient-ethereum-markets'

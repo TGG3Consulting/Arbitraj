@@ -35,6 +35,7 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
     ("zeroex.api_key", "zeroex", "Ключ 0x Swap API v2 для Base и Ethereum"),
     ("clipper.api_key", "clipper", "Blade RFQ: JSON с полями origin и key для доступа владельца к поставщику"),
     ("fynd.api_key", "fynd", "Ключ Fynd Hosted API для ручной проверки цены Base и Ethereum"),
+    ("dexalot.api_key", "dexalot", "Ключ канала Dexalot RFQ x-apikey для цен и подписанных условий"),
     ("hashflow.taker_key", "hashflow", "Ключ доступа Hashflow Taker API v3 для нескольких кошельков"),
     (TELEGRAM_DUTY_TOKEN, "telegram", "Токен бота для дежурного"),
     (TELEGRAM_DAILY_TOKEN, "telegram", "Токен бота суточных автоотчётов"),

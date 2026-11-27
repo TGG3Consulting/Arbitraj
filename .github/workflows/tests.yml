@@ -630,6 +630,8 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'tokenlon-ethereum'
+        run: python scripts/record_tokenlon_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'native-rfq-ethereum'
         run: python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'goliath-ethereum'

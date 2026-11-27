@@ -1,0 +1,329 @@
+{
+  "chain": 1,
+  "block": 26494988,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "window": {
+    "first": 26487789,
+    "last": 26494988,
+    "fills_by_source": {
+      "pmm_zeroex_v2": 101,
+      "uniswap_v3": 144,
+      "curve": 5,
+      "sushiswap": 2,
+      "uniswap_v2": 1,
+      "rfq1": 0,
+      "rfq2": 0,
+      "rfq6": 0
+    }
+  },
+  "roles": {
+    "pmm": {
+      "address": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+      "runtime": "0xd93c60d37531f7091af0f56e1ead05e61b26fffe245618ea084d807b00a5ab90"
+    },
+    "rfq1": {
+      "address": "0xfd6c2d2499b1331101726a8ac68ccc9da3fab54f",
+      "runtime": "0x479a2795f98609767e19232f49a072a5f78b92fa7f4806ffde325c6f2c6759d3"
+    },
+    "rfq2": {
+      "address": "0x91c986709bb4fe0763edf8e2690ee9d5019bea4a",
+      "runtime": "0x03ad6d2412fdce0b4a40a129dda730bd0979b178dbc4c302d06398ef17858424"
+    },
+    "wrapper": {
+      "address": "0x4a14347083b80e5216ca31350a2d21702ac3650d",
+      "runtime": "0xbb03e70b3d65b0a2f8f10aade7c5b0970a0319aec1b408b015d4ba5aaa8a47d3"
+    },
+    "rfq6": {
+      "address": "0xf45b4428b02e5efff08a88f4383224d6ea447935",
+      "runtime": "0x7ca1be0111a44b069b04e6337485404510d6f996229c644de2c952aa077024cc"
+    },
+    "smart_order_strategy": {
+      "address": "0x5e30ee498190c6f5d602f977ecedad035745b796",
+      "runtime": "0xc5342268644991482b196352fb7fc21516787e7a67394825a8df4b03ef850a28"
+    },
+    "user_proxy": {
+      "address": "0x03f34be1bf910116595db1b11e9d1b2ca5d59659",
+      "runtime": "0xabf73cab47631c9363fa11b421585b9edc25458176a4e00292846ed8a45b3c1a"
+    },
+    "user_proxy_impl": {
+      "address": "0x0b9f13ffab8448089f50073cf24bbe5c7bd8675a",
+      "runtime": "0xdb3bf7e4d3bea9449bdaaf049140386c9c0d57c1d9fcb962a88310b002fc70a5"
+    }
+  },
+  "controls": [
+    {
+      "block": 26488240,
+      "block_hash": "0x2194350e202dcd0b68f6173ea44e326e7a9044334d15fe03e4def70e1aee78b9",
+      "hash": "0x16f420a7ad4e132a10e374db2ee6fe7a7379ebb9efe5844a18c2a31c5dbaca90",
+      "log_index": 58,
+      "src": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "dst": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "taker": "4070000000000000000",
+      "maker": "6845504392",
+      "net": "6824967878",
+      "fee_bps": 30,
+      "recipient": "0x48e5e6e6c958c4c8057496863bceefe0a03593d2",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0x48e5e6e6c958c4c8057496863bceefe0a03593d2",
+      "order_hash": "0x1e9b4b5edf0bdf484aa2d267cd7f595efbbf7414c53f2069073d91b96f9371b1"
+    },
+    {
+      "block": 26488246,
+      "block_hash": "0x31e387eb8cebc5352b9675db4000aa8b4bac3ca67fb99db2641e48b13f754f6b",
+      "hash": "0x813d99ff048adfb7e0b39c053c2247d2b786adcd54650711ac5e199e28b12c0b",
+      "log_index": 45,
+      "src": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "dst": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "taker": "119184630000000000",
+      "maker": "200601800",
+      "net": "199999994",
+      "fee_bps": 30,
+      "recipient": "0xbfccde6fd87e20b58560b9a1c39118091b6e2e3c",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0xbfccde6fd87e20b58560b9a1c39118091b6e2e3c",
+      "order_hash": "0x626b5e8d48b21dc7d7a9f4fc1f93a692638e99f469ac603bd96fc836d093608f"
+    },
+    {
+      "block": 26488497,
+      "block_hash": "0x07d61335b4de8ce148537af465b508411e8a37d9b212ae10c39e153bba70420b",
+      "hash": "0xb6524a46566460470ef002f91928a12caf6e80d23144303cf01bcf2e2fcbeeec",
+      "log_index": 33,
+      "src": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "dst": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "taker": "1000000000",
+      "maker": "998669414",
+      "net": "998269946",
+      "fee_bps": 4,
+      "recipient": "0x24d88c3509433f41715efa4990e8b10332ffc4af",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0x24d88c3509433f41715efa4990e8b10332ffc4af",
+      "order_hash": "0x8f62818931514f632af96f894739bafcde82db1731799a35c0baa1f4f51fdec8"
+    },
+    {
+      "block": 26489878,
+      "block_hash": "0xc39d0d96f8857a6be4bdba221cf107fe88d90eb23d4c42ef0381b8ccc6efcfc8",
+      "hash": "0x43d7dc01ac8f8bd281b47a32d2b09fe562c8a9e5a060ebcc952034f2bc33a165",
+      "log_index": 404,
+      "src": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "dst": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "taker": "1628000000",
+      "maker": "1625879281",
+      "net": "1625228929",
+      "fee_bps": 4,
+      "recipient": "0x90026f1e196a330bb1db63db24954bbd104beafa",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0x90026f1e196a330bb1db63db24954bbd104beafa",
+      "order_hash": "0xb95b3dd5fc98e45e199877dfa50088ed0a88a199cdc4211a81aaf6ccf2d87a0b"
+    },
+    {
+      "block": 26488557,
+      "block_hash": "0xa93b542996b116744ee442b7227088f52b88740fa14fe47b23d6a75e2c366d6a",
+      "hash": "0x78a5f767cd20e5f4f83b31fc27a5677d569e161a06af224013073f6cae39db16",
+      "log_index": 273,
+      "src": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "dst": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "taker": "6200000000",
+      "maker": "3713137590000000000",
+      "net": "3703483432266000000",
+      "fee_bps": 26,
+      "recipient": "0xea98a72659c2dfa514167829cbf27ec21ee786f7",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0xea98a72659c2dfa514167829cbf27ec21ee786f7",
+      "order_hash": "0x6806571f229b8f790824b0e86254522782fadd81b94cb6088f71fab93d77eb58"
+    },
+    {
+      "block": 26488819,
+      "block_hash": "0x4c21faeca67e0296dc304b9b7954a8142d3335a5b9b33a98397056f1f3ff0ecc",
+      "hash": "0x38ce9dd57b1edcd924752baa67c7286e6065bd689d8572ed1e77b5f240229e54",
+      "log_index": 54,
+      "src": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "dst": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "taker": "33360493889",
+      "maker": "20000000000000000000",
+      "net": "19944000000000000000",
+      "fee_bps": 28,
+      "recipient": "0x8cbcad0de3a585450825accc9f61c346352fe889",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0x8cbcad0de3a585450825accc9f61c346352fe889",
+      "order_hash": "0x565d21473de8f1dba5a92a36a32a72b748759309933ad99c9f936b3adaecb264"
+    },
+    {
+      "block": 26488669,
+      "block_hash": "0x3a8957e9e93db4fe86cd9b9a04d7bef8d89dbe662e450429600a2d1456bb1ae5",
+      "hash": "0x3542c0b05f0221fd2628c3bfa4a6e4a37715dc4ae62dfb012c9e7e804709dffa",
+      "log_index": 95,
+      "src": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "dst": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "taker": "1123000000",
+      "maker": "1124378136",
+      "net": "1123928384",
+      "fee_bps": 4,
+      "recipient": "0x855203df94957e1ca803e3d12b895914173b9c6e",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0x855203df94957e1ca803e3d12b895914173b9c6e",
+      "order_hash": "0xd5ae2723339d00d7add99b95e21021d2d0a29cd4d154f7e183b0352900a5e540"
+    },
+    {
+      "block": 26488845,
+      "block_hash": "0xc95e4bbc82f725050918f3fe48b290628fc7f9db22c1e53fdc6d814be7e99ca9",
+      "hash": "0xf2d62e781ee6eb1dd9f63dbd95590568d22386f5186c3bf605e607a9e54c40d4",
+      "log_index": 93,
+      "src": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "dst": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "taker": "100000000",
+      "maker": "100122256",
+      "net": "100082207",
+      "fee_bps": 4,
+      "recipient": "0xdce79bcefd7272358efb309d3994b3aae7aa52fb",
+      "market_maker": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+      "user": "0xdce79bcefd7272358efb309d3994b3aae7aa52fb",
+      "order_hash": "0xc82fc619fbc46a29dddb22ccb68a9f7e5ebbbbfaca9684e38769302d1ca9fa7d"
+    }
+  ],
+  "sources": {
+    "defillama": "be9967c3f0d3ccd06c871bab0d16beb3304de719",
+    "protocol": "ada28eb58dc50cde59f87fcb97165a0a5c6655cd",
+    "rfq6_spec": "7793e365ba55b7dc6c8f000efca8dc057b62708f",
+    "sdk": "@tokenlon/sdk@5.4.2"
+  },
+  "observed_taker": {
+    "ws-probe-mm": {
+      "utc_unix": 1795777589,
+      "wallet": "0x3A0F468C19f58157ac24C9c040441BEAeb8376eE",
+      "responses": {
+        "q0": {
+          "exchangeable": true,
+          "rate": 1.001047645,
+          "minAmount": 1.06,
+          "maxAmount": 2500000,
+          "mmCode": "SCP-EOA-0xe319",
+          "makerAddress": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+          "takerAddress": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+          "makerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "takerAssetAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "makerAssetAmount": "1001047645",
+          "takerAssetAmount": "1000000000",
+          "feeFactor": 4,
+          "protocol": "PMMV5"
+        },
+        "q2": {
+          "exchangeable": true,
+          "rate": 1723.669701,
+          "minAmount": 0.000614,
+          "maxAmount": 1000.0,
+          "mmCode": "SCP-EOA-0xe319",
+          "makerAddress": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+          "takerAddress": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+          "makerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "takerAssetAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "makerAssetAmount": "1723669701",
+          "takerAssetAmount": "1000000000000000000",
+          "feeFactor": 30,
+          "protocol": "PMMV5"
+        },
+        "q1": {
+          "exchangeable": true,
+          "rate": 0.9987392355335888,
+          "minAmount": 1.06,
+          "maxAmount": 2500000,
+          "mmCode": "SCP-EOA-0xe319",
+          "makerAddress": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+          "takerAddress": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+          "makerAssetAddress": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "takerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "makerAssetAmount": "1000000000",
+          "takerAssetAmount": "1001262355",
+          "feeFactor": 4,
+          "protocol": "PMMV5"
+        },
+        "q3": {
+          "exchangeable": true,
+          "rate": 0.0005795800535647,
+          "minAmount": 0.000614354856778582,
+          "maxAmount": 1000.0,
+          "mmCode": "SCP-EOA-0xe319",
+          "makerAddress": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+          "takerAddress": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+          "makerAssetAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "takerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "makerAssetAmount": "1000000000000000000",
+          "takerAssetAmount": "1725387189",
+          "feeFactor": 30,
+          "protocol": "PMMV5"
+        }
+      }
+    },
+    "ws-true-signatures": {
+      "utc_unix": 1795777884,
+      "wallet": "0xa31c0FFCeeef190D063045De2aefdAC78D7f6D14",
+      "responses": {
+        "q0": {
+          "exchangeable": true,
+          "rate": 1725.245846,
+          "minAmount": 0.000614,
+          "maxAmount": 1000.0,
+          "mmCode": "SCP-EOA-0xe319",
+          "makerWalletSignature_bytes": 0,
+          "payload_bytes": 0,
+          "makerAddress": "0xe6f87b8eae04944d5209d0ba290e7067050b728b",
+          "takerAddress": "0x8d90113a1e286a5ab3e496fbd1853f265e5913c6",
+          "makerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "takerAssetAddress": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "makerAssetAmount": "862622923",
+          "takerAssetAmount": "500000000000000000",
+          "feeFactor": 30,
+          "protocol": "PMMV5"
+        }
+      }
+    },
+    "ws-probe": {
+      "utc_unix": 1795777559,
+      "wallet": "0x0C24474c013e4C0A94d8317EcF687e0e27886B2e",
+      "responses": {
+        "q0": {
+          "exchangeable": true,
+          "rate": "1724.3331434598999294",
+          "minAmount": 1e-09,
+          "maxAmount": 2246.6402
+        },
+        "q1": {
+          "exchangeable": true,
+          "rate": 1724.0934,
+          "minAmount": 0.0012,
+          "maxAmount": 1000,
+          "mmCode": "AMMV2-Quoter",
+          "makerAddress": "0xe592427a0aece92de3edee1f18e0157c05861564",
+          "takerAddress": "0x41f8d14c9475444f30a80431c68cf24dc9a8369a",
+          "makerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "takerAssetAddress": "0x0000000000000000000000000000000000000000",
+          "makerAssetAmount": "86204669",
+          "takerAssetAmount": "50000000000000000",
+          "feeFactor": 30,
+          "protocol": "AMMV2"
+        },
+        "q3": {
+          "exchangeable": true,
+          "rate": 1724.0934,
+          "minAmount": 0.0012,
+          "maxAmount": 1000,
+          "mmCode": "AMMV2-Quoter",
+          "makerAddress": "0xe592427a0aece92de3edee1f18e0157c05861564",
+          "takerAddress": "0x41f8d14c9475444f30a80431c68cf24dc9a8369a",
+          "makerAssetAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+          "takerAssetAddress": "0x0000000000000000000000000000000000000000",
+          "makerAssetAmount": "86204669",
+          "takerAssetAmount": "50000000000000000",
+          "feeFactor": 30,
+          "protocol": "AMMV2"
+        },
+        "q2": {
+          "exchangeable": false,
+          "reason": "NO_DATA"
+        }
+      }
+    }
+  }
+}

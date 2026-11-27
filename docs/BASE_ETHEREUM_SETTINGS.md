@@ -1135,8 +1135,8 @@ DOCSWAP · `0x9904c6d92ed455292f88b58665bc95b7019343c2` вернул фабри�
 
 | Фабрика SafeSwap | Зарегистрировано пар | Пар с полным кругом | Выплаченных ног через V5 / Router02 |
 |---|---:|---:|---:|
-| original · `0x26023843814cff92b8d75311d64d1c032b8b29f2` | 8 | 5 | 20 / 20 |
-| v2 · `0x9cf2f35e3656d4c68474525d67d9459da3a000cd` | 9 | 6 | 24 / 24 |
+| original · `0x26023843814cff92b8d75311d64d1c032b8b29f2` | 8 | 5 | 23 / 23 |
+| v2 · `0x9cf2f35e3656d4c68474525d67d9459da3a000cd` | 9 | 6 | 26 / 26 |
 | proxy-1 · `0x84d02e4ef772a3915def2d0c3f5d9452f1376795` | 4 | 0 | исполнение не проверено |
 | proxy-2 · `0x7f09d4be6bbf4b0ff0c97ca5c486a166198aeaee` | 8 | 0 | исполнение не проверено |
 
@@ -1342,7 +1342,7 @@ SmarDex · фабрика перечислила 31 пар. Свои фабри�
 | `verse` | Verse | [200, 14](https://api.geckoterminal.com/api/v2/networks/eth/dexes/verse/pools?page=1) | `0x6e1fbeeaba87bae1100d95f8340dc27ad7c8427b` | `0xee3e9e46e34a27dc755a63e2849c9913ee1a06e2`, getPair(address,address) | профиль, см. параметры выше |
 | `pancakeswap_ethereum` | Pancakeswap (Ethereum) | [200, 20](https://api.geckoterminal.com/api/v2/networks/eth/dexes/pancakeswap_ethereum/pools?page=1) | `0x17c1ae82d99379240059940093762c5e4539aba5` | `0x1097053fd2ea711dad45caccc45eff7548fcb362`, getPair(address,address) | профиль, см. параметры выше |
 | `kyberswap_classic_ethereum` | Kyberswap Classic (Ethereum) | [200, 15](https://api.geckoterminal.com/api/v2/networks/eth/dexes/kyberswap_classic_ethereum/pools?page=1) | `0xd343d5dba2fba55eef58189619c05e33cab95ca1` | `0x833e4083b7ae46cea85695c4f7ed25cdad8886de`, сверка не подтверждена | профиль, см. параметры выше |
-| `safemoonswap_ethereum` | SafemoonSwap (Ethereum) | [200, 0](https://api.geckoterminal.com/api/v2/networks/eth/dexes/safemoonswap_ethereum/pools?page=1) | `0xf75e33964d36cc65531051715616a6f2ebbb9c10` | `0x26023843814cff92b8d75311d64d1c032b8b29f2`, CREATE2 и getPair в обоих порядках | Две фабрики с архивными выплатами. Ещё две зарегистрированные фабрики используют proxy, пустая страница снимка |
+| `safemoonswap_ethereum` | SafemoonSwap (Ethereum) | [200, 0](https://api.geckoterminal.com/api/v2/networks/eth/dexes/safemoonswap_ethereum/pools?page=1) | `0xf118c8f569bcdeff8ddc5a4c6232ceb447487e1c` | `0x26023843814cff92b8d75311d64d1c032b8b29f2`, CREATE2 и getPair в обоих порядках | Две фабрики с архивными выплатами. Ещё две зарегистрированные фабрики используют proxy, пустая страница снимка |
 | `balancer_ethereum` | Balancer V2 (Ethereum) | [200, 20](https://api.geckoterminal.com/api/v2/networks/eth/dexes/balancer_ethereum/pools?page=1) | `0x0b09dea16768f0799065c475be02919503cb2a35` | не установлены, сверка не подтверждена | профиль, см. параметры выше |
 | `solidlydex` | Solidly | [200, 18](https://api.geckoterminal.com/api/v2/networks/eth/dexes/solidlydex/pools?page=1) | `0x6d7824c5b5b385d1dd8d56c543a0be2eaf140974` | не установлены, сверка не подтверждена | профиль, см. параметры выше |
 | `antfarm-ethereum` | Antfarm (Ethereum) | [200, 5](https://api.geckoterminal.com/api/v2/networks/eth/dexes/antfarm-ethereum/pools?page=1) | `0x0969f3866dfbc20130dc9cd3735fb02ab00c66f9` | `0xe48aee124f9933661d4dd3eb265fa9e153e32cbe`, CREATE2 и getPair(token0,token1,fee) в обоих порядках | профиль, см. параметры выше |

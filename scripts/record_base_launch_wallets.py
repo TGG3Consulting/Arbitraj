@@ -62,19 +62,22 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             if checked["status"]!="0x1":return None,dict(input=str(qty),stage="allowance",call=allowance,result=checked)
             if int(checked["returnData"],16)<qty:
                 approvals.append(tx(x,"approve(address,uint256)",["address","uint256"],[spender,qty]))
-            if mode=="router":approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
-        def trade(minimum,deadline):
+            if mode in ("router","router_exact"):approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
+        def trade(minimum,deadline,settle_qty=None,pool_id=None):
+            signed_id=pool_id or keccak(encode([key_type],[k]))
             if mode=="wrapped":
-                return tx(wrapped_module[0],"execute(bytes32,address,address,uint256,uint256,uint256)",["bytes32","address","address","uint256","uint256","uint256"],[keccak(encode([KEY],[k])),x,y,qty,minimum,deadline])
+                return tx(wrapped_module[0],"execute(bytes32,address,address,uint256,uint256,uint256)",["bytes32","address","address","uint256","uint256","uint256"],[signed_id,x,y,qty,minimum,deadline])
             if mode in ("v5","wrapped_v5"):
-                step=(17,wrapped_module[0],x,y,10000,keccak(encode([KEY],[k]))) if mode=="wrapped_v5" else (
+                step=(17,wrapped_module[0],x,y,10000,signed_id) if mode=="wrapped_v5" else (
                     (21 if bin_pool else 20) if flux else 19,cfg["dex.vault"] if flux else manager,x,y,10000,encode([key_type],[k]))
                 return tx(EXEC,f"execute(address,uint256,address,uint256,uint256,{STEP}[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[x,qty,y,minimum,deadline,[step]])
             if flux:
                 params=encode([f"({key_type},bool,uint128,uint128,bytes)"],[(k,forward,qty,minimum,b"")])
             else:
                 params=encode([f"({KEY},bool,uint128,uint128,uint256,bytes)"],[(k,forward,qty,minimum,0,b"")])
-            body=encode(["bytes","bytes[]"],[bytes([0x1c if bin_pool else 6,12,15]),[params,encode(["address","uint256"],[x,qty]),encode(["address","uint256"],[y,minimum])]])
+            exact_debt=mode=="router_exact"
+            pay=encode(["address","uint256","bool"],[x,qty if settle_qty is None else settle_qty,True]) if exact_debt else encode(["address","uint256"],[x,qty])
+            body=encode(["bytes","bytes[]"],[bytes([0x1c if bin_pool else 6,11 if exact_debt else 12,15]),[params,pay,encode(["address","uint256"],[y,minimum])]])
             args=tx(router,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[b"\x10",[body],deadline])
             if x==ZERO:args["value"]=hex(qty)
             return args
@@ -90,6 +93,17 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
         good=[v["status"] for v in r[-5:-2]]==["0x0","0x0","0x1"] and paid==qty and received==gross
         if r[-5]["status"]=="0x1" or r[-4]["status"]=="0x1":raise ValueError("строгий минимум либо срок не сработал")
         measured=dict(input=str(qty),quoted=str(gross),paid=str(paid),net=str(received),gas=int(r[-3]["gasUsed"],16),stage="accepted" if good else "settlement",calls=calls,results=r)
+        if wrapped_module and good:
+            wrong=bytes(32)
+            invalid=trade(gross,end,pool_id=wrong)
+            failed=simulate(owner,prefix+approvals+[invalid],mode)[-1]
+            if failed["status"]!="0x0":raise ValueError("принят посторонний PoolId")
+            measured["wrong_pool"]={"call":invalid,"result":failed}
+        if mode=="router_exact" and good and qty>1:
+            mismatch=trade(gross,end,qty-1)
+            failed=simulate(owner,prefix+approvals+[mismatch],mode)[-1]
+            if failed["status"]!="0x0":raise ValueError("Vault принял непогашенный вход")
+            measured["wrong_settlement"]={"call":mismatch,"result":failed}
         if bin_pool and good:
             from record_omni_flux_bin_math import before
             measured["bin_before"]=before(k,"0x"+keccak(encode([key_type],[k])).hex(),prefix,mode,owner,forward,r[-3],tx,simulate)
@@ -112,6 +126,9 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
         wire_key=(*key[:-1],bytes.fromhex(key[-1][2:])) if flux else key
         for qty in row.get("sizes",sizes):
             modes=["wrapped","wrapped_v5"] if wrapped_module else (["router"] if ZERO in key[:2] else ["router","v5"])
+            if d.get("native_direct"):
+                if ZERO not in key[:2]:continue
+                modes=["router_exact"]
             for mode in modes:
                 prefix,buy=leg(wire_key,owner,[],mode,cash,asset,qty)
                 sell=leg(wire_key,owner,prefix,mode,asset,cash,int(buy["net"]))[1] if prefix else None

@@ -15,7 +15,7 @@ from record_woo_base import WETH, HOLDERS
 MODULE = "0x" + keccak(text="O1NativeAdapter Base archive settlement")[-20:].hex()
 
 
-def capture(endpoint, artifact):
+def capture(endpoint, artifact, combined=None):
     with gzip.open(DATA / "base_launch_hooks.json.gz") as stream:
         d = json.load(stream)
     at = d["selector"]
@@ -30,7 +30,11 @@ def capture(endpoint, artifact):
     roles = [d["manager"], WETH, current, *legacy]
     if len(roles) != 5:
         raise ValueError("изменилось поколение Standard Hook")
-    creation = dict(data="0x" + artifact["creation"] + encode(["address"] * 5, roles).hex(),
+    if combined:
+        bindings=json.loads((DATA/"omni_flux_roles.json").read_bytes())
+        if at!=bindings["selector"]:raise ValueError("другой блок Flux")
+        roles.extend(bindings["roles"][k] for k in ("vault","clPoolManager","binPoolManager"))
+    creation = dict(data="0x" + artifact["creation"] + encode(["address"] * len(roles), roles).hex(),
                     **{"from": HOLDERS[WETH]})
     def build_read(method):
         if method not in ("eth_call", "eth_estimateGas"):
@@ -58,7 +62,12 @@ def capture(endpoint, artifact):
     if bytes(blank) != template or values != {encode(["address"], [a]) for a in roles}:
         raise ValueError("код расходится со сборкой или привязками")
     gas = build_read("eth_estimateGas")
-    archive = replay("o1-launchpad", endpoint, d, (MODULE, code))
+    if combined in ("cl","bin"):
+        from record_omni_flux_wallets import record
+        archive=record(endpoint,combined=="bin",(MODULE,code))
+        archive["native_router"]=record(endpoint,combined=="bin",native_direct=True)
+    else:
+        archive = replay("o1-launchpad", endpoint, d, (MODULE, code))
     archive["module"] = dict(roles=roles, keccak="0x" + keccak(concrete).hex(), runtime=code, deploy_gas=int(gas, 16))
     archive["gas_price"] = rpc(endpoint, "eth_getBlockByHash", [at["blockHash"], False])["baseFeePerGas"]
     return archive
@@ -68,11 +77,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("artifact", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--combined",choices=["o1","cl","bin"])
     args = parser.parse_args()
     artifact = json.loads(args.artifact.read_bytes())
     for url in ENDPOINTS:
         try:
-            result = capture(url, artifact)
+            result = capture(url, artifact,args.combined)
             args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf8")
             break
         except (OSError, ValueError) as exc:

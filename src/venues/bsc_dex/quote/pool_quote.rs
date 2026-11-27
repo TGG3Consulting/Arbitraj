@@ -493,7 +493,7 @@ pub fn swap(
         // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт) — выход по лесенке
         // ответов квотера контракта на блоке (quote/pmm_ladder.rs): точно в точках, между ними — средняя цена линейно,
         // выше последней точки — неисполнимо. Только точный вход.
-        (PoolState::OraclePmm(d), PoolKind::OraclePmm) if super::market_selection::wallet_quoter(e.family.variant).is_some() => {
+        (PoolState::OraclePmm(d), PoolKind::OraclePmm) if super::uses_wallet_quoter(e.family.variant) => {
             let points=if zero_for_one==d.base_is_token0 {&d.ladder_base_in} else {&d.ladder_quote_in};
             let (amount_in,amount_out)=super::pmm_ladder::wallet_amounts(points,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in,amount_out,complete:true})

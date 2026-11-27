@@ -123,6 +123,66 @@ fn safeswap_pair_and_router_fees_are_independent() {
 }
 
 #[test]
+fn safeswap_preserves_public_ether_in_every_supported_funding_mode() {
+    let evidence = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/safeswap_ethereum_protected_wallets.json.gz"
+    ));
+    let markets = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/safeswap_ethereum_directory.json.gz"
+    ));
+    assert_eq!(evidence["selector"], markets["selector"]);
+    assert_eq!(evidence["state_root"], markets["state_root"]);
+    let mut covered = std::collections::BTreeSet::new();
+    for row in evidence["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["profile"] == "proxy-2")
+    {
+        let preserved = &row["preserved_public_ether"];
+        let stock = raw(&preserved["canonical_wei"])
+            + U256::from(preserved["injected_wei"].as_u64().unwrap());
+        assert_eq!(stock, U256::ONE);
+        let actual = &preserved["buy"]["exact"];
+        assert_eq!(actual["spent"], row["buy"]["exact"]["spent"]);
+        assert_eq!(actual["received"], row["buy"]["exact"]["received"]);
+        assert_eq!(actual["external_fee"], row["buy"]["exact"]["external_fee"]);
+        for key in ["before", "after"] {
+            assert_eq!(raw(actual[key].as_array().unwrap().last().unwrap()), stock);
+        }
+        assert_eq!(preserved["sell_refused"]["code"], 3);
+        assert!(
+            preserved["sell_refused"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("fee balance")
+        );
+        assert_eq!(
+            U256::from_str_radix(
+                preserved["sell_snapshot"][2]
+                    .as_str()
+                    .unwrap()
+                    .trim_start_matches("0x"),
+                16
+            )
+            .unwrap(),
+            stock
+        );
+        assert!(covered.insert((row["mode"].as_str().unwrap(), raw(&actual["received"]))));
+    }
+    for mode in ["separate", "module", "v5"] {
+        assert_eq!(
+            covered
+                .iter()
+                .filter(|(observed, _)| *observed == mode)
+                .count(),
+            2
+        );
+    }
+    assert_eq!(covered.len(), 6);
+}
+
+#[test]
 fn surge_wallet_receives_ether_after_tax_on_a_later_block() {
     let d = archive(include_bytes!(
         "data/first_run_dex_2026-11-26/surge_ethereum_wallets.json.gz"

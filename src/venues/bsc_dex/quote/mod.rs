@@ -158,6 +158,9 @@ pub(super) mod v2_execution;
 mod v2_fallback;
 mod registered_v3_pricing;
 mod market_selection;
+pub(super) fn uses_wallet_quoter(variant: super::pools::family_variant::Variant) -> bool {
+    market_selection::wallet_quoter(variant).is_some()
+}
 mod market_fees;
 pub(super) mod vault_pricing;
 pub mod v2_pair_calls;

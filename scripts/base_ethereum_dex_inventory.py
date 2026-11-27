@@ -144,7 +144,7 @@ def tables(network, snapshots, profiles):
         for row in cases:
             b, s = (row[side]["exact"] for side in ("buy", "sell"))
             out.append(f"| {safe_modes[row['mode']]} | {b['spent']} | {b['external_fee']} | {b['received']} | {s['received']} | {s['external_fee']} | {b['gas']} / {s['gas']} |")
-        out.extend(["", "Для автоматического пути кошельку требуется собственный модуль с совпадающими ролями. При продаже за WETH резерв платы модуля возвращается из выручки в том же обмене. [Вызовы, балансы и газ](../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_protected_wallets.json.gz)."])
+        out.extend(["", "При проверке двух размеров покупки каждым из трёх способов модуль сохранил начальный 1 wei в публичном роутере и выплатил столько же LINK. Все шесть обратных заявок при таком остатке получили отказ до расхода средств. Для автоматического пути кошельку требуется собственный модуль с совпадающими ролями. При продаже за WETH резерв платы модуля возвращается из выручки в том же обмене. [Вызовы, балансы и газ](../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_protected_wallets.json.gz)."])
         for market in safeswap["deployments"][3]["markets"]:
             for row in market.get("paid_public", []):
                 if paid(row,"buy") and paid(row,"sell"):

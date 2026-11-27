@@ -139,7 +139,7 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
-    if e.family.variant.wallet_ladder(){
+    if super::super::quote::uses_wallet_quoter(e.family.variant) {
         let event=if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
             super::super::exec::pendle_wallet::IAdapter::Swap::SIGNATURE_HASH
         } else { super::super::pools::abi_v2v3::IV2Pair::Swap::SIGNATURE_HASH };

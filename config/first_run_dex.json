@@ -5107,7 +5107,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "umia-base",
-    "source": "https://github.com/umiafinance/protocol/tree/3165f5a5bdaa23a83fbfd4894523e7ca84d53a14 · tests/data/first_run_dex_2026-11-26/umia_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_history.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_wallets.json.gz",
+    "source": "https://github.com/umiafinance/protocol/tree/3165f5a5bdaa23a83fbfd4894523e7ca84d53a14 · tests/data/first_run_dex_2026-11-26/umia_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_history.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_wallets.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_sources.json",
     "settings": {
       "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
       "dex.universal_router_version": "2.1.2",
@@ -5128,7 +5128,9 @@
         "registry@0x120dbcdd58bb787309573e29159fe6d37a1983f6@0x109ec408fa0cf10d61553eb0b40e4eb42b53ad8d717299d75ebb86430325ee17",
         "hook@0x128bedebaa9304db74726efba848a98e7fb53a80@0xd1d26be995d3e7a3146ff13df024ce3d969559f1b39b8019caf0e19480d2444a",
         "factory@0x8e6a262e4fdfac98565c08a2ae6fc6d16253ad1b@0xe1263bd8859c9a768c22aba6cd2dafa90df999a3bba9cc0f7a17a43e04eab1ec",
-        "component@0x7d53251e1e10fb95c0fd4ce263c6ccef2a55a353@0x8e7be959705888320b2040dbcd24d8b8bb7063c011eabe1980a896f2e415a3df"
+        "component@0x7d53251e1e10fb95c0fd4ce263c6ccef2a55a353@0x8e7be959705888320b2040dbcd24d8b8bb7063c011eabe1980a896f2e415a3df",
+        "hook@0xbea11b032bfb6d7e20b9fd975c0211ad81a03a80@0x5a1f46c2598ce0c59c19ce857ab56d4567ac1278ebc12fdf1e276f72767ffbe9",
+        "factory@0x588f74e5a9630a8e5998fd10ec7aa7de08300181@0x6eca65bc8dbaad875167e28e3ddb0ec21b763a7189637204895371a8c86e72c8"
       ]
     }
   }

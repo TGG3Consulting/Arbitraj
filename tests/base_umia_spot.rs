@@ -65,10 +65,7 @@ fn hub_spot_vaults_and_wallets_match_physical_currencies() {
             }
             for side in ["buy", "sell"] {
                 let leg = &case[side];
-                if leg["stage"] != "accepted" {
-                    assert_eq!(spot["id"], old["id"]);
-                    continue;
-                }
+                assert_eq!(leg["stage"], "accepted");
                 let results = leg["results"].as_array().unwrap();
                 let n = results.len();
                 assert_eq!(results[n - 5]["status"], "0x0");
@@ -90,6 +87,8 @@ fn hub_spot_vaults_and_wallets_match_physical_currencies() {
         }
     }
     assert_eq!(empty.len(), 2);
+    assert_eq!(accepted.len(), 48);
+    assert_eq!(accepted.iter().filter(|p| p.0 == old["id"]).count(), 16);
     for spot in current
         .iter()
         .filter(|p| p["id"].is_string() && p["liquidity"] != "0")

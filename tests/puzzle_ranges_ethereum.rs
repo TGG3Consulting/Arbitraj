@@ -342,3 +342,89 @@ fn both_wallet_paths_advance_real_and_virtual_reserves_at_their_native_precision
         assert_eq!(count, expected);
     }
 }
+#[test]
+fn three_swaps_in_one_physical_pool_match_each_vault_event_and_final_wallet_balance() {
+    use arb::venues::bsc_dex::math::ranges_sequence;
+    let dir = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
+    ));
+    let paths = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/ranges_ethereum_graph.json.gz"
+    ));
+    assert_eq!(dir["selector"], paths["selector"]);
+    let mut counts = [0usize; 2];
+    for r in paths["cases"].as_array().unwrap() {
+        let pool = dir["pools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["pool"] == r["pool"])
+            .unwrap();
+        let tokens = pool["tokens"].as_array().unwrap();
+        let index = |k: &str| tokens.iter().position(|t| *t == r[k]).unwrap();
+        let (cash, mid, dest) = (index("cash"), index("mid"), index("dest"));
+        let size = qty(&r["size"]);
+        for (k, route) in ["direct", "split"].iter().enumerate() {
+            let result = &r[*route];
+            let split = k == 1;
+            let mut state = market(pool);
+            let mut funds = vec![U256::ZERO; tokens.len()];
+            funds[cash] = size;
+            let hops = if split {
+                vec![
+                    (cash, mid, 4000u64),
+                    (mid, dest, 10000),
+                    (cash, dest, 10000),
+                ]
+            } else {
+                vec![(cash, dest, 10000)]
+            };
+            let completed = hops.into_iter().enumerate().all(|(pos, (i, j, bps))| {
+                let paid = funds[i] * U256::from(bps) / U256::from(10000u64);
+                let Some((received, next)) = ranges_sequence::advance(&state, i, j, paid) else {
+                    return false;
+                };
+                if received.is_zero() {
+                    return false;
+                }
+                if result["stage"] == "paid" {
+                    let event = &result["swaps"][pos];
+                    assert_eq!((&event[0], &event[1]), (&tokens[i], &tokens[j]));
+                    assert_eq!(qty(&event[3]), paid);
+                    assert_eq!(qty(&event[4]), received);
+                }
+                state = next;
+                funds[i] -= paid;
+                funds[j] += received;
+                true
+            });
+            assert_eq!(
+                completed,
+                result["stage"] == "paid",
+                "{} {} {}",
+                pool["pool"],
+                r["mid"],
+                route
+            );
+            if !completed {
+                continue;
+            }
+            assert_eq!(funds[cash], U256::ZERO);
+            assert_eq!(funds[mid], U256::ZERO);
+            assert_eq!(funds[dest], qty(&result["credit"]));
+            let close = &result["state"][1];
+            assert_eq!(state.balances, quantities(&close["raw"]));
+            let v = state.v3.as_ref().unwrap();
+            assert_eq!(v.live, quantities(&close["live"]));
+            let VaultV3Rule::PuzzleRanges {
+                virtual_balances, ..
+            } = &v.rule
+            else {
+                panic!()
+            };
+            assert_eq!(*virtual_balances, quantities(&close["virtual"]));
+            counts[k] += 1;
+        }
+    }
+    assert_eq!(counts, [30, 27]);
+}

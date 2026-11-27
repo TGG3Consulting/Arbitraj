@@ -1,4 +1,8 @@
 //! Сравнение штатного маршрута с отдельными исполнимыми формами по чистым суммам, газу и разрешениям.
+use super::super::{
+    ctx::Ctx,
+    pools::{family_variant::Variant, pendle_quotes, registry::Entry, safeswap_quotes},
+};
 use super::{
     Quoting, cpu, gas::GasPrice, quote_timing, quote_timing_outer::Outer, routing, v2_execution,
     v2_fallback, vista_pricing,
@@ -8,14 +12,12 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
 };
 use alloy_primitives::{Address, Bytes, U256};
-use super::super::{
-    ctx::Ctx,
-    pools::{family_variant::Variant, pendle_quotes, registry::Entry, safeswap_quotes},
-};
+
+type QuoteRequest = fn(&Ctx, &Entry, Address, U256) -> GatewayResult<(Address, Bytes)>;
 
 /// Обе части ABI выбираются вместе. Этот рынок получает цены от собственного контракта.
 pub(super) struct WalletQuoter {
-    pub request: fn(&Ctx, &Entry, Address, U256) -> GatewayResult<(Address, Bytes)>,
+    pub request: QuoteRequest,
     pub payout: fn(&[u8]) -> Option<U256>,
 }
 
@@ -111,5 +113,31 @@ impl Quoting {
             });
         }
         best
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::venues::bsc_dex::pools::families;
+
+    #[test]
+    fn wallet_quoters_keep_their_own_abi_including_signal_only_families() {
+        for (kind, words) in [
+            ("safeswap_trade_module", 2),
+            ("pendle_market", 4),
+            ("pendle_market_v5", 5),
+        ] {
+            let f = families::make(kind, kind).unwrap();
+            assert!(!super::super::v2_pair_quote::kind_on(f));
+            let quoter = wallet_quoter(f.variant).unwrap();
+            let mut reply = vec![0; 32 * words];
+            reply[31] = 1;
+            assert_eq!((quoter.payout)(&reply), Some(U256::ONE));
+            assert_eq!((quoter.payout)(&reply[..32]), None);
+        }
+        let fork = families::make("pair", "v2_fork_executor").unwrap();
+        assert!(wallet_quoter(fork.variant).is_none());
+        assert!(super::super::v2_pair_quote::kind_on(fork));
     }
 }

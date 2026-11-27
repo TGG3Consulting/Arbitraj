@@ -12,6 +12,7 @@ from record_base_slipstream_executor import EXEC, OWNER, ROOT, RUNTIME, STEP, rp
 from record_bitswap_ethereum import balance, read_batch, tx
 from record_ethereum_v2_factories import FUNDING, WETH
 from record_ranges_ethereum import AT, DYNAMIC, ENDPOINT, ROOT_HASH
+from record_safeswap_trade import MULTICALL
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz"
 USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7"
@@ -21,15 +22,20 @@ ZERO = "0x" + "00"*20
 ENABLE = "approve(address,uint256)"
 
 
-def packet(mode, roles, pool, source, dest, qty, end, minimum):
+def packet(mode, roles, pool, source, dest, qty, end, minimum, native=False):
     if mode == "v5":
         step = (23, roles["vault"], source, dest, 10000, encode(["address"], [pool]))
+        if native:
+            wrap = source == WETH
+            return tx(EXEC, "executeNative(bool,address,uint256,address,uint256,uint256,"+STEP+"[])",
+                      ["bool","address","uint256","address","uint256","uint256",STEP+"[]"],
+                      [wrap,source,qty,dest,minimum,end,[step]], qty if wrap else 0)
         return tx(EXEC, "execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                   ["address","uint256","address","uint256","uint256",STEP+"[]"],
                   [source,qty,dest,minimum,end,[step]])
     return tx(roles["router"], "swapSingleTokenExactIn(address,address,address,uint256,uint256,uint256,bool,bytes)",
               ["address","address","address","uint256","uint256","uint256","bool","bytes"],
-              [pool, source, dest, qty, minimum, end, False, b""])
+              [pool, source, dest, qty, minimum, end, native, b""], qty if native and source == WETH else 0)
 
 
 def allow(mode, roles, token, qty, end):
@@ -48,7 +54,7 @@ def buy_cash(cash, qty, end, eth_budget=10**17):
               ["uint256","address[]","address","uint256"], [qty,[WETH,cash],OWNER,end], eth_budget)
 
 
-def run(endpoint, number, stress=False):
+def run(endpoint, number, stress=False, native=False):
     directory = json.loads(gzip.decompress(DATA.read_bytes()))
     roles = directory["roles"]
     chain, head, *codes = read_batch(endpoint,[("eth_chainId",[]),("eth_getBlockByHash",[AT["blockHash"],False]),
@@ -63,15 +69,21 @@ def run(endpoint, number, stress=False):
     def simulate(calls):
         return simulate_block(endpoint,AT,env,calls)
     def verify(mode, pool, source, target, qty, prefix):
-        checks = [balance(source,OWNER),balance(target,OWNER),balance(source,EXEC),balance(target,EXEC)]
-        approval = allow(mode,roles,source,qty,deadline)
+        def exposure(token, account):
+            if native and token==WETH:
+                return tx(MULTICALL,"getEthBalance(address)",["address"],[account])
+            return balance(token,account)
+        checks = [exposure(source,OWNER),exposure(target,OWNER),exposure(source,EXEC),exposure(target,EXEC)]
+        if native:
+            checks.extend([balance(WETH,OWNER),balance(WETH,EXEC)])
+        approval = [] if native and source==WETH else allow(mode,roles,source,qty,deadline)
         probe=tx(roles["router"],"querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)",
                  ["address","address","address","uint256","address","bytes"],[pool,source,target,qty,OWNER,b""])
         probe["from"]=ZERO
         # A successful Vault.quote mutates the simulated pool. Keep it out of the payment frame.
         quoted=simulate([*prefix,*approval,probe])[-1]
         def attempt(floor, end, capture_state=False):
-            op=packet(mode,roles,pool,source,target,qty,end,floor)
+            op=packet(mode,roles,pool,source,target,qty,end,floor,native)
             state = [tx(pool,"getRangePoolDynamicData()")] if capture_state else []
             values=simulate([*prefix,*approval,*state,*checks,op,*checks,*state])
             prep=values[:len(prefix)+len(approval)]
@@ -86,10 +98,11 @@ def run(endpoint, number, stress=False):
                     return {"raw":raw,"live":live,"virtual":virtual}
                 changes = [snapshot(rest[0]),snapshot(rest[-1])]
                 rest=rest[1:-1]
-            if any(x["status"]!="0x1" or len(x["returnData"])!=66 for x in [*rest[:4],*rest[5:]]):
+            n=len(checks)
+            if any(x["status"]!="0x1" or len(x["returnData"])!=66 for x in [*rest[:n],*rest[n+1:]]):
                 raise ValueError(("balance read",pool,source,target))
-            b,a=([int(x["returnData"],16) for x in z] for z in (rest[:4],rest[5:]))
-            return (op,rest[4],b,a,quoted,changes),None
+            b,a=([int(x["returnData"],16) for x in z] for z in (rest[:n],rest[n+1:]))
+            return (op,rest[n],b,a,quoted,changes),None
         trial,err=attempt(1,deadline)
         if err:return None,err
         op,result,b,a,quote,_=trial
@@ -114,7 +127,7 @@ def run(endpoint, number, stress=False):
         if (amount_in,amount_out)!=(paid,credit):raise ValueError(("Vault and actual wallet differ",pool,source,target))
         return [*prefix,*approval,checked[0]],dict(stage="paid",debit=paid,credit=credit,
              state=checked[5],swap_fee_rate=rate,swap_fee_raw=charge,
-             signed={k:checked[0][k] for k in ("from","to","data")},
+             signed={k:checked[0][k] for k in ("from","to","data","value")},
              logs=[{"address":l["address"],"topics":l["topics"],"data":l["data"]} for l in result["logs"]],
              quote=int(quote["returnData"],16) if quote["status"]=="0x1" else quote.get("error"),
              gas=int(result["gasUsed"],16),min_plus_one="reverted",expired="reverted")
@@ -123,7 +136,7 @@ def run(endpoint, number, stress=False):
     for idx,p in enumerate(directory["pools"]):
         if idx%4!=number or not p["initialized"] or p["paused"] or p["recovery"] or p["hook_stopped"]:continue
         cash=next((t for t in SIZES if t in p["tokens"] and p["raw"][p["tokens"].index(t)]),None)
-        if cash:
+        if cash and (not native or cash==WETH):
             plans.extend((p["pool"],cash,t) for t,q in zip(p["tokens"],p["raw"]) if t!=cash and q>0)
     def one(plan):
         pool,cash,token=plan
@@ -136,9 +149,10 @@ def run(endpoint, number, stress=False):
             sizes=sorted({min(budget,max(sizes[-1],raw*n)) for n in (1,5)})
         for qty in sizes:
             for mode in ("router","v5"):
-                prefix,buy=verify(mode,pool,cash,token,qty,[buy_cash(cash,qty,deadline,8*10**18 if stress else 10**17)])
+                opening=[] if native else [buy_cash(cash,qty,deadline,8*10**18 if stress else 10**17)]
+                prefix,buy=verify(mode,pool,cash,token,qty,opening)
                 row=dict(pool=pool,cash=cash,token=token,mode=mode,size=qty,buy=buy)
-                if prefix:
+                if prefix is not None:
                     _,row["sell"]=verify(mode,pool,token,cash,buy["credit"],prefix)
                 records.append(row)
         return records
@@ -154,10 +168,11 @@ if __name__ == "__main__":
     p.add_argument("out",type=Path)
     p.add_argument("shard",type=int,choices=range(4))
     p.add_argument("--stress",action="store_true")
+    p.add_argument("--native",action="store_true")
     args=p.parse_args()
     for endpoint in [ENDPOINT,"https://ethereum-rpc.publicnode.com","https://mainnet.gateway.tenderly.co"]:
         try:
-            evidence=run(endpoint,args.shard,args.stress)
+            evidence=run(endpoint,args.shard,args.stress,args.native)
             break
         except (OSError, RuntimeError, KeyError, ValueError) as exc:
             if isinstance(exc, ValueError) and isinstance(exc.args[0],tuple): raise

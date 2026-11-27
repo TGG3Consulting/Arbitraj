@@ -38,7 +38,7 @@ use super::v2_pair_sim::{Sim, judge};
 
 /// Вид без своего роутера: протокол V2 и нет своего пути исполнения (v2_fork_executor). Ошибок нет.
 pub fn kind_on(f: &Family) -> bool {
-    super::market_selection::wallet_quoter(f.variant).is_none() && !f.variant.umbrae() && f.proto == Proto::V2 && (!f.tradable || f.variant.dual_v2_execution() || f.variant == super::super::pools::family_variant::Variant::OmniV2) && !f.variant.frax_twamm()
+    !super::uses_wallet_quoter(f.variant) && !f.variant.umbrae() && f.proto == Proto::V2 && (!f.tradable || f.variant.dual_v2_execution() || f.variant == super::super::pools::family_variant::Variant::OmniV2) && !f.variant.frax_twamm()
         && !matches!(f.variant,super::super::pools::family_variant::Variant::Antfarm | super::super::pools::family_variant::Variant::Surge | super::super::pools::family_variant::Variant::Dagrow | super::super::pools::family_variant::Variant::Temple | super::super::pools::family_variant::Variant::Carbon | super::super::pools::family_variant::Variant::MintClub | super::super::pools::family_variant::Variant::Virtuals | super::super::pools::family_variant::Variant::BunnySwap | super::super::pools::family_variant::Variant::Memebox | super::super::pools::family_variant::Variant::Oasis | super::super::pools::family_variant::Variant::EtherVista)
 }
 

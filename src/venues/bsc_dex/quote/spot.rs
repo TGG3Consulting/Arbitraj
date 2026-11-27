@@ -32,6 +32,8 @@ fn q96() -> U256 {
 pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
     let coin0 = e.coin == e.pool.token0;
     match &e.pool.state {
+        // На пробе продажи нужен вход монет для обеспеченного выхода встречной валюты.
+        PoolState::Empire(s) => s.quote(coin0, false, amount).map(|swap| swap.amount_in),
         PoolState::UmbraeDamm(s) => {
             let i = s.tokens.iter().position(|&t| t == e.coin)?;
             mul_div(amount, s.reserves[i], s.reserves[1-i])

@@ -648,6 +648,10 @@ jobs:
           python scripts/record_mooniswap_wallet.py "${MATRIX_MARKET#moon-wallet-}" "$RUNNER_TEMP/moon/MooniswapWallet.json" "$RUNNER_TEMP/market.json"
         env:
           MATRIX_MARKET: ${{ matrix.market }}
+      - if: startsWith(matrix.market, 'defiplaza-')
+        run: python scripts/record_defiplaza.py "${MATRIX_MARKET#defiplaza-}" "$RUNNER_TEMP/market.json"
+        env:
+          MATRIX_MARKET: ${{ matrix.market }}
       - if: startsWith(matrix.market, 'mooniswap-')
         run: python scripts/record_mooniswap.py "${MATRIX_MARKET#mooniswap-}" "$RUNNER_TEMP/market.json"
         env:

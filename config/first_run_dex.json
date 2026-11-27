@@ -1653,7 +1653,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "alien-base-v3",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0x0fd83557b2be93617c9c1c1b6fd549401c74558c · https://sourcify.dev/server/v2/contract/8453/0x7682d268f34e86accadff56db9668eb6a449ff07 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x0fd83557b2be93617c9c1c1b6fd549401c74558c · https://sourcify.dev/server/v2/contract/8453/0x7682d268f34e86accadff56db9668eb6a449ff07 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json · tests/data/first_run_dex_2026-11-26/alien_fee_comparison_base.json.gz",
     "settings": {
       "dex.kind": "v3_fork",
       "dex.factory": "0x0fd83557b2be93617c9c1c1b6fd549401c74558c",
@@ -1664,6 +1664,7 @@
         "200",
         "300",
         "400",
+        "750",
         "3000",
         "10000"
       ]

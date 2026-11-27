@@ -1901,6 +1901,44 @@ def tables(network, snapshots, profiles):
     return out
 
 
+def alien_alternative_fees():
+    """Сопоставляет платы по одинаковой исходной заявке через независимые зарегистрированные пулы."""
+    directory = Path("tests/data/first_run_dex_2026-11-26")
+    with gzip.open(directory / "alien_fee_comparison_base.json.gz", "rt") as stream:
+        replay = json.load(stream)
+    with gzip.open(directory / "alien_fee_discovery_base.json.gz", "rt") as stream:
+        probe = json.load(stream)["mixed_fee_probe"]
+    found = probe["found"]
+    totals = sum(map(len, found.values()))
+    old = [len(set(pools) - {"750"}) for pools in found.values()]
+    out = ["### Alien Base V3 · WETH/USDC", "",
+           f"На блоке {replay['block']} проверены 45 сочетаний десяти токенов. Фабрика вернула {totals} физических пулов "
+           f"для {len(found)} пар. Прежние шесть ставок охватывали {sum(old)} пулов для {sum(n > 0 for n in old)} пар. "
+           "Ставка 750 со spacing 15 добавила WETH/AERO и WETH/USDT и ещё четыре альтернативы для уже обнаруживаемых пар. "
+           "Событие PoolCreated и индексатор дают отдельные пути обнаружения. Адреса WETH/AERO и WETH/USDC найдены "
+           "прямым запросом GeckoTerminal 27 ноября. Попадание этих пулов в выдачу по токену у работающего бота 25 ноября неизвестно. "
+           "[Канонические вызовы и ответы индексатора](../tests/data/first_run_dex_2026-11-26/alien_fee_discovery_base.json.gz).", "",
+           "V5 обменял одинаковые суммы между WETH и нативным контрактом USDC Base. Входы USDC заранее получены на отдельной паре Uniswap V3. "
+           "В каждой ячейке ниже приведены чистое зачисление кошельку в минимальных единицах выходного токена и газ вызова swap. "
+           "Каждая оплаченная нога проверена с точным минимумом, минимумом на единицу выше и истекшим сроком.", "",
+           "| Вход | Количество в минимальных единицах | Ставка 200 | Ставка 400 | Ставка 750 |", "|---|---:|---:|---:|---:|"]
+    fills = {}
+    for market in replay["markets"]:
+        for attempt in market.get("attempts", []):
+            leg = attempt.get("buy" if attempt["source"] == "WETH" else "sell")
+            if leg:
+                exact = leg["exact"]
+                fills.setdefault((attempt["source"], int(attempt["size"])), {})[market["tier"]] = (
+                    f"{exact['received']} / {int(exact['gas'], 16)}")
+    for (asset, size), tiers in sorted(fills.items()):
+        out.append(f"| {asset} | {size} | {tiers[200]} | {tiers[400]} | {tiers[750]} |")
+    return out + ["", "Пулы 3000 и 10000 отклонили все четыре исходных размера. Ставка 750 дала наибольший выход в четырёх сравнениях. "
+                  "Для покупки WETH за 1 USDC она потребовала на 2052 единицы газа больше ставки 400. Расходы на разрешение, газ в валюте сети, "
+                  "L1 и перевод результата в USDT учитываются отдельно при выборе исполнимого маршрута. "
+                  "[Квитанции, расходы и границы](../tests/data/first_run_dex_2026-11-26/alien_fee_comparison_base.json.gz) · "
+                  "[Архив GitHub Actions](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45979186408).", ""]
+
+
 def stabull_markets():
     root = Path("tests/data/first_run_dex_2026-11-26")
     def capture(name):
@@ -1997,6 +2035,7 @@ def main():
         lines.append("")
     from base_raindex_markets import raindex_markets
     lines.extend(raindex_markets())
+    lines.extend(alien_alternative_fees())
     lines.extend(stabull_markets())
     lines.extend(hashflow_market_observation())
     doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")

@@ -141,3 +141,7 @@ mod tests {
 #[cfg(test)]
 #[path = "prop_receipt_tests.rs"]
 mod prop_receipt_tests;
+
+#[cfg(test)]
+#[path = "prop_fact_tests.rs"]
+mod prop_fact_tests;

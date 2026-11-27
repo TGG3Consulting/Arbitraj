@@ -1,5 +1,6 @@
 //! Исходные поручения и независимые денежные события Ethereum, включая фактически выбранный Uniswap.
 use super::*;
+use crate::venues::bsc_dex::check::simulate::SimLog;
 use flate2::read::GzDecoder;
 use serde_json::Value;
 fn read(bytes: &[u8]) -> Value {

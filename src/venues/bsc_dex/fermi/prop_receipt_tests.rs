@@ -1,4 +1,4 @@
-//! Funded simulations from the original Kaliber and Taurus builder frames.
+//! Архивные выплаты Kaliber и Taurus. Восстановление сверяет события, подпись и пределы поручения.
 use super::{fill, send};
 use crate::venues::bsc_dex::{
     exec::{carbon_binding::Code, prop_wallet},
@@ -23,8 +23,8 @@ fn num(v: &Value) -> U256 {
     .unwrap()
 }
 
-#[test]
-fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot() {
+#[tokio::test]
+async fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot() {
     let file = |bytes: &[u8]| -> Value { serde_json::from_reader(GzDecoder::new(bytes)).unwrap() };
     let frames: Value = serde_json::from_str(include_str!(
         "../../../../tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json"
@@ -93,7 +93,7 @@ fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot() {
                             venue: addr(&plan["addresses"][1]),
                             vault: addr(&plan["addresses"][2]),
                             fallback: addr(&roles["rows"][0]["fallback"]),
-                            // Log settlement is independent of the RPC proxy check performed at the fill block.
+                            // Привязка прокси к блоку проверяется отдельно от денежных событий.
                             code: Code {
                                 shell: plan["shells"][0].as_str().unwrap().parse().unwrap(),
                                 implementation: Address::ZERO,
@@ -124,17 +124,26 @@ fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot() {
                     (input, output, spent, U256::ONE)
                 );
                 assert_eq!(fill(&proof, &r, router), Some((spent, received)));
-                // Exact-input buy with one unit promised credits every unit actually paid.
+                // При покупке за заданный расход подписана минимальная выплата в один атом.
                 proof.amount = -I256::ONE;
                 proof.limit = spent;
                 assert_eq!(fill(&proof, &r, router), Some((spent, received)));
+                if output == alloy_primitives::address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2") {
+                    super::prop_fact_tests::checked_buy(&proof, &r, router, spent, received);
+                }
+                if builder == "Titan"
+                    && input == alloy_primitives::address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")
+                    && output == alloy_primitives::address!("dac17f958d2ee523a2206206994597c13d831ec7")
+                {
+                    super::prop_fact_tests::through_core(&proof, &r, router, &row["logs"][0]).await;
+                }
                 proof.limit = spent - U256::ONE;
                 assert_eq!(fill(&proof, &r, router), None);
                 proof.limit = spent;
                 let mut duplicate = r.clone();
                 duplicate.logs.extend(r.logs.clone());
                 assert_eq!(fill(&proof, &duplicate, router), None);
-                // Remove each physical hop separately, including cash-to-market and market-to-owner.
+                // Удаляем по одному переводу, включая выплаты через кассу и через рынок.
                 for i in 0..r.logs.len() {
                     if r.logs[i].address() != output
                         || r.logs[i].topic0()

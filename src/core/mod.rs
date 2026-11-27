@@ -501,3 +501,5 @@ pub use engine::Core;
 
 #[cfg(test)]
 mod test_core;
+#[cfg(test)]
+pub(crate) mod prop_slot_filled_qty_tests;

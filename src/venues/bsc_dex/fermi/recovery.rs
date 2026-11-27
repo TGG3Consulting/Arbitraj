@@ -1,77 +1,35 @@
 //! Восстанавливает исходную транзакцию после ответа строителя или перезапуска. Сверяет исходный счёт, хеш, блок, calldata и квитанцию.
-use super::super::{exec, num, parts::Parts, resolve, send, wallet};
+//! На уже включённом обмене передаёт проверенные денежные события в учёт сделки.
+#[path = "recovery_order.rs"]
+mod order;
+#[cfg(test)]
+pub(super) use order::{amounts, spot};
+#[path = "recovery_origin.rs"]
+mod origin;
+use origin::{Header, Inclusion, Original, outer_matches, unknown};
+use super::super::{exec, parts::Parts, resolve, send, wallet};
 use super::{
     execute::{Marker, identity, same_request},
     missed::missed,
     receipt::fill,
 };
 use crate::{
-    core::types::{Fee, SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome},
+    core::types::{SendMethod, TradeRequest, TradeResult, TxOutcome},
     gateway::{
         errors::{ErrorCode, GatewayResult},
         pending::PendingRef,
         settlement_intent as intent,
     },
 };
-use alloy::primitives::{Address, B256, Bytes, U64, U256};
-use chrono::Utc;
-use serde::Deserialize;
+use alloy::primitives::U64;
 use serde_json::json;
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Inclusion {
-    from: Address,
-    to: Address,
-    #[serde(flatten)]
-    receipt: send::receipt::Receipt,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Header {
-    hash: B256,
-    parent_hash: B256,
-    timestamp: U64,
-    number: U64,
-}
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Original {
-    hash: B256,
-    block_hash: B256,
-    from: Address,
-    to: Address,
-    nonce: U64,
-    input: Bytes,
-    value: U256,
-}
-
-fn outer_matches(
-    account: &str,
-    bound: Option<&str>,
-    key: &str,
-    active: Option<&str>,
-    leg: B256,
-) -> bool {
-    !account.is_empty()
-        && !key.is_empty()
-        && bound == Some(account)
-        && active.is_none_or(|value| value == key)
-        && alloy_primitives::keccak256(key.as_bytes()) == leg
-}
-
 pub(in crate::venues::bsc_dex) async fn reconcile(
     p: &Parts,
     req: TradeRequest,
     marker: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
     let ctx = &p.ctx;
-    let unknown = || {
-        ctx.err(
-            ErrorCode::OutcomeUnknown,
-            "Fermi: исход по сохранённой подписи ещё не подтверждён",
-        )
-        .pending(marker.clone())
-    };
+    let unknown = || unknown(p, marker);
     let parse: Marker =
         serde_json::from_value(marker.parse.clone().ok_or_else(unknown)?).map_err(|_| unknown())?;
     let (hash, nonce) = resolve::keys(p, marker)?;
@@ -171,7 +129,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         )
         .await
         .map_err(|_| unknown())?;
-        // On a revert, a prior successful transaction could already have consumed this intent.
+        // Если транзакция откатилась, то поручение могла ранее исполнить другая транзакция.
         if filled != ok {
             return Err(unknown());
         }
@@ -236,128 +194,9 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
             .map_err(|_| unknown())?;
     }
     let (spent, received) = fill(o, &r.receipt, router).ok_or_else(unknown)?;
-    let (coins, cash) = if req.side == Side::Buy {
-        (received, spent)
-    } else {
-        (spent, received)
-    };
-    let coins = num::to_decimal(coins, parse.decs.0).ok_or_else(unknown)?;
-    let gross = num::to_decimal(cash, parse.decs.1).ok_or_else(unknown)?;
-    // A bounded exact-input purchase can return extra coins at the very same approved cash spend.
-    // The whole chain fill is credited to the deal. Fermi and every sale still require exact quantity.
-    if coins != req.qty && !(o.prop.is_some() && req.side == Side::Buy && coins > req.qty) {
-        return Err(unknown());
-    }
-    let fee = chain.gas_bnb.ok_or_else(unknown)?;
-    if let Some(intent::Outcome::Order(out)) = &entry.result {
-        if out.trade.filled_qty != coins
-            || out.gross_quote != gross
-            || out.trade.venue_ref != hash.to_string()
-            || out.trade.chain.as_ref().is_none_or(|c| {
-                (c.hash, c.nonce, c.block, c.gas_used, c.gas_bnb)
-                    != (
-                        chain.hash,
-                        chain.nonce,
-                        chain.block,
-                        chain.gas_used,
-                        chain.gas_bnb,
-                    )
-            })
-        {
-            return Err(unknown());
-        }
-        resolve::release_if_ours(p, hash, Some(nonce), false).await;
-        intent::note_gross(Some(gross));
-        return Ok(Some(out.trade.clone()));
-    }
-    let trade = TradeResult {
-        status: TradeStatus::Filled,
-        filled_qty: coins,
-        avg_price: gross.checked_div(coins).ok_or_else(unknown)?,
-        fees: Fee::single(fee, "ETH"),
-        venue_ref: hash.to_string(),
-        chain: Some(chain),
-        finished_at: Utc::now(),
-        executor: Some(match &o.prop {
-            Some(q) => format!("PropAMM {} ({})", q.terms.venue, o.builder),
-            None => format!("FermiSwap ({})", o.builder),
-        }),
-        request: req,
-    };
-    let spot = intent::SpotFill {
-        trade: trade.clone(),
-        gross_quote: gross,
-    };
-    intent::confirm(
-        db,
-        &parse.key,
-        &entry,
-        intent::Outcome::Order(Box::new(spot)),
-    )
-    .await
-    .map_err(|_| unknown())?;
-    resolve::release_if_ours(p, hash, Some(nonce), false).await;
-    intent::note_gross(Some(gross));
-    Ok(Some(trade))
+    order::finish(p, req, marker, &parse, &entry, chain, (spent, received)).await
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn recovery_reuses_only_the_original_mixed_wallet_and_leg_even_outside_an_active_scope() {
-        let leg = alloy_primitives::keccak256("deal-a/coin-buy");
-        assert!(outer_matches(
-            "w2",
-            Some("w2"),
-            "deal-a/coin-buy",
-            None,
-            leg
-        ));
-        assert!(outer_matches(
-            "w2",
-            Some("w2"),
-            "deal-a/coin-buy",
-            Some("deal-a/coin-buy"),
-            leg
-        ));
-        assert!(!outer_matches(
-            "w2",
-            Some("w3"),
-            "deal-a/coin-buy",
-            None,
-            leg
-        ));
-        assert!(!outer_matches(
-            "w2",
-            Some("w2"),
-            "deal-a/coin-buy",
-            Some("deal-b/coin-buy"),
-            leg
-        ));
-        assert!(!outer_matches(
-            "w2",
-            Some("w2"),
-            "deal-a/cash-sell",
-            None,
-            leg
-        ));
-    }
-
-    #[test]
-    fn rpc_inclusion_preserves_identity_for_canonical_position_checks() {
-        let tx = B256::with_last_byte(1);
-        let block = B256::with_last_byte(2);
-        let raw = json!({"from":Address::ZERO,"to":Address::ZERO,"transactionHash":tx,"blockHash":block,"transactionIndex":"0x3",
-            "blockNumber":"0x5","gasUsed":"0x5208","effectiveGasPrice":"0x1","status":"0x1","logs":[]});
-        let r: Inclusion = serde_json::from_value(raw).unwrap();
-        assert_eq!(
-            (
-                r.receipt.transaction_hash,
-                r.receipt.block_hash,
-                r.receipt.transaction_index
-            ),
-            (Some(tx), Some(block), Some(U64::from(3)))
-        );
-    }
-}
+#[path = "recovery_tests.rs"]
+mod tests;

@@ -4,7 +4,7 @@ use super::{Profile, levels::Depth};
 use crate::{
     gateway::{
         events::{MarketEvent, SourceId},
-        http,
+        market_http,
     },
     venues::bsc_dex::{hashflow::availability, parts::Parts},
 };
@@ -102,7 +102,8 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             let mut url = super::client::url(&p.ctx, "orderbook").ok()?;
             url.query_pairs_mut().append_pair("chain", &profile.slug);
             let r = p.ctx.http.get(url);
-            let (status, data) = http::exchange(r, p.ctx.limits().ok()?).await.ok()?;
+            let (status, data) = market_http::exchange(super::HTTP_SERVICE, r, p.ctx.limits().ok()?)
+                .await.ok()?;
             if !status.is_success() {
                 return None;
             }

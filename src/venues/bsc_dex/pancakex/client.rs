@@ -1,7 +1,10 @@
 //! Два отдельных запроса PCSX. Запрос цены никогда не публикует подпись или заявку.
 use super::{Request, Terms, profile::Profile};
 use crate::{
-    gateway::http::{self, Limits},
+    gateway::{
+        http::{self, Limits},
+        market_http,
+    },
     venues::bsc_dex::{ctx::Ctx, ryze},
 };
 use alloy_primitives::{Address, B256, Bytes, U256};
@@ -88,7 +91,8 @@ pub async fn quote(ctx: &Ctx, base: &str, query: Query, slippage_bps: u64) -> Op
     let path = url(base, "order-price/get-price")?;
     let mut lim = ctx.limits().ok()?;
     lim.max_bytes = lim.max_bytes.min(131072);
-    let (status, v) = http::exchange(
+    let (status, v) = market_http::exchange(
+        "pancakex",
         client()?
             .post(path)
             .json(&query.body(ctx.chain_id()?, slippage_bps)),

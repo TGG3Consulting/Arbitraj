@@ -11,7 +11,7 @@ use super::{
 };
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    http,
+    market_http,
 };
 use crate::venues::bsc_dex::{ctx::Ctx, node::rpc};
 use alloy::{sol, sol_types::SolCall};
@@ -69,14 +69,13 @@ pub(super) async fn canonical<C: SolCall>(
 }
 
 pub(super) async fn registry(ctx: &Ctx) -> GatewayResult<Vec<Market>> {
-    let (status, body) = http::exchange(ctx.http.get(REGISTRY), ctx.limits()?)
+    let limits = ctx.limits()?;
+    let (status, body) = market_http::exchange("hanji", ctx.http.get(REGISTRY), limits)
         .await
-        .map_err(|_| {
-            ctx.err(
-                ErrorCode::Unreachable,
-                "Hanji: не получен публичный реестр рынков",
-            )
-        })?;
+        .map_err(|e| ctx.err(
+            if e.held() { ErrorCode::RateLimited } else { ErrorCode::Unreachable },
+            e.description(&limits),
+        ))?;
     if !status.is_success() {
         return Err(ctx.err(
             ErrorCode::BadResponse,

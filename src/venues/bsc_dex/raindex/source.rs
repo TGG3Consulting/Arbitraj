@@ -1,13 +1,15 @@
 //! Источник только перечисляет orderBytes. Торговые поля подтверждает сама книга вызовом quote от модуля.
 use super::{profile::Source, wire::Order, *};
-use crate::gateway::http;
+use crate::gateway::market_http;
 use alloy::sol_types::SolEvent;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
 type Raw = HashMap<B256, Bytes>;
 const QUERY: &str = "query($h:Bytes!,$id:Bytes!){orders(first:250,orderBy:id,orderDirection:asc,where:{active:true,id_gt:$id},block:{hash:$h}){id orderHash orderBytes raindex{id}}}";
 async fn page(ctx: &Ctx, r: reqwest::RequestBuilder) -> Option<Value> {
-    let (status, body) = http::exchange(r, ctx.limits().ok()?).await.ok()?;
+    let (status, body) = market_http::exchange("raindex", r, ctx.limits().ok()?)
+        .await
+        .ok()?;
     status
         .is_success()
         .then(|| serde_json::from_str(&body).ok())

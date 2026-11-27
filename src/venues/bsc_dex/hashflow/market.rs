@@ -2,7 +2,7 @@
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
 use super::{Ctx, wire::Chain};
 use super::model::Request;
-use crate::gateway::http;
+use crate::gateway::market_http;
 use alloy_primitives::Address;
 use reqwest::{
     RequestBuilder,
@@ -21,12 +21,10 @@ pub(super) async fn read<T: DeserializeOwned>(ctx: &Ctx, req: RequestBuilder) ->
     let mut header =
         HeaderValue::from_str(key.as_str()).map_err(|_| "Неверный формат ключа Hashflow")?;
     header.set_sensitive(true);
-    let (status, body) = http::exchange(
-        req.header(AUTHORIZATION, header),
-        ctx.limits().map_err(|e| e.message)?,
-    )
-    .await
-    .map_err(|_| "Нет полного ответа Hashflow")?;
+    let limits = ctx.limits().map_err(|e| e.message)?;
+    let (status, body) = market_http::exchange("hashflow", req.header(AUTHORIZATION, header), limits)
+        .await
+        .map_err(|e| e.description(&limits))?;
     if !status.is_success() {
         return Err(format!("Hashflow вернул HTTP {status}"));
     }

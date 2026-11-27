@@ -42,6 +42,7 @@ mod keep_last_deliver;
 mod keep_last_kinds;
 mod keep_last_state;
 pub mod log_clock;
+pub(crate) mod market_http;
 pub mod lost_log;
 pub mod network_hint;
 pub mod own_nets;

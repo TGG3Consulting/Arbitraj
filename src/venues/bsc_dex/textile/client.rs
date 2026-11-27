@@ -3,7 +3,7 @@ use super::{profile::Profile, wire};
 use crate::{
     gateway::{
         errors::{ErrorCode, GatewayError, GatewayResult},
-        http,
+        market_http,
     },
     venues::bsc_dex::{ctx::Ctx, wallet},
 };
@@ -113,9 +113,16 @@ async fn post(ctx: &Ctx, firm: bool, q: &Query, profile: Option<&Profile>) -> Ga
     if let Some(value) = auth {
         req = req.header(reqwest::header::AUTHORIZATION, value);
     }
-    let (status, body) = http::exchange(req, ctx.limits()?)
+    let limits = ctx.limits()?;
+    let (status, body) = market_http::exchange("textile", req, limits)
         .await
-        .map_err(|_| fail(ctx, "Нет полного ответа Textile. Статус запроса неизвестен"))?;
+        .map_err(|err| {
+            if err.held() {
+                fail(ctx, &format!("Textile: {}", err.description(&limits)))
+            } else {
+                fail(ctx, "Нет полного ответа Textile. Статус запроса неизвестен")
+            }
+        })?;
     if !status.is_success() {
         return Err(fail(
             ctx,

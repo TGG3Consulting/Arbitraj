@@ -8,7 +8,7 @@ use super::{
 };
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    http,
+    market_http,
     source_quote::{Preview, Request},
 };
 use alloy::{rpc::types::Log, sol_types::SolCall};
@@ -26,6 +26,8 @@ pub(in crate::venues::bsc_dex) fn enabled(ctx: &Ctx) -> bool {
 mod abi;
 mod client;
 mod wire;
+// Книга и персональный firm используют один бюджет сервера Native.
+const HTTP_SERVICE: &str = "native_rfq";
 pub(super) const LABEL: &str = "Native RFQ v6";
 mod levels;
 mod profile;
@@ -81,9 +83,13 @@ async fn check(
         ("version", "6".into()),
         ("allow_multihop", "false".into()),
     ]);
-    let (status, body) = http::exchange(ctx.http.get(url), ctx.limits()?)
+    let limits = ctx.limits()?;
+    let (status, body) = market_http::exchange(HTTP_SERVICE, ctx.http.get(url), limits)
         .await
-        .map_err(|_| bad(ctx, "Нет полного ответа Native RFQ"))?;
+        .map_err(|e| ctx.err(
+            if e.held() { ErrorCode::RateLimited } else { ErrorCode::Unreachable },
+            e.description(&limits),
+        ))?;
     if !status.is_success() {
         return Err(bad(ctx, "Native RFQ отклонил запрос"));
     }

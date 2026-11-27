@@ -31,7 +31,6 @@ mod tests;
 use super::{ctx::Ctx, node::rpc};
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
-    http,
     source_quote::{Preview, Request},
 };
 use alloy::{
@@ -43,7 +42,7 @@ use chrono::Utc;
 use deployment::Deployment;
 use frame::{Builder, Frame};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 
 sol! {
     function quoteAmounts(address tokenIn, address tokenOut, int256 amountSpecified) external view
@@ -111,33 +110,8 @@ async fn verify_router(ctx: &Ctx, head: &Head, deployment: Deployment) -> Gatewa
     Ok(())
 }
 
-async fn builder_snapshot(ctx: &Ctx, builder: Builder) -> GatewayResult<Value> {
-    let (url, method) = builder.data();
-    let mut limits = ctx.limits()?;
-    limits.max_bytes = limits.max_bytes.min(1_048_576);
-    let request = ctx
-        .http
-        .post(url)
-        .json(&json!({"jsonrpc":"2.0","id":1,"method":method,"params":[]}));
-    let (status, body) = http::exchange(request, limits).await.map_err(|_| {
-        ctx.err(
-            ErrorCode::Unreachable,
-            "Не получено состояние строителя Ethereum",
-        )
-    })?;
-    let parsed = serde_json::from_str::<Value>(&body).ok();
-    parsed
-        .filter(|r| {
-            status.is_success() && r["id"] == 1 && r["jsonrpc"] == "2.0" && r.get("error").is_none()
-        })
-        .and_then(|mut r| r.get_mut("result").map(Value::take))
-        .ok_or_else(|| {
-            ctx.err(
-                ErrorCode::BadResponse,
-                "Некорректный ответ строителя Ethereum",
-            )
-        })
-}
+mod builder_read;
+use builder_read::builder_snapshot;
 
 async fn frame(ctx: &Ctx, builder: Builder, deployment: Deployment) -> GatewayResult<Frame> {
     Frame::read(builder, &builder_snapshot(ctx, builder).await?, deployment).ok_or_else(|| {

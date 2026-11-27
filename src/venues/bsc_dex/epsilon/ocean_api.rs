@@ -72,7 +72,7 @@ impl<'a> Client<'a> {
             account,
         )?;
         let (status, body) =
-            crate::gateway::http::exchange(self.ctx.http.get(url), self.ctx.limits().ok()?)
+            crate::gateway::market_http::exchange("epsilon-openocean", self.ctx.http.get(url), self.ctx.limits().ok()?)
                 .await
                 .ok()?;
         if !status.is_success() {

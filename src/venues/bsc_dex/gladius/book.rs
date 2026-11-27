@@ -8,7 +8,7 @@ use super::{
 use crate::{
     gateway::{
         events::{MarketEvent, SourceId},
-        http,
+        market_http,
     },
     venues::bsc_dex::hashflow::availability,
 };
@@ -85,7 +85,7 @@ async fn read(p: &Parts, profile: &Profile, quote: Address) -> Option<Orders> {
     url.query_pairs_mut()
         .append_pair("chainId", &profile.chain.to_string())
         .append_pair("orderStatus", "open");
-    let (status, body) = http::exchange(ctx.http.get(url), ctx.limits().ok()?)
+    let (status, body) = market_http::exchange("gladius", ctx.http.get(url), ctx.limits().ok()?)
         .await
         .ok()?;
     if !status.is_success() {

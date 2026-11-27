@@ -23,7 +23,6 @@ use serde_json::{Value, json};
 
 use crate::gateway::calc_meter::{self, Source};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::gateway::http;
 
 use super::ctx::{Ctx, ID};
 use super::errors;
@@ -181,10 +180,17 @@ async fn send(
         req = req.json(b);
     }
     let t1 = std::time::Instant::now();
-    let got = http::exchange(req, lim).await;
+    let got = crate::gateway::market_http::exchange("KyberSwap", req, lim).await;
     // Решение 129: ожидание темпа и время запроса — в счётчик расчёта кандидата (gateway/calc_meter.rs).
     calc_meter::record(Source::Aggregator, 1, waited, t1.elapsed());
-    let (status, text) = got.map_err(|f| errors::from_fail(&f, &lim, SOURCE))?;
+    let (status, text) = got.map_err(|error| match error {
+        crate::gateway::market_http::Error::Http(f) => errors::from_fail(&f, &lim, SOURCE),
+        other => ctx.err(ErrorCode::RateLimited, other.description(&lim)),
+    })?;
+    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        ctx.raw.write(ID, &format!("rest {path}"), "HTTP 429");
+        return Err(errors::from_http(status.as_u16(), SOURCE, &text));
+    }
     ctx.raw.write(ID, &format!("rest {path}"), &text);
     let v: Value = serde_json::from_str(&text).map_err(|_| {
         if status.is_success() {

@@ -13,7 +13,7 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::{ctx::Ctx, quote::router_pricing},
 };
-use alloy_primitives::{Address, U256, keccak256};
+use alloy_primitives::{U256, keccak256};
 use serde_json::{Value, json};
 
 pub(in crate::venues::bsc_dex) fn enabled(e: &Entry) -> bool {

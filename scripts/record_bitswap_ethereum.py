@@ -18,6 +18,20 @@ def tx(a,name,types=(),values=(),value=0):
     return call(a,calldata(name,types,values),value)
 def balance(token,w):
     return tx(token,"balanceOf(address)",["address"],[w])
+def token_flow(logs, token, address):
+    topic = "0x" + keccak(text="Transfer(address,address,uint256)").hex()
+    net = 0
+    for log in logs:
+        topics = log["topics"]
+        if log["address"].lower() != token or len(topics) != 3 or topics[0].lower() != topic:
+            continue
+        quantity = int(log["data"], 16)
+        if int(topics[2], 16) == int(address, 16):
+            net += quantity
+        if int(topics[1], 16) == int(address, 16):
+            net -= quantity
+    return net
+
 def read_batch(url, methods):
     out=[]
     for idx in range(0,len(methods),8):
@@ -61,17 +75,23 @@ def verify(url,tag,j):
             raise ValueError(("role mismatch",pool))
         if [int(v[-40:],16) for v in targets[i*5:i*5+5]]!=[int(a,16) for a in mods]:
             raise ValueError(("delegated roles differ",pool))
-def capture(url):
+def environment(url):
     j=json.loads(FIXTURE.read_text());tag={"blockHash":BLOCK,"requireCanonical":True}
     header=rpc(url,"eth_getBlockByHash",[BLOCK,False])
     if int(header["number"],16)!=j["height"] or rpc(url,"eth_chainId",[])!="0x1":
         raise ValueError("canonical anchor")
+    if any(v!="0x" for v in read_batch(url,[("eth_getCode",[a,tag]) for a in (OWNER,EXEC,VIRTUAL)])):
+        raise ValueError("isolated payer or simulation address is already occupied")
     verify(url,tag,j)
     end=int(header["timestamp"],16)+240
     word=lambda x:"0x"+format(x,"064x")
     overrides={OWNER:{"balance":hex(30*10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                             "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}},
                VIRTUAL:{"code":"0x"+(ROOT/"contracts/out/VirtualQuoter.bin-runtime").read_text().strip().removeprefix("0x")}}
+    return j,tag,header,end,overrides
+
+def capture(url):
+    j,tag,header,end,overrides=environment(url)
     cases=[];inactive=[]
     for m in j["markets"]:
         x,y=m["tokens"]
@@ -100,9 +120,15 @@ def capture(url):
                     raise ValueError(("unexpected swap outcomes",m["pool"],a,amount,[(k,r.get("error")) for k,r in enumerate(res) if r["status"]!="0x1"]))
                 frame=lambda i:[int(v["returnData"],16) for v in res[i:i+4]]
                 old,mid,new=frame(2),frame(8),frame(13)
-                if old!=mid or (old[0]-new[0],new[1]-old[1])!=(used,out) or old[2:]!=new[2:]:
-                    raise ValueError("wallet debit/credit, rollback or executor residue")
-                cases.append(dict(pool=m["pool"],input=a,output=b,authorized=str(amount),spent=str(used),received=str(out),
+                spent=old[0]-new[0];received=new[1]-old[1]
+                # quoteIzi reports the authorized input off the point limit, even when one
+                # unit of output costs more than the remaining input. V5 sweeps that change.
+                if old!=mid or not 0<spent<=used<=amount or (used<amount and spent!=used) or received!=out or old[2:]!=new[2:]:
+                    raise ValueError(("wallet or callback",m["pool"],a,amount,used,out,spent,received,old,mid,new))
+                logs=res[12]["logs"]
+                if (token_flow(logs,a,m["pool"]),-token_flow(logs,b,m["pool"]))!=(spent,received):
+                    raise ValueError(("pool and wallet transfers disagree",m["pool"],a,amount))
+                cases.append(dict(pool=m["pool"],input=a,output=b,authorized=str(amount),quote_used=str(used),spent=str(spent),received=str(received),
                                   swap_gas=int(res[12]["gasUsed"],16),approval_gas=int(res[1]["gasUsed"],16),
                                   before=list(map(str,old)),after=list(map(str,new)),logs=res[12]["logs"],strict=res[6]["error"],expired=res[7]["error"]))
     if not cases:raise ValueError("no payable settlement market proved")

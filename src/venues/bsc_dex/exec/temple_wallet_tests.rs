@@ -1,6 +1,8 @@
 //! Фактические списания и выплаты TempleAdapter, сохранённые архивной EVM на Ethereum.
 use super::temple_wallet::{Key, Proof};
-use alloy_primitives::{Address, U256, keccak256};
+use super::vista_wire::IVistaFlow::swapFromCall;
+use alloy::sol_types::SolCall;
+use alloy_primitives::{Address, Bytes, U256, keccak256};
 use flate2::read::GzDecoder;
 use serde_json::Value;
 fn addr(v: &Value) -> Address {
@@ -31,12 +33,27 @@ fn temple_protected_wallet_receipts_bind_assets_recipient_and_limits() {
         if case["mode"] == "router" {
             assert_eq!(amount(&case["buy"]["return_data"]), U256::ZERO);
         }
+        for leg in ["buy", "sell"] {
+            let row = &case[leg];
+            assert_eq!(row["status"], "0x1");
+            for limit in ["strict", "stale"] {
+                assert_eq!(row[limit]["status"], "0x0");
+                assert_eq!(row[limit]["delta"], serde_json::json!(["0", "0", "0"]));
+            }
+        }
         if case["mode"] != "protected" {
             continue;
         }
         for leg in ["buy", "sell"] {
             let row = &case[leg];
             let minimum = amount(&row["minimum"]);
+            let tx = &row["transaction"];
+            let raw = serde_json::from_value::<Bytes>(tx["data"].clone()).unwrap();
+            let signed = swapFromCall::abi_decode_validate(&raw).unwrap();
+            assert_eq!(
+                (addr(&tx["from"]), addr(&tx["to"]), amount(&tx["value"])),
+                (wallet, key.module, U256::ZERO)
+            );
             let mut p = Proof {
                 key,
                 payer: wallet,
@@ -44,8 +61,9 @@ fn temple_protected_wallet_receipts_bind_assets_recipient_and_limits() {
                 output: addr(&row["output"]),
                 amount: amount(&row["amount"]),
                 minimum,
-                deadline: U256::ONE,
+                deadline: signed.deadline,
             };
+            assert_eq!(p.data(), raw);
             let logs =
                 serde_json::from_value::<Vec<crate::venues::bsc_dex::check::simulate::SimLog>>(
                     row["logs"].clone(),
@@ -61,6 +79,11 @@ fn temple_protected_wallet_receipts_bind_assets_recipient_and_limits() {
             );
             assert!(row["too_high"].is_object() && row["expired"].is_object());
             p.minimum += U256::ONE;
+            assert_eq!(
+                p.data(),
+                serde_json::from_value::<Bytes>(row["strict"]["transaction"]["data"].clone())
+                    .unwrap()
+            );
             assert_eq!(p.measured(&logs), None);
             p.minimum = minimum;
             p.payer = key.router;

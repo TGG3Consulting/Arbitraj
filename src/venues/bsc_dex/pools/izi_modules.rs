@@ -27,8 +27,12 @@ fn bindings(lines: &[String]) -> Option<Vec<(Address, B256)>> {
         })
         .collect()
 }
-fn matches(answers:&[Bytes],roles:&[(Address,B256)])->bool{
-    answers.len()==roles.len() && answers.iter().zip(roles).all(|(slot,(a,_))|slot.len()==32 && slot[12..]==a[..])
+fn matches(answers: &[Bytes], roles: &[(Address, B256)]) -> bool {
+    answers.len() == roles.len()
+        && answers
+            .iter()
+            .zip(roles)
+            .all(|(slot, (a, _))| slot.len() == 32 && slot[12..] == a[..])
 }
 pub(in crate::venues::bsc_dex) async fn at(
     ctx: &Ctx,
@@ -79,9 +83,13 @@ pub(in crate::venues::bsc_dex) async fn at(
             batch::view(at, pool, IIziPool::feeCall {}),
         ],
     );
-    let checked=futures_util::future::try_join_all(allowed.iter().map(|(a,h)|
-        super::solidly_classic_factory::bind(ctx,*a,*h,None,at)));
-    let (_,_, roles, [fk, x, y, fee]) = tokio::try_join!(checked,
+    let checked = futures_util::future::try_join_all(
+        allowed
+            .iter()
+            .map(|(a, h)| super::solidly_classic_factory::bind(ctx, *a, *h, None, at)),
+    );
+    let (_, _, roles, [fk, x, y, fee]) = tokio::try_join!(
+        checked,
         super::v2_pair_binding::code(ctx, id, pool, at),
         roles,
         fields
@@ -103,7 +111,11 @@ pub(in crate::venues::bsc_dex) async fn at(
     if !matches(&bytes, &allowed) {
         return Err(bad());
     }
-    let entry = |x,y| IIziFactory::poolCall {tokenX:x,tokenY:y,fee};
+    let entry = |x, y| IIziFactory::poolCall {
+        tokenX: x,
+        tokenY: y,
+        fee,
+    };
     let [forward, reverse] = batch::read(
         ctx,
         [
@@ -129,11 +141,18 @@ mod tests {
         let roles: Vec<_> = (1..=5)
             .map(|i| (Address::repeat_byte(i), alloy_primitives::keccak256([i])))
             .collect();
-        let mut result:Vec<_>=roles.iter().map(|(a,_)|Bytes::copy_from_slice(a.into_word().as_slice())).collect();
+        let mut result: Vec<_> = roles
+            .iter()
+            .map(|(a, _)| Bytes::copy_from_slice(a.into_word().as_slice()))
+            .collect();
         // flashModule shares this storage word with feeChargePercent (offset 20), as compiled in iZiSwapPool.
-        let mut packed=result[4].to_vec();packed[11]=50;result[4]=Bytes::from(packed);
-        assert!(matches(&result,&roles));
-        result.swap(0,1);assert!(!matches(&result,&roles));result.swap(0,1);
+        let mut packed = result[4].to_vec();
+        packed[11] = 50;
+        result[4] = Bytes::from(packed);
+        assert!(matches(&result, &roles));
+        result.swap(0, 1);
+        assert!(!matches(&result, &roles));
+        result.swap(0, 1);
         result.pop();
         assert!(!matches(&result, &roles));
         assert!(bindings(&[]).is_none());

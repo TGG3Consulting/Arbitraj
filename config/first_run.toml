@@ -3934,7 +3934,7 @@ prefill = { kind = "Venue", id = "base_dex" }
 name = "textile.trading"
 area = "площадка base_dex"
 unit = "да/нет"
-value = "false"
+value = "true"
 source = "https://docs.textilecredit.com/api/v2/aggregators.html"
 rationale = "Допуск каждой заявки указывает владелец после выбора контракта и предела расхода газа."
 prefill = { kind = "Venue", id = "base_dex" }
@@ -4102,3 +4102,1620 @@ value = "network 8453,reactor 0x3c53c04d633bec3fb0de3492607c239bf92d07f9 0x45b00
 source = "https://docs.rubicon.finance/developers/deployments"
 rationale = "Добавьте адрес и хеш собственного модуля после согласованного размещения."
 prefill = { kind = "Venue", id = "base_dex" }
+
+# О-68. Рекомендации включённых каналов
+
+[[section]]
+title = "Параметры dex · DEX ambient-ethereum@ethereum"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.router"
+area = "DEX ambient-ethereum@ethereum"
+unit = "адрес"
+method = "Задаёт владелец: указать адрес собственного развёрнутого AmbientWallet этой семьи из квитанции в Ethereum. Подтвердить runtime по dex.module_runtime_hashes профиля и привязку к контрактам данной семьи."
+source = "https://docs.ambient.finance/developers/deployed-contracts · https://docs.ambient.finance/developers/dex-contract-interface/swaps/hot-path-swap-migration/directly-calling-crocswapdex · tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz; contracts/AmbientWallet.sol; config/first_run_dex.json"
+rationale = "Здесь dex.router указывает на собственный модуль расчёта. Публичный роутер или контракт из симуляции имеет иную роль."
+
+[[section]]
+title = "Параметры dex · DEX kaliber-lambda-ethereum@ethereum"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.propamm_slot_builders"
+area = "DEX kaliber-lambda-ethereum@ethereum"
+unit = "titan / buildernet"
+method = "Задаёт владелец: в Ethereum для kaliber разрешить через запятую только доверенных строителей из проверенного набора «titan». Пустое поле сохраняет отключённые слотовые запросы."
+source = "tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json; src/venues/bsc_dex/fermi/prop_oracle.rs; docs/BASE_ETHEREUM_SETTINGS.md, Kaliber/Taurus"
+rationale = "Выбор разрешает передачу одиночного защищённого обмена конкретному строителю. Кадр подтверждается по адресу оракула, хешу runtime и точным ключам stateDiff."
+
+[[section.rec]]
+name = "dex.router"
+area = "DEX kaliber-lambda-ethereum@ethereum"
+unit = "адрес"
+method = "Задаёт владелец: в карточке Ethereum разместить собственный PropSlotVenueAdapter версии 2 для kaliber и взять адрес из подтверждённой квитанции. Проверить привязку выбранного модуля к профилю данной семьи."
+source = "tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json; contracts/PropSlotVenueAdapter.sol; docs/BASE_ETHEREUM_SETTINGS.md, Kaliber/Taurus"
+rationale = "Значение требуется только для слотового исполнения этого ранее принятого профиля. Публичная касса Lambda и модуль владельца имеют разные роли."
+
+[[section]]
+title = "Параметры dex · DEX kipseli-lambda-ethereum@ethereum"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.router"
+area = "DEX kipseli-lambda-ethereum@ethereum"
+unit = "адрес"
+method = "Задаёт владелец: указать адрес собственного развёрнутого PropVenueAdapter этой семьи из квитанции в Ethereum. Подтвердить runtime по dex.module_runtime_hashes профиля и привязку к контрактам данной семьи."
+source = "https://github.com/lambdaclass/propamm-router-contracts/tree/d6e41d3d6f3bf9f8ec78dfea5957f81b7bed467b · https://eth.blockscout.com/address/0x71e790dd841c8a9061487cb3e78c288e75ce0b3d · tests/data/first_run_dex_2026-11-26/kipseli_ethereum.json.gz; contracts/PropVenueAdapter.sol; config/first_run_dex.json"
+rationale = "Здесь dex.router указывает на собственный модуль расчёта. Публичный роутер или контракт из симуляции имеет иную роль."
+
+[[section]]
+title = "Параметры dex · DEX taurus-lambda-ethereum@ethereum"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.propamm_slot_builders"
+area = "DEX taurus-lambda-ethereum@ethereum"
+unit = "titan / buildernet"
+method = "Задаёт владелец: в Ethereum для taurus разрешить через запятую только доверенных строителей из проверенного набора «titan, buildernet». Пустое поле сохраняет отключённые слотовые запросы."
+source = "tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json; src/venues/bsc_dex/fermi/prop_oracle.rs; docs/BASE_ETHEREUM_SETTINGS.md, Kaliber/Taurus"
+rationale = "Выбор разрешает передачу одиночного защищённого обмена конкретному строителю. Кадр подтверждается по адресу оракула, хешу runtime и точным ключам stateDiff."
+
+[[section.rec]]
+name = "dex.router"
+area = "DEX taurus-lambda-ethereum@ethereum"
+unit = "адрес"
+method = "Задаёт владелец: в карточке Ethereum разместить собственный PropSlotVenueAdapter версии 2 для taurus и взять адрес из подтверждённой квитанции. Проверить привязку выбранного модуля к профилю данной семьи."
+source = "tests/data/first_run_dex_2026-11-26/prop_ethereum_builder_frames.json; contracts/PropSlotVenueAdapter.sol; docs/BASE_ETHEREUM_SETTINGS.md, Kaliber/Taurus"
+rationale = "Значение требуется только для слотового исполнения этого ранее принятого профиля. Публичная касса Lambda и модуль владельца имеют разные роли."
+
+[[section]]
+title = "Параметры hashflow · Global"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "hashflow.source"
+area = "вся система"
+unit = "идентификатор"
+method = "Задаёт владелец: для выданного доступа Wallet API Trader введите api, для Multi-Wallet Trader — точное имя source из подтверждения Hashflow."
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "Значение должно соответствовать классу выданного токена. Один произвольный публичный идентификатор не даёт доступа к чужому каналу."
+
+[[section.rec]]
+name = "hashflow.api_wallet"
+area = "вся система"
+unit = "адрес"
+method = "Задаёт владелец: для режима api укажите публичный EVM-адрес своего кошелька, одобренного Hashflow для этого ключа. Для Multi-Wallet оставьте пустым."
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "API Wallet Trader связан с определённым адресом. Сам токен доступа вносится в зашифрованный секрет hashflow.taker_key."
+
+[[section]]
+title = "Параметры http · Global"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "http.body_idle_ms"
+area = "вся система"
+unit = "мс"
+value = "10000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Общий HTTP-транспорт. Значение действующего бота из снимка 25 ноября."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "http.max_body_bytes"
+area = "вся система"
+unit = "байт"
+value = "64000000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Общий HTTP-транспорт. Значение действующего бота из снимка 25 ноября."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "http.timeout_ms"
+area = "вся система"
+unit = "мс"
+value = "10000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Общий HTTP-транспорт. Значение действующего бота из снимка 25 ноября."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "http.total_ms"
+area = "вся система"
+unit = "мс"
+value = "30000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Общий HTTP-транспорт. Значение действующего бота из снимка 25 ноября."
+prefill = { kind = "Global" }
+
+[[section]]
+title = "Параметры kyber · Global"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "kyber.base_url"
+area = "вся система"
+unit = "URL"
+value = "https://aggregator-api.kyberswap.com"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.buy_fill_tolerance_pct"
+area = "вся система"
+unit = "%"
+value = "0.1"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.chain"
+area = "вся система"
+unit = "сеть"
+value = "bsc"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Сегмент URL агрегатора. Подписант этого адаптера работает с chainId 56. Профили Base и Ethereum запрещают exec.via_kyber=true."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.deadline_s"
+area = "вся система"
+unit = "секунды"
+value = "60"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.final_gate_usd"
+area = "вся система"
+unit = "USDT"
+value = "-0.05"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Предварительный порог запроса финальной цены при исполнении Kyber на BSC. Штатный порог чистой прибыли для покупки проверяется отдельно."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.gas_limit_margin_pct"
+area = "вся система"
+unit = "%"
+value = "20"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.gas_price_markup_pct"
+area = "вся система"
+unit = "%"
+value = "10"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.http_timeout_ms"
+area = "вся система"
+unit = "мс"
+value = "5000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.max_wait_ms"
+area = "вся система"
+unit = "мс"
+value = "1500"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.receipt_poll_ms"
+area = "вся система"
+unit = "мс"
+value = "1000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.receipt_timeout_ms"
+area = "вся система"
+unit = "мс"
+value = "60000"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.rps"
+area = "вся система"
+unit = "запросов в секунду"
+value = "3"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Темп фактически настроенного бота. Применяйте свой тариф, IP и разрешённый бюджет."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.slippage_bps"
+area = "вся система"
+unit = "bps"
+value = "50"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.user_agent"
+area = "вся система"
+unit = "имя приложения"
+value = "g3-arb/1.0"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Рабочее значение BSC из снимка 25 ноября. Применяет только исполнитель KyberSwap BSC."
+prefill = { kind = "Global" }
+
+[[section.rec]]
+name = "kyber.quote_poll_ms"
+area = "вся система"
+unit = "мс"
+method = "Не используется после решений 92 и 121. Оставить пустым."
+source = "src/settings/catalog/kyber.rs"
+rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."
+
+[[section.rec]]
+name = "kyber.quote_concurrency"
+area = "вся система"
+unit = "запросов"
+method = "Не используется после решений 92 и 121. Оставить пустым."
+source = "src/settings/catalog/kyber.rs"
+rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."
+
+[[section.rec]]
+name = "kyber.probe_usdt"
+area = "вся система"
+unit = "USDT"
+method = "Не используется после решений 92 и 121. Оставить пустым."
+source = "src/settings/catalog/kyber.rs"
+rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."
+
+[[section.rec]]
+name = "kyber.deposit_confirmations"
+area = "вся система"
+unit = "блоков"
+method = "Не используется после решений 92 и 121. Оставить пустым."
+source = "src/settings/catalog/kyber.rs"
+rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."
+
+[[section.rec]]
+name = "kyber.node_http_url"
+area = "вся система"
+unit = "URL"
+method = "Задаёт владелец. Адрес его RPC для исполнения в BSC mainnet (chainId 56). Ключ провайдера хранится отдельно в kyber.node_http_key."
+source = "src/venues/kyberswap/ctx.rs"
+rationale = "Для своего локального узла берите URL из его настроек. Секретный URL в справочник не попадает."
+
+[[section.rec]]
+name = "kyber.client_id"
+area = "вся система"
+unit = "идентификатор"
+method = "Задаёт владелец. Свой X-Client-Id интеграции KyberSwap."
+source = "https://docs.kyberswap.com/kyberswap-solutions/kyberswap-aggregator/aggregator-api-specification"
+rationale = "Публичный идентификатор приложения. Значение должно принадлежать этой интеграции."
+
+[[section]]
+title = "Параметры airswap · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "airswap.gas_budget_native"
+area = "Venue base_dex"
+unit = "монета газа"
+value = "0.0000024"
+source = "tests/data/first_run_dex_2026-11-26/airswap_base_orders.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_base_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (192797 gas максимума контрольных выплат × 6000000 wei/gas максимума среди 1 архивных квитанций сети + 7384041770 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "airswap.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "airswap.min_validity_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "4000"
+source = "https://docs.base.org/specifications/transactions/transaction-finality; config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "2 с запаса для включения Base плюс 2 с общего расчётного срока. Сетевой документ описывает ориентир включения около 200 мс. Начальный минимальный остаток подписанной заявки. Срок перепроверяется перед отправкой. Это политика допуска, включение в конкретный блок не гарантируется."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "airswap.makers"
+area = "Venue base_dex"
+unit = "HTTPS URL"
+method = "Задаёт владелец: у согласованного маркетмейкера получить HTTPS URL сервера AirSwap RFQ для chainId 8453, проверить getProtocols и getTokens для нужного SwapERC20; несколько доверенных URL перечислить через запятую."
+source = "https://github.com/airswap/airswap-about/blob/master/technology/protocols.md; tests/data/first_run_dex_2026-11-26/airswap_base_orders.json.gz"
+rationale = "Адрес доверенного maker индивидуален. Архив сохраняет хеш locator и признак HTTPS, полного подтверждённого рабочего URL в нём нет."
+
+[[section]]
+title = "Параметры bsc · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "bsc.node_background_share_pct"
+area = "Venue base_dex"
+unit = "%"
+value = "25"
+source = "Снимок 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, bsc.node_background_share_pct в Global; src/venues/bsc_dex/node/pace.rs"
+rationale = "25% очереди RPC гарантировано ожидающему фону. Остальные заявки обслуживаются с учётом приоритетов. Читается с площадки с возможностью общего значения."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "bsc.node_http_rps"
+area = "Venue base_dex"
+unit = "вызовов в секунду"
+method = "Задаёт владелец: взять разрешённый RPS текущего RPC-тарифа сети и выделить долю этому процессу с учётом прочих клиентов. Для своего узла сверить с устойчивым RPS по тайм-аутам, 429 и запаздыванию головы; 20 запросов/с — ориентир старого публичного узла, 500 — замер отдельного собственного BSC-узла."
+source = "docs/OWN_NODE_SWITCH.md, §2; src/venues/bsc_dex/node/pace.rs"
+rationale = "Фактическая пропускная способность и единицы тарифов зависят от выбранного узла. Каждый вложенный вызов пачки занимает собственное место. Значение может переопределять общий лимит."
+
+[[section.rec]]
+name = "bsc.node_backup_hold_s"
+area = "Venue base_dex"
+unit = "секунды"
+value = "10"
+source = "https://www.alchemy.com/docs/reference/throughput (окно тарификации 10 с); src/venues/bsc_dex/node/failover.rs"
+rationale = "Ориентир для резервного провайдера при коротком сбое основного. При наличии настроенного резерва оставаться на нём 10 с, затем снова пробовать основной. Для иных квот срок требуется сверить с периодом их сброса."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "bsc.node_http_url"
+area = "Venue base_dex"
+unit = "URL"
+method = "Задаёт владелец: взять HTTP URL основного узла сети base с chainId 8453 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_http_key."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для base_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_http_url_backup"
+area = "Venue base_dex"
+unit = "URL"
+method = "Задаёт владелец: взять HTTP URL резервного узла сети base с chainId 8453 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_http_key_backup. Резерв заполнять при наличии независимого узла."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для base_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_ws_url"
+area = "Venue base_dex"
+unit = "URL"
+method = "Задаёт владелец: взять WebSocket URL основного узла сети base с chainId 8453 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_ws_key."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для base_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_ws_url_backup"
+area = "Venue base_dex"
+unit = "URL"
+method = "Задаёт владелец: взять WebSocket URL резервного узла сети base с chainId 8453 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_ws_key_backup. Резерв заполнять при наличии независимого узла."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для base_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section]]
+title = "Параметры dex · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.chain"
+area = "Venue base_dex"
+unit = "id сети"
+value = "base"
+source = "src/settings/evm_profiles.rs, PROFILES; docs/BASE_ETHEREUM_SETTINGS.md, сетевые области"
+rationale = "Локальное имя сети. При регистрации оно сверяется с идентичностью площадки."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dex.evm_chain_id"
+area = "Venue base_dex"
+unit = "chainId"
+value = "8453"
+source = "src/settings/evm_profiles.rs, PROFILES; docs/BASE_ETHEREUM_SETTINGS.md, сетевые области"
+rationale = "Используется для проверки eth_chainId у собственного узла и для подписи."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dex.native_wrapped"
+area = "Venue base_dex"
+unit = "адрес"
+value = "0x4200000000000000000000000000000000000006"
+source = "docs/BASE_ETHEREUM_SETTINGS.md, таблица сетевых ролей; config/first_run_dex.json; https://specs.optimism.io/protocol/predeploys.html"
+rationale = "Каноническая обёртка ETH данной сети; сверяется адрес контракта WETH."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dex.settlement_contract"
+area = "Venue base_dex"
+unit = "адрес"
+value = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+source = "https://developers.circle.com/stablecoins/usdc-contract-addresses"
+rationale = "Контракт USDC для площадки base_dex. Адрес и тикер сопоставляются со справочником сети исходной биржи перед конверсией. Предложение требует явного сохранения оператором."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dex.deadline_s"
+area = "Venue base_dex"
+unit = "секунды"
+value = "6"
+source = "Аналог Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex; docs/BASE_ETHEREUM_SETTINGS.md, dex.deadline_s"
+rationale = "На Base проба вызывает контракт со временем головы +1 с; 6 с — исходный ориентир быстрых сетей в снимке."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры dexalot · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dexalot.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/BASE_ETHEREUM_SETTINGS.md"
+rationale = "Base Dexalot вне списка приоритета решения 7. После собственного доступа и проверки канала владелец может включить торговлю."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dexalot.gas_budget_native"
+area = "Venue base_dex"
+unit = "ETH"
+value = "0.00000110"
+source = "tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json"
+rationale = "Оплачено 912909590890 wei ETH с L1-комиссией. Рекомендованный резерв 20% по аналогии с наблюдаемым kyber.gas_limit_margin_pct и округление вверх до 10⁻⁸ ETH. Изменение сетевой платы требует пересмотра."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "dexalot.min_validity_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "tests/data/first_run_dex_2026-11-26/dexalot_base_registry.json.gz · https://docs.base.org/base-chain/network-information/block-building"
+rationale = "Один 2-секундный блок Base на отправку после проверки. В архивном исполнении до expiry оставалось 11 секунд. Это политика допуска и её нужно сверять с задержкой фактического канала."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры epsilon · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "epsilon.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Самостоятельный агрегированный путь Alien Base вне 34 строк решения 7. Сохраняется прежнее ручное включение после подстановки ролей и проверки кошелька."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "epsilon.contracts"
+area = "Venue base_dex"
+unit = "сети, адреса и хеши"
+value = "8453 venue 0x303ca5c65aabcb1ce242df93f478c41e0e4d2580 0x9faa959724103a37e5576a181647c0799d64e9482972e9c6ba75db9382990767,8453 provider alien-base-v3 0xb20c411fc84fbb27e78608c24d0056d974ea9411 0x2f70232aaa27620a58a0d8b2c5161690f343c51d7db8b270ea54297390ec354d,8453 provider uniswap-v3-base 0x2626664c2603336e57b271c5c0b26f421741e481 0x38bd640f47df62b2fd5a6755a63f4976ad847dc9b946ae0d145d21d16bb124e4"
+source = "tests/data/first_run_dex_2026-11-26/epsilon_base_wallets.json.gz"
+rationale = "Порядок ролей venue, provider alien-base-v3, provider uniswap-v3-base привязан к исходным адресам и runtime. Для защиты получателя можно добавить строку wallet на реальный модуль владельца. Такой строки в публичном предзаполнении нет."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "epsilon.openocean_url"
+area = "Venue base_dex"
+unit = "HTTPS"
+value = "https://open-api.openocean.finance/v4/base"
+source = "https://docs.openocean.finance/docs/swap-api/v4"
+rationale = "Корень API OpenOcean V4 для Base; код добавляет пути quote и swap и сверяет вложенные роли с Epsilon."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "epsilon.openocean_contracts"
+area = "Venue base_dex"
+unit = "сети, адреса и хеши"
+method = "Задаёт владелец: скопируйте четыре публичные строки venue, provider, implementation, executor из раздела Epsilon общего справочника; добавьте пятую строку 8453 wallet АДРЕС ВАШ_ХЕШ для своего EpsilonApiWallet после сверки его полного runtime. Для пути предоплаты добавьте все пять опубликованных ролей LiquidFi."
+source = "tests/data/first_run_dex_2026-11-26/epsilon_openocean_roles.json"
+rationale = "Публичные строки (разделитель в UI — запятая): 8453 venue 0x303ca5c65aabcb1ce242df93f478c41e0e4d2580 0x9faa959724103a37e5576a181647c0799d64e9482972e9c6ba75db9382990767,8453 provider 0x6352a56caadc4f1e25cd6c75970fa768a3304e64 0xd25c83b45b88eb2f1dabb7fbb265cc605e11c56f06d0ef531458d3dad5383693,8453 implementation 0x201263cea08e8f1d6e2fdd1fd2ca44bf6145e2af 0x863d1be920d9ae40f43374ce0cc29b0e536df18d70ef02ec0b9537cc0e6d61bd,8453 executor 0x9cafca2507a6128931f88ccc3d83d8bcf74b09f0 0x074af16fce38ed179f069d9af8e4557be18f461bc7264576f341d0f644d83bed. Дополнительная группа из epsilon_openocean_funding.json: 8453 funding 0x114b11ae066a7785452c4570b42fff1b7fa5b001 0x24f7c75783390994465547c6d2688cf81b9aa2f511eb1dc73042849ebf7fe85b,8453 beacon 0xd477349548e0515e5a68cce75942771c49e9bdf3 0x6198b877e3043cef34dd3447fe6b3d516c73adb1130fc02cf339c2b490945e89,8453 vault 0x8d6fcf96253cd9c828b7c5d37ebcc1e1f0d7aa5e 0x2a6ee158683080311227ebf388ad8db54f10f0c4f45d324c6029a0a2fe408d4e,8453 funding_implementation 0xec772b4019a21af2edd567136072b90feff59bc0 0x0f281ed62a91ea089932f415311f340e93e28e976ac80963c6c8407b9cbb24a3,8453 vault_implementation 0xa2ca2f1e3e4d6ecbdced888e8edab0467d30adc6 0x0eb1b1db4f59eed73fd6534857bd05d502b37041d02b1ef35e92fc11727efb46. Парсер принимает ровно 5 либо 10 различных привязанных адресов, без адреса своего модуля рабочее значение сформировать нельзя."
+
+[[section.rec]]
+name = "epsilon.max_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "5000"
+source = "tests/data/first_run_dex_2026-11-26/epsilon_base_wallets.json.gz"
+rationale = "По аналогии с ограничением свежести Hashflow и сроком нескольких блоков Base. Перед подписью повторно подтверждаются текущее состояние, разрешения провайдеров, fee и реальные денежные пределы."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "epsilon.quote_timeout_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "epsilon.gas_budget_native"
+area = "Venue base_dex"
+unit = "монета газа"
+value = "0.00001"
+source = "tests/data/first_run_dex_2026-11-26/epsilon_base_wallets.json.gz"
+rationale = "На 32 архивных ногах оригинального и защищённого маршрутов 134691–396596 gas. При 0,0162 gwei из Hashflow Base верхняя оценка около 0,00000643 ETH до публикации. Округление до 0,00001 ETH даёт начальный лимит; OpenOcean обязан пройти собственный актуальный расчёт."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры exec · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "exec.dex_slippage_pct"
+area = "Venue base_dex"
+unit = "%"
+value = "0.5"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, exec.dex_slippage_pct"
+rationale = "Допуск minOut 0,5% в процентах. Проверка прибыли и худшая цена маршрута продолжают действовать."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры feed · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "feed.stale_after_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "3500"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex; https://docs.base.org/base-chain/network-information/transaction-finality; src/venues/bsc_dex/node/heads.rs"
+rationale = "Для Base взят действовавший на BSC/Arbitrum порог 3500 мс. Следить за задержкой новых голов; bsc.blocks_poll_ms должен быть строго меньше порога."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры gladius · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "gladius.gas_budget_native"
+area = "Venue base_dex"
+unit = "монета газа"
+value = "0.0000035"
+source = "tests/data/first_run_dex_2026-11-26/gladius_base_protected.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_base_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (285390 gas максимума контрольных выплат × 6000000 wei/gas максимума среди 1 архивных квитанций сети + 7384041770 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "gladius.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "gladius.quote_timeout_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "gladius.max_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "5000"
+source = "src/venues/bsc_dex/ryze/price_tests.rs, max_age_ms=5000; src/venues/bsc_dex/gladius/book.rs; https://docs.rubicon.finance/developers/gladius-api"
+rationale = "По аналогии с проверенным сроком 5 с для индикативной книги Ryze. Интервал между завершением чтения и следующим запросом Gladius — 2500 мс; отсутствие ответа снимает книгу. Более длинный Retry-After требует отдельной паузы по хосту."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "gladius.min_validity_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "4000"
+source = "https://docs.base.org/specifications/transactions/transaction-finality; config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "2 с запаса для включения Base плюс 2 с общего расчётного срока. Сетевой документ описывает ориентир включения около 200 мс. Начальный минимальный остаток подписанной заявки. Срок перепроверяется перед отправкой. Это политика допуска, включение в конкретный блок не гарантируется."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры hanji · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "hanji.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Приоритетная строка Base #5919. Торговля доступна при совпадении зарегистрированного рынка, фактического покрытия и принятого контракта владельца."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hanji.executor"
+area = "Venue base_dex"
+unit = "адрес"
+method = "Задаёт владелец: разверните HanjiExecutor для своего кошелька в Base, проверьте сеть, WETH и runtime по артефакту; внесите фактический адрес размещения."
+source = "tests/data/first_run_dex_2026-11-26/hanji_executor_receipts.json"
+rationale = "Адрес экземпляра в изолированном тесте не является развёртыванием владельца."
+
+[[section.rec]]
+name = "hanji.markets"
+area = "Venue base_dex"
+unit = "адреса"
+value = "0x15c8cb4e336b1e478d155d813830129fb225eee3,0x1ae89451919cf82a5e83580f57f3856f5508f1c8,0x30bfa3b501c8f83114c1a789febb6281a0bcd751,0x44330b61f492dbebc137bd2e4f6c3f19855320e9,0x6a6951db3bb99f76a8ccb9f8a8399b613666298b,0xb2cfad3880801012ca1beba290f095ebc0087c4b,0xde1eb3cd7f55c71ccc312fdf257fb73a73c72d7f,0xf455b3c0756908c6a2f44a7f7390053cfe354eea"
+source = "tests/data/first_run_dex_2026-11-26/hanji_base.json"
+rationale = "Все восемь записей публичного реестра Base на блоке 62262756. Комбинации включают cbBTC/USDC, ETH/USDC, cbBTC/ETH и пять токенов против USDC. Исполнимость конкретного размера подтверждается книгой и персональной проверкой."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hanji.registry_refresh_s"
+area = "Venue base_dex"
+unit = "с"
+value = "60"
+source = "tests/data/first_run_dex_2026-11-26/hanji_base.json"
+rationale = "Интервал обновления списка рынков по аналогии с окном публичного Router Ryze 60 с. Это лимит частоты перечитывания реестра, уровни и выплаты проверяются по новым блокам."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hanji.quote_budget_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hanji.gas_budget_native"
+area = "Venue base_dex"
+unit = "ETH"
+value = "0.00003"
+source = "tests/data/first_run_dex_2026-11-26/hanji_executor_receipts.json"
+rationale = "Стартовый полный лимит Base: две записанные ноги израсходовали 1093106 и 1143868 gas. При 0,0162 gwei в квитанции Hashflow Base на 1,15 млн gas приходится около 0,000019 ETH без L1; 0,00003 ETH оставляет резерв. Текущий полный расчёт и прибыль проверяются отдельно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры hashflow · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "hashflow.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Hashflow Base подтверждён архивом, но отдельная строка Base #1447 вне перечня решения 7; включение оставлено владельцу."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hashflow.gas_budget_native"
+area = "Venue base_dex"
+unit = "нативная монета"
+value = "0.000004"
+source = "tests/data/hashflow_direct_2026-11-26/swaps.json"
+rationale = "Base: 132106 gas, 16200000 wei/gas плюс L1 19772058409 wei, оплачено 0,000002159889258409 ETH. Рекомендованный потолок округлён вверх; превышение актуальной оценкой исключает кандидат."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hashflow.levels_max_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "10000"
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "Внутренняя политика свежести по аналогии с книгой Ryze. Текущая реализация обновляет уровни через половину возраста: около 5 с после цикла; авторизованный тариф проверяется по своему договору."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hashflow.quote_budget_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "hashflow.min_validity_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "5000"
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "Нижняя граница оставшегося quoteExpiry при отборе: более двух 2-секундных блоков Base. Это политика доставки, не обещание исполнения."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры native_rfq · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "native_rfq.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Приоритетная строка Native Swap #2803 этой сети; нужны свои средства, доступный firm на адрес владельца и проверенный runtime собственного защитного модуля."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "native_rfq.max_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "10000"
+source = "src/venues/bsc_dex/native_rfq/book.rs — аналог hashflow.levels_max_age_ms"
+rationale = "При 10 с жизни снимка книга запрашивается примерно через 5 с после цикла. Старые уровни не служат разрешением на перевод."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "native_rfq.quote_timeout_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "native_rfq.min_validity_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "5000"
+source = "tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_protected.json.gz"
+rationale = "Политика как у Hashflow той же сети. При отборе проверяется реальный срок firm, в 12 архивных операциях Ethereum оставался запас более минуты."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "native_rfq.gas_budget_native"
+area = "Venue base_dex"
+unit = "нативная монета"
+value = "0.000006"
+source = "tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_protected.json.gz"
+rationale = "Стартовая оценка по аналогу Ethereum Native (до 236628 gas) и Hashflow Base (0,0162 gwei плюс L1). Регистрация Base и публичная книга зафиксированы отдельно; фактический газ Base определяется симуляцией владельца."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры pancakex · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "pancakex.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.quote_budget_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.contracts"
+area = "Venue base_dex"
+unit = "роли"
+value = "8453 router 0x88815caf0b12208585832b693841c9da19c91687 0x73be727e93e4d775ab6e43f5e89640f33307925711f804e26c6d63ec98c0079c,8453 implementation 0x52fa6de23569cb6df0463e833e95d18c84f7d64a 0x1a97a76952498bde32770b7c69079bcd8376dd7c24a2061386ba04cd7e4cdf01,8453 permit 0x31c2f6fcff4f8759b3bd5bf0e1084a055615c768 0xa1d9069bd00ed3f3a4e7fa14cc96bda1ebdda625cf6e4c616b6fae4965684a6e,8453 v1 0x2c0be7d502495696d1c910b8a9d3bd813560cad4 0x9217045d809a45280ece6c7e9179b5e705b3b7e4bd4d25c5e5c6036c05737938,8453 v3 0xcd9051b3b1d25f44d528d005318db85012e68703 0xbbe3e8c4449d1d7247c07c5f2e8df01ec7906f217a1f00dbfe344a09650a8ee9"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_profiles.json; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Сеть 8453, блок 62262756. 5 строк профиля. Физическая роль и ограничения каждого токена проверяются отдельно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.tokens"
+area = "Venue base_dex"
+unit = "активы"
+value = "8453 fiat 0x833589fcd6edb6e08f4c7c32d4f71b54bda02913 0xa6705a10bb756b5dea144591118be77d7af0c3eee3bf2dfe2583dcb0364fefab 0x2ce6311ddae708829bc0784c967b7d77d19fd779 0x11b75a237997ab8328f65b2d5a55c10f0346d0a175741ed42ddf4f2c66b9e873 0x4fc7850364958d97b4d3f5a08f79db2493f8ca44,8453 b20 0xb2000000000000000000002d0ba3164cc74f58b7 0x309b8896ee4c1ff7ec1966155373dee42663b6b40c3fedc70ba501684848d2a3 0xb20f000000000000000000000000000000000000 0x8453000000000000000000000000000000000002"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_profiles.json; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Сеть 8453, блок 62262756. 2 строк профиля. Физическая роль и ограничения каждого токена проверяются отдельно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.base_url"
+area = "Venue base_dex"
+unit = "URL"
+value = "https://x.pancakeswap.com"
+source = "https://developer.pancakeswap.finance/contracts/pcsx/swap-integration; tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz"
+rationale = "Официальная база путей order-price/get-price и order-handler/order. Составлять путь от корня."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.slippage_bps"
+area = "Venue base_dex"
+unit = "б.п."
+value = "10"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Успешный неподписанный запрос на этой сети передавал 0,1%. 10 б.п. интерфейса передаются API как 0.10 процента. Минимальный выход сделки проверяется отдельно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "pancakex.max_lifetime_sec"
+area = "Venue base_dex"
+unit = "с"
+value = "196"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz; tests/data/first_run_dex_2026-11-26/pancakex_unsigned_exact_out.json.gz; https://docs.base.org/specifications/transactions/transaction-finality; src/venues/bsc_dex/pancakex/book.rs, Ticket::eligible"
+rationale = "В 4 успешных ответах exact input/output срок Permit2 относительно HTTP Date — 192 с. Бот проверяет также время полученного до запроса блока: к 192 с прибавлены 2 с запаса на отставание головы сети и 2 с бюджета расчёта. Это рекомендуемый потолок; более старый блок или более длинный ордер могут не пройти."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры raindex · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "raindex.gas_budget_native"
+area = "Venue base_dex"
+unit = "монета газа"
+value = "0.0000045"
+source = "tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_base_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (368970 gas максимума контрольных выплат × 6000000 wei/gas максимума среди 1 архивных квитанций сети + 7384041770 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "raindex.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Включение предусмотрено решением 7. Для исполнения действуют проверки кошелька, разрешений и пригодности маршрута."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "raindex.quote_timeout_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "raindex.max_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "90000"
+source = "config/first_run.toml, venue.book_stale_ms для Phemex: ориентир 90000 мс для периодических снимков; src/venues/bsc_dex/raindex/book.rs и source.rs"
+rationale = "Стартовый предел 90 с для перечня ордеров с постраничной загрузкой. На одну книгу код выделяет не более 45 с. Расчёт на точном размере всё равно проверяет кошелёк на блоке. Проходимость большой книги зависит от числа страниц и задержки индексатора."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "raindex.books"
+area = "Venue base_dex"
+unit = "сети и книги"
+method = "Задаёт владелец: из квитанции развёртывания взять адрес своего модуля для каждой книги и подставить в скобках; формат строк через запятую: 8453 6 0xe522cb4a5fcb2eb31a52ff41a4653d85a4fd7c9d 0xfba04db418c8fbba851c2570230536316d9fb53bdc5f44ec82229b30c92263a2 (адрес своего размещённого модуля книги) 0x19077c4459bc38204f0c205b670cf1287fc99fcc912cd036f7647ea2718310bf graphql https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71/subgraphs/raindex-base/prod/gn"
+source = "tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz; tests/data/first_run_dex_2026-11-26/raindex_base_quotes.json.gz; https://github.com/rainlanguage/rain.strategies/blob/d58fd9d89a040c0ace494f12abf5452776b106d5/settings.yaml"
+rationale = "Каждому адресу книги соответствует отдельный модуль своего кошелька. Код проверяет хеши обоих контрактов, book(), bookCodeHash() и селектор версии."
+
+[[section]]
+title = "Параметры ryze · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "ryze.trading"
+area = "Venue base_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Приоритетная строка Base #7945. Сохранение рекомендации оставляет обязательными действующий кошелёк, персональное измерение и проверку допуска перед подписью."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.books_interval_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "10000"
+source = "config/first_run.toml — ryze.router_requests_per_minute; src/venues/bsc_dex/ryze/price.rs"
+rationale = "Два размера дают до 10 POST за проход. Пауза 10 с ограничивает один фоновый цикл примерно 60 запросами в минуту и оставляет часть рекомендованных 100 запросов финальным проверкам; все кошельки делят окно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.quote_age_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "15000"
+source = "tests/data/first_run_dex_2026-11-26/ryze_buy_gross_control.json"
+rationale = "Внутренняя политика свежести по аналогии с возрастом уровней Hashflow: один 10-секундный цикл книги плюс запас на измерение. В архиве четыре чтения BUY заняли около 1,28 с. Перед подписью цена измеряется заново."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.quote_budget_ms"
+area = "Venue base_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.quote_sizes"
+area = "Venue base_dex"
+unit = "единицы токена"
+value = "0x4200000000000000000000000000000000000006=0.001,0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf=0.00003476"
+source = "tests/data/first_run_dex_2026-11-26/ryze_base_verified_intents.json.gz"
+rationale = "Адрес=количество базовой валюты в целых единицах токена: Router измерял WETH 10^15 raw, а в квитанции cbBTC объём заявки 3476 raw при 8 знаках. Оба пула против USDC; для их прямого отбора выбранная расчётная валюта должна быть настоящим USDC Base."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.slippage_bps"
+area = "Venue base_dex"
+unit = "б.п."
+value = "30"
+source = "tests/data/first_run_dex_2026-11-26/ryze_buy_gross_control.json"
+rationale = "В четырёх исходных запросах slippageTolerance = 30 б.п. Минимум выхода и предел расхода владельца дополнительно проверяются."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "ryze.validity_sec"
+area = "Venue base_dex"
+unit = "с"
+value = "1800"
+source = "https://documentation.ryze.pro/guide/submit-transactions"
+rationale = "Ryze показывает срок текущей заявки 30 минут. В боте он отсчитывается от канонического блока и записывается в подпись; короткий срок свежести самой котировки проверяется отдельно."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры send · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "send.gas_limit_margin_pct"
+area = "Venue base_dex"
+unit = "%"
+value = "20"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, send.gas_limit_margin_pct"
+rationale = "Запас 20% к количеству единиц газа eth_estimateGas. Фактическая плата учитывается по правилам своей сети."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "send.replaced_confirm_blocks"
+area = "Venue base_dex"
+unit = "блоков"
+value = "10"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, send.replaced_confirm_blocks; src/venues/bsc_dex/resolve_single.rs"
+rationale = "Дополнительный поиск исходной квитанции после занятого nonce, прежде чем признать вытеснение. Единица — блок этой сети."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры textile · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "textile.gas_budget_native"
+area = "Venue base_dex"
+unit = "монета газа"
+value = "0.0000044"
+source = "tests/data/first_run_dex_2026-11-26/textile_base_wallets.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_base_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (358886 gas максимума контрольных выплат × 6000000 wei/gas максимума среди 1 архивных квитанций сети + 7384041770 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "textile.partner"
+area = "Venue base_dex"
+unit = "да/нет"
+method = "Задаёт владелец: true при выданном Textile доступе rfq:aggregator и ключе textile.api_key в хранилище секретов; false для разрешённого прямого taker-кошелька с подтверждением контроля."
+source = "https://api.textilecredit.com/v2/openapi.json; src/venues/bsc_dex/textile/client.rs"
+rationale = "Режим определяется правами аккаунта. Для защищённого taker-модуля без заранее внесённого инвентаря код требует партнёрскую авторизацию."
+
+[[section]]
+title = "Параметры venue · Venue base_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "Venue base_dex"
+unit = "название"
+value = "base"
+source = "src/core/transfers.rs, own_net; src/venues/bsc_dex/coins.rs; src/venues/bsc_dex/wallet/transfer.rs; Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex"
+rationale = "Историческое имя поля: для кошелька DEX оно объявляет собственную обслуживаемую сеть. Перед переводом проверяется совпадение с именем, которое ядро выбрало для этой площадки. У бирж отдельные venue.base_network/venue.ethereum_network."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "Venue base_dex"
+unit = "монета"
+value = "USDC"
+source = "docs/BASE_ETHEREUM_SETTINGS.md, расчётная монета и сверка конверсии; src/venues/bsc_dex/tokens.rs, usdt; https://developers.circle.com/stablecoins/usdc-contract-addresses"
+rationale = "На Base проверен путь расчёта USDC кошелька с конверсией USDC/USDT на бирже покупки."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Параметры airswap · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "airswap.gas_budget_native"
+area = "Venue eth_dex"
+unit = "монета газа"
+value = "0.000100"
+source = "tests/data/first_run_dex_2026-11-26/airswap_ethereum_orders.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (207088 gas максимума контрольных выплат × 241442222 wei/gas максимума среди 2 архивных квитанций сети + 0 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "airswap.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "airswap.min_validity_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "14000"
+source = "https://ethereum.org/en/developers/docs/blocks/; config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "12 с на один слот Ethereum плюс 2 с общего расчётного срока. Начальный минимальный остаток подписанной заявки. Срок перепроверяется перед отправкой. Это политика допуска, включение в конкретный блок не гарантируется."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "airswap.makers"
+area = "Venue eth_dex"
+unit = "HTTPS URL"
+method = "Задаёт владелец: у согласованного маркетмейкера получить HTTPS URL сервера AirSwap RFQ для chainId 1, проверить getProtocols и getTokens для нужного SwapERC20; несколько доверенных URL перечислить через запятую."
+source = "https://github.com/airswap/airswap-about/blob/master/technology/protocols.md; tests/data/first_run_dex_2026-11-26/airswap_ethereum_orders.json.gz"
+rationale = "Адрес доверенного maker индивидуален. Архив сохраняет хеш locator и признак HTTPS, полного подтверждённого рабочего URL в нём нет."
+
+[[section]]
+title = "Параметры bsc · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "bsc.node_background_share_pct"
+area = "Venue eth_dex"
+unit = "%"
+value = "25"
+source = "Снимок 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, bsc.node_background_share_pct в Global; src/venues/bsc_dex/node/pace.rs"
+rationale = "25% очереди RPC гарантировано ожидающему фону. Остальные заявки обслуживаются с учётом приоритетов. Читается с площадки с возможностью общего значения."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "bsc.node_http_rps"
+area = "Venue eth_dex"
+unit = "вызовов в секунду"
+method = "Задаёт владелец: взять разрешённый RPS текущего RPC-тарифа сети и выделить долю этому процессу с учётом прочих клиентов. Для своего узла сверить с устойчивым RPS по тайм-аутам, 429 и запаздыванию головы; 20 запросов/с — ориентир старого публичного узла, 500 — замер отдельного собственного BSC-узла."
+source = "docs/OWN_NODE_SWITCH.md, §2; src/venues/bsc_dex/node/pace.rs"
+rationale = "Фактическая пропускная способность и единицы тарифов зависят от выбранного узла. Каждый вложенный вызов пачки занимает собственное место. Значение может переопределять общий лимит."
+
+[[section.rec]]
+name = "bsc.node_backup_hold_s"
+area = "Venue eth_dex"
+unit = "секунды"
+value = "10"
+source = "https://www.alchemy.com/docs/reference/throughput (окно тарификации 10 с); src/venues/bsc_dex/node/failover.rs"
+rationale = "Ориентир для резервного провайдера при коротком сбое основного. При наличии настроенного резерва оставаться на нём 10 с, затем снова пробовать основной. Для иных квот срок требуется сверить с периодом их сброса."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "bsc.node_http_url"
+area = "Venue eth_dex"
+unit = "URL"
+method = "Задаёт владелец: взять HTTP URL основного узла сети ethereum с chainId 1 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_http_key."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для eth_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_http_url_backup"
+area = "Venue eth_dex"
+unit = "URL"
+method = "Задаёт владелец: взять HTTP URL резервного узла сети ethereum с chainId 1 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_http_key_backup. Резерв заполнять при наличии независимого узла."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для eth_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_ws_url"
+area = "Venue eth_dex"
+unit = "URL"
+method = "Задаёт владелец: взять WebSocket URL основного узла сети ethereum с chainId 1 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_ws_key."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для eth_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section.rec]]
+name = "bsc.node_ws_url_backup"
+area = "Venue eth_dex"
+unit = "URL"
+method = "Задаёт владелец: взять WebSocket URL резервного узла сети ethereum с chainId 1 в панели выбранного RPC-провайдера или конфигурации собственного узла. Ключ провайдера обозначается {key}; сам ключ хранится в bsc.node_ws_key_backup. Резерв заполнять при наличии независимого узла."
+source = "docs/BASE_ETHEREUM_SETTINGS.md, сетевые области; src/settings/evm_profiles.rs, local_only; src/venues/bsc_dex/node/failover.rs"
+rationale = "Для eth_dex URL берётся только из области площадки. Проверить chainId, новые головы и logs через WebSocket, доступные исторические состояния и поддерживаемую кошельком симуляцию через HTTP."
+
+[[section]]
+title = "Параметры dex · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "dex.chain"
+area = "Venue eth_dex"
+unit = "id сети"
+value = "ethereum"
+source = "src/settings/evm_profiles.rs, PROFILES; docs/BASE_ETHEREUM_SETTINGS.md, сетевые области"
+rationale = "Локальное имя сети. При регистрации оно сверяется с идентичностью площадки."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "dex.evm_chain_id"
+area = "Venue eth_dex"
+unit = "chainId"
+value = "1"
+source = "src/settings/evm_profiles.rs, PROFILES; docs/BASE_ETHEREUM_SETTINGS.md, сетевые области"
+rationale = "Используется для проверки eth_chainId у собственного узла и для подписи."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "dex.settlement_contract"
+area = "Venue eth_dex"
+unit = "адрес"
+value = "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+source = "https://tether.to/en/supported-protocols/; docs/BASE_ETHEREUM_SETTINGS.md"
+rationale = "Контракт USDT для площадки eth_dex. Адрес и тикер сопоставляются со справочником сети исходной биржи перед конверсией. Предложение требует явного сохранения оператором."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "dex.deadline_s"
+area = "Venue eth_dex"
+unit = "секунды"
+value = "24"
+source = "https://ethereum.org/en/developers/docs/blocks/#block-time; docs/BASE_ETHEREUM_SETTINGS.md, dex.deadline_s"
+rationale = "Два 12-секундных слота от времени головы. Пропуск обоих приводит к истечению срока контракта."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры exec · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "exec.dex_slippage_pct"
+area = "Venue eth_dex"
+unit = "%"
+value = "0.5"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, exec.dex_slippage_pct"
+rationale = "Допуск minOut 0,5% в процентах. Проверка прибыли и худшая цена маршрута продолжают действовать."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры feed · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "feed.stale_after_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "30000"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex; https://ethereum.org/en/developers/docs/blocks/#block-time; src/venues/bsc_dex/node/heads.rs"
+rationale = "Два слота Ethereum по 12 с плюс 6 с резерва доставки. Порог в 3500 мс с быстрых сетей блокировал бы здоровую голову внутри нормального слота. bsc.blocks_poll_ms должен быть строго меньше порога."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры fermi · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "fermi.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Приоритетная строка Ethereum #7979. Для выбора нужны свежий кадр указанного строителя, настоящий executor, средства и положительная чистая цена."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.builder"
+area = "Venue eth_dex"
+unit = "имя"
+value = "titan"
+source = "tests/data/first_run_dex_2026-11-26/fermi_builder_coverage.json"
+rationale = "Формат парсера — titan. В архивном окне 65 событий в 211 блоках Titan, 22 в 46 блоках BuilderNet. Это выбор исходного провайдера для проверки слота."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.executor"
+area = "Venue eth_dex"
+unit = "адрес"
+method = "Задаёт владелец: разверните FermiSlotExecutor в Ethereum, сверьте привязку к выбранным Fermi router и runtime и укажите собственный адрес."
+source = "tests/data/first_run_dex_2026-11-26/fermi_slot_receipts.json"
+rationale = "Восемь оригинальных симуляций двух строителей подтверждают ABI; их адрес исполнения не подставляется владельцу."
+
+[[section.rec]]
+name = "fermi.gas_budget_native"
+area = "Venue eth_dex"
+unit = "ETH"
+value = "0.00007"
+source = "tests/data/first_run_dex_2026-11-26/fermi_slot_receipts.json"
+rationale = "Архив: swap до 263551 gas, разрешение до 48549, ставка 196619430 wei/gas. Совместно около 0,0000614 ETH. Округлённый стартовый потолок включает запас, стоимость нового слота проверяется перед отправкой."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.quote_sizes"
+area = "Venue eth_dex"
+unit = "суммы валюты котировки"
+value = "1"
+source = "tests/data/first_run_dex_2026-11-26/fermi_slot_receipts.json"
+rationale = "Размер в единицах валюты котировки: записаны обмены с одним полным USDT (1000000 raw) как точным входом и выходом. Другие уровни можно добавить в строго возрастающем порядке."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.quote_budget_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "fermi.books_interval_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "2000"
+source = "src/venues/bsc_dex/fermi/slot_feed.rs; config/first_run.toml — profit.calc_timeout_ms"
+rationale = "Пауза между проверками кадров — один интервал общего расчёта 2000 мс. В Ethereum это несколько попыток за 12-секундный слот. Каждая подтверждает точные parent и target, не создавая гарантий доставки."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры gladius · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "gladius.gas_budget_native"
+area = "Venue eth_dex"
+unit = "монета газа"
+value = "0.00014"
+source = "tests/data/first_run_dex_2026-11-26/gladius_ethereum_protected.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (288184 gas максимума контрольных выплат × 241442222 wei/gas максимума среди 2 архивных квитанций сети + 0 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.quote_timeout_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.max_age_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "5000"
+source = "src/venues/bsc_dex/ryze/price_tests.rs, max_age_ms=5000; src/venues/bsc_dex/gladius/book.rs; https://docs.rubicon.finance/developers/gladius-api"
+rationale = "По аналогии с проверенным сроком 5 с для индикативной книги Ryze. Интервал между завершением чтения и следующим запросом Gladius — 2500 мс; отсутствие ответа снимает книгу. Более длинный Retry-After требует отдельной паузы по хосту."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.min_validity_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "14000"
+source = "https://ethereum.org/en/developers/docs/blocks/; config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "12 с на один слот Ethereum плюс 2 с общего расчётного срока. Начальный минимальный остаток подписанной заявки. Срок перепроверяется перед отправкой. Это политика допуска, включение в конкретный блок не гарантируется."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры hashflow · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "hashflow.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Ethereum #1447 входит в решение 7."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "hashflow.gas_budget_native"
+area = "Venue eth_dex"
+unit = "нативная монета"
+value = "0.000025"
+source = "tests/data/hashflow_direct_2026-11-26/swaps.json"
+rationale = "Ethereum: 150511 gas, 119521235 wei/gas, оплачено 0,000017989260601085 ETH. Рекомендованный потолок округлён вверх; превышение актуальной оценкой исключает кандидат."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "hashflow.levels_max_age_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "10000"
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "Внутренняя политика свежести по аналогии с книгой Ryze. Текущая реализация обновляет уровни через половину возраста: около 5 с после цикла; авторизованный тариф проверяется по своему договору."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "hashflow.quote_budget_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "hashflow.min_validity_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "15000"
+source = "https://docs.hashflow.com/hashflow/taker/getting-started-api-v3"
+rationale = "Нижняя граница оставшегося quoteExpiry при отборе: один 12-секундный слот Ethereum с запасом."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры native_rfq · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "native_rfq.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM_ANSWERS.md#o61-inventory"
+rationale = "Приоритетная строка Native Swap #2803 этой сети; нужны свои средства, доступный firm на адрес владельца и проверенный runtime собственного защитного модуля."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.max_age_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "10000"
+source = "src/venues/bsc_dex/native_rfq/book.rs — аналог hashflow.levels_max_age_ms"
+rationale = "При 10 с жизни снимка книга запрашивается примерно через 5 с после цикла. Старые уровни не служат разрешением на перевод."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.quote_timeout_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "2000"
+source = "config/first_run.toml — profit.calc_timeout_ms (2000 мс)"
+rationale = "Стартовый предел ожидания по аналогии с общим расчётом прибыли. При истечении срока исключить просроченного кандидата; задержку измерять до подписания."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.min_validity_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "15000"
+source = "tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_protected.json.gz"
+rationale = "Политика как у Hashflow той же сети. При отборе проверяется реальный срок firm, в 12 архивных операциях Ethereum оставался запас более минуты."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.gas_budget_native"
+area = "Venue eth_dex"
+unit = "нативная монета"
+value = "0.00007"
+source = "tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_protected.json.gz"
+rationale = "224061–236628 gas для 12 защищённых обменов Ethereum. Лимит включает запас под разрешение по аналогии с бюджетом Fermi Ethereum."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры pancakex · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "pancakex.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "true"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Включение предусмотрено решением 7. Для исполнения действуют проверки кошелька, разрешений и пригодности маршрута."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.quote_budget_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.contracts"
+area = "Venue eth_dex"
+unit = "роли"
+value = "1 router 0x88815caf0b12208585832b693841c9da19c91687 0x73be727e93e4d775ab6e43f5e89640f33307925711f804e26c6d63ec98c0079c,1 implementation 0x6daca881fe954c0787c7b994a75bf75307d541be 0x86ef6854dbed37cc4934e56cd8c09a3771eca0ec4b8c8804a4e8327b54f4b881,1 permit 0x31c2f6fcff4f8759b3bd5bf0e1084a055615c768 0xb29cb67ee041882c3a6f4235375bd6e4d197f0526f0bb5479c49dd1c87d36c98,1 v1 0xee49a7a1c03fc07b676cbf7d6d721762d5380cda 0x9217045d809a45280ece6c7e9179b5e705b3b7e4bd4d25c5e5c6036c05737938,1 v3 0xbabfb4936976573a9494a396ea078e6ecd926574 0xbbe3e8c4449d1d7247c07c5f2e8df01ec7906f217a1f00dbfe344a09650a8ee9"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_profiles.json; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Сеть 1, блок 26494988. 5 строк профиля. Физическая роль и ограничения каждого токена проверяются отдельно."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.tokens"
+area = "Venue eth_dex"
+unit = "активы"
+value = "1 fiat 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505 0x43506849d7c04f9138d1a2050bbf3a0c054402dd 0xcdfb7d322961af3acae7a8f7ee8b69c205b36f576cc5b077f170c7eb8ecbe3ea 0x807a96288a1a408dbc13de2b1d087d10356395d2,1 exact 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23,1 tether-input 0xdac17f958d2ee523a2206206994597c13d831ec7 0xb44fb4e949d0f78f87f79ee46428f23a2a5713ce6fc6e0beb3dda78c2ac1ea55"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_profiles.json; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Сеть 1, блок 26494988. 3 строк профиля. Физическая роль и ограничения каждого токена проверяются отдельно."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.base_url"
+area = "Venue eth_dex"
+unit = "URL"
+value = "https://x.pancakeswap.com"
+source = "https://developer.pancakeswap.finance/contracts/pcsx/swap-integration; tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz"
+rationale = "Официальная база путей order-price/get-price и order-handler/order. Составлять путь от корня."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.slippage_bps"
+area = "Venue eth_dex"
+unit = "б.п."
+value = "10"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz; https://developer.pancakeswap.finance/contracts/pcsx/swap-integration"
+rationale = "Успешный неподписанный запрос на этой сети передавал 0,1%. 10 б.п. интерфейса передаются API как 0.10 процента. Минимальный выход сделки проверяется отдельно."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "pancakex.max_lifetime_sec"
+area = "Venue eth_dex"
+unit = "с"
+value = "218"
+source = "tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz; tests/data/first_run_dex_2026-11-26/pancakex_unsigned_exact_out.json.gz; https://ethereum.org/en/developers/docs/blocks/; src/venues/bsc_dex/pancakex/book.rs, Ticket::eligible"
+rationale = "В 4 успешных ответах exact input/output срок Permit2 относительно HTTP Date — 192 с. Бот проверяет также время полученного до запроса блока: к 192 с прибавлены 24 с запаса на отставание головы сети и 2 с бюджета расчёта. Это рекомендуемый потолок; более старый блок или более длинный ордер могут не пройти."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры raindex · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "raindex.gas_budget_native"
+area = "Venue eth_dex"
+unit = "монета газа"
+value = "0.00034"
+source = "tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz, tests/data/first_run_dex_2026-11-26/raindex_v3_ethereum.json.gz, tests/data/first_run_dex_2026-11-26/raindex_cash_ethereum.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (697470 gas максимума контрольных выплат × 241442222 wei/gas максимума среди 2 архивных квитанций сети + 0 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "raindex.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "false"
+source = "docs/review/BASE_ETHEREUM.md, решение владельца 7 и замечание О-68"
+rationale = "Дополнительный канал на этой сети. Владелец может включить его после проверки действующего источника и своего расчётного профиля."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "raindex.quote_timeout_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "1000"
+source = "config/first_run.toml, profit.calc_timeout_ms=2000; src/settings/catalog/dex.rs"
+rationale = "Приложение не даёт поставщику занять весь общий срок 2000 мс. Стартовый бюджет 1000 мс — половина общего срока, оставшаяся часть предназначена другим этапам. Скорость удалённого поставщика этим числом не подтверждается."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "raindex.max_age_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "90000"
+source = "config/first_run.toml, venue.book_stale_ms для Phemex: ориентир 90000 мс для периодических снимков; src/venues/bsc_dex/raindex/book.rs и source.rs"
+rationale = "Стартовый предел 90 с для перечня ордеров с постраничной загрузкой. На одну книгу код выделяет не более 45 с. Расчёт на точном размере всё равно проверяет кошелёк на блоке. Проходимость большой книги зависит от числа страниц и задержки индексатора."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "raindex.books"
+area = "Venue eth_dex"
+unit = "сети и книги"
+method = "Задаёт владелец: из квитанции развёртывания взять адрес своего модуля для каждой книги и подставить в скобках; формат строк через запятую: 1 3 0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74 0xd07dc3eb86d937aa1ced15fed4108f3206cd76d3e17caafadd13eed02abc7c81 (адрес своего размещённого модуля книги) 0xae51c722199816882fff55a5a50c560f8e5808d829bbf8a9a7fcd32b5fd53ed0 blockscout https://eth.blockscout.com/api/v2/addresses/0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74/logs, 1 4 0x0ea6d458488d1cf51695e1d6e4744e6fb715d37c 0x12bf1769f735e0ddc96e109c470be6f5f7844a83f2db65bb7a780c0ce7fee1f2 (адрес своего размещённого модуля книги) 0x4d02d9f6cbc61b68cc7e3f0bcdf9bfd0144b66d828bad74a1321e2fa29dd6523 blockscout https://eth.blockscout.com/api/v2/addresses/0x0ea6d458488d1cf51695e1d6e4744e6fb715d37c/logs"
+source = "tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz; tests/data/first_run_dex_2026-11-26/raindex_ethereum_quotes.json.gz; https://raw.githubusercontent.com/rainlanguage/raindex/0352173773372ab0b8f3f779586bec446d4eca99/deployments/raindex.json"
+rationale = "Каждому адресу книги соответствует отдельный модуль своего кошелька. Код проверяет хеши обоих контрактов, book(), bookCodeHash() и селектор версии."
+
+[[section.rec]]
+name = "raindex.sample_amounts"
+area = "Venue eth_dex"
+unit = "сырые количества ERC20"
+value = "1 0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74 0xdac17f958d2ee523a2206206994597c13d831ec7 0x9caae40dcf950afea443119e51e821d6fe2437ca 3000000000 84000000000000000000,1 0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74 0xdac17f958d2ee523a2206206994597c13d831ec7 0x9caae40dcf950afea443119e51e821d6fe2437ca 3000000000 85000000000000000000,1 0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74 0xdac17f958d2ee523a2206206994597c13d831ec7 0x9caae40dcf950afea443119e51e821d6fe2437ca 3000000000 100000000000000000000,1 0xf1224a483ad7f1e9aa46a8ce41229f32d7549a74 0xdac17f958d2ee523a2206206994597c13d831ec7 0x9caae40dcf950afea443119e51e821d6fe2437ca 3000000000 200000000000000000000"
+source = "tests/data/first_run_dex_2026-11-26/raindex_v3_ethereum.json.gz; src/venues/bsc_dex/raindex/legacy.rs"
+rationale = "Четыре полных прогона V3, Ethereum блок 26494988. Проверенный maxDebit 3000000000 единиц USDT (6 знаков) на строку; exactCredit 84, 85, 100 и 200 BJ (18 знаков) соответственно. Измеренное списание 504, 510, 600 и 1200 USDT. В каждой строке cap — лимит симуляции, его нельзя выдавать за расход или обязательный размер сделки."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "raindex.cash_routes"
+area = "Venue eth_dex"
+unit = "сети и мосты"
+method = "Задаёт владелец: из квитанции своего RaindexCashWallet взять адрес wrapper. Заполнить одну строку «1 0x0ea6d458488d1cf51695e1d6e4744e6fb715d37c (свой адрес wrapper) 0xddd0a60d634e87f96cb3e52483bd78332101ae4f0203db480728a2ab81e27b12 0.3»."
+source = "tests/data/first_run_dex_2026-11-26/raindex_cash_ethereum.json.gz; src/venues/bsc_dex/raindex/cash.rs"
+rationale = "Ethereum V4. Платёжный токен USDT, промежуточный WETH, комиссия пула 0,3%. Доказаны шесть симуляций. Адрес из архивного развёртывания на форке владельцу не принадлежит."
+
+[[section]]
+title = "Параметры send · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "send.gas_limit_margin_pct"
+area = "Venue eth_dex"
+unit = "%"
+value = "20"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, send.gas_limit_margin_pct"
+rationale = "Запас 20% к количеству единиц газа eth_estimateGas. Фактическая плата учитывается по правилам своей сети."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "send.replaced_confirm_blocks"
+area = "Venue eth_dex"
+unit = "блоков"
+value = "10"
+source = "Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex, send.replaced_confirm_blocks; src/venues/bsc_dex/resolve_single.rs"
+rationale = "Дополнительный поиск исходной квитанции после занятого nonce, прежде чем признать вытеснение. Единица — блок этой сети."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры textile · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "textile.gas_budget_native"
+area = "Venue eth_dex"
+unit = "монета газа"
+value = "0.00018"
+source = "tests/data/first_run_dex_2026-11-26/textile_ethereum_wallets.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "Стартовый предел в ETH: 2 × (362394 gas максимума контрольных выплат × 241442222 wei/gas максимума среди 2 архивных квитанций сети + 0 wei архивного максимума публикации), округление вверх до двух значащих цифр. Множитель 2 — запас рекомендации. Текущая полная плата проверяется адаптером. Более дорогая транзакция может быть отклонена."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "textile.partner"
+area = "Venue eth_dex"
+unit = "да/нет"
+method = "Задаёт владелец: true при выданном Textile доступе rfq:aggregator и ключе textile.api_key в хранилище секретов; false для разрешённого прямого taker-кошелька с подтверждением контроля."
+source = "https://api.textilecredit.com/v2/openapi.json; src/venues/bsc_dex/textile/client.rs"
+rationale = "Режим определяется правами аккаунта. Для защищённого taker-модуля без заранее внесённого инвентаря код требует партнёрскую авторизацию."
+
+[[section]]
+title = "Параметры venue · Venue eth_dex"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "venue.bsc_network"
+area = "Venue eth_dex"
+unit = "название"
+value = "ethereum"
+source = "src/core/transfers.rs, own_net; src/venues/bsc_dex/coins.rs; src/venues/bsc_dex/wallet/transfer.rs; Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex"
+rationale = "Историческое имя поля: для кошелька DEX оно объявляет собственную обслуживаемую сеть. Перед переводом проверяется совпадение с именем, которое ядро выбрало для этой площадки. У бирж отдельные venue.base_network/venue.ethereum_network."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "venue.quote_asset"
+area = "Venue eth_dex"
+unit = "монета"
+value = "USDT"
+source = "docs/BASE_ETHEREUM_SETTINGS.md, расчётная монета и сверка конверсии; src/venues/bsc_dex/tokens.rs, usdt; https://tether.to/en/supported-protocols/"
+rationale = "На Ethereum профиль использует USDT как расчётную монету; тикер и адрес должны описывать один и тот же токен."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Параметры kyber · Venue kyberswap"
+intro = "Проверьте источник и область перед сохранением. Персональные значения задаёт владелец."
+
+[[section.rec]]
+name = "kyber.assume_zero_transfer_tax"
+area = "Venue kyberswap"
+unit = "да/нет"
+method = "Не используется после решений 92 и 121. Оставить пустым."
+source = "src/settings/catalog/kyber.rs"
+rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."

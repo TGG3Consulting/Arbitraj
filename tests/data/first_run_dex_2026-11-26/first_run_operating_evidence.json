@@ -1,0 +1,143 @@
+{
+  "settings": {
+    "http.body_idle_ms": 10000,
+    "http.max_body_bytes": 64000000,
+    "http.timeout_ms": 10000,
+    "http.total_ms": 30000,
+    "kyber.base_url": "https://aggregator-api.kyberswap.com",
+    "kyber.buy_fill_tolerance_pct": "0.1",
+    "kyber.chain": "bsc",
+    "kyber.deadline_s": 60,
+    "kyber.final_gate_usd": "-0.05",
+    "kyber.gas_limit_margin_pct": "20",
+    "kyber.gas_price_markup_pct": "10",
+    "kyber.http_timeout_ms": 5000,
+    "kyber.max_wait_ms": 1500,
+    "kyber.receipt_poll_ms": 1000,
+    "kyber.receipt_timeout_ms": 60000,
+    "kyber.rps": 3,
+    "kyber.slippage_bps": 50,
+    "kyber.user_agent": "g3-arb/1.0"
+  },
+  "settings_source": "Сохранённый снимок настроек 25.11.2026, outputs/profit-drop-2026-11-25/settings.json. Только публичные и числовые значения.",
+  "dexalot_base": {
+    "source": "https://mainnet.base.org",
+    "method": "eth_getTransactionReceipt",
+    "receipt": {
+      "transactionHash": "0x8cf90507a0f102969f7a3f5fcdddb82098987924ac4efe918b7971eb8ebc6b04",
+      "blockHash": "0xf17ade6cbad9e2578254edffc9a5759b2ab7105e3e55896e57589e70af75c04a",
+      "blockNumber": "0x2fef37a",
+      "status": "0x1",
+      "gasUsed": "0x24c2f",
+      "effectiveGasPrice": "0x5bb490",
+      "l1Fee": "0x1da15fafa"
+    },
+    "fee_wei": "912909590890",
+    "seconds_to_expiry": 11
+  },
+  "network_comparisons": [
+    {
+      "name": "send.replaced_confirm_blocks",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": 10
+    },
+    {
+      "name": "send.replaced_confirm_blocks",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": 10
+    },
+    {
+      "name": "venue.bsc_network",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": "arbitrum"
+    },
+    {
+      "name": "venue.bsc_network",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": "BEP20"
+    },
+    {
+      "name": "dex.deadline_s",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": 6
+    },
+    {
+      "name": "dex.deadline_s",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": 6
+    },
+    {
+      "name": "bsc.node_background_share_pct",
+      "scope": {
+        "kind": "Global"
+      },
+      "value": "25"
+    },
+    {
+      "name": "send.gas_limit_margin_pct",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": "20"
+    },
+    {
+      "name": "send.gas_limit_margin_pct",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": "20"
+    },
+    {
+      "name": "feed.stale_after_ms",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": 3500
+    },
+    {
+      "name": "feed.stale_after_ms",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": 3500
+    },
+    {
+      "name": "exec.dex_slippage_pct",
+      "scope": {
+        "id": "arb_dex",
+        "kind": "Venue"
+      },
+      "value": "0.5"
+    },
+    {
+      "name": "exec.dex_slippage_pct",
+      "scope": {
+        "id": "bsc_dex",
+        "kind": "Venue"
+      },
+      "value": "0.5"
+    }
+  ]
+}

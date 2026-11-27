@@ -5258,6 +5258,7 @@
     "id": "spectra-v2-base-legacy-1",
     "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
     "settings": {
+      "dex.pool_enabled": true,
       "dex.kind": "spectra_crypto_v1",
       "dex.factory": "0x7ea3097e2af59ea705398544e0f58eddb7bd1852",
       "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
@@ -5273,6 +5274,7 @@
     "id": "spectra-v2-base-legacy-2",
     "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
     "settings": {
+      "dex.pool_enabled": true,
       "dex.kind": "spectra_crypto_v1",
       "dex.factory": "0x04ec86bf37dfd77397bcc2e386cb37f175b4e106",
       "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
@@ -5288,6 +5290,7 @@
     "id": "spectra-v2-base",
     "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
     "settings": {
+      "dex.pool_enabled": true,
       "dex.kind": "spectra_stableswap_ng",
       "dex.factory": "0x928d0c9443f49a0e33f877f4e1f19270691c2ad2",
       "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
@@ -5403,6 +5406,7 @@
     "id": "umia-base",
     "source": "https://github.com/umiafinance/protocol/tree/3165f5a5bdaa23a83fbfd4894523e7ca84d53a14 · tests/data/first_run_dex_2026-11-26/umia_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_history.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_wallets.json.gz · tests/data/first_run_dex_2026-11-26/umia_base_sources.json",
     "settings": {
+      "dex.pool_enabled": true,
       "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
       "dex.universal_router_version": "2.1.2",
       "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
@@ -5966,6 +5970,7 @@
     "id": "kipseli-lambda-ethereum",
     "source": "https://github.com/lambdaclass/propamm-router-contracts/tree/d6e41d3d6f3bf9f8ec78dfea5957f81b7bed467b · https://eth.blockscout.com/address/0x71e790dd841c8a9061487cb3e78c288e75ce0b3d · tests/data/first_run_dex_2026-11-26/kipseli_ethereum.json.gz",
     "settings": {
+      "dex.pool_enabled": false,
       "dex.kind": "lambda_propamm",
       "dex.factory": "0x71e790dd841c8a9061487cb3e78c288e75ce0b3d",
       "dex.quoter": "0x4ddf368080cd7946db5b459ad591c350158175e1",
@@ -6973,6 +6978,7 @@
     "id": "ambient-ethereum",
     "source": "https://docs.ambient.finance/developers/deployed-contracts · https://docs.ambient.finance/developers/dex-contract-interface/swaps/hot-path-swap-migration/directly-calling-crocswapdex · tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz",
     "settings": {
+      "dex.pool_enabled": true,
       "dex.kind": "ambient_ethereum",
       "dex.factory": "0xaaaaaaaaa24eeeb8d57d431224f73832bc34f688",
       "dex.quoter": "0x3e3edd3ed7621891e574e5d7f47b1f30a994c0d0",

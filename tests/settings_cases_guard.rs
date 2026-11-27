@@ -133,3 +133,9 @@ fn every_setting_has_case_record() {
         errors.join("\n")
     );
 }
+
+#[path = "common/first_run_channels.rs"]
+mod first_run_channels;
+
+#[path = "common/first_run_operating_evidence.rs"]
+mod first_run_operating_evidence;

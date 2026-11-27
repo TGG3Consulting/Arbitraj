@@ -1,0 +1,418 @@
+{
+  "chain": 8453,
+  "source": "https://docs.stabull.finance/amm/contracts",
+  "samples": [
+    {
+      "height": 61830752,
+      "selector": {
+        "blockHash": "0x9b5629a4714fc5a1a2348e5e8de88f2701c44ea3e8df85abf62bdea5222c79e3",
+        "requireCanonical": true
+      },
+      "timestamp": 1795556526,
+      "state_root": "0xe1989fb778bb25d08f08dc7df620f107a14d65c6b981300471f2beb1cd713364",
+      "roles": [
+        {
+          "assimilator": "0x8ba5bddc1cd6d1a0c757982b2af3eb6db53903e0",
+          "expected_token": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+          "token": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+          "oracle": "0x0b0e64c05083fdf9ed7c5d3d8262c4216efc9394",
+          "rate": 16927376,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419114454,
+            16927376,
+            1795553846,
+            1795553860,
+            36893488147419114454
+          ]
+        },
+        {
+          "assimilator": "0x53b105e1d48a76cdb955d037f042c830d14d82ab",
+          "expected_token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "oracle": "0x7e860098f58bbfc8648a4311b374b1d669a2bc6b",
+          "rate": 99991312,
+          "oracle_scale": 8,
+          "round": [
+            55340232221128654945,
+            99991312,
+            1795525329,
+            1795525342,
+            55340232221128654945
+          ]
+        },
+        {
+          "assimilator": "0x41f9289b3641499d9b78a127d9be7173def37374",
+          "expected_token": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+          "token": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+          "oracle": "0x29413773e7cd4dfd6ad89a50887877b88a6c592c",
+          "rate": 1975324,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419111846,
+            1975324,
+            1795555076,
+            1795555089,
+            36893488147419111846
+          ]
+        },
+        {
+          "assimilator": "0x97f8bf444bfc3052ae60a8ca50a0257daa440295",
+          "expected_token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+          "token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+          "oracle": "0xc91d87e81fab8f93699ecf7ee9b44d11e1d53f0f",
+          "rate": 109657000,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419110052,
+            109657000,
+            1795554579,
+            1795554592,
+            36893488147419110052
+          ]
+        },
+        {
+          "assimilator": "0x74e540e770a480e1c6210d30192df3fb11d2e830",
+          "expected_token": "0xe743f13623e000261b634f0e5676f294475ec24d",
+          "token": "0xe743f13623e000261b634f0e5676f294475ec24d",
+          "oracle": "0xdfbb5cbc88e382de007bfe6ce99c388176ed80ad",
+          "rate": 73700,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109712,
+            73700,
+            1795556477,
+            1795556490,
+            36893488147419109712
+          ]
+        },
+        {
+          "assimilator": "0xf39786a33ea844fc91d94ca029b64141c72244a6",
+          "expected_token": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+          "token": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+          "oracle": "0x2ecc8a8b370fc6a217166b2782a35339bebee98b",
+          "rate": 5700142,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419114138,
+            5700142,
+            1795555899,
+            1795555912,
+            36893488147419114138
+          ]
+        },
+        {
+          "assimilator": "0x656a5225705b58eaedbdf5e6f538364e9e1cd11e",
+          "expected_token": "0x269cae7dc59803e5c596c95756faeebb6030e0af",
+          "token": "0x269cae7dc59803e5c596c95756faeebb6030e0af",
+          "oracle": "0x9e8ee77c76d4fa41306056d1c3196af5da1600bd",
+          "rate": 5148058,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419110549,
+            5148058,
+            1795553131,
+            1795553144,
+            36893488147419110549
+          ]
+        },
+        {
+          "assimilator": "0x5cecfa0a31cb7964b37484d6efa268b909bbee3a",
+          "expected_token": "0x7479791022eb1030bbc3b09f6575c5db4ddc0b90",
+          "token": "0x7479791022eb1030bbc3b09f6575c5db4ddc0b90",
+          "oracle": "0x7e860098f58bbfc8648a4311b374b1d669a2bc6b",
+          "rate": 99991312,
+          "oracle_scale": 8,
+          "round": [
+            55340232221128654945,
+            99991312,
+            1795525329,
+            1795525342,
+            55340232221128654945
+          ]
+        },
+        {
+          "assimilator": "0x6b06ac99fe8c9651620fe6da8a90be2080ca67c5",
+          "expected_token": "0xd4dd9e2f021bb459d5a5f6c24c12fe09c5d45553",
+          "token": "0xd4dd9e2f021bb459d5a5f6c24c12fe09c5d45553",
+          "oracle": "0x3a1d6444fb6a402470098e23dad0b7e86e14252f",
+          "rate": 119701703,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419103493,
+            119701703,
+            1795534180,
+            1795534193,
+            36893488147419103493
+          ]
+        },
+        {
+          "assimilator": "0x1246b19c59fff6a92e875b57402743cf576c86bb",
+          "expected_token": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+          "token": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+          "oracle": "0x46e51b8ca41d709928eda9ae43e42193e6cdf229",
+          "rate": 66528000,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419103565,
+            66528000,
+            1795531178,
+            1795531191,
+            36893488147419103565
+          ]
+        },
+        {
+          "assimilator": "0xd0c3f8c2689e4c911e4c7d4836ef856ca1248746",
+          "expected_token": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+          "token": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+          "oracle": "0x05a6cf213ecc5501a11a08ebefa4a8a60313ef97",
+          "rate": 5486,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109343,
+            5486,
+            1795556275,
+            1795556288,
+            36893488147419109343
+          ]
+        },
+        {
+          "assimilator": "0xf7a0c8903e8fd15d61311ce228a866884571fcbb",
+          "expected_token": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+          "token": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+          "oracle": "0xdfbb5cbc88e382de007bfe6ce99c388176ed80ad",
+          "rate": 73700,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109712,
+            73700,
+            1795556477,
+            1795556490,
+            36893488147419109712
+          ]
+        },
+        {
+          "assimilator": "0xb0edb08a7a9f42bacdb35922ab5ecf5974751c0b",
+          "expected_token": "0x7cee47e7b7cd04cf984e8dd86c42595b5771a9b2",
+          "token": "0x7cee47e7b7cd04cf984e8dd86c42595b5771a9b2",
+          "oracle": "0xb67047edf6204f4c81333248da71f8387050790c",
+          "rate": 21727400,
+          "oracle_scale": 8,
+          "round": [
+            1,
+            21727400,
+            1795553753,
+            1795553753,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "height": 62262756,
+      "selector": {
+        "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "requireCanonical": true
+      },
+      "timestamp": 1795642926,
+      "state_root": "0x037b0c48cd33236cb94ec9e9fc7438c120b138c2c31d39d0ebe42521ee65676b",
+      "roles": [
+        {
+          "assimilator": "0x8ba5bddc1cd6d1a0c757982b2af3eb6db53903e0",
+          "expected_token": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+          "token": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+          "oracle": "0x0b0e64c05083fdf9ed7c5d3d8262c4216efc9394",
+          "rate": 17167971,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419114525,
+            17167971,
+            1795641044,
+            1795641056,
+            36893488147419114525
+          ]
+        },
+        {
+          "assimilator": "0x53b105e1d48a76cdb955d037f042c830d14d82ab",
+          "expected_token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "token": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+          "oracle": "0x7e860098f58bbfc8648a4311b374b1d669a2bc6b",
+          "rate": 99987442,
+          "oracle_scale": 8,
+          "round": [
+            55340232221128654946,
+            99987442,
+            1795611736,
+            1795611749,
+            55340232221128654946
+          ]
+        },
+        {
+          "assimilator": "0x41f9289b3641499d9b78a127d9be7173def37374",
+          "expected_token": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+          "token": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+          "oracle": "0x29413773e7cd4dfd6ad89a50887877b88a6c592c",
+          "rate": 1973260,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419111870,
+            1973260,
+            1795641653,
+            1795641666,
+            36893488147419111870
+          ]
+        },
+        {
+          "assimilator": "0x97f8bf444bfc3052ae60a8ca50a0257daa440295",
+          "expected_token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+          "token": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+          "oracle": "0xc91d87e81fab8f93699ecf7ee9b44d11e1d53f0f",
+          "rate": 109759000,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419110079,
+            109759000,
+            1795640371,
+            1795640384,
+            36893488147419110079
+          ]
+        },
+        {
+          "assimilator": "0x74e540e770a480e1c6210d30192df3fb11d2e830",
+          "expected_token": "0xe743f13623e000261b634f0e5676f294475ec24d",
+          "token": "0xe743f13623e000261b634f0e5676f294475ec24d",
+          "oracle": "0xdfbb5cbc88e382de007bfe6ce99c388176ed80ad",
+          "rate": 73340,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109746,
+            73340,
+            1795640268,
+            1795640281,
+            36893488147419109746
+          ]
+        },
+        {
+          "assimilator": "0xf39786a33ea844fc91d94ca029b64141c72244a6",
+          "expected_token": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+          "token": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+          "oracle": "0x2ecc8a8b370fc6a217166b2782a35339bebee98b",
+          "rate": 5699239,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419114197,
+            5699239,
+            1795641438,
+            1795641451,
+            36893488147419114197
+          ]
+        },
+        {
+          "assimilator": "0x656a5225705b58eaedbdf5e6f538364e9e1cd11e",
+          "expected_token": "0x269cae7dc59803e5c596c95756faeebb6030e0af",
+          "token": "0x269cae7dc59803e5c596c95756faeebb6030e0af",
+          "oracle": "0x9e8ee77c76d4fa41306056d1c3196af5da1600bd",
+          "rate": 5104643,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419110643,
+            5104643,
+            1795640214,
+            1795640228,
+            36893488147419110643
+          ]
+        },
+        {
+          "assimilator": "0x5cecfa0a31cb7964b37484d6efa268b909bbee3a",
+          "expected_token": "0x7479791022eb1030bbc3b09f6575c5db4ddc0b90",
+          "token": "0x7479791022eb1030bbc3b09f6575c5db4ddc0b90",
+          "oracle": "0x7e860098f58bbfc8648a4311b374b1d669a2bc6b",
+          "rate": 99987442,
+          "oracle_scale": 8,
+          "round": [
+            55340232221128654946,
+            99987442,
+            1795611736,
+            1795611749,
+            55340232221128654946
+          ]
+        },
+        {
+          "assimilator": "0x6b06ac99fe8c9651620fe6da8a90be2080ca67c5",
+          "expected_token": "0xd4dd9e2f021bb459d5a5f6c24c12fe09c5d45553",
+          "token": "0xd4dd9e2f021bb459d5a5f6c24c12fe09c5d45553",
+          "oracle": "0x3a1d6444fb6a402470098e23dad0b7e86e14252f",
+          "rate": 120305093,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419103494,
+            120305093,
+            1795608308,
+            1795608321,
+            36893488147419103494
+          ]
+        },
+        {
+          "assimilator": "0x1246b19c59fff6a92e875b57402743cf576c86bb",
+          "expected_token": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+          "token": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+          "oracle": "0x46e51b8ca41d709928eda9ae43e42193e6cdf229",
+          "rate": 66190000,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419103568,
+            66190000,
+            1795627152,
+            1795627165,
+            36893488147419103568
+          ]
+        },
+        {
+          "assimilator": "0xd0c3f8c2689e4c911e4c7d4836ef856ca1248746",
+          "expected_token": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+          "token": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+          "oracle": "0x05a6cf213ecc5501a11a08ebefa4a8a60313ef97",
+          "rate": 5447,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109367,
+            5447,
+            1795642800,
+            1795642814,
+            36893488147419109367
+          ]
+        },
+        {
+          "assimilator": "0xf7a0c8903e8fd15d61311ce228a866884571fcbb",
+          "expected_token": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+          "token": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+          "oracle": "0xdfbb5cbc88e382de007bfe6ce99c388176ed80ad",
+          "rate": 73340,
+          "oracle_scale": 8,
+          "round": [
+            36893488147419109746,
+            73340,
+            1795640268,
+            1795640281,
+            36893488147419109746
+          ]
+        },
+        {
+          "assimilator": "0xb0edb08a7a9f42bacdb35922ab5ecf5974751c0b",
+          "expected_token": "0x7cee47e7b7cd04cf984e8dd86c42595b5771a9b2",
+          "token": "0x7cee47e7b7cd04cf984e8dd86c42595b5771a9b2",
+          "oracle": "0xb67047edf6204f4c81333248da71f8387050790c",
+          "rate": 22048800,
+          "oracle_scale": 8,
+          "round": [
+            1,
+            22048800,
+            1795642483,
+            1795642483,
+            1
+          ]
+        }
+      ]
+    }
+  ]
+}

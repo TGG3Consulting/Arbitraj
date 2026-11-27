@@ -1836,15 +1836,27 @@ def stabull_markets():
     directory = capture("directory")
     protected = capture("protected_wallets")
     native = capture("native_wallets")
+    oracle = read(root / "stabull_base_oracles.json")
+    earlier, current = oracle["samples"]
+    ages = [current["timestamp"] - r["round"][3] for r in current["roles"]]
+    changed = sum(a["rate"] != b["rate"] for a, b in zip(earlier["roles"], current["roles"], strict=True))
     out = ["### Stabull на Base", "",
            f"Фабрика `{directory['factory']['address']}` создала 12 Curve к блоку {directory['height']}. "
            f"За 24 часа зарегистрировано {directory['events']} Trade. Официальный Router `{directory['factory']['router']}` "
            "принимает точный вход. Curve принимает также целевую выплату с максимальным входом. "
-           "Внешний оракул может обновиться между блоками без события Curve. Каждый блок заново читаются флаги, обе валюты, assimilator и их курсы.",
+           "Внешний оракул может обновиться между блоками без события Curve. Каждый блок заново читаются флаги, обе валюты, assimilator и их курсы. "
+           f"На высотах {earlier['height']} и {current['height']} для всех {len(current['roles'])} assimilator проверены token, oracle, getRate и latestRoundData. "
+           f"Значения изменились у {changed}; на последней высоте возраст ответов от {min(ages)} до {max(ages)} секунд. "
+           "Доказательства опубликованного срока по каждому оракулу в настройках отсутствуют.",
            "", "Первая настройка `dex.kind=stabull` загружает котировки. Для денежного пути владелец размещает "
            f"StabullAdapter, задаёт его адрес в `dex.router` и выбирает `dex.kind=stabull_module`. "
            f"Архивный runtime `{protected['module']['runtime']}`, расход размещения {protected['module']['deployment_gas']} gas. "
-           "Прямой модуль проверяет строгий срок, расход и конечную выплату. Шаг V5 проверяет срок внешнего поручения; "
+           "Прямой модуль проверяет фактический расход и выплату при точном входе и целевом выходе. Котировка viewTargetSwap задаёт первую пробу; "
+           "при расхождении кошельковая симуляция определяет точный бюджет и повторно проверяет его. Во время восстановления сверяются первоначальная calldata, "
+           "Curve Trade и движение денег владельца. Официальный Router задаётся через `dex.quoter` и `dex.quoter_runtime_hash`. "
+           "Его ABI допускает денежный обмен с точным входом. Curve допускает оба способа. Эти прямые ERC20-формы требуют двух "
+           "проверенных реализаций в `dex.router_exact_tokens`; все 12 рынков содержат обновляемый Base USDC, автоматический список пуст. "
+           "Шаг V5 проверяет срок внешнего поручения; "
            "внутри одной транзакции адаптер согласует его с более строгой проверкой Curve. Лимит капитала, ступени в USD, срок и разрешение торговли задаёт владелец.",
            "", "Архив моделирует 0,001 и 1 USDC и обратную продажу полученной валюты. Счётчик учитывает отдельные подтверждённые выплаты, включая повтор разными входами. "
            "Во всех успешных случаях более строгий денежный предел на один атом и истекший срок отвергнуты. "
@@ -1857,7 +1869,7 @@ def stabull_markets():
         for case in direct["cases"] + guarded["cases"]:
             counts[case["mode"]] += sum(case.get(k, {}).get("stage") == "paid" for k in ["buy", "sell", "buy_target", "sell_target"])
         out.append(f"| {market['pool_name']} | `{market['address']}` | {counts['pool']} | {counts['router']} | {counts['module']} | {counts['v5']} |")
-    return out + ["", "[Размещения Stabull](https://docs.stabull.finance/amm/contracts) · [Архив кошелька и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45964238282)", ""]
+    return out + ["", "[Размещения Stabull](https://docs.stabull.finance/amm/contracts) · [Архив кошелька и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45964238282) · [Граница V5: равенство времени успешно на 20 выплатах](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45966291856)", ""]
 
 
 def hashflow_market_observation():

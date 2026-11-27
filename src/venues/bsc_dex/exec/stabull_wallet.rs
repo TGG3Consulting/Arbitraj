@@ -50,7 +50,12 @@ pub struct Proof {
     pub deadline: U256,
 }
 impl Terms {
-    pub(crate) fn proof(self, o: &v2_wallet_sim::Order, minimum: U256, deadline: U256) -> Proof {
+    pub(in crate::venues::bsc_dex) fn proof(
+        self,
+        o: &v2_wallet_sim::Order,
+        minimum: U256,
+        deadline: U256,
+    ) -> Proof {
         Proof {
             terms: self,
             payer: o.payer,
@@ -212,3 +217,7 @@ impl Proof {
         Some((spent, received))
     }
 }
+
+#[cfg(test)]
+#[path = "stabull_wallet_tests.rs"]
+mod tests;

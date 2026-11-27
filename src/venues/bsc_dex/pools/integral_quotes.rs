@@ -64,18 +64,24 @@ pub(super) async fn levels<C: SolCall>(
     pair: (Address, Address),
     sizes: &[U256],
     at: &Value,
-    quote: impl Fn(Address, Address, U256) -> C,
+    quote: fn(Address, Address, U256) -> C,
 ) -> GatewayResult<Vec<LadderPoint>> {
     if sizes.is_empty() {
         return Ok(Vec::new());
     }
+    let bad = || {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "Неполный или некорректный ответ контракта котировки",
+        )
+    };
     let calls = sizes
         .iter()
         .map(|&amount| batch::view(at, relay, quote(pair.0, pair.1, amount)))
         .collect::<Vec<_>>();
     let rows = rpc::batch(ctx, &calls).await?;
     if rows.len() != sizes.len() {
-        return Err(integral_size::bad(ctx));
+        return Err(bad());
     }
     let mut steps = Vec::new();
     for (&amount_in, row) in sizes.iter().zip(rows) {
@@ -84,9 +90,9 @@ pub(super) async fn levels<C: SolCall>(
             Err(e) if e.code == ErrorCode::SwapReverted => continue,
             Err(e) => return Err(e),
         };
-        let raw: Bytes = serde_json::from_str(raw.get()).map_err(|_| integral_size::bad(ctx))?;
+        let raw: Bytes = serde_json::from_str(raw.get()).map_err(|_| bad())?;
         if raw.len() != 32 {
-            return Err(integral_size::bad(ctx));
+            return Err(bad());
         }
         if let Some(amount_out) = payout(&raw) {
             steps.push(LadderPoint {

@@ -27,6 +27,33 @@ fn delta(logs: &Value, token: &Value, payer: &str) -> (u128, u128) {
     (paid, received)
 }
 #[test]
+fn both_rates_follow_their_own_oracle_on_two_canonical_blocks() {
+    let source: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/stabull_base_oracles.json"
+    ))
+    .unwrap();
+    let samples = source["samples"].as_array().unwrap();
+    assert_eq!(samples.len(), 2);
+    let mut rates = BTreeMap::new();
+    for sample in samples {
+        let rows = sample["roles"].as_array().unwrap();
+        assert_eq!(rows.len(), 13);
+        assert_eq!(sample["selector"]["requireCanonical"], true);
+        for row in rows {
+            assert_eq!(row["token"], row["expected_token"]);
+            assert_eq!(row["rate"], row["round"][1]);
+            assert!(row["rate"].as_u64().unwrap() > 0);
+            assert!(row["round"][3].as_u64().unwrap() <= sample["timestamp"].as_u64().unwrap());
+            if let Some(previous) = rates.insert(row["assimilator"].as_str().unwrap(), &row["rate"])
+            {
+                assert_ne!(previous, &row["rate"]);
+            }
+        }
+    }
+    assert_eq!(rates.len(), 13);
+}
+
+#[test]
 fn successful_payments_preserve_wallet_limits_in_each_form() {
     let dir = capture(include_bytes!(
         "data/first_run_dex_2026-11-26/stabull_base_directory.json.gz"
@@ -96,6 +123,9 @@ fn successful_payments_preserve_wallet_limits_in_each_form() {
                     }
                     assert_eq!(v["min_or_cap_error"]["code"], 3);
                     assert_eq!(v["deadline_error"]["code"], 3);
+                    if case["mode"] == "v5" {
+                        assert!(v["deadline_equality_gas"].as_u64().unwrap() > 0);
+                    }
                 }
             }
         }

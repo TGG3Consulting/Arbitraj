@@ -5813,7 +5813,7 @@
     "network": "base",
     "chain_id": 8453,
     "id": "stabull",
-    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_native_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_protected_wallets.json.gz",
+    "source": "https://docs.stabull.finance/amm/contracts · tests/data/first_run_dex_2026-11-26/stabull_base_directory.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_native_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_protected_wallets.json.gz · tests/data/first_run_dex_2026-11-26/stabull_base_oracles.json",
     "settings": {
       "dex.kind": "stabull",
       "dex.factory": "0x86ba17ebf8819f7fd32cf1a43abcaae541a5bebf",
@@ -5822,7 +5822,9 @@
       "dex.pmm_ladder_counter": true,
       "dex.module_runtime_hashes": [
         "0xa1876c000be9b44649d66c77b2412119195fb5d4dab19fe8229c45f025952461"
-      ]
+      ],
+      "dex.quoter": "0x4b82759d385e905c85d1fcf7811ed33b738965a0",
+      "dex.quoter_runtime_hash": "0x48a70718633ebeb23c300e6c043572823ef6688d243d9dfc490ad55e4379dd7f"
     }
   },
   {

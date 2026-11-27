@@ -143,12 +143,32 @@ def capture(url,venue,artifact=None):
     word=lambda x:"0x"+format(x,"064x")
     changes={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
             "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    constructor = []
+    module_address = ADAPTER
     if module:
         if rpc(url,"eth_getCode",[ADAPTER,tag])!="0x" or not artifact:raise ValueError("VVS isolated module or build")
         code=bound_runtime(artifact,d["factory"],url,tag)
-        changes[ADAPTER]={"code":"0x"+code}
         d["module_hash"]="0x"+keccak(hexstr=code).hex()
-    run=lambda calls:simulate_block(url,tag,changes,calls)
+        if shiba:
+            import hashlib
+            from record_empire_module import MODULE, deployment
+            module_address = MODULE
+            create, identity = deployment(url,tag,d["factory"],artifact)
+            assert identity["runtime"] == d["module_hash"]
+            constructor.append(create)
+            d["deployment"] = dict(kind="shibaswap_v2_module",chainId=1,factory=d["factory"],
+                factoryHash=d["roles"]["factory"]["runtime"],sourceBlock=tag["blockHash"],
+                runtimeKeccak=identity["runtime"],data=create["data"],
+                creationSha256=hashlib.sha256(bytes.fromhex(create["data"][2:])).hexdigest(),
+                runtimeSha256=hashlib.sha256(bytes.fromhex(code)).hexdigest())
+        else:
+            changes[module_address]={"code":"0x"+code}
+    def run(calls):
+        rows=simulate_block(url,tag,changes,constructor+calls)
+        if constructor:
+            assert rows[0]["status"]=="0x1"
+            d["deployment_gas"]=int(rows[0]["gasUsed"],16)
+        return rows[len(constructor):]
     roles={k:v["address"] for k,v in d["roles"].items()};output=[];missing=[]
     usdc="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
     wbtc="0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
@@ -177,7 +197,7 @@ def capture(url,venue,artifact=None):
         for seed in budgets[cash]:
             fund=tx(WETH,"deposit()",value=seed) if cash==WETH else tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[seed,[WETH,cash],OWNER,end],10**16)
             for wire in modes:
-                spender=EXEC if wire=="v5" else (ADAPTER if wire=="module" else roles[wire]);prefix=[fund];amount=seed
+                spender=EXEC if wire=="v5" else (module_address if wire=="module" else roles[wire]);prefix=[fund];amount=seed
                 for a,b in [(cash,other),(other,cash)]:
                     permit=approval(a,spender,amount)
                     if shiba:
@@ -187,15 +207,15 @@ def capture(url,venue,artifact=None):
                         quote=tx(roles["quoter"],"quoteExactInputSingle("+QUOTE+")",[QUOTE],[(a,b,amount,fee,0)])
                     def order(minimum,deadline):
                         if wire=="module":
-                            return tx(ADAPTER,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[pool,a,b,amount,minimum,deadline])
+                            return tx(module_address,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[pool,a,b,amount,minimum,deadline])
                         if wire=="v5":
-                            step=(17,ADAPTER,a,b,10000,encode(["address"],[pool])) if venue=="vvs" or shiba else (1,pool,a,b,10000,b"")
+                            step=(17,module_address,a,b,10000,encode(["address"],[pool])) if venue=="vvs" or shiba else (1,pool,a,b,10000,b"")
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,deadline,[step]])
                         if wire=="router":
                             return tx(spender,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,fee,OWNER,deadline,amount,minimum,0)])
                         inner=tx(spender,"exactInputSingle("+ORDER02+")",[ORDER02],[(a,b,fee,OWNER,amount,minimum,0)])
                         return tx(spender,"multicall(uint256,bytes[])",["uint256","bytes[]"],[deadline,[bytes.fromhex(inner["data"][2:])]])
-                    checks=[balance(t,w) for w in ((OWNER,EXEC,ADAPTER) if module else (OWNER,EXEC)) for t in (a,b)]
+                    checks=[balance(t,w) for w in ((OWNER,EXEC,module_address) if module else (OWNER,EXEC)) for t in (a,b)]
                     width=len(checks)
                     base=prefix+[permit,*checks,quote];i=len(base)
                     trial=run(base+[order(1,end),*checks])

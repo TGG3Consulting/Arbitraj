@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `47142e94` (27.11.2026).
+Последний просмотренный коммит: `622972ae` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2982,7 +2982,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-34 | 9bdfd68a | `src/settings/store.rs` `set_checked` и `src/api/settings.rs` `ExpectedValue`: комментарии на английском и без «принимает / возвращает / ошибки» (CODING_STANDARDS). Это общий модуль настроек всего бота: описать по-русски поле `compare` в PUT /api/settings (null — ключа не было) и ошибку конфликта. |
 | О-35 | указание владельца 27.11 | **Ryze — только по официальной документации, лимиты учесть именно для Ryze.** Факты из документации: (1) Relayer (`ryze.relayer_url`, `POST intents/submit`) — «100 requests per minute» на IP, при превышении HTTP 429 ([relayer/overview](https://documentation.ryze.pro/relayer/overview.html)). (2) Router `POST /quote` ([router/quote](https://documentation.ryze.pro/router/quote.html)) — лимит, кэш и срок действия котировки в документации не указаны. (3) API `mainnet.api.ryze.pro/api` — «Responses are cached for 60 seconds» ([api/overview](https://documentation.ryze.pro/api/overview.html)); бот котировки берёт с Router, не с API — подтвердить, что ни одна цена для торговли не идёт из кэшируемого API. Что сделать: (а) предел отправок в Relayer — настройкой (не хардкод) с записью в SETTINGS_CASES и источником-ссылкой выше; бот не отправляет сверх предела и показывает это в UI; (б) HTTP 429 от Relayer сейчас не различается (`execute.rs` `let _accepted = http::submit_once(...)` — ответ отброшен, дальше `reconcile`) — разбирать 429 отдельно: заявка не принята → сделки нет (правило «не исполнился — отменяем, больше не пробуем»), причина в журнале и UI; (в) для Router `/quote` лимиты не придумывать: нет в документации — спросить владельца; частоту опроса книги (`ryze.books_interval_ms` × число `ryze.quote_sizes` × 2 стороны) показать в UI. |
 | О-36 | b89cbd5b | Размер файлов AirSwap: `airswap/mod.rs` — 336 строк, `airswap/routing.rs` — 248, ориентир 200. Разделить. |
-| О-37 | 42f8060d | `contracts/AmbientWallet.sol`: числа без имени и ссылки на строку исходника CrocSwap — индекс пула `420`, слоты `2` и `3501` (`proxyPaths_[1]`, `[3500]`), границы цены `21267430153580247136652501917186561137` и `65538` (TickMath), callpath `1` в `userCmd`, `uint16(0)` и `uint8(0)` в команде. Нужны имена-константы со ссылкой на файл и строку CrocSwap (StorageLayout, TickMath, HotProxy, документация poolIdx). После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. |
+| О-37 | 42f8060d | `contracts/AmbientWallet.sol`: числа без имени и ссылки на строку исходника CrocSwap — индекс пула `420`, слоты `2` и `3501` (`proxyPaths_[1]`, `[3500]`), границы цены `21267430153580247136652501917186561137` и `65538` (TickMath), callpath `1` в `userCmd`, `uint16(0)` и `uint8(0)` в команде. Нужны имена-константы со ссылкой на файл и строку CrocSwap (StorageLayout, TickMath, HotProxy, документация poolIdx). После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **622972ae: в боте индексы пулов задаются настройкой `dex.ambient_pool_indices`, а в контракте `common()` зашит `420`. Пул с другим индексом из настройки контракт пропускает только через `register`. Описать это расхождение в карточке и в SETTINGS_CASES или вынести индекс в конструктор.** |
 | О-38 | 47142e94 | (1) R-42: в общем `exec/market_plan.rs:125` прямое `e.family.variant==Variant::Aqua`; рядом уже есть предикат `aqua()` — использовать его. (2) Числа протокола без имени и ссылки: `p.traits.bit(254)` в `pools/aqua.rs:31` и `1u64<<40` (срок uint40) в `pools/aqua.rs:61` и `pools/aqua_ladder.rs:23`. Дать именованные константы со ссылкой на строку SwapVM v1.0.2; те же значения, что в О-33 для контракта. |
 
 ### 650ce364, e0d22d6e — проверено
@@ -3825,5 +3825,14 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Новый вариант `Variant::Aqua` (dex.kind `aqua_swapvm`), `Venue::Aqua`, `Wire::Aqua` и файлы `pools/aqua*.rs`, `exec/aqua_plan.rs`, `exec/aqua_wallet.rs`, `quote/aqua_pricing.rs`. Настройки записаны в SETTINGS_CASES.
 - Регрессия BSC проверена. Ветки в `entry.rs`, `vista_gate.rs`, `market_probe.rs`, `created_log.rs`, `factory_scan.rs`, `nami.rs`, `pmm_binding.rs`, `multi_pair.rs`, `verify.rs`, `emptiness.rs`, `pool_quote.rs` и `v2_wallet_sim.rs` защищены `aqua()`, новым Venue или новым Wire. В `created.rs` фильтр логов дополнен topic0 Aqua по той же схеме, что у Balancer V1 и Bancor. Подписка всё равно идёт по адресам, а на BSC адресов Aqua нет.
 - Новая правка: О-38.
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38.
+
+### 622972ae — Ambient Ethereum: первый запуск, карточка модуля, настройки
+
+- Новые настройки `dex.ambient_query`, `dex.ambient_roles`, `dex.ambient_pool_indices` и `dex.ambient_index_url` записаны в SETTINGS_CASES.
+- Карточка `ambient-ethereum-create.json` с runtimeKeccak `0xbc38499e…` совпадает с записанными `ambient_ethereum_wallet` и с `dex.module_runtime_hashes` в `first_run_dex.json`. `AmbientWallet.sol` после 980d9b2a не менялся.
+- `tests/data/…/ethereum.json` переформатирован.
+- О-37 дополнен: индекс пула в боте задаётся настройкой, а в контракте зашит.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38.

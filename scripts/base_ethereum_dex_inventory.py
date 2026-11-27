@@ -2667,15 +2667,34 @@ def main():
         lines.append(f"| `{key}` | `{display}` |")
     lines.extend(["| `dex.router` | Адрес модуля после подтверждённого размещения через карточку DEX. |", "",
         "На блоке 26 494 988 оба пула имели нулевые учётные резервы по обоим токенам. Квотер отклонил все "
-        "восемь запросов. При наличии денег у плательщика исходный контракт также отклонил все восемь обменов. "
+        "восемь запросов. При наличии денег у плательщика исходный контракт отклонил все восемь обменов "
+        "с причиной `DexNotInitialized(bytes8)` для соответствующего ключа. "
         "На блоке 25 928 919 в тех же пулах прошли восемь обменов через исходный контракт, восемь через "
         "модуль напрямую и четыре через V5. За 1 USDC получено 1,000079 USDT. За 1 USDe получено 0,999872 USDT. "
         "Это выплаты в архивной симуляции. Газ и стоимость исходного актива учитываются отдельно при расчёте прибыли.", "",
         "В режиме точного выхода сумма списания ограничена бюджетом. Размер выплаты проверяется по изменению "
         "баланса получателя. До повторного ввода ликвидности пустой пул не даёт исполнимого размера. "
         "[Исходные суммы и отказы](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46032290072) · "
-        "[Модуль и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46032522844) · "
+        "[Модуль и V5](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46034438302) · "
         "[Описание протокола](https://docs.fluid.instadapp.io/integrate/dex-lite-swaps.html).", ""])
+    fluid_hops = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/fluid_dex_lite_hops.json.gz").read_bytes()))
+    lines.extend(["На одном состоянии сверены исходный `swapHop`, два или четыре отдельных шага V5 и защищённый "
+        "`executeHop` с одной итоговой оплатой. Во всех трёх случаях на одном маршруте совпали списания "
+        "и конечные выплаты вплоть до минимальной единицы. На маршруте из четырёх шагов первый пул "
+        "использован трижды с последовательным обновлением его резервов.", "",
+        "| Вложен один токен | Шагов | Получено | Газ исходного контракта | Газ V5 | Газ защищённого executeHop |",
+        "|---|---:|---:|---:|---:|---:|"])
+    from decimal import Decimal
+    names={"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48":("USDC",6),
+           "0x4c9edd5852cd905f086c759e8383e09bff1e68b3":("USDe",18)}
+    for fund in (x for x in fluid_hops["payments"] if x["form"]=="protected"):
+        peers={x["form"]:x for x in fluid_hops["payments"] if x["path"]==fund["path"]}
+        ticker,decimals=names[fund["target"]]
+        net=format(Decimal(fund["received"]).scaleb(-decimals),"f").rstrip("0").rstrip(".")
+        lines.append(f"| {names[fund['source']][0]} | {len(fund['markets'])} | {net} {ticker} | "
+                     f"{peers['original']['gas']} | {peers['v5']['gas']} | {fund['gas']} |")
+    lines.extend(["", "Старый хеш модуля остаётся допустимым для обмена через один пул. У новой версии "
+                  "`hopVersion()` возвращает 1. [Квитанции девяти маршрутов](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46034438302).", ""])
     ambient = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz").read_bytes()))
     preset = next(r["settings"] for r in profiles if r["id"] == "ambient-ethereum" and r["chain_id"] == 1)
     lines.extend(["### Ambient на Ethereum", "",

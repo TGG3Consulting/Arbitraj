@@ -74,6 +74,7 @@ pub fn eval_from(
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "маршрут без пулов"));
     }
+    if legs.len()>1 && super::bundles_route::coupled(legs){return super::bundles_route::eval(ctx,legs,side,qty,tax_keep)}
     match side {
         Side::Buy => buy(ctx, legs, qty, tax_keep, first),
         Side::Sell => sell(ctx, legs, qty, tax_keep, first),
@@ -132,7 +133,7 @@ pub(super) fn sell_step(
 
 /// Покупка «с конца»: от нужного количества монеты назад к USDT, каждый пул — точный выход; доля крючка шага — по его
 /// входу (buy_step). Решение 336: обмен последнего хопа (считается первым) — готовый, если дан. Ошибки: см. eval.
-fn buy(
+pub(super) fn buy(
     ctx: &Ctx,
     legs: &[Leg],
     qty: Decimal,
@@ -211,7 +212,7 @@ fn complete(ctx: &Ctx, swaps: Vec<Option<Swapped>>) -> GatewayResult<Vec<Swapped
 
 /// Путь из хопов в порядке исполнения и итога; у шага — допуск с влиянием крючка, применённым на его входе (решение
 /// «335 (лесенка влияния)»). Ошибки: BadResponse (суммы обмена не переводятся в число).
-fn build(
+pub(super) fn build(
     ctx: &Ctx,
     legs: &[Leg],
     swaps: Vec<Swapped>,

@@ -44,10 +44,15 @@ async fn projected(
     at: &Value,
     now: u32,
 ) -> GatewayResult<Option<U256>> {
+    let q=batch::view(at,pool,IFarm::antfarmOracleCall{});
+    projected_oracle(ctx,pool,market.reserves,q,at,now).await
+}
+
+pub(super) async fn projected_oracle(ctx:&Ctx,pool:Address,reserves:[U256;2],query:batch::Request,at:&Value,now:u32)->GatewayResult<Option<U256>>{
     let [o, p, res] = batch::read(
         ctx,
         [
-            batch::view(at, pool, IFarm::antfarmOracleCall {}),
+            query,
             batch::view(at, pool, IFarm::price1CumulativeLastCall {}),
             batch::view(at, pool, IFarm::getReservesCall {}),
         ],
@@ -78,7 +83,7 @@ async fn projected(
         average: U256::from(batch::decode(&avg, IFarm::price1AverageCall {})?),
         first: batch::decode(&first, IFarm::firstUpdateCallCall {})?,
     }
-    .rate(market.reserves, now))
+    .rate(reserves, now))
 }
 
 async fn sources(

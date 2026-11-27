@@ -81,6 +81,7 @@ pub(super) struct Common {
     pub bun: Address,
     pub fee_pair: Market,
     pub wallet_balance: U256,
+    pub fee_rate_after: Option<U256>,
     pub deposits: U256,
 }
 type CanonicalCache = Cache<Common, (B256, Profile)>;
@@ -136,7 +137,28 @@ async fn read(ctx: &Ctx, p: Profile, at: &Value) -> GatewayResult<Common> {
         super::bundles::market(ctx, p, bun, oracle, (bun, p.weth), at),
         batch::read(ctx, [batch::view(at, bun, bal.clone())])
     )?;
+    let header: super::super::quote::white_state::Head = super::super::node::rpc::call(
+        ctx,
+        "eth_getBlockByHash",
+        serde_json::json!([at["blockHash"], false]),
+    )
+    .await?;
+    if header.selector() != *at {
+        return Err(bad());
+    }
+    let now = super::super::check::sim_base::Base::next_time(ctx.chain_id(), header.timestamp.to())
+        as u32;
+    let fee_rate_after = super::antfarm_book::projected_oracle(
+        ctx,
+        oracle,
+        fee_pair.reserves,
+        batch::view(at, oracle, IBundle::pairOracleCall {}),
+        at,
+        now,
+    )
+    .await?;
     Ok(Common {
+        fee_rate_after,
         bun,
         fee_pair,
         wallet_balance: batch::decode(&v, bal)?,

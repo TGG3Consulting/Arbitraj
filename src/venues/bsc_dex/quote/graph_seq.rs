@@ -31,6 +31,8 @@ use super::super::num;
 use super::path::Path;
 use super::route_calc::{self, Leg, keep};
 use super::{pool_after, pool_quote, pool_tax};
+use super::super::math::bundles_sequence::Sequence;
+use super::bundles_route;
 
 /// Пулы, через которые идут две доли и больше. Решение 295: по физическому пулу (`PoolRef::site`) — разные пары одного
 /// многомонетного пула в двух долях — общий пул; у прочих ссылок site() = сама ссылка. Принимает: ноги долей.
@@ -40,7 +42,15 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
     let mut out = HashSet::new();
     for legs in shares {
         // Пул внутри одной доли не повторяется (путь без повторов токенов и площадок), но берём множество — на всякий случай.
-        let mine: HashSet<PoolRef> = legs.iter().map(|l| l.entry.liquidity_site()).collect();
+        let mut mine=HashSet::new();
+        for l in *legs {
+            let primary=l.entry.liquidity_site();
+            if let PoolState::Bundles(b)=&l.entry.pool.state{
+                let fee=PoolRef::Contract(b.fee_pair.pool);
+                if !mine.insert(fee.clone()){out.insert(fee.clone());}
+                if primary!=fee {mine.insert(primary);}
+            }else{mine.insert(primary);}
+        }
         for r in mine {
             if !seen.insert(r.clone()) {
                 out.insert(r);
@@ -62,7 +72,7 @@ pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<Strin
         );
     }
     shares.iter().flat_map(|l| l.iter()).find_map(|l| {
-        (common.contains(&l.entry.liquidity_site()) && !pool_after::appliable(&l.entry)).then(|| {
+        (!matches!(&l.entry.pool.state,PoolState::Bundles(_)) && common.contains(&l.entry.liquidity_site()) && !pool_after::appliable(&l.entry)).then(|| {
             format!(
                 "через пул {} {:?} идут две доли и больше, а состояние этого вида пула после обмена не считается — \
                  доли общего пула не считаются как независимые (решение 223)",
@@ -88,20 +98,21 @@ pub fn eval(
         return Err(ctx.err(ErrorCode::NoRoute, w));
     }
     let mut after: HashMap<PoolRef, PoolState> = HashMap::new();
+    let mut bundles=Sequence::default();
     let mut out = Vec::with_capacity(shares.len());
     for (legs, qty) in shares {
         if !legs
             .iter()
-            .any(|l| common.contains(&l.entry.liquidity_site()))
+            .any(|l| bundles_route::affected(l,&common))
         {
             let tax_keep = pool_tax::coin_keep(legs, side, t);
             out.push(route_calc::eval(ctx, legs, side, *qty, tax_keep)?);
             continue;
         }
-        let cur = on_state(legs, &after);
+        let cur = on_state(legs, &after, &bundles);
         let tax_keep = pool_tax::coin_keep(&cur, side, t);
         let p = route_calc::eval(ctx, &cur, side, *qty, tax_keep)?;
-        advance(ctx, &cur, &p, &common, &mut after)?;
+        advance(ctx, &cur, &p, &common, &mut after, &mut bundles)?;
         out.push(p);
     }
     super::temple_budget::check(ctx,&out)?;
@@ -129,7 +140,7 @@ pub fn resequence(
         .filter(|&i| {
             refs[i]
                 .iter()
-                .any(|l| common.contains(&l.entry.liquidity_site()))
+                .any(|l| bundles_route::affected(l,&common))
         })
         .collect();
     let input: Vec<(&[Leg], Decimal)> = idx.iter().map(|&i| (refs[i], shares[i].1)).collect();
@@ -156,11 +167,12 @@ pub fn legs_of(p: &Path) -> Vec<Leg> {
 }
 
 /// Ноги доли на текущих состояниях общих пулов (после прошлых долей). Ошибок нет.
-fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>) -> Vec<Leg> {
+fn on_state(legs: &[Leg], after: &HashMap<PoolRef, PoolState>, bundles:&Sequence) -> Vec<Leg> {
     legs.iter()
         .map(|l| {
             let mut l = l.clone();
-            if let Some(s) = after.get(&l.entry.liquidity_site()) {
+            if let PoolState::Bundles(b)=&l.entry.pool.state {l.entry.pool.state=PoolState::Bundles(Box::new(bundles.current(b)));}
+            else if let Some(s) = after.get(&l.entry.liquidity_site()) {
                 l.entry.pool.state = s.clone();
             }
             l
@@ -177,6 +189,7 @@ fn advance(
     p: &Path,
     common: &HashSet<PoolRef>,
     after: &mut HashMap<PoolRef, PoolState>,
+    bundles:&mut Sequence,
 ) -> GatewayResult<()> {
     let bad = || {
         ctx.err(
@@ -199,7 +212,10 @@ fn advance(
             .hook
             .pct_at(leg.usable.hook_pct, amount)
             .map_err(|why| ctx.err(ErrorCode::NoRoute, why))?;
-        let s = if common.contains(&r) {
+        let s = if let PoolState::Bundles(b)=&leg.entry.pool.state {
+            let fill=bundles.advance(b,leg.token_in,amount).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Bundles Swap: общая комиссия в порядке исполнения не покрыта"))?;
+            super::super::math::swap_cl::Swapped{amount_in:amount,amount_out:fill.credit,complete:true}
+        }else if common.contains(&r) {
             let (s, st) = pool_after::apply(ctx, &leg.entry, leg.token_in, amount)?;
             after.insert(r, st);
             s

@@ -212,6 +212,7 @@ pub(crate) async fn book(
         fee_pair: shared.fee_pair,
         bun: shared.bun,
         weth: p.weth,
+        fee_rate_after: shared.fee_rate_after,
         router_balance: shared.wallet_balance,
         deposits: shared.deposits,
     })

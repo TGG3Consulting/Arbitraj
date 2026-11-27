@@ -459,7 +459,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","pendle-registry-ethereum","pendle-wallets-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","pendle-registry-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -571,6 +571,17 @@ jobs:
           python scripts/record_carbon_ethereum.py "$RUNNER_TEMP/market.json"
           node contracts/build-hanji.mjs "$RUNNER_TEMP/carbon" CarbonWallet
           python scripts/record_carbon_wallet.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/carbon/CarbonWallet.json" "$RUNNER_TEMP/carbon-protected.json"
+      - if: matrix.market == 'pendle-protected-ethereum'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - if: matrix.market == 'pendle-protected-ethereum'
+        working-directory: contracts
+        run: npm ci --no-audit --no-fund
+      - if: matrix.market == 'pendle-protected-ethereum'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/pendle" PendleMarketAdapter
+          python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/pendle/PendleMarketAdapter.json"
       - if: matrix.market == 'pendle-wallets-ethereum'
         run: python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'pendle-registry-ethereum'

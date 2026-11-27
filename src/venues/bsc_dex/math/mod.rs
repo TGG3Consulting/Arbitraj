@@ -14,6 +14,7 @@ pub mod dagrow;
 pub mod surge;
 pub mod antfarm;
 pub mod bundles;
+pub mod bundles_sequence;
 mod bundles_inverse;
 pub mod antfarm_route;
 pub mod antfarm_output;

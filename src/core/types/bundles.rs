@@ -22,6 +22,9 @@ pub struct Book {
     pub fee_pair: Market,
     pub bun: Address,
     pub weth: Address,
+    /// Оракульная цена после первого обмена в BUN/WETH на высоте исполнения.
+    #[serde(default)]
+    pub fee_rate_after:Option<U256>,
     pub router_balance: U256,
     pub deposits: U256,
 }

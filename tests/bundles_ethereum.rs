@@ -62,6 +62,7 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
             fee_pair: fee_pair.clone(),
             bun: address(&data["protocol_token"]),
             weth: address(&router["weth"]),
+            fee_rate_after:None,
             router_balance: qty(&router["fee_token_balance"]),
             deposits: qty(&router["total_deposits"]),
         };

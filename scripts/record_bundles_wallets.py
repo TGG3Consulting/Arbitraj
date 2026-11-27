@@ -151,6 +151,9 @@ def wallets(endpoint,artifact=None):
                         record["cases"].append(dict(pool=row["pool"],input=a,amount=str(qty),mode=path,wire=wire,**outcome))
     if not any(r["stage"]=="settled" for r in record["cases"]):
         raise ValueError("no confirmed wallet settlement")
+    if artifact:
+        from record_bundles_sequence import measure
+        record["sequences"]=measure(run,record,ADAPTER,end)
     return record
 
 

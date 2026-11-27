@@ -262,6 +262,32 @@ fn paying_fees_from_proceeds_matches_eight_atomic_wallet_fills() {
             (fill.credit, fill.loan_fee),
             (integer(&r["credit"]), U256::ZERO)
         );
+        let mut alternate = book.clone();
+        alternate.proceeds = Some((tier, balances));
+        let inverse = alternate
+            .output_order(source, false, fill.credit)
+            .expect("net payout has an executable archived witness");
+        assert!(inverse.credit >= fill.credit && inverse.primary.debit <= q);
+        if inverse.primary.debit > U256::ONE {
+            assert!(
+                alternate
+                    .paid_from_output(source, inverse.primary.debit - U256::ONE, tier, balances)
+                    .is_none_or(|smaller| smaller.credit < fill.credit)
+            );
+        }
+        let mut all = book.clone();
+        let mut loans = [None, None];
+        loans[usize::from(all.market.tokens[1] == output)] = loan.then_some(balances);
+        all.limits = Some(crate::core::types::AntfarmLimits {
+            payer: Address::ZERO,
+            module: Address::ZERO,
+            stock: (!loan).then_some(balances),
+            loans,
+        });
+        let visible = all
+            .swap(source, true, q)
+            .expect("model must expose routes funded from the payout before execution search");
+        assert_eq!((visible.amount_in, visible.amount_out), (q, fill.credit));
         assert!(
             book.paid_from_output(
                 source,

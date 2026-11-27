@@ -1,6 +1,6 @@
 //! Снимок для пробы Antfarm. Обратная нога читает состояние после пробной покупки,
 //! включая купленные ATF, дивиденды пары и обновление часового оракула.
-use super::super::{ctx::Ctx, exec::antfarm_wallet, node::multicall, quote::white_state};
+use super::super::{ctx::Ctx, node::multicall, quote::white_state};
 use super::antfarm::{IFarm, derived};
 use super::registry::Entry;
 use crate::core::types::{AntfarmBook, AntfarmMarket, PoolState};
@@ -17,7 +17,8 @@ pub(in crate::venues::bsc_dex) async fn anchor(
 ) -> GatewayResult<(white_state::Head, Box<Entry>)> {
     let h = white_state::head(ctx, &format!("{number:#x}")).await?;
     let mut entry = Box::new(e.clone());
-    antfarm_wallet::fresh(ctx, &mut entry, h).await?;
+    let b=super::antfarm_book::read(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await?;
+    entry.pool.state=PoolState::Antfarm(Box::new(b));
     entry.pool.block = number;
     Ok((h, entry))
 }

@@ -38,9 +38,17 @@ async fn observed(
     } else {
         (h.hash, payer, antfarm_book::FEE_TOKEN)
     };
+    // Cache deterministic absence at this block. A transport failure can recover on the next read.
     *cell(key)
-        .get_or_init(|| async { output::funds(ctx, payer, asset, h, loan).await.ok() })
+        .get_or_try_init(|| async {
+            match output::funds(ctx, payer, asset, h, loan).await {
+                Ok(v) => Ok(Some(v)),
+                Err(e) if e.code == crate::gateway::errors::ErrorCode::NoRoute => Ok(None),
+                Err(e) => Err(e),
+            }
+        })
         .await
+        .ok()?
 }
 pub(in crate::venues::bsc_dex) async fn available(
     ctx: &Ctx,

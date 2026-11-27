@@ -97,6 +97,7 @@ pub(crate) mod umbrae_quotes;
 mod umbrae_damm_state;
 mod antfarm;
 pub(crate) mod antfarm_probe;
+pub(super) mod antfarm_probe_wallet;
 pub(crate) mod antfarm_book;
 pub(crate) mod antfarm_capacity;
 mod temple_directory;

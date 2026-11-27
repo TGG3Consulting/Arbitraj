@@ -143,27 +143,22 @@ pub async fn run(
         v
     });
     let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).or_else(|| antfarm.as_ref().map(|(_,e)|e.as_ref())).or_else(||temple.as_ref().map(|(_,e)|e.as_ref())).unwrap_or(e);
-    let (buy_aps, buy_router, buy_data) = part(
-        ctx,
-        e,
-        Order {
-            token_in: usdt,
-            token_out: coin,
-            amount_in: usdt_amount,
-            min_out: U256::from(1u8),
-        },
-        wallet,
-        now,
-        (vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p)),
-    )
-    .await?;
+    let own_antfarm = antfarm.is_some() && super::super::pools::antfarm_probe::uses_funding_pair(e,source);
+    let mut list = if carbon || own_bond.is_some() || own_antfarm{Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
+    let buy_order=Order{token_in:usdt,token_out:coin,amount_in:usdt_amount,min_out:U256::ONE};
+    let buying=if let Some((head,_))=&antfarm {
+        Some(Box::pin(super::super::pools::antfarm_probe_wallet::select(ctx,e,*head,wallet,&buy_order,&list)).await?)
+    }else{None};
+    let (buy_entry,(buy_aps,buy_router,buy_data))=match buying {
+        Some(selected)=>(Some(selected.entry),selected.call),
+        None=>(None,part(ctx,e,buy_order,wallet,now,(vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p))).await?),
+    };
+    let e=buy_entry.as_deref().unwrap_or(e);
     // Решение 388 (t174): «ожидалось без налога» — у DEX с виртуальным квотером его вызов с подменой кода в этих же
     // симуляциях (quote/probe_quote.rs); способ выбран один раз — вызов и разбор одного квотера.
     let way = probe_quote::Way::of(ctx, e);
     let over = way.overrides(ctx)?;
     let (qto, qdata) = way.request(ctx, e, usdt, usdt_amount)?;
-    let own_antfarm = antfarm.is_some() && super::super::pools::antfarm_probe::uses_funding_pair(e,source);
-    let mut list = if carbon || own_bond.is_some() || own_antfarm{Vec::new()}else{vec![pc::transfer(source, usdt, wallet, usdt_amount)]};
     if let Some(seed) = vista
         .as_ref()
         .and_then(|v| v.fund(wallet, usdt, usdt_amount))
@@ -243,20 +238,15 @@ pub async fn run(
     let rest = bought - half - quarter;
     let post=if let Some(n)=farm_post {Some(super::super::pools::antfarm_probe::after(ctx,e,&first[n].return_data)?)} else if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else if temple.is_some(){super::super::pools::temple::after_probe(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought,(wallet,own_bond.as_ref().and_then(|(_,_,p)|*p),&first[x].logs))?};
     let e=post.as_deref().unwrap_or(e);
-    let (sell_aps, sell_router, sell_data) = part(
-        ctx,
-        e,
-        Order {
-            token_in: coin,
-            token_out: usdt,
-            amount_in: rest,
-            min_out: U256::from(1u8),
-        },
-        wallet,
-        now,
-        (vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p)),
-    )
-    .await?;
+    let sell_order=Order{token_in:coin,token_out:usdt,amount_in:rest,min_out:U256::ONE};
+    let selling=if let Some((head,_))=&antfarm {
+        Some(Box::pin(super::super::pools::antfarm_probe_wallet::select(ctx,e,*head,wallet,&sell_order,&list)).await?)
+    }else{None};
+    let (sell_entry,(sell_aps,sell_router,sell_data))=match selling {
+        Some(selected)=>(Some(selected.entry),selected.call),
+        None=>(None,part(ctx,e,sell_order,wallet,now,(vista.as_deref(),own_bond.as_ref().and_then(|(_,_,p)|*p))).await?),
+    };
+    let e=sell_entry.as_deref().unwrap_or(e);
     // Решение 252: продажа — СРАЗУ после покупки, пробный перевод четверти — ПОСЛЕ продажи (порядок — pc::sell_tail).
     // Настоящая продажа (Universal Router, исполнитель, роутер форка) идёт без перевода монеты перед ней в том же блоке;
     // у монеты с отражением (reflection, форк SafeMoon) перевод перед продажей поднял бы balanceOf пары выше резерва, и

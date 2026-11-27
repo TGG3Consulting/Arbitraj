@@ -168,7 +168,7 @@ pub(in crate::venues::bsc_dex) fn probe(
     protection: Option<Protection>,
 ) -> Option<GatewayResult<ProbeCall>> {
     match (&e.pool.state, e.family.variant) {
-        (PoolState::Antfarm(_), _) => Some(super::antfarm_wallet::probe(ctx, e, order, now)),
+        (PoolState::Antfarm(_), _) => Some(super::super::pools::antfarm_probe_wallet::part(ctx, e, order, now)),
         (_, Variant::Temple) => Some(super::temple_wallet::probe(ctx, e, order, wallet, now)),
         (PoolState::MintClub(_), _) => Some(super::mint_club_direct::probe(
             ctx, e, order, wallet, protection,

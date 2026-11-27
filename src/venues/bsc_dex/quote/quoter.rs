@@ -49,6 +49,9 @@ pub async fn out_at(
     amount: U256,
     block: &str,
 ) -> GatewayResult<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::UniswapV1{
+        return Box::pin(super::super::pools::uniswap_v1_quotes::out(ctx,e,token_in,amount,block)).await;
+    }
     if e.family.variant==super::super::pools::family_variant::Variant::Surge {
         return Box::pin(super::surge_pricing::observed(ctx,e,token_in,amount,block)).await;
     }

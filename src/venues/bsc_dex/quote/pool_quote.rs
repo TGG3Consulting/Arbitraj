@@ -76,6 +76,8 @@ pub fn swap(
             super::super::math::temple::quote(s,token_in,out,exact_in,amount)
                 .ok_or_else(||why("TempleDAO: объём, фактическая валюта выплаты или обеспечение не подходят для этой стороны"))
         }
+        (PoolState::UniswapV1(s),PoolKind::V2)=>s.swap(token_in,exact_in,amount)
+            .map(|f|Swapped{amount_in:f.spent,amount_out:f.received,complete:true}).ok_or_else(none),
         (PoolState::Rubicon(book),PoolKind::V2) => {
             let fill=book.plan(token_in,exact_in,amount).ok_or_else(none)?;
             Ok(Swapped{amount_in:fill.spent,amount_out:fill.received,complete:fill.complete})

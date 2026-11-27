@@ -122,8 +122,8 @@ impl<'a> Walk<'a> {
             if out.len() >= self.cap {
                 return;
             }
-            let multi = edge.entry.shared_market();
-            if multi.as_ref().is_some_and(|s| sites.contains(s)) {
+            let multi = [edge.entry.shared_market(), edge.entry.second_liquidity_site()];
+            if multi.iter().flatten().any(|s| sites.contains(s)) {
                 continue;
             }
             let next = edge.other(node);
@@ -137,13 +137,13 @@ impl<'a> Walk<'a> {
                 }
             } else if next != self.to && self.allowed.contains(&next) && !visited.contains(&next) {
                 visited.insert(next);
-                if let Some(s) = &multi {
+                for s in multi.iter().flatten() {
                     sites.insert(s.clone());
                 }
                 steps.push(step);
                 self.dfs(next, visited, sites, steps, out);
                 steps.pop();
-                if let Some(s) = &multi {
+                for s in multi.iter().flatten() {
                     sites.remove(s);
                 }
                 visited.remove(&next);

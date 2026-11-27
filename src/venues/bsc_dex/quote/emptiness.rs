@@ -48,6 +48,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),
+        PoolState::UniswapV1(s)=>s.markets.iter().flatten().any(|e|e.erc20.is_zero()||e.eth.is_zero()),
         PoolState::Rubicon(s) => s.offers.iter().all(Vec::is_empty),
         PoolState::Carbon(s) => s.strategies.iter().flat_map(|st|&st.orders).all(|o|o.y==0 || (o.a==0 && o.b==0)),
         PoolState::MintClub(s) => s.steps.last().is_none_or(|&(end,_)| alloy_primitives::U256::from(end)<=s.supply && (s.bonded.is_zero() || s.available.is_zero())),

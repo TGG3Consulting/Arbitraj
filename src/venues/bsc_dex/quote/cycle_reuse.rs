@@ -49,7 +49,7 @@ pub(super) fn after(ctx: &Ctx, legs: &[Leg], input: Decimal) -> GatewayResult<Ve
         || e.pool.reference != last.entry.pool.reference
         || legs[1..legs.len() - 1]
             .iter()
-            .any(|l| l.entry.liquidity_site() == e.liquidity_site())
+            .any(|l| l.entry.shares_liquidity(e))
     {
         return Err(bad());
     }

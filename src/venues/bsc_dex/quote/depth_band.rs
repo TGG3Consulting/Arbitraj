@@ -191,6 +191,10 @@ fn side(
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
             Ok((super::super::math::temple::band(s,token_in,out,U256::from((grow*SCALE) as u128),U256::from(SCALE as u128),buy),true))
         }
+        (PoolState::UniswapV1(s),PoolKind::V2)=>{
+            let (x,y)=s.band_reserves(token_in).ok_or("Uniswap V1: нет физической пары")?;
+            xy_band(x,y,b,buy)
+        }
         (PoolState::Rubicon(book), PoolKind::V2) => book.depth_in_band(token_in, buy, (b*SCALE) as u64, SCALE as u64)
             .map(|value|(value,true)).ok_or_else(||"Rubicon Classic: некорректная глубина книги".into()),
         (PoolState::Carbon(s),PoolKind::V2) => super::super::math::carbon_depth::band(s,token_in,buy,(b*SCALE) as u64)

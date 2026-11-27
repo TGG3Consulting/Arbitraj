@@ -88,7 +88,7 @@ pub(super) fn replacement(
                 let need = ask(last, cash, wei)?;
                 first
                     .iter()
-                    .filter(|e| e.liquidity_site() != last.liquidity_site())
+                    .filter(|e| !e.shares_liquidity(last))
                     .filter_map(|e| ask(e, physical, need))
                     .min()
             })

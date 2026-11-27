@@ -14,6 +14,7 @@ use std::collections::HashSet;
 
 pub(super) fn affected(l: &Leg, common: &HashSet<PoolRef>) -> bool {
     common.contains(&l.entry.liquidity_site())
+        || l.entry.second_liquidity_site().is_some_and(|s|common.contains(&s))
         || matches!(&l.entry.pool.state,PoolState::Bundles(b) if common.contains(&PoolRef::Contract(b.fee_pair.pool)))
 }
 pub(super) fn shares(a: &Leg, b: &Leg) -> bool {

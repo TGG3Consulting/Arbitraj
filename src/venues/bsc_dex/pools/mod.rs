@@ -240,6 +240,8 @@ pub mod nami;
 pub mod supernova;
 mod nami_batch;
 pub(crate) mod cycle_cash;
+pub(crate) mod uniswap_v1;
+pub(crate) mod uniswap_v1_quotes;
 pub mod ethervista;
 mod ethervista_registry;
 pub(super) mod ethervista_reserve;

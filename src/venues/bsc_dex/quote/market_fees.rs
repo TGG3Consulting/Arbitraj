@@ -49,6 +49,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
                     )
                 }),
         ),
+        PoolState::UniswapV1(s)=>Some(Ok(if s.dual(){Decimal::new(5991,4)}else{Decimal::new(3,1)})),
         PoolState::Antfarm(_)
         | PoolState::Surge(_)
         | PoolState::Dagrow(_)

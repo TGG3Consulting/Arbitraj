@@ -130,8 +130,8 @@ fn dfs<'g>(
         if out.len() >= max_paths {
             return;
         }
-        let multi = edge.entry.shared_market();
-        if multi.as_ref().is_some_and(|s| sites.contains(s)) {
+        let multi = [edge.entry.shared_market(), edge.entry.second_liquidity_site()];
+        if multi.iter().flatten().any(|s| sites.contains(s)) {
             continue;
         }
         let next = edge.other(node);
@@ -144,7 +144,7 @@ fn dfs<'g>(
         {
             // Внутренний узел — только разрешённая промежуточная, без повторного захода (нет циклов, нет возврата в старт).
             visited.insert(next);
-            if let Some(s) = &multi {
+            for s in multi.iter().flatten() {
                 sites.insert(s.clone());
             }
             steps.push(step);
@@ -152,7 +152,7 @@ fn dfs<'g>(
                 graph, next, to, allowed, max_hops, max_paths, visited, sites, steps, out,
             );
             steps.pop();
-            if let Some(s) = &multi {
+            for s in multi.iter().flatten() {
                 sites.remove(s);
             }
             visited.remove(&next);
@@ -219,8 +219,8 @@ fn dfs_cycle<'g>(
         // Один и тот же пул в цикле не используем дважды (атомарный бандл свопа по пулу — один раз, решение 85/84).
         // Решение 295: по физическому пулу (site) — разные пары одного многомонетного пула тоже «тот же пул»; у прочих
         // ссылок site() = сама ссылка.
-        let site = edge.entry.liquidity_site();
-        if used.contains(&site) {
+        let sites = [Some(edge.entry.liquidity_site()), edge.entry.second_liquidity_site()];
+        if sites.iter().flatten().any(|s|used.contains(s)) {
             continue;
         }
         let next = edge.other(node);
@@ -234,7 +234,7 @@ fn dfs_cycle<'g>(
         } else if steps.len() + 1 < max_cycle_len && !visited.contains(&next) {
             // Внутренний токен — любой, без повторного захода; остаётся запас хотя бы на одно замыкающее ребро.
             visited.insert(next);
-            used.insert(site.clone());
+            used.extend(sites.iter().flatten().cloned());
             steps.push(step);
             dfs_cycle(
                 graph,
@@ -248,7 +248,7 @@ fn dfs_cycle<'g>(
                 out,
             );
             steps.pop();
-            used.remove(&site);
+            for site in sites.iter().flatten() {used.remove(site);}
             visited.remove(&next);
         }
     }

@@ -511,6 +511,7 @@ pub enum PoolState {
     UmbraeDamm(Box<UmbraeDammState>),
     Carbon(Box<CarbonState>),
     Rubicon(Box<super::rubicon::Book>),
+    UniswapV1(Box<super::uniswap_v1::UniswapV1State>),
     Temple(Box<TempleState>),
     Dagrow(Box<DagrowState>),
     Surge(Box<super::surge::SurgeState>),

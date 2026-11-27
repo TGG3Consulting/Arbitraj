@@ -99,7 +99,16 @@ pub fn path_costs(
             names.gas,
             false,
         );
-        if let PoolState::Rubicon(book)=&h.entry.pool.state {
+        if let PoolState::UniswapV1(s)=&h.entry.pool.state{
+            let f=s.swap(h.token_in,side==Side::Sell,if side==Side::Sell{h.swapped.amount_in}else{h.swapped.amount_out})
+                .filter(|f|f.spent==h.swapped.amount_in && f.received==h.swapped.amount_out)
+                .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Uniswap V1: размер или промежуточная выплата изменились"))?;
+            add(&mut out,CostKind::PoolFee,pct(h.pool_in,Decimal::new(3,1)),&from,true);
+            if s.dual(){
+                let eth=num::to_decimal(f.eth,num::BNB_DECIMALS).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Uniswap V1: промежуточный ETH вне пределов"))?;
+                add(&mut out,CostKind::PoolFee,pct(eth,Decimal::new(3,1)),names.gas,true);
+            }
+        } else if let PoolState::Rubicon(book)=&h.entry.pool.state {
             let exact_in=side==Side::Sell;
             let p=book.plan(h.token_in,exact_in,if exact_in{h.swapped.amount_in}else{h.swapped.amount_out}).filter(|p|p.spent==h.swapped.amount_in && p.received==h.swapped.amount_out)
                 .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Rubicon Classic: нет подтверждения комиссии выбранных заявок"))?;

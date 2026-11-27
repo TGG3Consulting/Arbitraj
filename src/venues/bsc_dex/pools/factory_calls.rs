@@ -262,6 +262,14 @@ pub fn plan(
                     .then(|| stable_native::registry_pair(coin, quote, wrapped))
                     .flatten();
                 for (a, b) in std::iter::once((coin, quote)).chain(alt) {
+                    if f.variant == super::family_variant::Variant::UniswapV1 {
+                        qs.clear();
+                        if wrapped==Some(a) || wrapped==Some(b){
+                            let token=if wrapped==Some(a){b}else{a};
+                            qs.push(Q::UniswapV1{token,registry:None});
+                        }
+                        qs.push(Q::UniswapV1{token:a,registry:Some(factory)});
+                    }
                     if f.variant == super::family_variant::Variant::MintClub {
                         qs.clear(); qs.extend([Q::MintClub{token:a,reserve:b},Q::MintClub{token:b,reserve:a}]);
                     }

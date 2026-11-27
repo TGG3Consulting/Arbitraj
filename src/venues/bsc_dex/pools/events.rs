@@ -41,6 +41,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon=>super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
@@ -114,6 +115,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     use alloy::sol_types::SolEvent;
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
+        _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
         _ if f.variant==super::family_variant::Variant::Carbon => super::carbon_events::topics(),
         _ if f.variant==super::family_variant::Variant::MintClub => vec![super::mint_club::IBond::Transfer::SIGNATURE_HASH],
@@ -183,6 +185,9 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
+        _ if e.family.variant==super::family_variant::Variant::UniswapV1=>{
+            e.valid=false;Applied::Refresh("Uniswap V1: изменились физические резервы биржи".into())
+        }
         _ if e.family.variant==super::family_variant::Variant::RubiconClassic => {
             let pair=log.topics().get(2);
             let a=e.pool.token0;let b=e.pool.token1;

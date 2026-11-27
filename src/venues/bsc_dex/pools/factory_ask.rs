@@ -59,6 +59,7 @@ use super::verify_solidly::registry_call;
 /// Вид вопроса к реестру фабрики.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Q {
+    UniswapV1 {token:Address,registry:Option<Address>},
     Rubicon(Address, bool),
     /// V2 и форки V2: getPair(a, b).
     V2,
@@ -112,6 +113,7 @@ impl Q {
     pub fn name(self) -> &'static str {
         match self {
             Q::MintClub{..} => "tokenBond",
+            Q::UniswapV1{..} => "getExchange",
             Q::Rubicon(..) => "getBestOffer",
             Q::V2 => "getPair",
             Q::UmbraeBins => "getAllPairs(tokenA,tokenB)",
@@ -143,6 +145,7 @@ impl Q {
 pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
     match q {
         Q::MintClub{token,..} => super::mint_club::IBond::tokenBondCall{token}.abi_encode().into(),
+        Q::UniswapV1{token,..}=> super::uniswap_v1::IFactory::getExchangeCall{token}.abi_encode().into(),
         Q::Rubicon(_,reverse) => {
             let (sell_token,buy_token)=if reverse{(quote,coin)}else{(coin,quote)};
             super::rubicon::IRubiconMarket::getBestOfferCall{sellToken:sell_token,buyToken:buy_token}.abi_encode().into()
@@ -254,6 +257,10 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
 /// пула нет) или текст «ответ не по ABI». Ошибок нет.
 pub fn decode_q(q: Q, out: &[u8]) -> Result<Vec<Address>, String> {
     let list = match q {
+        Q::UniswapV1{registry,..}=>{
+            let a=super::uniswap_v1::IFactory::getExchangeCall::abi_decode_returns_validate(out).map_err(|e|e.to_string())?;
+            if a.is_zero(){vec![]}else{vec![registry.unwrap_or(a)]}
+        }
         Q::Rubicon(market,_) => {
             let id=super::rubicon::IRubiconMarket::getBestOfferCall::abi_decode_returns_validate(out).map_err(|e|e.to_string())?;
             if id.is_zero(){Vec::new()}else{vec![market]}

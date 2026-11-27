@@ -189,7 +189,8 @@ impl Walk<'_> {
             }
             let e = g.edge(i);
             let site = e.entry.liquidity_site();
-            if self.used.contains(&site) {
+            let second = e.entry.second_liquidity_site();
+            if self.used.contains(&site) || second.as_ref().is_some_and(|p|self.used.contains(p)) {
                 continue;
             }
             let next = e.other(node);
@@ -212,8 +213,8 @@ impl Walk<'_> {
                     }
                     let close = &g.edge(exit).entry;
                     let terminal = close.liquidity_site();
-                    if terminal == site
-                        || (self.used.contains(&terminal)
+                    if close.shares_liquidity(&e.entry)
+                        || ((self.used.contains(&terminal) || close.second_liquidity_site().is_some_and(|p| self.used.contains(&p)))
                             && (first.pool.reference != close.pool.reference
                                 || !super::cycle_reuse::supported(first)))
                     {
@@ -227,11 +228,13 @@ impl Walk<'_> {
                 }
             } else if !last && !self.visited.contains(&next) {
                 self.visited.push(next);
+                let used_before=self.used.len();
                 self.used.push(site);
+                self.used.extend(second);
                 self.hops.push((i, node));
                 self.dfs(next);
                 self.hops.pop();
-                self.used.pop();
+                self.used.truncate(used_before);
                 self.visited.pop();
             }
         }

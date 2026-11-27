@@ -122,6 +122,11 @@ pub async fn state(
         let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
         return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
     }
+    if f.variant==Variant::UniswapV1 {
+        let at=super::nami::block(ctx,&tag).await?;
+        let b=Box::pin(super::uniswap_v1::load(ctx,f,reference,[pair.0,pair.1],&at)).await?;
+        return Ok(Loaded{state:PoolState::UniswapV1(Box::new(b)),ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::RubiconClassic {
         let at=super::nami::block(ctx,&tag).await?;
         let b=Box::pin(super::rubicon::load(ctx,f,reference.address(),pair,&at)).await?;

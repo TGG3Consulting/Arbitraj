@@ -45,6 +45,7 @@ pub fn shared(shares: &[&[Leg]]) -> HashSet<PoolRef> {
         let mut mine=HashSet::new();
         for l in *legs {
             let primary=l.entry.liquidity_site();
+            if let Some(second)=l.entry.second_liquidity_site(){mine.insert(second);}
             if let PoolState::Bundles(b)=&l.entry.pool.state{
                 let fee=PoolRef::Contract(b.fee_pair.pool);
                 if !mine.insert(fee.clone()){out.insert(fee.clone());}
@@ -72,7 +73,7 @@ pub fn unsupported(shares: &[&[Leg]], common: &HashSet<PoolRef>) -> Option<Strin
         );
     }
     shares.iter().flat_map(|l| l.iter()).find_map(|l| {
-        (!matches!(&l.entry.pool.state,PoolState::Bundles(_)) && common.contains(&l.entry.liquidity_site()) && !pool_after::appliable(&l.entry)).then(|| {
+        (!matches!(&l.entry.pool.state,PoolState::Bundles(_)) && (common.contains(&l.entry.liquidity_site()) || l.entry.second_liquidity_site().is_some_and(|s| common.contains(&s))) && !pool_after::appliable(&l.entry)).then(|| {
             format!(
                 "через пул {} {:?} идут две доли и больше, а состояние этого вида пула после обмена не считается — \
                  доли общего пула не считаются как независимые (решение 223)",

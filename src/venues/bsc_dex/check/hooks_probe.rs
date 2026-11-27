@@ -155,7 +155,7 @@ pub fn requests(ctx: &Ctx, e: &Entry, plan: &Plan) -> GatewayResult<Vec<(Address
 }
 
 pub(super) fn individual(ctx: &Ctx, e: &Entry) -> bool {
-    matches!(e.family.variant, super::super::pools::family_variant::Variant::SupernovaIntegral | super::super::pools::family_variant::Variant::CypherIntegral | super::super::pools::family_variant::Variant::PuzzleRanges)
+    matches!(e.family.variant, super::super::pools::family_variant::Variant::UniswapV1 | super::super::pools::family_variant::Variant::SupernovaIntegral | super::super::pools::family_variant::Variant::CypherIntegral | super::super::pools::family_variant::Variant::PuzzleRanges)
         || virtual_quoter::on(ctx, e.family.id, e.family.proto)
 }
 

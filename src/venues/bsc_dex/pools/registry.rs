@@ -130,6 +130,7 @@ impl Entry {
     /// A V1 token-to-token edge draws from two independently registered ETH exchanges.
     pub fn second_liquidity_site(&self) -> Option<PoolRef> {
         if let crate::core::types::PoolState::YieldBasisLev(s)=&self.pool.state{return Some(PoolRef::Contract(s.amm));}
+        if let crate::core::types::PoolState::YieldBasisPool(s)=&self.pool.state && super::yield_basis::key(s.id).is_some_and(|(_,role,_)|role==2){return Some(PoolRef::Contract(s.amm));}
         if let crate::core::types::PoolState::BancorV3(s)=&self.pool.state {
             return s.markets.iter().flatten().nth(1).map(|m|PoolRef::Member{contract:s.network,coin:m.token});
         }

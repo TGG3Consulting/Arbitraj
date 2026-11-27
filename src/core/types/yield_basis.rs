@@ -1,6 +1,6 @@
 //! YieldBasis LEVAMM, crvUSD against the Curve pool LP token.
 //! Arithmetic from the deployed Vyper versions; safe limits differ by generation.
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{Address, B256, U256};
 use serde::{Deserialize, Serialize};
 const UNIT: u64 = 1_000_000_000_000_000_000;
 fn unit() -> U256 {
@@ -14,6 +14,7 @@ pub enum Limits {
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LevState {
+    pub index: u64,
     pub amm: Address,
     pub stable: Address,
     pub lp: Address,
@@ -27,6 +28,25 @@ pub struct LevState {
     pub cash: [U256; 2],
     pub limits: Limits,
     pub killed: bool,
+}
+/// Official get_dy points for Curve/Virtual. Preserve registry identity alongside
+/// the samples so a cached state cannot be reused under another physical venue.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Preview {
+    pub id: B256,
+    pub venue: Address,
+    pub cryptopool: Address,
+    pub amm: Address,
+    pub coins: [Address; 2],
+    pub levels: [Vec<super::LadderPoint>; 2],
+}
+impl Preview {
+    pub fn points(&self, input: Address) -> Option<&[super::LadderPoint]> {
+        self.coins
+            .iter()
+            .position(|v| *v == input)
+            .map(|i| self.levels[i].as_slice())
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Fill {

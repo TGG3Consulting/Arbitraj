@@ -48,6 +48,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),
+        PoolState::YieldBasisPool(s)=>s.levels.iter().all(Vec::is_empty),
         PoolState::YieldBasisLev(s)=>s.killed || s.collateral.is_zero() || s.cash.iter().all(U256::is_zero),
         PoolState::BalancerV1(s)=>!s.public_swap || s.assets.iter().filter(|a|!a.recorded.is_zero() && !a.physical.is_zero()).count()<2,
         PoolState::BancorV3(s)=>s.markets.iter().flatten().any(|m|!m.enabled || m.base.is_zero() || m.bnt.is_zero()) || s.vault_balances.iter().all(U256::is_zero),
@@ -91,7 +92,7 @@ pub fn empty(e: &Entry) -> bool {
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
         // PMM от оракула (WooFi, решение 122 F, 3): пуст, когда контракт на паузе или оракул не признаёт цену.
-        PoolState::OraclePmm(d) if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis || super::uses_wallet_quoter(e.family.variant) || e.family.proto == super::super::pools::families::Proto::Elfomo => {
+        PoolState::OraclePmm(d) if super::uses_wallet_quoter(e.family.variant) || e.family.proto == super::super::pools::families::Proto::Elfomo => {
             d.paused || !d.feasible || (d.ladder_quote_in.is_empty() && d.ladder_base_in.is_empty())
         }
         PoolState::OraclePmm(d) => d.paused || !d.feasible || d.price.is_zero(),

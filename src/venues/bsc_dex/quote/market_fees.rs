@@ -50,7 +50,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
                 }),
         ),
         PoolState::YieldBasisLev(s)=>Some(super::super::num::to_decimal(s.fee,16).ok_or_else(||ctx.err(ErrorCode::BadResponse,"YieldBasis: неверная ставка комиссии"))),
-        PoolState::OraclePmm(_) if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis=>Some(Ok(Decimal::ZERO)),
+        PoolState::YieldBasisPool(_)=>Some(Ok(Decimal::ZERO)),
         PoolState::BalancerV1(s)=>Some(super::super::num::to_decimal(s.fee,16).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Balancer V1: неверная ставка комиссии"))),
         PoolState::BancorV3(s)=>Some(Ok(s.markets.iter().flatten().fold(Decimal::ZERO,|fee,m|fee+(Decimal::ONE_HUNDRED-fee)*Decimal::new(i64::from(m.fee_ppm),6)))),
         PoolState::UniswapV1(s)=>Some(Ok(if s.dual(){Decimal::new(5991,4)}else{Decimal::new(3,1)})),

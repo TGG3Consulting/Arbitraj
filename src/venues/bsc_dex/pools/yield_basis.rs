@@ -15,27 +15,31 @@ use crate::{
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde_json::{Value, json};
 
-alloy::sol! {
-    interface IYieldBasis {
-        function markets(uint256 index) external view returns(address asset,address cryptopool,address amm,address lt,address oracle,address virtual_pool,address staker);
-        event MarketParameters(uint256 indexed idx,address indexed asset_token,address indexed cryptopool,address amm,address lt,address oracle,address virtual_pool,address staker,address agg);
-        function market_count() external view returns(uint256);
-        function coins(uint256 i) external view returns(address);
-        function get_dy(uint256 i,uint256 j,uint256 qty) external view returns(uint256);
-        function get_state() external view returns(uint256 collateral,uint256 debt,uint256 x0);
-        function fee() external view returns(uint256);
-        function is_killed() external view returns(bool);
-        function price() external view returns(uint256);
-        function decimals() external view returns(uint8);
-        function LEVERAGE() external view returns(uint256);
-        function STABLECOIN() external view returns(address);
-        function PRICE_ORACLE_CONTRACT() external view returns(address);
-        function LT_CONTRACT() external view returns(address);
-        function AMM() external view returns(address);
-        function POOL() external view returns(address);
-        function FACTORY() external view returns(address);
+#[allow(clippy::too_many_arguments)]
+mod abi {
+    alloy::sol! {
+        interface IYieldBasis {
+            function markets(uint256 index) external view returns(address asset,address cryptopool,address amm,address lt,address oracle,address virtual_pool,address staker);
+            event MarketParameters(uint256 indexed idx,address indexed asset_token,address indexed cryptopool,address amm,address lt,address oracle,address virtual_pool,address staker,address agg);
+            function market_count() external view returns(uint256);
+            function coins(uint256 i) external view returns(address);
+            function get_dy(uint256 i,uint256 j,uint256 qty) external view returns(uint256);
+            function get_state() external view returns(uint256 collateral,uint256 debt,uint256 x0);
+            function fee() external view returns(uint256);
+            function is_killed() external view returns(bool);
+            function price() external view returns(uint256);
+            function decimals() external view returns(uint8);
+            function LEVERAGE() external view returns(uint256);
+            function STABLECOIN() external view returns(address);
+            function PRICE_ORACLE_CONTRACT() external view returns(address);
+            function LT_CONTRACT() external view returns(address);
+            function AMM() external view returns(address);
+            function POOL() external view returns(address);
+            function FACTORY() external view returns(address);
+        }
     }
 }
+pub(crate) use abi::IYieldBasis;
 pub(crate) fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
     ctx.err(
         ErrorCode::NotApplicable,
@@ -244,6 +248,7 @@ pub(super) async fn read(ctx: &Ctx, m: YieldBasisMarket, at: &Value) -> GatewayR
         return Err(bad(ctx));
     }
     let s = LevState {
+        index: m.index,
         amm: m.amm,
         lp: m.cryptopool,
         stable: m.stable,

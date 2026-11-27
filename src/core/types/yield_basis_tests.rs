@@ -17,6 +17,7 @@ fn address(v: &Value) -> Address {
 }
 fn state(r: &Value) -> LevState {
     LevState {
+        index: r["index"].as_u64().unwrap(),
         amm: address(&r["amm"]),
         stable: address(&r["stable"]),
         lp: address(&r["pool"]),

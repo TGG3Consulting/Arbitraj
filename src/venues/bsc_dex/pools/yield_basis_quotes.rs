@@ -2,7 +2,7 @@
 use super::{
     balancer_v1::{data, views},
     families::Family,
-    ladder_counter, load_metric,
+    ladder_counter,
     registry::{Entry, Registry},
     yield_basis::{self as y, IYieldBasis, YieldBasisMarket},
 };
@@ -37,16 +37,49 @@ pub(crate) fn request(
         return Err(y::bad(ctx));
     };
     let (_, _, venue) = y::key(id).ok_or_else(|| y::bad(ctx))?;
-    let stable = match &e.pool.state {
-        PoolState::YieldBasisLev(s) => s.stable,
-        PoolState::OraclePmm(s) => s.pool_token0.ok_or_else(|| y::bad(ctx))?,
-        _ => return Err(y::bad(ctx)),
-    };
+    let (_, stable) = shape(e).ok_or_else(|| y::bad(ctx))?;
     Ok(quote(
         venue,
         side(stable, [e.pool.token0, e.pool.token1], input).ok_or_else(|| y::bad(ctx))?,
         qty,
     ))
+}
+pub(crate) fn shape(e: &Entry) -> Option<(alloy_primitives::B256, Address)> {
+    if e.family.variant != super::family_variant::Variant::YieldBasis
+        || e.pool.kind != crate::core::types::PoolKind::V2
+    {
+        return None;
+    }
+    let PoolRef::Singleton { manager, id } = e.pool.reference else {
+        return None;
+    };
+    let (idx, role, venue) = y::key(id)?;
+    if manager.is_zero() || (role == 0) != (manager == venue) {
+        return None;
+    }
+    let coins = match &e.pool.state {
+        PoolState::YieldBasisLev(s)
+            if idx == s.index && role == 1 && venue == s.amm && manager == s.lp =>
+        {
+            [s.stable, s.lp]
+        }
+        PoolState::YieldBasisPool(s)
+            if id == s.id
+                && venue == s.venue
+                && manager == s.cryptopool
+                && ((role == 0 && venue == manager)
+                    || (role == 2 && venue != manager && venue != s.amm)) =>
+        {
+            s.coins
+        }
+        _ => return None,
+    };
+    let pair = [e.pool.token0, e.pool.token1];
+    (!coins[0].is_zero()
+        && !coins[1].is_zero()
+        && coins[0] != coins[1]
+        && (pair == coins || pair == [coins[1], coins[0]]))
+    .then_some((id, coins[0]))
 }
 pub(crate) async fn official(
     ctx: &Ctx,
@@ -67,7 +100,7 @@ pub(crate) async fn official(
     let r = views(ctx, &[quote(m.venue, i, qty)], at).await?;
     call::decode::<IYieldBasis::get_dyCall>(&r[0])
 }
-async fn bound(
+pub(crate) async fn bound(
     ctx: &Ctx,
     f: &Family,
     r: &PoolRef,
@@ -147,12 +180,19 @@ pub(crate) async fn load(
     sells.sort_unstable();
     sells.dedup();
     let sell = levels(ctx, m, coin, &sells, at).await?;
-    Ok(load_metric::state(
-        pair,
-        coin,
-        m.stable,
-        (!buy.is_empty() || !sell.is_empty()).then_some(0),
-        buy,
-        sell,
-    ))
+    let levels = if counter == m.stable {
+        [buy, sell]
+    } else {
+        [sell, buy]
+    };
+    Ok(PoolState::YieldBasisPool(Box::new(
+        crate::core::types::yield_basis::Preview {
+            id: m.id(),
+            venue: m.venue,
+            cryptopool: m.cryptopool,
+            amm: m.amm,
+            coins: m.coins(),
+            levels,
+        },
+    )))
 }

@@ -50,7 +50,7 @@ pub async fn out_at(
     block: &str,
 ) -> GatewayResult<U256> {
     if e.family.variant.fluid_lite(){let at=super::super::pools::nami::block(ctx,block).await?;return Ok(Box::pin(super::super::pools::fluid_dex_lite::official(ctx,e,token_in,amount,true,&at)).await?.amount_out)}
-    if e.family.variant==super::super::pools::family_variant::Variant::Ambient{let at=super::super::pools::nami::block(ctx,block).await?;
+    if e.family.variant.ambient(){let at=super::super::pools::nami::block(ctx,block).await?;
         let p=Box::pin(super::super::pools::ambient::official(ctx,e,token_in,amount,true,&at)).await?;
         if p.amount_in!=amount{return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Ambient: частичный расход для полного шага"))}
         return Ok(p.amount_out);}

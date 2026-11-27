@@ -60,7 +60,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant==super::super::pools::family_variant::Variant::Ambient || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Motoswap(_)|PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.fluid_lite() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.llamma() || matches!(e.pool.state,PoolState::Motoswap(_)|PoolState::Ammalgam(_)|PoolState::Mooniswap(_)|PoolState::DefiPlaza(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -99,7 +99,7 @@ impl Market {
             Box::pin(super::super::exec::fluid_lite_plan::check_module(ctx,e,t,&h.selector())).await?;
             Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,h)).await?;
             anchor=Some((h,Box::new(e.clone())));Venue::FluidLiteWallet
-        } else if e.family.variant==super::super::pools::family_variant::Variant::Ambient{
+        } else if e.family.variant.ambient(){
             let h=white_state::head(ctx,&format!("{number:#x}")).await?;
             let t=super::super::exec::ambient_plan::terms(ctx,e,ctx.dex_addr("dex.router",e.family.id)?,None)?;
             Box::pin(super::super::exec::ambient_plan::check_module(ctx,e,t,&h.selector())).await?;

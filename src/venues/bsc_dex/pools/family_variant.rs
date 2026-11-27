@@ -279,6 +279,7 @@ impl Variant {
     /// Площадка торгует целыми акциями эмитента с отдельными правилами оплаты и выдачи.
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
     pub(crate) fn solidly_clone(self)->bool { self==Self::SolidlyClone }
+    pub(crate) fn ambient(self)->bool { self == Self::Ambient }
     pub(crate) fn aqua(self)->bool {self==Self::Aqua}
     pub(crate) fn mooniswap(self)->bool {self==Self::Mooniswap}
     pub(crate) fn ammalgam(self)->bool {self==Self::Ammalgam}

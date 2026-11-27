@@ -180,7 +180,7 @@ fn calc_for(ctx:&Ctx,e:&Entry,u:&Usable,side:Side,qty:Decimal,(coin_dec,usdt_dec
         // any pool hook or token fee. Selection still applies normal gates.
         let coins=super::super::num::to_decimal(if side==Side::Buy{received}else{spent},coin_dec).ok_or_else(bad)?;
         let cash=super::super::num::to_decimal(if side==Side::Buy{spent}else{received},usdt_dec).ok_or_else(bad)?;
-        if (e.family.variant.llamma() || e.family.variant==super::super::pools::family_variant::Variant::Ambient) && side==Side::Sell && coins>Decimal::ZERO && coins<qty && cash>Decimal::ZERO {return Ok((Swapped{amount_in:spent,amount_out:received,complete:false},coins,cash,applied));}
+        if (e.family.variant.llamma() || e.family.variant.ambient()) && side==Side::Sell && coins>Decimal::ZERO && coins<qty && cash>Decimal::ZERO {return Ok((Swapped{amount_in:spent,amount_out:received,complete:false},coins,cash,applied));}
         if coins<qty || cash<=Decimal::ZERO{return Err(no("Денежная проба не покрывает запрошенный объём".into()));}
         return Ok((Swapped{amount_in:spent,amount_out:received,complete:true},qty,cash,applied));
     }

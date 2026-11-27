@@ -899,7 +899,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::V2 if f.variant.mooniswap() => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::Brokerbot => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.broker_markets"]),
         Proto::V2 if f.variant.fluid_lite()=>list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.pmm_ladder_usd"]),
-        Proto::V2 if f.variant==Variant::Ambient=>list.extend(["dex.factory","dex.quoter","dex.ambient_query","dex.ambient_roles","dex.pmm_ladder_usd"]),
+        Proto::V2 if f.variant.ambient()=>list.extend(["dex.factory","dex.quoter","dex.ambient_query","dex.ambient_roles","dex.pmm_ladder_usd"]),
         Proto::V2 if f.variant.llamma() => list.extend(["dex.factory","dex.factory_runtime_hash","dex.llamma_runtime_classes"]),
         Proto::V2 if f.variant==Variant::YieldBasis => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::BalancerV1 => list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash"]),

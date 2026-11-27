@@ -78,7 +78,7 @@ pub(super) async fn option(
     let decimals = (i.coin_dec, i.usdt_dec);
     let measured=if let Some(head)=h && e.family.variant.aqua(){Some(Box::pin(super::aqua_sizing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && e.family.variant==super::super::pools::family_variant::Variant::FluidDexLite{Some(Box::pin(super::fluid_lite_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
-    else if let Some(head)=h && e.family.variant==super::super::pools::family_variant::Variant::Ambient{Some(Box::pin(super::ambient_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
+    else if let Some(head)=h && e.family.variant.ambient(){Some(Box::pin(super::ambient_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && e.family.variant.llamma(){Some(Box::pin(super::llamma_pricing::paid(q,i,&e,payer,&execution,head)).await?)}
     else if let Some(head)=h && matches!(&e.pool.state,crate::core::types::PoolState::YieldBasisPool(_)|crate::core::types::PoolState::BancorLegacy(_)){
         let fill=Box::pin(super::yield_basis_sizing::paid(q,i,&e,payer,&execution,head)).await?;
@@ -186,7 +186,7 @@ pub(super) async fn option(
             "Не подтверждены полнота объёма или способ исполнения V2",
         )
     };
-    let partial_input=c.entry.family.variant.llamma() || c.entry.family.variant==super::super::pools::family_variant::Variant::Ambient;
+    let partial_input=c.entry.family.variant.llamma() || c.entry.family.variant.ambient();
     if c.coins != i.qty && !(partial_input && i.side==Side::Sell && c.coins>Decimal::ZERO && c.coins<i.qty) {
         return Err(bad());
     }

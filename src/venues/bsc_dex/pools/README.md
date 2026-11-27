@@ -45,6 +45,9 @@ DEX — строки таблицы сопоставления (решение 5
 
 | Файл | Что делает |
 | --- | --- |
+| `ambient.rs`, `ambient_roles.rs` | Котировка CrocImpact и проверка Swap/FlagCross в выбранном CrocSwapDex на одном каноническом блоке. |
+| `ambient_format.rs` | Индексы обработчиков, базовый слот массива и границы цены из CrocSwap-protocol d65b20f. |
+| `ambient_directory.rs`, `ambient_hints.rs` | Ключи из GraphCache и заданных индексов. Реестр проверяет инициализацию пары и её параметры в сети. |
 | `factory_scan.rs` | Поиск пулов по фабрикам на своём узле (решение 121, C3; index.factory_scan): проход при старте подписки и при изменении настроек, найденное — в справочник (factory) и в ту же проверку и подписку, что пулы индексатора (канал «монета обновлена»); решение 449 — начало прохода (FactoryScan.started, «проход начат» в журнале): DEX и их настройки берутся в начале прохода |
 | `factory_ask.rs` | Вид вопроса к реестру фабрики при поиске пулов (решения 121 C3, 122 F): V2 getPair, V3 getPool(fee), Solidly getPool / Solidly V1 getPair (по stable), Algebra poolByPair, DODO V2 getDODOPoolBidirection; данные вызова и разбор ответа в список адресов |
 | `factory_calls.rs` | Вызовы реестра фабрик: V2 getPair(монета, встречный), V3 getPool(…, fee) по dex.v3_fee_tiers; заметки по DEX (не подключена, не задана dex.v3_fee_tiers); разбор ответа |

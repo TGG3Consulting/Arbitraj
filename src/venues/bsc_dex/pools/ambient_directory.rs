@@ -1,24 +1,22 @@
 //! GraphCache publishes physical keys. Any key, including one discovered from explicit indices,
 //! must resolve to an initialized market in the selected singleton on the current canonical head.
+#[path = "ambient_hints.rs"]
+mod graphcache;
+use graphcache::hints;
 use super::{
     ambient::{self, bad},
     balancer_v1::individual,
     families::{self, Family},
-    family_variant::Variant,
     stable_list::{self, Extra},
     verify::{Candidate, Verdict},
 };
 use crate::{
     core::types::{PoolRef, ambient::Market},
-    gateway::{
-        errors::{ErrorCode, GatewayResult},
-        http,
-    },
+    gateway::errors::{ErrorCode, GatewayResult},
     venues::bsc_dex::ctx::Ctx,
 };
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, U256};
-use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
 pub(crate) type Keys = HashMap<(u64, Address, B256), Market>;
@@ -67,52 +65,6 @@ pub(crate) fn resolve(
     }
     Err(bad(ctx))
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct Hint {
-    base: Address,
-    quote: Address,
-    pool_idx: Box<serde_json::value::RawValue>,
-}
-async fn hints(ctx: &Ctx, f: &Family, chain: u64) -> GatewayResult<Vec<Market>> {
-    let mut url = reqwest::Url::parse(&ctx.dex_text("dex.ambient_index_url", f.id)?)
-        .map_err(|_| bad(ctx))?
-        .join("pool_list")
-        .map_err(|_| bad(ctx))?;
-    if url.scheme() != "https" || url.host().is_none() {
-        return Err(bad(ctx));
-    }
-    url.query_pairs_mut()
-        .append_pair("chainId", &format!("{chain:#x}"));
-    let (status, body) = http::exchange(ctx.http.get(url), ctx.limits()?)
-        .await
-        .map_err(|_| bad(ctx))?;
-    if !status.is_success() {
-        return Err(bad(ctx));
-    }
-    #[derive(Deserialize)]
-    struct Reply {
-        data: Vec<Hint>,
-    }
-    let reply: Reply = serde_json::from_str(&body).map_err(|_| bad(ctx))?;
-    Ok(reply
-        .data
-        .into_iter()
-        .filter_map(|v| {
-            let raw = v.pool_idx.get();
-            let index = if raw.starts_with('"') {
-                serde_json::from_str::<String>(raw).ok()?.parse().ok()?
-            } else {
-                raw.parse().ok()?
-            };
-            (v.base < v.quote).then_some(Market {
-                base: v.base,
-                quote: v.quote,
-                index,
-            })
-        })
-        .collect())
-}
 pub(super) async fn scan(
     ctx: &Ctx,
     coins: &HashMap<Address, String>,
@@ -121,7 +73,7 @@ pub(super) async fn scan(
 ) {
     for f in families::all(ctx)
         .into_iter()
-        .filter(|f| f.variant == Variant::Ambient)
+        .filter(|f| f.variant.ambient())
     {
         if let Err(e) = scan_family(ctx, f, coins, quotes, extra).await {
             extra.no_answer += 1;

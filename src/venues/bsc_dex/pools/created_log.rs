@@ -85,7 +85,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Carbon => ("dex.factory",super::carbon::ICarbon::PairCreated::SIGNATURE_HASH,false),
-            Proto::V2 if f.variant==super::family_variant::Variant::Ambient=>continue, // Governed singleton has no general pool-created or swap log.
+            Proto::V2 if f.variant.ambient()=>continue, // Governed singleton has no general pool-created or swap log.
             Proto::V2 if f.variant==super::family_variant::Variant::YieldBasis => ("dex.factory",super::yield_basis::IYieldBasis::MarketParameters::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BalancerV1 => ("dex.factory",super::balancer_v1::IBPool::LOG_NEW_POOL::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BancorLegacy => ("dex.factory",super::bancor_legacy::ILegacy::LiquidityPoolAdded::SIGNATURE_HASH,false),

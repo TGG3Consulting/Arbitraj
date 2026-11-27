@@ -808,6 +808,8 @@ jobs:
         run: python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'pendle-registry-ethereum'
         run: python scripts/record_pendle_registry.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'pendle-registry-base'
+        run: python scripts/record_pendle_base_registry.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'dagrow-protected-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/dagrow" DagrowAdapter

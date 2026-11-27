@@ -36,12 +36,16 @@ def rpc(session,url,method,params):
 def call(to,sig,outputs,args=(),values=()):
     return to,keccak(text=sig)[:4]+encode(args,values),outputs
 
-def read(session,url,rows):
+def read(session,url,rows,tag=AT):
+    return read_many(rows,tag,lambda m,p:rpc(session,url,m,p))
+
+
+def read_many(rows,tag,fetch):
     result=[]
     for at in range(0,len(rows),96):
         part=rows[at:at+96]
         data=keccak(text="aggregate3((address,bool,bytes)[])")[:4]+encode(["(address,bool,bytes)[]"],[[(addr,True,wire)for addr,wire,_ in part]])
-        out=rpc(session,url,"eth_call",[{"to":MULTICALL,"data":"0x"+data.hex()},AT])
+        out=fetch("eth_call",[{"to":MULTICALL,"data":"0x"+data.hex()},tag])
         raw=decode(["(bool,bytes)[]"],bytes.fromhex(out[2:]))[0]
         if len(part)!=len(raw):raise ValueError("incomplete multicall")
         for (_,_,abi),(ok,values) in zip(part,raw,strict=True):
@@ -56,16 +60,20 @@ def capture(url):
     if rpc(session,url,"eth_chainId",[])!="0x1" or head["stateRoot"]!=ROOT_HASH:raise ValueError("другая сеть или высота")
     if rpc(session,url,"eth_getBlockByNumber",[head["number"],False])["hash"]!=BLOCK:raise ValueError("другой канонический блок")
     logs=rpc(session,url,"eth_getLogs",[{"fromBlock":"0x0","toBlock":head["number"],"address":list(FACTORIES.values()),"topics":[TOPICS]}])
+    return snapshot(head,AT,FACTORIES,ROUTER,STATIC,SOURCE,logs,lambda m,p:rpc(session,url,m,p),lambda rows:read(session,url,rows))
+
+
+def snapshot(head,tag,factories,router,static,source,logs,fetch,views_at):
     rows=[]
     def code(addr):
-        raw=bytes.fromhex(rpc(session,url,"eth_getCode",[addr,AT])[2:]);return {"bytes":len(raw),"hash":"0x"+keccak(raw).hex()}
+        raw=bytes.fromhex(fetch("eth_getCode",[addr,tag])[2:]);return {"bytes":len(raw),"hash":"0x"+keccak(raw).hex()}
     bindings={}
-    for name,addr in {**FACTORIES,"router":ROUTER,"routerStatic":STATIC}.items():
-        slot=rpc(session,url,"eth_getStorageAt",[addr,SLOT,AT]);impl="0x"+slot[-40:]
+    for name,addr in {**factories,"router":router,"routerStatic":static}.items():
+        slot=fetch("eth_getStorageAt",[addr,SLOT,tag]);impl="0x"+slot[-40:]
         bindings[name]={"address":addr,**code(addr),"implementation":None if impl==ZERO else {"address":impl,**code(impl)}}
     for l in sorted(logs,key=lambda v:(int(v["blockNumber"],16),int(v["logIndex"],16))):
         sig,market,pt=l["topics"]
-        if l.get("removed") or l["address"].lower() not in FACTORIES.values() or sig not in TOPICS:raise ValueError("неподтверждённая регистрация")
+        if l.get("removed") or l["address"].lower() not in factories.values() or sig not in TOPICS:raise ValueError("неподтверждённая регистрация")
         rows.append({"factory":l["address"].lower(),"market":"0x"+market[-40:],"event_pt":"0x"+pt[-40:],"block":int(l["blockNumber"],16),"hash":l["blockHash"],
                     "tx":l["transactionHash"],"index":int(l["logIndex"],16),"event":sig,"args":l["data"]})
     if len({r["market"] for r in rows})!=len(rows):raise ValueError("повтор адреса модели")
@@ -74,7 +82,7 @@ def capture(url):
         m=r["market"]
         qs.extend([call(r["factory"],"isValidMarket(address)",["bool"],["address"],[m]),
                    call(m,"factory()",["address"]),call(m,"readTokens()",["address"]*3),call(m,"expiry()",["uint256"])])
-    views=iter(read(session,url,qs));unique_sy=set()
+    views=iter(views_at(qs));unique_sy=set()
     for r in rows:
         valid,factory,tokens,expiry=[next(views) for _ in range(4)]
         r.update(valid=valid==[True],bound_factory=factory[0] if factory else None,tokens=tokens,expiry=expiry[0] if expiry else None)
@@ -85,7 +93,7 @@ def capture(url):
     for a in sy_list:
         qs.extend([call(a,"getTokensIn()",["address[]"]),call(a,"getTokensOut()",["address[]"]),
                    call(a,"assetInfo()",["uint8","address","uint8"]),call(a,"exchangeRate()",["uint256"])])
-    views=iter(read(session,url,qs))
+    views=iter(views_at(qs))
     for a in sy_list:
         ins,outs,asset,rate=[next(views) for _ in range(4)]
         sy_rows[a]={"in":ins[0] if ins else None,"out":outs[0] if outs else None,"asset":asset,"rate":str(rate[0]) if rate else None}
@@ -96,14 +104,14 @@ def capture(url):
         qs.extend([call(pt,"SY()",["address"]),call(pt,"YT()",["address"]),call(yt,"PT()",["address"]),call(yt,"SY()",["address"]),
                    call(pt,"expiry()",["uint256"]),call(yt,"expiry()",["uint256"]),
                    call(sy,"balanceOf(address)",["uint256"],["address"],[m]),call(pt,"balanceOf(address)",["uint256"],["address"],[m]),
-                   call(m,"readState(address)",STATE,["address"],[ROUTER]),call(m,"readState(address)",STATE,["address"],[ZERO])])
-    views=iter(read(session,url,qs))
+                   call(m,"readState(address)",STATE,["address"],[router]),call(m,"readState(address)",STATE,["address"],[ZERO])])
+    views=iter(views_at(qs))
     for r in live:
         sy,pt,yt=r["tokens"];ps,py,yp,ys,pe,ye,bs,bp,sr,sz=[next(views) for _ in range(10)]
         r["series"]=[ps,py,yp,ys,pe,ye]==[[sy],[yt],[pt],[sy],[r["expiry"]],[r["expiry"]]]
         r["physical"]=[str(bs[0]) if bs else None,str(bp[0]) if bp else None]
         r["router_state"]=list(map(str,sr)) if sr else None;r["plain_state"]=list(map(str,sz)) if sz else None
-    return {"source":SOURCE,"selector":AT,"height":int(head["number"],16),"timestamp":now,"state_root":ROOT_HASH,"roles":bindings,
+    return {"source":source,"selector":tag,"height":int(head["number"],16),"timestamp":now,"state_root":head["stateRoot"],"roles":bindings,
             "counts_by_factory":dict(Counter(r["factory"] for r in rows)),"registrations":rows,"standardized_yield":sy_rows}
 
 if __name__=="__main__":

@@ -4,12 +4,14 @@
 Использует только файлы. Другие разделы документа сохраняются.
 """
 import argparse
+from collections import Counter
 import hashlib
 import gzip
 import json
 from pathlib import Path
 from base_eth_omni_mars_deli import paragraphs as omni_mars_deli
 import base_launch_inventory
+from base_ethereum_source_roles import card_reference, classify_source, describe, verified_coverage_profiles
 
 
 def read(path):
@@ -61,6 +63,23 @@ def tables(network, snapshots, profiles):
     out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
                f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
                "внутренних ключей обозначают отдельные фабрики и семейства.")
+    verified = {
+        key: observation for key, observation in data["factory-probes"]["rows"].items()
+        if observation.get("factory_roundtrip") and observation.get("token0")
+        and observation.get("token1") and observation["token0"] != observation["token1"]
+    }
+    matching_factories = sum(
+        key in aliases and
+        configured[aliases[key]]["settings"].get("dex.factory", "").lower() ==
+        observation["reported_factory"].lower()
+        for key, observation in verified.items()
+    )
+    out[2] += (
+        f" На блоке {data['factory-probes']['block']} для {len(verified)} ID один пул из выборки "
+        f"подтвердил две разные валюты, а фабрика вернула его адрес. Для {matching_factories} из "
+        f"этих ID адрес фабрики совпал с профилем. Здесь посчитаны проверенные ID, по одному "
+        f"образцу на ID. Исполнимый объём и доходность из этого числа определить нельзя."
+    )
     for id, row in configured.items():
         fields = []
         for k, v in row["settings"].items():
@@ -1785,6 +1804,12 @@ def tables(network, snapshots, profiles):
             status += f" · `T-DEX-{network}-{id}` найти первичное размещение Base и привязать событие обмена к фабрике"
         if id in ("solidly-v3-base", "solidly-v3"):
             status += " · оператор задаёт собственный адрес принятого модуля"
+        if id in verified and id in aliases:
+            actual = verified[id]["reported_factory"].lower()
+            expected = configured[aliases[id]]["settings"].get("dex.factory")
+            if expected and expected.lower() != actual:
+                status += (f" · Проверенная фабрика образца отличается от dex.factory профиля "
+                           f"({expected}). Этот образец не подтверждает профиль.")
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):
@@ -1794,7 +1819,7 @@ def tables(network, snapshots, profiles):
                    f"{roundtrip or 'сверка не подтверждена'} | {status} |")
     out.extend(["", "#### DefiLlama", "",
                 "Адреса извлечены из секции нужной сети в коде адаптера объёмов. Их роль, реализация и исполнение требуют проверки. "
-                "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту.",
+                "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту. Статус «нет спота» относится к учтённой операции, в которой плательщик не получает второй взаимозаменяемый актив в обмен на первый. Для других продуктов того же имени проверяется их собственная строка.",
                 "", f"Приоритет — опубликованный оборот этой сети за предыдущие 24 часа в USD, "
                 f"срез {volume.get('at', 'не получен')}. Карты, агрегаторы и общую ликвидность разных "
                 "протоколов необходимо сопоставлять по контрактам. Оборот не является доходом бота.",
@@ -1815,9 +1840,10 @@ def tables(network, snapshots, profiles):
     hashflow = next(n for n in hashflow_data["networks"] if n["chain"] == (8453 if base else 1))
     king_shark = {s["id"]:s for s in read(Path("tests/data/first_run_dex_2026-11-26/king_sharkswap_source_bindings.json"))
                   if s["network"] == network}
+    checked_profiles = verified_coverage_profiles(network, configured, read(data_dir / f"{network}.json"))
+    coverage_counts = Counter()
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
-        from base_ethereum_source_roles import card_reference
         ref = card_reference(network,r) or r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
@@ -2294,8 +2320,6 @@ def tables(network, snapshots, profiles):
                 original=json.load(stream)
             candidates=[original["factory"]]
             task=f"Balancer V1 · {len(original['registered'])} оригинальных BPool. Обе формы обмена и ограничения по округлению сверены с исходным пулом"
-        if not base and str(row["id"])=="7520":
-            task="Карточные платежи; адаптер crypto-card.ts измеряет использование карты. Отдельные спотовые реестры Cypher указаны под 7037 и 7038"
         if not base and str(row["id"]) == "9435":
             directory = read(Path("tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"))
             candidates = [directory["venue"]]
@@ -2529,13 +2553,29 @@ def tables(network, snapshots, profiles):
             assert empire["factory"] in {a.lower() for a in candidates}
             task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
                     f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
-        if task == f"`T-SOURCE-{network}-{row['id']}`":
-            from base_ethereum_source_roles import describe
-            measured = describe(network,str(row["id"]),r,configured,candidates)
-            if measured:
-                task = measured
+        kind, profile, status = classify_source(network, r, checked_profiles)
+        coverage_counts[kind] += 1
+        coverage_counts["profile"] += int(profile is not None)
+        if kind == "nonspot":
+            task = status
+        else:
+            pending = f"`T-SOURCE-{network}-{row['id']}`"
+            if task == pending:
+                measured = describe(network, str(row["id"]), r, configured, candidates)
+                if measured:
+                    task = measured
+            task = f"{status}. {task}" if task else status
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
+    direct, provider = coverage_counts["spot"], coverage_counts["provider"]
+    out.extend(["", f"Из {len(llama['rows'])} строк оборота спотовый обмен установлен в "
+                f"{direct + provider}, в том числе {provider} через провайдера. "
+                f"В {coverage_counts['profile']} строках подтверждена привязка как минимум одного "
+                f"DEX-профиля первого запуска на этой сети. Для {coverage_counts['nonspot']} указан статус "
+                f"«нет спота», для {coverage_counts['other']} установлен иной предмет или способ расчёта, "
+                f"по {coverage_counts['unknown']} вид обмена в этой сети остался открытым. "
+                "Каждый ID считается один раз. API-доступ, наличие ликвидности, разрешение на торговлю и "
+                "количество независимых физических пулов проверяются отдельно."])
     scope_note = (
         "Из Base двадцатки обнаружено одно дополнительное размещение уже известной площадки. "
         "У ранней фабрики Aerodrome Slipstream 22 пула, у двух положительна активная ликвидность. "

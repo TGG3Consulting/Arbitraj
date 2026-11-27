@@ -76,7 +76,9 @@ def capture(endpoint,compiled,archive):
                 tx=real,logs=fill["logs"],refusals=[result[i]["error"] for i in failed],before=list(map(str,before)),after=list(map(str,after))))
     if not any(r["mode"]=="v5" and len(r["path"])>3 for r in controls):raise ValueError("no atomic composed payment")
     creation=bytes.fromhex(compiled["creation"])+encode(["address"]*3,[registry,network,WETH])
-    manifest=dict(kind="bancor_v21",chainId=1,factory=registry,network=network,wrapped=WETH,
+    wrapped_code=bytes.fromhex(rpc(endpoint,"eth_getCode",[WETH,at])[2:])
+    if not wrapped_code:raise ValueError("missing wrapped native runtime")
+    manifest=dict(kind="bancor_legacy",wrappedHash="0x"+keccak(wrapped_code).hex(),chainId=1,factory=registry,network=network,wrapped=WETH,
                   factoryHash=roles["BancorConverterRegistry"]["keccak256"],networkHash=roles["BancorNetwork"]["keccak256"],
                   sourceBlock=at["blockHash"],creationSha256=sha256(creation).hexdigest(),runtimeKeccak="0x"+keccak(hexstr=code).hex(),
                   runtimeSha256=sha256(bytes.fromhex(code[2:])).hexdigest(),data="0x"+creation.hex(),solc=compiled["solc"])

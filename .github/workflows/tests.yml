@@ -855,6 +855,7 @@ jobs:
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/uniswap-v1-create.json
             ${{ runner.temp }}/bancor-v3-create.json
+            ${{ runner.temp }}/balancer-v1-create.json
             ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json

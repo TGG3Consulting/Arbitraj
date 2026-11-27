@@ -1,6 +1,7 @@
 """Measure protected BPool cash, native/WETH settlement, exact-target refunds and the V5 step."""
 import argparse
 import gzip
+from hashlib import sha256
 import json
 from pathlib import Path
 
@@ -91,7 +92,18 @@ def capture(endpoint,artifact,original):
                               gas=int(trade["gasUsed"],16),logs=trade["logs"]))
     if not cases:
         raise ValueError("no paid original sample")
-    return dict(selector=at, module=MODULE, module_hash="0x"+keccak(hexstr=code).hex(),cases=cases)
+    role = original["factory"]
+    creation = bytes.fromhex(artifact["creation"]) + encode(["address","address"],[role,WETH])
+    wrapped = bytes.fromhex(rpc(endpoint,"eth_getCode",[WETH,at])[2:])
+    if not wrapped:
+        raise ValueError("missing WETH runtime")
+    module_hash = "0x"+keccak(hexstr=code).hex()
+    manifest = dict(kind="balancer_v1",chainId=1,factory=role,wrapped=WETH,
+                    factoryHash=original["factory_code"]["keccak256"],wrappedHash="0x"+keccak(wrapped).hex(),
+                    sourceBlock=at["blockHash"],creationSha256=sha256(creation).hexdigest(),
+                    runtimeSha256=sha256(bytes.fromhex(code[2:])).hexdigest(),runtimeKeccak=module_hash,
+                    data="0x"+creation.hex(),solc=artifact["solc"])
+    return dict(selector=at,module=MODULE,module_hash=module_hash,cases=cases),manifest
 
 
 if __name__ == "__main__":
@@ -105,10 +117,11 @@ if __name__ == "__main__":
     errors = []
     for url in ("https://eth.drpc.org","https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com"):
         try:
-            record = capture(url,json.loads(args.compiled.read_bytes()),original)
+            record,manifest = capture(url,json.loads(args.compiled.read_bytes()),original)
             break
         except (requests.RequestException,RuntimeError,ValueError,KeyError) as e:
             errors.append((url,str(e)[:550]))
     else:
         raise RuntimeError(errors)
+    args.out.with_name("balancer-v1-create.json").write_bytes(json.dumps(manifest,separators=(",",":")).encode())
     args.out.write_bytes(json.dumps(record,separators=(",",":")).encode())

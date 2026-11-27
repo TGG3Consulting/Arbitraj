@@ -646,6 +646,7 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/v1" UniswapV1Adapter
           python scripts/record_uniswap_v1.py "$RUNNER_TEMP/v1/UniswapV1Adapter.json" "$RUNNER_TEMP/market.json"
+          python scripts/export_uniswap_v1_create.py "$RUNNER_TEMP/v1/UniswapV1Adapter.json" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/uniswap-v1-create.json"
       - if: matrix.market == 'rubicon-aquila-base'
         run: python scripts/record_aquila_base.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'rubicon-aquila-ethereum'
@@ -804,6 +805,7 @@ jobs:
           path: |
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
+            ${{ runner.temp }}/uniswap-v1-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json
             ${{ runner.temp }}/antfarm-protected.json

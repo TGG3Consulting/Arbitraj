@@ -25,22 +25,27 @@ pub struct Fill {
     pub eth: U256,
 }
 
+// Original Vyper getInputPrice/getOutputPrice in
+// https://github.com/Uniswap/v1-contracts/blob/master/contracts/uniswap_exchange.vy
+const INPUT_AFTER_FEE: u32 = 997;
+const FEE_SCALE: u32 = 1000;
+
 fn input(x: U256, y: U256, amount: U256) -> Option<U256> {
     if amount.is_zero() || x.is_zero() || y.is_zero() {
         return None;
     }
-    let weighted = amount.checked_mul(U256::from(997))?;
+    let weighted = amount.checked_mul(U256::from(INPUT_AFTER_FEE))?;
     weighted
         .checked_mul(y)?
-        .checked_div(x.checked_mul(U256::from(1000))?.checked_add(weighted)?)
+        .checked_div(x.checked_mul(U256::from(FEE_SCALE))?.checked_add(weighted)?)
 }
 fn output(x: U256, y: U256, want: U256) -> Option<U256> {
     if want.is_zero() || x.is_zero() || want >= y {
         return None;
     }
     x.checked_mul(want)?
-        .checked_mul(U256::from(1000))?
-        .checked_div(y.checked_sub(want)?.checked_mul(U256::from(997))?)?
+        .checked_mul(U256::from(FEE_SCALE))?
+        .checked_div(y.checked_sub(want)?.checked_mul(U256::from(INPUT_AFTER_FEE))?)?
         .checked_add(U256::ONE)
 }
 

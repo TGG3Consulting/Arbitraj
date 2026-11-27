@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `ff22a9f2` (27.11.2026).
+Последний просмотренный коммит: `77f6419b` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2988,6 +2988,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-40 | fdf3ec47 | `contracts/EulerSwapWallet.sol`: у фабрик V1 и V2 закреплены только адреса, codehash — нет. Во всех остальных кошельках серии (LlammaWallet, AquaStrategyWallet, AmbientWallet, AirSwapWallet) codehash закреплён и сверяется перед каждой сделкой. Либо закрепить и проверять codehash обеих фабрик, либо фактом (исходник или байткод фабрик на Sourcify/Etherscan) показать, что они не прокси и не обновляются, и записать это в шапку контракта. |
 | О-41 | 01b17059 | Dexalot (Base), «готовая фича — пять частей» не выполнена. (1) Код читает `dexalot.base_url` (`dexalot/client.rs:18`) и секрет `dexalot.api_key`, но в каталоге настроек (`src/settings/catalog`) их нет, в `SETTINGS_CASES.md` и `SETTINGS.md` записей нет, в UI полей нет. Завести обе с записью в SETTINGS_CASES; для ключа — кнопка «Проверить подключение». (2) Хардкод адреса: `dexalot/client.rs:33` сравнивает с `"https://api.dexalot.com/api/rfq"`. Признак «официальный API» вынести в настройку (или в рекомендацию первого запуска со ссылкой на документацию Dexalot), а не в строку кода. (3) `dexalot/price.rs` — 243 строки, ориентир 200. | **14c028f5: пункт (1) частично — настройки `dexalot.base_url/roles/trading/min_validity_ms/gas_budget_native` и секрет `dexalot.api_key` заведены, в SETTINGS_CASES записаны. Осталось: поля в UI и «Проверить подключение» для ключа; (2) хардкод `"https://api.dexalot.com/api/rfq"` на месте; (3) размер `price.rs`.** |
 | О-42 | 14c028f5 | `contracts/DexalotWallet.sol`: (1) `order.nonceAndMeta>>96` — сдвиг без имени и ссылки на строку MainnetRFQ.sol, где задана упаковка «адрес получателя в старших 160 битах». Дать именованную константу со ссылкой на строку. (2) `block.timestamp>uint32(order.expiry)` — поле `expiry` объявлено `uint128`, приведение к `uint32` отбрасывает старшие биты. Сравнивать полное значение, как сам MainnetRFQ, или ссылкой на исходник показать, почему uint32. После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **edb898c1: карточка `dexalot-base-create.json` уже собрана из текущего байткода. После правки О-42 её пересобрать и сверить (см. О-26, О-31).** |
+| О-43 | 77f6419b | R-42: прямые `== Variant::EulerV1/EulerV2` в общих файлах: `exec/stabull_plan.rs:175`, `pools/created_log.rs:76-77`, `pools/direct_module.rs:142`, `pools/factory_calls.rs:170`, `pools/families.rs:852`. Предикат `euler()` есть; для различия поколений завести, например, `euler_v2()` или выбор внутри `euler_swap.rs` и заменить. В профильных `euler_*.rs` сравнения допустимы. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3935,3 +3936,15 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Тест различает частичное исполнение: при ETH → USDT предел кривой достигнут на 224.14 из запрошенных 1000 USDT. Видимость `proof` и `ambient` сужена до `pub(in crate::venues::bsc_dex)`. Логика исполнения не менялась. Замечаний нет.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42.
+
+### 77f6419b — EulerSwap V1/V2: торговля через проверенные пулы и кошелёк
+
+- Новые варианты `EulerV1` и `EulerV2` с предикатом `euler()`, файлы `pools/euler_swap.rs`, `pools/euler_quotes.rs`, `exec/euler_wallet.rs`. Отбор пула по фабрике `poolsByPair` (`factory_ask.rs`).
+- Регрессия BSC проверена.
+  - В общую `OraclePmm` добавлено поле `shared_accounts` (serde default, пустое). На BSC (`baibai`, `elfomo`, `lunar`, `load_izi`, `load_metric`, `load_woo`) — `Vec::new()`, поведение то же.
+  - Ветки в `direct_module.rs`, `registry.rs`, `events.rs`, `route_hops.rs`, `solidly_gate.rs` и `pmm_binding.rs` защищены `euler()`.
+  - `registry.rs`: два пула Euler с общим счётом LP считаются пересекающимися — правило только для `euler()`.
+- `EulerSwapWallet.sol` после fdf3ec47 не менялся. О-40 (codehash фабрик) открыт.
+- Новая правка: О-43 (R-42).
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43.

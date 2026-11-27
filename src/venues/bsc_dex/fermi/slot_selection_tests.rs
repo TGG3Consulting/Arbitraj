@@ -1,7 +1,7 @@
 //! Проверка фактических двух рыночных выплат и допуска кадра по архиву строителя.
 use super::super::{Deployment, Frame, slot_config::same_frame};
 use super::*;
-use alloy::primitives::B256;
+use alloy::primitives::{Address, B256};
 use flate2::read::GzDecoder;
 use serde_json::Value;
 fn fixture(data: &[u8]) -> Value {

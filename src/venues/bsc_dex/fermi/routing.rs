@@ -3,7 +3,7 @@ use super::super::{hashflow, parts::Parts, send::tx_1559::Fees};
 use super::{firm::firm, indicative::candidate, markets::Books, slot::Proof};
 use crate::core::types::{Asset, Quote, RouteMode, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use alloy::primitives::{Address, U256};
+use alloy::primitives::U256;
 use rust_decimal::Decimal;
 use std::{sync::Arc, time::Duration};
 

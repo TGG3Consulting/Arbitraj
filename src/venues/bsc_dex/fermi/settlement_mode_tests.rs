@@ -1,6 +1,6 @@
 //! Тип маршрута в старых и новых карточках проверяется на параметрах Taurus Ethereum и Pancake StableSwap BSC.
 use super::*;
-use alloy::primitives::B256;
+use alloy::primitives::{Address, B256};
 use alloy::sol_types::{SolEvent, SolValue};
 use crate::venues::bsc_dex::pools::llamma::ILlama;
 use serde_json::Value;

@@ -39,7 +39,7 @@ impl Code {
             runtime: runtime.parse().map_err(|_| bad())?,
         })
     }
-    pub(super) async fn at_transaction(
+    pub(in crate::venues::bsc_dex) async fn at_transaction(
         &self,
         ctx: &Ctx,
         controller: Address,

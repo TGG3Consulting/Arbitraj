@@ -46,6 +46,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
 }
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
+    Gladius(&'a super::super::gladius::settlement::Saved),
     SolidlyRouter(&'a super::solidly_router_wallet::Proof),
     Ranges(&'a super::ranges_wallet::Proof),
     RegisteredV3(&'a super::registered_v3_wallet::Proof),
@@ -69,6 +70,7 @@ pub(super) enum Saved<'a> {
 }
 fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
+        c.gladius.as_deref().map(Saved::Gladius),
         c.solidly_router.as_deref().map(Saved::SolidlyRouter),
         c.ranges.as_deref().map(Saved::Ranges),
         c.registered_v3.as_deref().map(Saved::RegisteredV3),
@@ -102,6 +104,10 @@ pub(in crate::venues::bsc_dex) async fn included(
     hash: B256,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(g)=&c.gladius{
+        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Gladius"))?.nonce;
+        g.included(ctx,hash,nonce,receipt).await?;
+    }
     if let Some(n)=&c.native_rfq{
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Native RFQ"))?.nonce;
         n.included(ctx,hash,nonce,receipt).await?;
@@ -111,6 +117,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     }
     for saved in entries(c) {
         match saved {
+            Saved::Gladius(_) => {}, // в том числе проверено для revert выше
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::Ranges(p)=>p.included(ctx,hash,receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
@@ -144,6 +151,7 @@ impl Saved<'_> {
         output: Address,
     ) -> Result<(U256, U256), &'static str> {
         match self {
+            Self::Gladius(p) => p.amounts(&r.logs).ok_or("Gladius: фактические движения и выплата не подтверждены"),
             Self::SolidlyRouter(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Solidly Router01: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::Ranges(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Ranges: событие Vault и чистые движения кошелька расходятся с подписанным поручением"),
             Self::RegisteredV3(p) => p.amounts(&r.logs,wallet,input,output).ok_or("V3 Router: не подтверждены расходы, получатель или выплата по исходному поручению"),

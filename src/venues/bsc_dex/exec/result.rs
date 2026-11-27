@@ -78,7 +78,7 @@ pub fn result(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub(super) fn with_native_fact(
+pub(in crate::venues::bsc_dex) fn with_native_fact(
     ctx: &Ctx,
     req: TradeRequest,
     d: txs::Done,

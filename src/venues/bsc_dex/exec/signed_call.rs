@@ -2,8 +2,8 @@
 use super::super::{check::simulate::SimLog, ctx::Ctx, node::rpc, send::track::Receipt};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::rpc::types::Log;
-use alloy_primitives::{Address, B256, Bytes, U256};
-use serde::Deserialize;
+use alloy_primitives::{Address, B256, Bytes, U64,U256,keccak256};
+use serde::{Serialize,Deserialize};
 use serde_json::json;
 pub(super) async fn included(
     ctx: &Ctx,
@@ -59,4 +59,54 @@ pub(in crate::venues::bsc_dex) fn logs(rows: &[SimLog]) -> Option<Vec<Log>> {
             })
         })
         .collect()
+}
+
+/// Полный исходный хеш calldata позволяет сверить подпись заявки без сохранения её в журнале.
+#[derive(Clone,Copy,Debug,Serialize,Deserialize)]
+pub(crate) struct Erc20Call {pub chain:u64,pub payer:Address,pub module:Address,pub calldata:B256}
+impl Erc20Call {
+    pub(in crate::venues::bsc_dex) async fn included(&self,ctx:&Ctx,hash:B256,nonce:u64,r:&Receipt)->GatewayResult<()> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct Tx {
+            hash: B256,
+            block_hash: B256,
+            transaction_index: U64,
+            chain_id: U64,
+            from: Address,
+            to: Address,
+            nonce: U64,
+            input: Bytes,
+            value: U256,
+        }
+        let fail = || {
+            ctx.err(
+                ErrorCode::OutcomeUnknown,
+                "Не подтверждено исходное поручение ERC20 в каноническом блоке",
+            )
+        };
+        if !(ctx.chain_id()==Some(self.chain) && super::super::wallet::signer::address(ctx).ok()==Some(self.payer)) || r.transaction_hash != Some(hash) || r.block_hash.is_none() {
+            return Err(fail());
+        }
+        let tx: Option<Tx> = rpc::call(ctx, "eth_getTransactionByHash", json!([hash]))
+            .await
+            .map_err(|_| fail())?;
+        if !tx.is_some_and(|t| {
+            t.hash == hash
+                && Some(t.block_hash) == r.block_hash
+                && Some(t.transaction_index) == r.transaction_index
+                && t.chain_id.to::<u64>() == self.chain
+                && t.from == self.payer
+                && t.to == self.module
+                && t.nonce.to::<u64>() == nonce
+                && t.value.is_zero()
+                && keccak256(&t.input) == self.calldata
+        }) {
+            return Err(fail());
+        }
+        super::super::send::canonical_receipt::verify(ctx, hash, r)
+            .await
+            .map_err(|_| fail())?;
+        Ok(())
+    }
 }

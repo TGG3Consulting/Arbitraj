@@ -77,6 +77,11 @@ pub(in crate::venues::bsc_dex) async fn failed(
     let Ok(Some(entry)) = intent::load(db, &k).await else {
         return e;
     };
+    if let Some(g)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.gladius){
+        if tx.outcome!=TxOutcome::Reverted{return e;}
+        let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
+        if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
+    }
     if let Some(n)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.native_rfq){
         if tx.outcome!=TxOutcome::Reverted{return e}
         let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e};
@@ -121,7 +126,7 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
     else {
         return Ok(None);
     };
-    if exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.native_rfq).is_some_and(|n|!n.wallet(&p.ctx)){
+    if exec::swap_ctx::SwapCtx::of(&entry.lookup).is_some_and(|c| c.native_rfq.is_some_and(|n|!n.wallet(&p.ctx)) || c.gladius.is_some_and(|g|!g.wallet(&p.ctx))){
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
     }
     if let Some(intent::Outcome::Order(x)) = entry.result {
@@ -189,7 +194,13 @@ pub(in crate::venues::bsc_dex) async fn record(
     }
     let parse = exec::swap_ctx::SwapCtx::of(&entry.lookup).ok_or_else(|| err(String::new()))?;
     let (_, qd)=parse.decs.ok_or_else(||err(String::new()))?;
-    let gross=if let Some(native)=parse.native_rfq{
+    let gross=if let Some(g)=parse.gladius{
+        let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
+        let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
+        g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
+        let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
+        if t.request.side==Side::Buy{debit}else{credit}
+    }else if let Some(native)=parse.native_rfq{
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
         let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
         native.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
@@ -224,9 +235,11 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     let who = wallet::signer::address(ctx)?;
     let old=p.rfqs.take(who,id);
     let native=p.native_quotes.take(who,id);
-    let (result,fallback_fee)=match (old,native){
-        (Some(q),None)=>(selected(p,req.clone(),id,who,&q).await,q.fallback_fee),
-        (None,Some(t))=>(super::super::native_rfq::routing::trade(p,req.clone(),&t).await,t.fallback_fee),
+    let gladius=p.gladius.take(who,id);
+    let (result,fallback_fee)=match (old,native,gladius){
+        (None,None,Some(t))=>(super::super::gladius::settlement::trade(p,req.clone(),&t).await,t.fallback_fee),
+        (Some(q),None,None)=>(selected(p,req.clone(),id,who,&q).await,q.fallback_fee),
+        (None,Some(t),None)=>(super::super::native_rfq::routing::trade(p,req.clone(),&t).await,t.fallback_fee),
         _=>return Err(routing::no(p,"Подписанная RFQ отсутствует или неоднозначна, нужна новая котировка")),
     };
     let Err(e) = result else {

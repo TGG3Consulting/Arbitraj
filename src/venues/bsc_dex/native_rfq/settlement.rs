@@ -9,18 +9,16 @@ use crate::{
     venues::bsc_dex::{
         ctx::Ctx,
         exec, hashflow,
-        node::rpc,
         num,
         parts::Parts,
         quote::direct,
-        send::{self, receipt::Receipt},
+        send::receipt::Receipt,
         wallet,
     },
 };
-use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
+use alloy_primitives::{Address, B256, U256, keccak256};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Saved {
     pub(super) order: wire::Proof,
@@ -46,47 +44,8 @@ impl Saved {
         nonce: u64,
         r: &Receipt,
     ) -> GatewayResult<()> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Tx {
-            hash: B256,
-            block_hash: B256,
-            transaction_index: U64,
-            chain_id: U64,
-            from: Address,
-            to: Address,
-            nonce: U64,
-            input: Bytes,
-            value: U256,
-        }
-        let fail = || {
-            ctx.err(
-                ErrorCode::OutcomeUnknown,
-                "Не подтверждено исходное поручение Native RFQ в каноническом блоке",
-            )
-        };
-        if !self.wallet(ctx) || r.transaction_hash != Some(hash) || r.block_hash.is_none() {
-            return Err(fail());
-        }
-        let tx: Option<Tx> = rpc::call(ctx, "eth_getTransactionByHash", json!([hash]))
-            .await
-            .map_err(|_| fail())?;
-        if !tx.is_some_and(|t| {
-            t.hash == hash
-                && Some(t.block_hash) == r.block_hash
-                && Some(t.transaction_index) == r.transaction_index
-                && t.chain_id.to::<u64>() == self.chain
-                && t.from == self.order.payer
-                && t.to == self.module
-                && t.nonce.to::<u64>() == nonce
-                && t.value.is_zero()
-                && keccak256(&t.input) == self.calldata
-        }) {
-            return Err(fail());
-        }
-        send::canonical_receipt::verify(ctx, hash, r)
-            .await
-            .map_err(|_| fail())?;
+        exec::signed_call::Erc20Call{chain:self.chain,payer:self.order.payer,module:self.module,calldata:self.calldata}.included(ctx,hash,nonce,r).await?;
+        let fail=||ctx.err(ErrorCode::OutcomeUnknown,"Квитанция не подтвердила условия Native RFQ");
         if r.status.to::<u64>() == 1 && self.matches(r).is_none() {
             return Err(fail());
         }

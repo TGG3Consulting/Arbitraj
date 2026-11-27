@@ -75,6 +75,7 @@ impl Subs {
         if let Some((_, out)) = last {
             super::hashflow::feed::clear(p, &out).await;
             super::native_rfq::book::clear(p, &out).await;
+            super::gladius::book::clear(p, &out).await;
             if p.ctx.chain_id() == Some(8453) {
                 super::ryze::book::clear(p, &out).await;
                 super::hanji::feed::clear(p, &out).await;
@@ -111,6 +112,7 @@ impl Subs {
         if let Some((_, previous)) = last {
             super::hashflow::feed::clear(p, &previous).await;
             super::native_rfq::book::clear(p, &previous).await;
+            super::gladius::book::clear(p, &previous).await;
             if p.ctx.chain_id() == Some(8453) {
                 super::ryze::book::clear(p, &previous).await;
                 super::hanji::feed::clear(p, &previous).await;
@@ -133,6 +135,7 @@ impl Subs {
             )));
         }
         new.push(tokio::spawn(super::native_rfq::book::run(p.clone(),out.clone())));
+        new.push(tokio::spawn(super::gladius::book::run(p.clone(),out.clone())));
         new.push(tokio::spawn(super::hashflow::feed::run(
             p.clone(),
             out.clone(),

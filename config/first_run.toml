@@ -3885,3 +3885,43 @@ value = "0x00000000000004533fe15556b1e086bb1a72ceae 0x66139d772b392067ed16463c9a
 source = "tests/data/first_run_dex_2026-11-26/keyed_quote_endpoints.json"
 rationale = "Прокси и хеш кода реестра 0x, адрес и хеш реализации EIP-1967. Проверяются текущий и предыдущий Settler функции 2."
 prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Открытые заявки Rubicon Gladius"
+intro = "Публичная выдача ордеров и проверенные размещения. Для самостоятельной оплаты владелец добавляет размещение защитного модуля и разрешение своего кошелька."
+
+[[section.rec]]
+name = "gladius.orders_url"
+area = "площадка eth_dex"
+unit = "URL"
+value = "https://gladius.rubicon.finance/dutch-auction/orders"
+source = "https://docs.rubicon.finance/developers/gladius-api"
+rationale = "Путь не включает параметры запроса. Ответ с ошибкой очищает книгу."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.roles"
+area = "площадка eth_dex"
+unit = "сеть и контракты"
+value = "network 1,reactor 0x3c53c04d633bec3fb0de3492607c239bf92d07f9 0x45b00f6a2bd8cccb534191ff9116a185b0f2a6319998f32a71685f49030fa6e0,implementation 0x9981bc54aa03e12310cde5221cbe5c2790016d48 0xbc7bf59cc7c2c3ebc1180f4f65ee1b794efd69750e145aa7e059cacd0b07ee0d,quoter 0x56e43695d183dcfa9d8fe95e796227a491627fd9 0x348631f02f30bebd88e86f602afd0eae39a8c4cd76d078c16dce611e7fe66bd9"
+source = "https://docs.rubicon.finance/developers/deployments"
+rationale = "Добавьте адрес и хеш собственного модуля после согласованного размещения."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "gladius.orders_url"
+area = "площадка base_dex"
+unit = "URL"
+value = "https://gladius.rubicon.finance/dutch-auction/orders"
+source = "https://docs.rubicon.finance/developers/gladius-api"
+rationale = "Путь не включает параметры запроса. Ответ с ошибкой очищает книгу."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "gladius.roles"
+area = "площадка base_dex"
+unit = "сеть и контракты"
+value = "network 8453,reactor 0x3c53c04d633bec3fb0de3492607c239bf92d07f9 0x45b00f6a2bd8cccb534191ff9116a185b0f2a6319998f32a71685f49030fa6e0,implementation 0x9981bc54aa03e12310cde5221cbe5c2790016d48 0xbc7bf59cc7c2c3ebc1180f4f65ee1b794efd69750e145aa7e059cacd0b07ee0d,quoter 0x56e43695d183dcfa9d8fe95e796227a491627fd9 0x348631f02f30bebd88e86f602afd0eae39a8c4cd76d078c16dce611e7fe66bd9"
+source = "https://docs.rubicon.finance/developers/deployments"
+rationale = "Добавьте адрес и хеш собственного модуля после согласованного размещения."
+prefill = { kind = "Venue", id = "base_dex" }

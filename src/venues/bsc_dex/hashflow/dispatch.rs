@@ -20,12 +20,14 @@ pub(super) struct Dispatch {
 pub(super) enum Gate {
     Hashflow(String),
     Native(u64),
+    Gladius(u64),
 }
 impl Dispatch {
     fn cap(&self, ctx: &Ctx) -> GatewayResult<U256> {
         let k = match self.gate {
             Gate::Hashflow(_) => "hashflow.gas_budget_native",
             Gate::Native(_) => "native_rfq.gas_budget_native",
+            Gate::Gladius(_) => "gladius.gas_budget_native",
         };
         super::super::num::to_units(ctx.dec(k)?, 18)
             .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Некорректный лимит газа RFQ"))
@@ -39,6 +41,7 @@ impl Dispatch {
                         .int("hashflow.min_validity_ms")
                         .is_ok_and(|m| routing::expiry_ok(self.expiry, m))
             }
+            Gate::Gladius(g) => super::super::gladius::enabled(ctx) && ctx.settings.generation()==*g && super::super::gladius::timely(ctx,self.expiry),
             Gate::Native(g) => {
                 super::super::native_rfq::enabled(ctx)
                     && ctx.settings.generation() == *g
@@ -100,7 +103,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
     marker: &PendingRef,
 ) -> GatewayResult<()> {
     let Some(parse) =
-        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some())
+        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some() || c.gladius.is_some())
     else {
         return Ok(());
     };
@@ -211,7 +214,7 @@ where
     let dispatch = Dispatch {
         key: super::execute::key(p, req)?,
         expiry,
-        gate: Gate::Native(generation),
+        gate: if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

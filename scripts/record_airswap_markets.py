@@ -22,7 +22,7 @@ ENDPOINTS = {
 }
 
 
-def acquire(network, url):
+def acquire(network, url, payments=False):
     chain = json.loads((ROOT/"tests/data/base_ethereum_networks.json").read_bytes())[network]
     at = {"blockHash":chain["hash"],"requireCanonical":True}
     header = rpc(url,"eth_getBlockByHash",[chain["hash"],False])
@@ -52,16 +52,23 @@ def acquire(network, url):
         cash[generation]={"fee":getter(target,"protocolFee()","uint256"),
                           "fee_light":getter(target,"protocolFeeLight()","uint256"),
                           "fee_wallet":getter(target,"protocolFeeWallet()","address")}
-    return dict(chain_id=chain["chain"],height=chain["block"],selector=at,roles=roles,
+    fills={}
+    if payments:
+        from record_airswap_orders import funded
+        for version,target in [("v5",SWAP),("v4",LEGACY)]:
+            if version in cash:
+                fills[version]=funded(url,network,at,int(header["timestamp"],16)+900,target,version,getter)
+    return dict(funded_fixture_orders=fills,chain_id=chain["chain"],height=chain["block"],selector=at,roles=roles,
                 protocol="0x"+PROTOCOL.hex(),terms=cash,makers=result)
 
 if __name__=="__main__":
     arg=argparse.ArgumentParser()
     arg.add_argument("network",choices=ENDPOINTS);arg.add_argument("output",type=Path)
+    arg.add_argument("--payments",action="store_true")
     options=arg.parse_args()
     for url in ENDPOINTS[options.network]:
         try:
-            snapshot=acquire(options.network,url)
+            snapshot=acquire(options.network,url,options.payments)
             break
         except (ValueError,requests.RequestException,RuntimeError) as error:
             last=error

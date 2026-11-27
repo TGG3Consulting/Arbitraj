@@ -84,7 +84,7 @@ def capture(network, endpoint):
         for fill in group:
             transfers = []
             for log in receipt["logs"]:
-                if not previous < int(log["logIndex"], 16) < fill["index"] or log["topics"][0] != TRANSFER or len(log["topics"]) != 3:
+                if not previous < int(log["logIndex"], 16) < fill["index"] or len(log["topics"]) != 3 or log["topics"][0] != TRANSFER:
                     continue
                 asset = log["address"].lower()
                 sender, recipient = ["0x" + t[-40:] for t in log["topics"][1:]]

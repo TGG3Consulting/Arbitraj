@@ -32,6 +32,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
                         && r.leg.i == leg.i
                         && r.leg.j == leg.j
                         && r.leg.p == profile
+                        && r.leg.target() == leg.target()
                 })
             })
     };
@@ -41,7 +42,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let pair = if buy { (quote, coin) } else { (coin, quote) };
     if !valid()
         || who != t.owner
-        || pair != (leg.input, leg.output)
+        || pair != leg.pair()
         || req.venue != ctx.venue()
         || req.qty != t.qty
         || req.side != t.side
@@ -69,12 +70,13 @@ pub(in crate::venues::bsc_dex) async fn trade(
     if t.received < floor {
         return Err(bad());
     }
-    let payment = Payment::new(
+    let payment = Payment::route(
         leg,
         who,
         t.action.clone(),
         t.expiry,
         (if buy { U256::ONE } else { wanted }, t.spent, floor),
+        t.middle,
     );
     let env = p.env();
     let hold = env
@@ -103,7 +105,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let raw = exec::txs::send(
         &env,
         &slot,
-        profile.module,
+        leg.target(),
         payment.data,
         U256::ZERO,
         false,

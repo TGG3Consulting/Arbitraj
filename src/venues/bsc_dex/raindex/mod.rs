@@ -6,6 +6,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use std::sync::Arc;
 mod amount;
 pub(super) mod book;
+mod cash;
 mod payment;
 mod profile;
 pub(super) mod routing;
@@ -29,6 +30,7 @@ pub(super) fn enabled(ctx: &Ctx) -> bool {
 #[derive(Clone)]
 struct Leg {
     p: Profile,
+    via: Option<cash::State>,
     order: Arc<wire::Order>,
     hash: B256,
     i: usize,
@@ -37,6 +39,24 @@ struct Leg {
     output: Address,
 }
 impl Leg {
+    fn pair(&self) -> (Address, Address) {
+        match self.via {
+            Some(b) if self.input == b.role.bridge => (b.role.cash, self.output),
+            Some(b) => (self.input, b.role.cash),
+            None => (self.input, self.output),
+        }
+    }
+    fn target(&self) -> Address {
+        self.via.map_or(self.p.module, |b| b.role.wrapper)
+    }
+    fn decimals(&self, address: Address, p: &Parts) -> Option<u8> {
+        if let Some(b) = self.via
+            && address == b.role.bridge
+        {
+            return Some(b.decimals);
+        }
+        p.tokens.decimals_known(address)
+    }
     async fn current(&self, ctx: &Ctx, h: white_state::Head) -> Option<(Quantity, Quantity, B256)> {
         let response:Bytes=rpc::call(ctx,"eth_call",serde_json::json!([{"from":self.p.module,"to":self.p.book,"input":self.order.quote(self.i,self.j)},h.selector()])).await.ok()?;
         self.order.price(&response)

@@ -45,6 +45,7 @@ fn check(row: &Value, owner: Address, chain: u64) {
     let hash = from_value(row["order"].clone()).unwrap();
     let order = Arc::new(wire::Order::decode(p.version, &encoded, hash).unwrap());
     let leg = Leg {
+        via: None,
         p,
         hash,
         order,
@@ -117,4 +118,76 @@ fn original_order_and_one_payment_match_own_wallet_on_both_networks() {
         }
         assert_eq!(counts, expected);
     }
+}
+
+#[test]
+fn stablecoin_route_restores_receipt_for_book_fill_and_conversion_of_its_change() {
+    let a = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_cash_ethereum.json.gz"
+    );
+    let data: Value = serde_json::from_reader(GzDecoder::new(a.as_slice())).unwrap();
+    let role = cash::Role {
+        wrapper: from_value(data["wrapper"].clone()).unwrap(),
+        hash: from_value(data["wrapperCode"].clone()).unwrap(),
+        router: from_value(data["router"].clone()).unwrap(),
+        pair: from_value(data["pair"].clone()).unwrap(),
+        cash: from_value(data["cash"].clone()).unwrap(),
+        bridge: from_value(data["bridge"].clone()).unwrap(),
+    };
+    let bare = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz"
+    );
+    let book_info: Value = serde_json::from_reader(GzDecoder::new(bare.as_slice())).unwrap();
+    let book = book_info["modules"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|x| x["version"] == 4)
+        .unwrap();
+    let p = Profile {
+        book: from_value(book["book"].clone()).unwrap(),
+        book_hash: B256::ZERO,
+        chain: 1,
+        version: 4,
+        module: from_value(data["wallet"].clone()).unwrap(),
+        module_hash: from_value(data["walletCode"].clone()).unwrap(),
+    };
+    let owner = from_value(data["payer"].clone()).unwrap();
+    let mut with_return = 0;
+    let rows = data["cases"].as_array().unwrap();
+    for row in rows {
+        let action: Bytes = from_value(row["action"].clone()).unwrap();
+        let config = wire::takeOrders2Call::abi_decode_validate(&action)
+            .unwrap()
+            .config;
+        let hash = from_value(row["order"].clone()).unwrap();
+        let raw = config.orders[0].order.abi_encode();
+        let leg = Leg {
+            via: Some(cash::State::archived(role, 18)),
+            p,
+            hash,
+            order: Arc::new(wire::Order::decode(4, &raw, hash).unwrap()),
+            i: config.orders[0].inputIOIndex.to(),
+            j: config.orders[0].outputIOIndex.to(),
+            input: role.bridge,
+            output: from_value(row["asset"].clone()).unwrap(),
+        };
+        let cap = amount(row, "cap");
+        let middle = amount(row, "acquired");
+        let net = amount(row, "received");
+        let spent = amount(row, "spent");
+        let payment =
+            payment::Payment::route(&leg, owner, action, 0, (U256::ONE, cap, net), middle);
+        let logs: Vec<Log> = from_value(row["logs"].clone()).unwrap();
+        assert_eq!(payment.saved.amounts(&logs), Some((spent, net)));
+        let separate: Vec<_> = logs
+            .into_iter()
+            .filter(|l| l.address() != p.module)
+            .collect();
+        assert!(payment.saved.amounts(&separate).is_none());
+        if middle > amount(row, "bookPaid") {
+            with_return += 1;
+        }
+    }
+    assert_eq!((rows.len(), with_return), (6, 3));
 }

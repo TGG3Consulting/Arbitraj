@@ -14,6 +14,8 @@ use alloy_primitives::keccak256;
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Saved {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    via: Option<(cash::Role, bool, U256)>,
     call: Erc20Call,
     profile: Profile,
     digest: B256,
@@ -88,25 +90,68 @@ impl Saved {
             }
             _ => return None,
         };
-        let e = wire::Settled::decode_log_data(unique(
-            self.call.module,
+        let book_payment = wire::Settled::decode_log_data(unique(
+            self.profile.module,
             wire::Settled::SIGNATURE_HASH,
         )?)
         .ok()?;
         if !empty
-            || sender != self.call.module
+            || sender != self.profile.module
             || hash != self.hash
             || i != U256::from(self.i)
             || j != U256::from(self.j)
-            || e.payer != self.call.payer
-            || e.orderCall != self.digest
-            || e.input != self.input
-            || e.output != self.output
-            || e.spent.is_zero()
-            || e.spent < self.low
-            || e.spent > self.cap
-            || e.received < self.floor
+            || book_payment.orderCall != self.digest
         {
+            return None;
+        }
+        let (spent, received) = if let Some((route, buy, middle)) = self.via {
+            let e = cash::Settled::decode_log_data(unique(
+                self.call.module,
+                cash::Settled::SIGNATURE_HASH,
+            )?)
+            .ok()?;
+            if self.call.module != route.wrapper
+                || book_payment.payer != route.wrapper
+                || e.owner != self.call.payer
+                || e.buy != buy
+                || e.action != self.digest
+                || e.intermediate.is_zero()
+            {
+                return None;
+            }
+            if buy
+                && (self.input != route.cash
+                    || e.asset != self.output
+                    || book_payment.input != route.bridge
+                    || book_payment.output != e.asset
+                    || book_payment.spent != e.intermediate
+                    || e.intermediate > middle
+                    || book_payment.received < e.received)
+            {
+                return None;
+            }
+            if !buy
+                && (self.output != route.cash
+                    || e.asset != self.input
+                    || book_payment.input != e.asset
+                    || book_payment.output != route.bridge
+                    || book_payment.received != e.intermediate
+                    || e.intermediate < middle
+                    || book_payment.spent != e.spent)
+            {
+                return None;
+            }
+            (e.spent, e.received)
+        } else {
+            if book_payment.payer != self.call.payer
+                || book_payment.input != self.input
+                || book_payment.output != self.output
+            {
+                return None;
+            }
+            (book_payment.spent, book_payment.received)
+        };
+        if spent.is_zero() || spent < self.low || spent > self.cap || received < self.floor {
             return None;
         }
         let net = |address, debit| {
@@ -130,8 +175,8 @@ impl Saved {
                 incoming.checked_sub(outgoing)
             }
         };
-        (net(self.input, true)? == e.spent && net(self.output, false)? == e.received)
-            .then_some((e.spent, e.received))
+        (net(self.input, true)? == spent && net(self.output, false)? == received)
+            .then_some((spent, received))
     }
 }
 pub(super) struct Payment {
@@ -139,19 +184,47 @@ pub(super) struct Payment {
     pub saved: Saved,
 }
 impl Payment {
+    #[cfg(test)]
     pub(super) fn new(
         leg: &Leg,
         owner: Address,
         action: Bytes,
         expiry: u64,
+        limits: (U256, U256, U256),
+    ) -> Self {
+        Self::route(leg, owner, action, expiry, limits, U256::ZERO)
+    }
+    pub(super) fn route(
+        leg: &Leg,
+        owner: Address,
+        action: Bytes,
+        expiry: u64,
         (low, cap, floor): (U256, U256, U256),
+        middle: U256,
     ) -> Self {
         let digest = keccak256(&action);
-        let data = Bytes::from(
+        let (input, output) = leg.pair();
+        let via = leg
+            .via
+            .map(|b| (b.role, leg.input == b.role.bridge, middle));
+        let data = Bytes::from(if let Some((_, buy, bridge_limit)) = via {
+            cash::fillCall {
+                r: cash::Request {
+                    asset: if buy { output } else { input },
+                    cap,
+                    floor,
+                    bridgeLimit: bridge_limit,
+                    deadline: U256::from(expiry),
+                    buy,
+                },
+                action,
+            }
+            .abi_encode()
+        } else {
             wire::fillCall {
                 l: wire::Limits {
-                    input: leg.input,
-                    output: leg.output,
+                    input,
+                    output,
                     minimumDebit: low,
                     maximumDebit: cap,
                     minimumCredit: floor,
@@ -159,13 +232,14 @@ impl Payment {
                 },
                 action,
             }
-            .abi_encode(),
-        );
+            .abi_encode()
+        });
         let saved = Saved {
+            via,
             call: Erc20Call {
                 chain: leg.p.chain,
                 payer: owner,
-                module: leg.p.module,
+                module: leg.target(),
                 calldata: keccak256(&data),
             },
             profile: leg.p,
@@ -173,8 +247,8 @@ impl Payment {
             hash: leg.hash,
             i: leg.i,
             j: leg.j,
-            input: leg.input,
-            output: leg.output,
+            input,
+            output,
             low,
             cap,
             floor,

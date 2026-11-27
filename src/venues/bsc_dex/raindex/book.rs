@@ -88,8 +88,9 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
                     .collect::<Vec<_>>();
                 let mut markets = BTreeMap::new();
                 for r in &rows {
-                    let b = r.leg.input == *cash;
-                    let coin = if b { r.leg.output } else { r.leg.input };
+                    let (input, output) = r.leg.pair();
+                    let b = input == *cash;
+                    let coin = if b { output } else { input };
                     let sides = markets.entry(coin).or_insert((false, false));
                     if b {
                         sides.0 = true;

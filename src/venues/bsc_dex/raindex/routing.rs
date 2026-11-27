@@ -14,6 +14,7 @@ pub(in crate::venues::bsc_dex) struct Ticket {
     pub(super) owner: Address,
     pub(super) action: Bytes,
     pub(super) expiry: u64,
+    pub(super) middle: U256,
     pub(super) spent: U256,
     pub(super) received: U256,
     pub(super) qty: Decimal,
@@ -25,7 +26,7 @@ pub(in crate::venues::bsc_dex) struct Ticket {
 impl Ticket {
     pub(super) fn id(&self) -> B256 {
         let mut id = b"Raindex/order".to_vec();
-        id.extend_from_slice(self.row.leg.p.module.as_slice());
+        id.extend_from_slice(self.row.leg.target().as_slice());
         id.extend_from_slice(self.owner.as_slice());
         id.extend(self.expiry.to_be_bytes());
         id.extend_from_slice(&self.action);
@@ -45,7 +46,7 @@ pub(in crate::venues::bsc_dex) fn available(p: &Parts, a: &Asset, s: Side) -> bo
     enabled(&p.ctx)
         && pair(p, a, s)
             .zip(p.raindex.rows(&p.ctx))
-            .is_some_and(|(pair, rows)| rows.iter().any(|r| (r.leg.input, r.leg.output) == pair))
+            .is_some_and(|(pair, rows)| rows.iter().any(|r| r.leg.pair() == pair))
 }
 pub(in crate::venues::bsc_dex) fn breaks(
     p: &Parts,
@@ -59,16 +60,11 @@ pub(in crate::venues::bsc_dex) fn breaks(
     else {
         return vec![];
     };
-    let Some((di, dout)) = p
-        .tokens
-        .decimals_known(pair.0)
-        .zip(p.tokens.decimals_known(pair.1))
-    else {
-        return vec![];
-    };
     rows.iter()
-        .filter(|r| (r.leg.input, r.leg.output) == pair)
+        .filter(|r| r.leg.pair() == pair)
         .filter_map(|r| {
+            let di = r.leg.decimals(r.leg.input, p)?;
+            let dout = r.leg.decimals(r.leg.output, p)?;
             let cap = r.cap.cap(dout)?;
             if s == Side::Buy {
                 num::to_decimal(cap, dout)
@@ -116,7 +112,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     use futures_util::{StreamExt, stream};
     let offers: Vec<_> = rows
         .iter()
-        .filter(|v| (v.leg.input, v.leg.output) == pair)
+        .filter(|v| v.leg.pair() == pair)
         .cloned()
         .collect();
     let candidates = stream::iter(offers)
@@ -160,14 +156,19 @@ async fn candidate(
     let funds = p
         .raindex
         .funds
-        .get(p, leg.p.chain, leg.input, leg.p.module, age)?;
+        .get(p, leg.p.chain, leg.pair().0, leg.target(), age)?;
     if leg.order.owner() == funds.who {
         return None;
     }
-    let di = funds.decimals;
-    let dout = p.tokens.decimals_known(leg.output)?;
     let buy = s == Side::Buy;
-    let decs = if buy { (dout, di) } else { (di, dout) };
+    let oi = p.tokens.decimals_known(leg.pair().1)?;
+    let decs = if buy {
+        (oi, funds.decimals)
+    } else {
+        (funds.decimals, oi)
+    };
+    let di = leg.decimals(leg.input, p)?;
+    let dout = leg.decimals(leg.output, p)?;
     let wanted = direct::ceil_units(qty, decs.0)?;
     if num::to_decimal(wanted, decs.0)? != qty {
         return None;
@@ -204,7 +205,17 @@ async fn candidate(
     } else {
         wanted
     };
-    if output.is_zero() || debit.is_zero() || output > cap.cap(dout)? || debit > funds.spend {
+    if output.is_zero() || debit.is_zero() || output > cap.cap(dout)? {
+        return None;
+    }
+    let middle = if buy { debit } else { output };
+    let cash_units = match (leg.via, head) {
+        (Some(b), Some(h)) => b.official(ctx, h, buy, middle).await?,
+        (Some(b), None) => b.estimate(buy, middle)?,
+        (None, _) => middle,
+    };
+    let budget = if buy { cash_units } else { wanted };
+    if budget > funds.spend {
         return None;
     }
     let cash = if let Some(h) = head {
@@ -223,19 +234,20 @@ async fn candidate(
             word,
         )?;
         let low = if buy { U256::ONE } else { wanted };
-        let payment = Payment::new(
+        let payment = Payment::route(
             leg,
             funds.who,
             action.clone(),
             expiry,
-            (low, debit, if buy { wanted } else { U256::ONE }),
+            (low, budget, if buy { wanted } else { U256::ONE }),
+            middle,
         );
         let (spent, received, gas_used) = payment.measure(ctx, h, expiry).await.ok()?;
         if buy && received != wanted {
             return None;
         }
         pricing.gas = pricing.gas.for_quote(ctx, &p.heads).await.ok()?;
-        let bill = exec::cycle_gas::priced(&pricing, funds.who, (leg.p.module, payment.data))
+        let bill = exec::cycle_gas::priced(&pricing, funds.who, (leg.target(), payment.data))
             .await
             .ok()?;
         gas = num::to_decimal(
@@ -250,6 +262,7 @@ async fn candidate(
         units = gas_used;
         ticket = Some(Ticket {
             row,
+            middle,
             owner: funds.who,
             action,
             spent,
@@ -263,7 +276,7 @@ async fn candidate(
         });
         num::to_decimal(if buy { spent } else { received }, decs.1)?
     } else {
-        num::to_decimal(if buy { debit } else { output }, decs.1)?
+        num::to_decimal(cash_units, decs.1)?
     };
     let q = Quote {
         venue: ctx.venue(),

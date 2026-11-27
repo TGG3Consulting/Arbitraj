@@ -128,6 +128,7 @@ impl Source {
             self.history(&p.ctx, h).await?
         };
         let known: HashSet<_> = p.tokens.all().into_iter().map(|v| v.address).collect();
+        let bridges = cash::State::configured(&p.ctx, self.profile, h, quote).await;
         let mut legs = vec![];
         for (hash, data) in raw {
             let Some(order) = Order::decode(self.profile.version, &data, hash) else {
@@ -137,19 +138,39 @@ impl Source {
             let (a, b) = order.pairs();
             for (i, input) in a.iter().enumerate() {
                 for (j, output) in b.iter().enumerate() {
-                    if input != output
-                        && ((*input == quote && known.contains(output))
-                            || (*output == quote && known.contains(input)))
-                    {
-                        legs.push(Leg {
-                            p: self.profile,
-                            order: order.clone(),
-                            hash,
-                            i,
-                            j,
-                            input: *input,
-                            output: *output,
-                        });
+                    if input == output {
+                        continue;
+                    }
+                    let leg = Leg {
+                        p: self.profile,
+                        via: None,
+                        order: order.clone(),
+                        hash,
+                        i,
+                        j,
+                        input: *input,
+                        output: *output,
+                    };
+                    let eligible = |leg: &Leg| {
+                        let (a, b) = leg.pair();
+                        a != b
+                            && ((a == quote && known.contains(&b))
+                                || (b == quote && known.contains(&a)))
+                    };
+                    if eligible(&leg) {
+                        legs.push(leg.clone());
+                    }
+                    for bridge in &bridges {
+                        if *input != bridge.role.bridge && *output != bridge.role.bridge {
+                            continue;
+                        }
+                        let candidate = Leg {
+                            via: Some(*bridge),
+                            ..leg.clone()
+                        };
+                        if eligible(&candidate) {
+                            legs.push(candidate);
+                        }
                     }
                 }
             }

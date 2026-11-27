@@ -13,6 +13,10 @@ on:
         description: Replay Ethereum Xchange generations and DeltaSwap on the pinned canonical state
         type: boolean
         default: false
+      market_replay_only:
+        description: Run only the selected archive replay; use a separate full run for the release SHA
+        type: boolean
+        default: false
       ethereum_open_subset:
         description: Optional JSON list of market IDs from ethereum-open-markets to replay
         type: string
@@ -87,7 +91,7 @@ env:
   SHARDS: "8"
 jobs:
   clippy:
-    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -99,7 +103,7 @@ jobs:
           shared-key: clippy
       - run: cargo clippy --all-targets --locked -- -D warnings
   tests:
-    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -332,7 +336,7 @@ jobs:
           name: carbon-wallet-allocations
           path: ${{ runner.temp }}/carbon-wallet-allocations.json
   mint-club-evm:
-    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -344,7 +348,7 @@ jobs:
       - run: npm ci --prefix contracts/evmtest --no-audit --no-fund
       - run: node contracts/evmtest/mint_club.mjs
   hanji-executor:
-    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only }}
+    if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

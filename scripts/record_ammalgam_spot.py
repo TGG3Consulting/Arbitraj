@@ -41,12 +41,16 @@ def capture(url):
 
     def binding(target):
         slot, direct = read_batch(url, [("eth_getStorageAt", [target, s, tag]) for s in (BEACON_SLOT, IMPL_SLOT)])
-        assert not (int(slot, 16) and int(direct, 16))
         record = dict(runtime=code(target))
         if int(slot, 16):
             beacon = "0x" + slot[-40:]
             impl, = one(beacon, "implementation()", ["address"])
             record.update(beacon=beacon, beacon_hash=code(beacon), implementation=impl, implementation_hash=code(impl))
+        # PairBeaconProxy stores both the beacon and the last initialized implementation.
+        # Its fallback may use the previous implementation for a read during an upgrade.
+        if int(direct, 16) and int(slot, 16):
+            current = "0x" + direct[-40:]
+            record.update(initialized=current, initialized_hash=code(current), synchronized=impl == current)
         elif int(direct, 16):
             impl = "0x" + direct[-40:]
             record.update(implementation=impl, implementation_hash=code(impl))
@@ -62,7 +66,9 @@ def capture(url):
         reserves = one(pool, "getReserves()", ["uint112", "uint112", "uint32"])
         assets, shares = one(pool, "totalAssetsAndShares(bool)", ["uint112[6]", "uint112[6]"], ["bool"], [True])
         cash = [one(t, "balanceOf(address)", ["uint256"], ["address"], [pool])[0] for t in coins]
-        pools.append(dict(index=index, pool=pool, tokens=coins, code=binding(pool), reserves=list(map(str,reserves)),
+        pinned = binding(pool)
+        assert pinned.get("beacon") == one(FACTORY, "pairBeacon()", ["address"])[0]
+        pools.append(dict(index=index, pool=pool, tokens=coins, code=pinned, reserves=list(map(str,reserves)),
                           cash=list(map(str,cash)), lending_assets=list(map(str,assets)), lending_shares=list(map(str,shares))))
     assert len({p["pool"] for p in pools}) == count
     market, = [p for p in pools if set(p["tokens"]) == {WETH, USDC}]

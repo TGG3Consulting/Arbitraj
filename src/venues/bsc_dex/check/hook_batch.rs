@@ -71,8 +71,7 @@ pub async fn measure(
     let mut calls: Vec<(Address, Bytes)> = Vec::new();
     for (i, (mem, plan)) in pools.iter().enumerate() {
         let base = fresh.map_or(mem, |f| &f.pools[&mem.pool.reference]);
-        let asks = if mem.family.variant
-            == super::super::pools::family_variant::Variant::SupernovaIntegral
+        let asks = if matches!(mem.family.variant,super::super::pools::family_variant::Variant::SupernovaIntegral|super::super::pools::family_variant::Variant::CypherIntegral)
         {
             Vec::new()
         } else {

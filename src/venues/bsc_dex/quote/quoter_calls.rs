@@ -78,7 +78,7 @@ pub fn request(
         }
         return Ok((ctx.dex_addr("dex.router",e.family.id)?,super::super::pools::memebox::calldata(token_in,token_out,amount)));
     }
-    if e.family.variant==super::super::pools::family_variant::Variant::SupernovaIntegral {
+    if matches!(e.family.variant,super::super::pools::family_variant::Variant::SupernovaIntegral|super::super::pools::family_variant::Variant::CypherIntegral) {
         return Err(ctx.err(ErrorCode::NotApplicable,"Supernova: требуется канонический customDeployer и отправитель котировки"));
     }
     if e.family.variant.external_algebra_swap() {

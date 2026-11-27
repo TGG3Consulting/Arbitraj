@@ -112,6 +112,11 @@ pub async fn state(
         let state=Box::pin(super::surge::market(ctx,f,reference.address(),pair,&at)).await?;
         return Ok(Loaded{state:PoolState::Surge(Box::new(state)),ticks:None,bins:None,fee_pips:None});
     }
+    if f.variant==Variant::CypherIntegral {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::cypher_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
+        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant.protected_router_wallet() {
         let at=super::nami::block(ctx,&tag).await?;
         let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;

@@ -90,7 +90,7 @@ pub(super) fn leg(
             end,
         )
     } else {
-        let mut m=Market::from_entry(e).ok_or_else(fail)?;
+        let mut m=Market::from_entry(ctx,e).ok_or_else(fail)?;
         m.wallet_module=registered_router::wallet_module(ctx,e)==Some(router);
         m.order(
             order.token_in,

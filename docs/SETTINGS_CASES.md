@@ -52,6 +52,7 @@
 | `dex.cl_tick_spacings` | какие пулы Slipstream находятся по фабрике (pools/factory_calls.rs) | необязательная: Не задана — Slipstream этой DEX по фабрике не ищется |
 | `dex.curve_plain_implementations` | какие пулы фабрики Curve 2021 допускаются (pools/verify_curve_plain.rs) | необязательная: не задана — пулы фабрики не берутся, только dex.stable_pools |
 | `dex.curve_ng_versions` | какие пулы Curve NG допускаются (pools/verify_curve_ng.rs) | без .optional(): ошибка «не задана»: Не задана или пуста — DEX не подключена |
+| `dex.algebra_pool_deployer` | физический CREATE2-деплоер Cypher Algebra Integral, включая все custom-соли | несовпадение с factory/quoter/router исключает текущее поручение |
 | `dex.custom_deployers` | какие пулы Algebra Integral допускаются (pools/verify_algebra.rs) | необязательная: Не задан — только poolByPair (кастомные пулы отклоняются) |
 | `dex.intermediate_dex_priced` | расчёт: промежуточные монеты без биржи в маршрутах (pools/mids.rs) | необязательная: не задана) — обычной промежуточной с подписью с цепи, цену BNB 1:1 не получает (решение 270, дополнение … |
 | `dex.intermediate_partial_fill` | расчёт: путь через промежуточную отдаёт помещающуюся часть (quote/routing.rs) | необязательная: Не задана или нет — как раньше |

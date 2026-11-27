@@ -21,6 +21,16 @@ ZERO="0x"+"00"*20
 POOL=digest(b"Pool(address,address,address)")
 CUSTOM=digest(b"CustomPool(address,address,address,address)")
 
+def plugin_template(code,pool):
+    # Меняем только полный операнд PUSH20/PUSH32, равный адресу этой же пары.
+    out=bytearray(code);i=0;address=bytes.fromhex(pool[2:]);references=[]
+    while i<len(out):
+        opcode=out[i];size=opcode-0x5f if 0x60<=opcode<=0x7f else 0
+        if size in (20,32) and out[i+1:i+1+size]==address.rjust(size,b"\0"):
+            out[i+1:i+1+size]=bytes(size);references.append(i+1)
+        i+=1+size
+    return digest(out),references
+
 def capture(ep):
     snap=json.loads((DATA/"ethereum.json").read_bytes()); c=Capture(dict(snap,endpoint=ep))
     tag=c.selector;head=rpc(ep,"eth_getBlockByHash",[tag["blockHash"],False]);height=int(head["number"],16)
@@ -67,7 +77,9 @@ def capture(ep):
     for a in sorted(plug):
         b=raw(rpc(ep,"eth_getCode",[a,tag]))
         if not b:raise ValueError("missing plugin code")
-        codes[a]=dict(runtime=digest(b),bytes=len(b))
+        pools=[m["pool"] for m in markets if m["plugin"]==a]
+        template,offsets=plugin_template(b,pools[0]) if len(pools)==1 else (digest(b),[])
+        codes[a]=dict(runtime=digest(b),bytes=len(b),template=template,pool_operands=offsets)
     return dict(height=height,selector=tag,state_root=ROOT_HASH,source="https://docs.cyphereth.com/docs/contracts/mainnet/",
                 factory=f,router=r,quoter=q,physical=codelink,init="0x"+init.hex(),plugins=codes,markets=markets)
 

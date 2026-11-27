@@ -367,6 +367,9 @@ mod tests {
                         let data: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();
                         assert_eq!(data["selector"], snapshot["selector"]);
                         assert_eq!(data["init"].as_str(), Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && p.id=="cypher-v4-ethereum"{
+                        let d:Value=serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz").as_slice())).unwrap();
+                        assert_eq!(d["init"],text.as_str());assert_eq!(d["selector"],snapshot["selector"]);
                     } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="algebra_integral_supernova") {
                         let data:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json")).unwrap();
                         assert_eq!(data["selector"],snapshot["selector"]);

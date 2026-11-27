@@ -23,6 +23,7 @@ pub enum Variant {
     NamiIntegral,
     /// Supernova AlgebraBasePluginV3: скидка tx.origin и внешнее исполнение Reflex.
     SupernovaIntegral,
+    CypherIntegral,
     /// Ring Few V2 на Ethereum, отдельный путь underlying через проверенные fw wrappers.
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
@@ -217,7 +218,7 @@ impl Variant {
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -270,6 +271,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_base_plugin_v1" => Variant::BasePluginV1,
         "algebra_integral_hydrex" => Variant::HydrexIntegral,
         "algebra_integral_nami" => Variant::NamiIntegral,
+        "algebra_integral_cypher" => Variant::CypherIntegral,
         "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,

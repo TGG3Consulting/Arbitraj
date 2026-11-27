@@ -29,7 +29,7 @@ contract DegenSwapAdapter {
     struct Opening {uint256 walletIn;uint256 receiverOut;uint256 moduleIn;uint256 moduleOut;}
     function swapFrom(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline) external returns(uint256 net){
         require(!entered && (msg.sender==payer || msg.sender==executor) && recipient!=address(0) && recipient!=address(this) && recipient!=address(router),"payer");
-        require(block.timestamp<=deadline && minimum!=0 && amount!=0 && input!=output && input.code.length>0 && output.code.length>0,"order");
+        require(block.timestamp<=deadline && (minimum!=0 || msg.sender==executor) && amount!=0 && input!=output && input.code.length>0 && output.code.length>0,"order");
         entered=true;
         address pair=factory.getPair(input,output);
         require(pair.code.length>0 && recipient!=pair && ISafePair(pair).factory()==address(factory),"pair");

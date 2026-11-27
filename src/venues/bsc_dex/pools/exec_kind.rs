@@ -227,7 +227,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "algebra_integral_base_plugin_v1"
         | "algebra_integral_hydrex"
         | "algebra_integral_quickswap"
-        | "algebra_integral_nami" | "algebra_integral_supernova" => ExecKind::Algebra,
+        | "algebra_integral_nami" | "algebra_integral_supernova" | "algebra_integral_cypher" => ExecKind::Algebra,
         // Решение 444: Algebra V1.9 с направленными комиссиями (Camelot V3) — swap(recipient, zeroToOne,
         // amountRequired, limitSqrtPrice, data) и algebraSwapCallback(int256, int256, bytes) те же (cryptoalgebra/
         // AlgebraV1.9 a45417ed AlgebraPool.sol:604-610, IAlgebraSwapCallback.sol:18-22) — шаг ALGEBRA, исполнитель тот же.

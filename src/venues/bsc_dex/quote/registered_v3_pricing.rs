@@ -72,7 +72,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 _ => None,
             }
         } else {
-            Market::from_entry(e).map(Wire::RegisteredV3)
+            Market::from_entry(ctx,e).map(Wire::RegisteredV3)
         };
         if let (Some(target), Some(wire)) = (router, wire) {
             let order = Execution {
@@ -84,7 +84,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
-        if let Some(target)=registered_router::wallet_module(ctx,e) && let Some(mut m)=Market::from_entry(e)
+        if let Some(target)=registered_router::wallet_module(ctx,e) && let Some(mut m)=Market::from_entry(ctx,e)
             && (head.is_none() || registered_router::checked_module(ctx,e,&head.unwrap().selector()).await.is_ok()){
             m.wallet_module=true;
             let order=Execution{mode:RouteMode::Direct,target,wire:Wire::RegisteredV3(m)};
@@ -95,7 +95,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};
                 (0,Bytes::from(fee.abi_encode()))
-            } else {(if classic {3} else {1},Bytes::new())};
+            } else {(if classic {3}else if e.family.variant==Variant::CypherIntegral{2}else{1},Bytes::new())};
             let wire = Wire::V5(V5Step {
                 kind,
                 pool,

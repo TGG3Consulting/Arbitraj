@@ -121,7 +121,7 @@ pub fn needs(f: &Family) -> bool {
             | Variant::FraxTwamm
             | Variant::FraxTwammRouter
             | Variant::BasePluginV1 | Variant::TrebleIntegral
-            | Variant::NamiIntegral | Variant::SupernovaIntegral
+            | Variant::NamiIntegral | Variant::SupernovaIntegral | Variant::CypherIntegral
             | super::family_variant::Variant::QuickswapIntegral
             | super::family_variant::Variant::CurvePlain
             | super::family_variant::Variant::CurveMeta

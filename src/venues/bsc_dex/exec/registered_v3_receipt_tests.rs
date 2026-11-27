@@ -63,7 +63,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 .unwrap();
             let market = Market {
                 pool,
-                fee_event:extended,wallet_module:false,
+                algebra_deployer:None,fee_event:extended,wallet_module:false,
                 fee: U24::from(node["fee"].as_u64().unwrap() as u32),
             };
             let bound = Proof {
@@ -129,7 +129,7 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
         let data: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
         let market = archive["markets"].as_array().unwrap().iter().find(|e| e["pool"] == row["pool"]).unwrap();
         let proof = Proof {
-            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), fee_event:false,wallet_module:true },
+            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), algebra_deployer:None,fee_event:false,wallet_module:true },
             target:parse(&tx["to"]), payer:parse(&tx["from"]),input:parse(&row["source"]),output:parse(&row["target"]),
             budget:amount(&row["spent"]),minimum:amount(&row["received"]),deadline:U256::from_be_slice(&data[data.len()-32..]),
         };
@@ -153,4 +153,39 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
         count+=1;
     }
     assert_eq!(count,16);
+}
+
+#[test]
+fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
+    let mut fills=0;
+    for raw in [include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_0.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_1.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_2.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_3.json.gz").as_slice()]{
+        let d:Value=serde_json::from_reader(GzDecoder::new(raw)).unwrap();
+        let parse=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+        for m in d["markets"].as_array().unwrap(){
+            for c in m["cases"].as_array().unwrap().iter().filter(|r|r["mode"]=="router" && r["buy"].is_object()){
+                for side in ["buy","sell"]{
+                    let leg=&c[side];let x=&leg["exact"];if !x.is_object(){continue}
+                    let tx=x["calldata"].as_str().unwrap().parse::<Bytes>().unwrap();
+                    let call=ICypherRouter::exactInputSingleCall::abi_decode(&tx).unwrap().args;
+                    assert_eq!(call.deployer,parse(&m["deployer"]));
+                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,fee_event:false,wallet_module:false,algebra_deployer:Some(call.deployer)},
+                        target:parse(&d["router"]),payer:parse(&x["payer"]),input:call.tokenIn,output:call.tokenOut,budget:call.amountIn,minimum:call.minimum,deadline:call.deadline};
+                    assert_eq!(p.data(),tx);assert_eq!(p.payer,call.recipient);assert_eq!(x["spent"],p.budget.to_string().as_str());
+                    let q=leg["official_quote"]["response"].as_str().unwrap().parse::<Bytes>().unwrap();
+                    assert_eq!(super::super::super::pools::nami::decoded(&q),Some(p.minimum));
+                    let logs:Vec<SimLog>=serde_json::from_value(x["logs"].clone()).unwrap();
+                    let pair_topic=keccak256(p.market.event().0);
+                    assert!(logs.iter().any(|l|l.address==p.market.pool && l.topics.first()==Some(&pair_topic)));
+                    // Прямая выплата admitted только у ETH-активов с проверенной чистой передачей.
+                    // У иных ERC20 архивное сравнение использует физические балансы, в боте работает V5.
+                    if let Some((spent,received))=p.measured(&logs){assert_eq!((spent,received),(p.budget,p.minimum));}
+                    fills+=1;
+                }
+            }
+        }
+    }
+    assert_eq!(fills,292);
 }

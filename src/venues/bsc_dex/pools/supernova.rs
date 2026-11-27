@@ -86,7 +86,7 @@ fn projected(observed: u32, reference: u16, actual: u16) -> Option<u16> {
     u16::try_from(low).ok()
 }
 
-fn role(
+pub(super) fn role(
     ctx: &Ctx,
     id: &str,
     physical: Address,

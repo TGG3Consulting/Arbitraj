@@ -73,6 +73,9 @@ pub async fn out_at(
                 "Пара Nami не содержит входной токен",
             ));
         };
+        if e.family.variant == super::super::pools::family_variant::Variant::CypherIntegral {
+            return Box::pin(super::super::pools::cypher_quotes::out(ctx,e,token_in,to,amount,block)).await;
+        }
         if e.family.variant == super::super::pools::family_variant::Variant::SupernovaIntegral {
             return super::super::pools::supernova::quote(ctx,e,token_in,to,amount,block).await;
         }

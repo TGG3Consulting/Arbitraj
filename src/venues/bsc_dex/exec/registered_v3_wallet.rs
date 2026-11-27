@@ -23,10 +23,16 @@ sol! {interface IV3Router {
     struct ExactIn { address tokenIn;address tokenOut;uint24 fee;address recipient;uint256 deadline;uint256 amountIn;uint256 amountOutMinimum;uint160 sqrtPriceLimitX96; }
     function exactInputSingle(ExactIn params) external payable returns(uint256 amountOut);
 }}
+sol!{interface ICypherRouter{
+    struct Params {address tokenIn;address tokenOut;address deployer;address recipient;uint256 deadline;uint256 amountIn;uint256 minimum;uint160 limit;}
+    function exactInputSingle(Params calldata args) external payable returns(uint256);
+}}
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Market {
     pub pool: Address,
     pub fee: U24,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub algebra_deployer:Option<Address>,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub fee_event: bool,
     #[serde(default, skip_serializing_if = "standard_event")]
@@ -34,9 +40,11 @@ pub struct Market {
 }
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
-    pub(in crate::venues::bsc_dex) fn from_entry(e: &super::super::pools::registry::Entry) -> Option<Self> {
+    pub(in crate::venues::bsc_dex) fn from_entry(ctx:&Ctx,e: &super::super::pools::registry::Entry) -> Option<Self> {
+        let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
+        let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         Some(Self {
-            pool: e.pool.reference.address(), fee: U24::from(e.pool.fee_pips?), wallet_module:false,
+            pool: e.pool.reference.address(), fee: if algebra{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
     }
@@ -63,6 +71,7 @@ impl RouterMarket for Market {
         self.pool
     }
     fn event(self) -> (&'static str, usize) {
+        if self.algebra_deployer.is_some(){return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)",224)}
         if self.fee_event {
             return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)",224);
         }
@@ -88,6 +97,7 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
+        if let Some(deployer)=self.algebra_deployer{return ICypherRouter::exactInputSingleCall{args:ICypherRouter::Params{tokenIn:input,tokenOut:output,deployer,recipient:wallet,deadline,amountIn:amount,minimum,limit:Default::default()}}.abi_encode().into()}
         if self.wallet_module{return super::super::pools::solidly_v3::execution_data(self.pool,input,output,amount,minimum,deadline)}
         IV3Router::exactInputSingleCall {
             params: IV3Router::ExactIn {
@@ -221,7 +231,7 @@ pub(super) async fn plan(
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let mut market = Market::from_entry(e).ok_or_else(fail)?;market.wallet_module=guarded;
+    let mut market = Market::from_entry(ctx,e).ok_or_else(fail)?;market.wallet_module=guarded;
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,

@@ -3,6 +3,7 @@ import argparse
 import gzip
 import json
 from pathlib import Path
+import time
 
 import requests
 from eth_abi import decode, encode
@@ -14,7 +15,11 @@ def topic(s):
     return "0x"+keccak(text=s).hex()
 
 
-def capture(url):
+# Located by bisecting epochInfos(epoch).filled. Each boundary is checked on both canonical block hashes.
+BOUNDARIES = {268:52529532, 3:42028259, 120:46288988, 5:42074628, 273:58413283}
+ENDPOINTS = ("https://mainnet.base.org","https://base-rpc.publicnode.com","https://base.gateway.tenderly.co","https://base.drpc.org")
+
+def capture():
     with gzip.open(DATA/"treble_limit_epochs.json.gz") as f:
         inventory=json.load(f)
     with gzip.open(DATA/"base_algebra_treble-v4.json.gz") as f:
@@ -22,11 +27,19 @@ def capture(url):
     manager=inventory["manager"]
     session=requests.Session()
     def rpc(m,params):
-        result=session.post(url,json={"id":1,"jsonrpc":"2.0","method":m,"params":params},timeout=20)
-        result.raise_for_status()
-        data=result.json()
-        if "result" not in data:raise RuntimeError(str(data.get("error"))[:200])
-        return data["result"]
+        last=None
+        for attempt in range(3):
+            for url in ENDPOINTS:
+                try:
+                    result=session.post(url,json={"id":1,"jsonrpc":"2.0","method":m,"params":params},timeout=15)
+                    result.raise_for_status()
+                    data=result.json()
+                    if data.get("result") is None:raise ValueError(str(data.get("error"))[:160])
+                    return data["result"]
+                except (requests.RequestException,ValueError) as err:
+                    last=err
+            time.sleep(2**attempt)
+        raise RuntimeError(f"{m}: {last}")
     snapshot=rpc("eth_getBlockByHash",[inventory["selector"]["blockHash"],False])
     head=int(snapshot["number"],16)
     if rpc("eth_chainId",[])!="0x2105" or snapshot["stateRoot"]!=accepted["state_root"]:
@@ -43,20 +56,13 @@ def capture(url):
             continue
         epoch=completed[-1]
         call={"to":manager,"data":topic("epochInfos(uint232)")[:10]+encode(["uint232"],[epoch["id"]]).hex()}
-        def filled(height):
-            raw=rpc("eth_call",[call,hex(height)])
-            if raw=="0x":
-                return False
-            return decode(["bool"],bytes.fromhex(raw[2:]))[0]
-        lo,hi=0,head
-        while lo+1<hi:
-            mid=(lo+hi)//2
-            if filled(mid):
-                hi=mid
-            else:
-                lo=mid
-        if filled(lo) or not filled(hi):raise ValueError("epoch boundary")
+        hi=BOUNDARIES[epoch["id"]]
         header=rpc("eth_getBlockByNumber",[hex(hi),False])
+        if hi > head:raise ValueError("fill after inventory")
+        def filled(block_hash):
+            raw=rpc("eth_call",[call,{"blockHash":block_hash,"requireCanonical":True}])
+            return raw!="0x" and decode(["bool"],bytes.fromhex(raw[2:]))[0]
+        if filled(header["parentHash"]) or not filled(header["hash"]):raise ValueError("epoch boundary")
         logs=rpc("eth_getLogs",[{"blockHash":header["hash"],"address":manager,
                       "topics":[topic("Fill(uint232,int24,bool)"),"0x"+encode(["uint232"],[epoch["id"]]).hex()]}])
         if len(logs)!=1:raise ValueError((epoch["id"],hi,"Fill count",len(logs)))
@@ -82,11 +88,5 @@ if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("out",type=Path)
     args=p.parse_args()
-    for endpoint in ("https://base-rpc.publicnode.com","https://mainnet.base.org","https://base.gateway.tenderly.co"):
-        try:
-            data=capture(endpoint)
-            break
-        except (requests.RequestException,RuntimeError) as exc:
-            print(str(exc)[:200],flush=True)
-    else:raise RuntimeError("canonical archive unavailable")
+    data=capture()
     args.out.write_text(json.dumps(data,separators=(",",":")),encoding="utf8")

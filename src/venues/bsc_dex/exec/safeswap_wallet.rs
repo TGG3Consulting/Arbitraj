@@ -32,9 +32,9 @@ mod abi {
 use abi::ISettlement;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proof {
-    #[serde(default,skip_serializing_if="std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub native_router: bool,
-    #[serde(default,skip_serializing_if="std::ops::Not::not")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub degen_module: bool,
     pub pool: Address,
     pub module: Address,
@@ -53,8 +53,8 @@ impl Proof {
         deadline: U256,
     ) -> Self {
         Self {
-            native_router:matches!(o.wire,v2_wallet_sim::Wire::DegenRouter(_)),
-            degen_module:matches!(o.wire,v2_wallet_sim::Wire::DegenModule(_)),
+            native_router: matches!(o.wire, v2_wallet_sim::Wire::DegenRouter(_)),
+            degen_module: matches!(o.wire, v2_wallet_sim::Wire::DegenModule(_)),
             pool,
             module: o.target,
             payer: o.payer,
@@ -66,7 +66,9 @@ impl Proof {
         }
     }
     pub(in crate::venues::bsc_dex) fn data(&self) -> Bytes {
-        if self.native_router{return super::degen_router::data(self)}
+        if self.native_router {
+            return super::degen_router::data(self);
+        }
         IVistaFlow::swapFromCall {
             tokenIn: self.input,
             tokenOut: self.output,
@@ -144,13 +146,21 @@ impl Proof {
         {
             return None;
         }
-        if self.native_router{
-            if swap.sender!=self.module || swap.to!=wallet{return None}
-            let moved=|token,src,dst|fill::moved_logs(logs,token,src,dst);
-            let paid=moved(input,Some(wallet),None).checked_sub(moved(input,None,Some(wallet)))?;
-            let got=moved(output,None,Some(wallet)).checked_sub(moved(output,Some(wallet),None))?;
-            return (paid==self.budget && got>=self.minimum && got<=outgoing
-                && moved(output,Some(self.pool),Some(wallet))==got && !moved(input,Some(wallet),Some(self.pool)).is_zero()).then_some((paid,got));
+        if self.native_router {
+            if swap.sender != self.module || swap.to != wallet {
+                return None;
+            }
+            let moved = |token, src, dst| fill::moved_logs(logs, token, src, dst);
+            let paid =
+                moved(input, Some(wallet), None).checked_sub(moved(input, None, Some(wallet)))?;
+            let got =
+                moved(output, None, Some(wallet)).checked_sub(moved(output, Some(wallet), None))?;
+            return (paid == self.budget
+                && got >= self.minimum
+                && got <= outgoing
+                && moved(output, Some(self.pool), Some(wallet)) == got
+                && !moved(input, Some(wallet), Some(self.pool)).is_zero())
+            .then_some((paid, got));
         }
         let mut fills = logs.iter().filter(|l| {
             l.address() == self.module && l.topic0() == Some(&ISettlement::Filled::SIGNATURE_HASH)
@@ -166,14 +176,26 @@ impl Proof {
         }
         let moved = |token, from, to| fill::moved_logs(logs, token, from, to);
         if self.degen_module {
-            let mut events=logs.iter().filter(|l|l.address()==self.module && l.topic0()==Some(&ISettlement::Funded::SIGNATURE_HASH));
-            if let Some(log)=events.next(){
-                let debit=ISettlement::Funded::decode_log_data(&log.inner.data).ok()?;
-                if events.next().is_some() || debit.sender!=wallet || debit.input!=input || debit.spent!=f.spent
-                    || debit.credited.is_zero() || debit.credited>f.spent || f.nativeFee!=U256::ZERO
-                    || moved(input,Some(wallet),Some(self.module)).is_zero() || moved(output,Some(self.pool),Some(wallet)).is_zero(){return None}
+            let mut events = logs.iter().filter(|l| {
+                l.address() == self.module
+                    && l.topic0() == Some(&ISettlement::Funded::SIGNATURE_HASH)
+            });
+            if let Some(log) = events.next() {
+                let debit = ISettlement::Funded::decode_log_data(&log.inner.data).ok()?;
+                if events.next().is_some()
+                    || debit.sender != wallet
+                    || debit.input != input
+                    || debit.spent != f.spent
+                    || debit.credited.is_zero()
+                    || debit.credited > f.spent
+                    || f.nativeFee != U256::ZERO
+                    || moved(input, Some(wallet), Some(self.module)).is_zero()
+                    || moved(output, Some(self.pool), Some(wallet)).is_zero()
+                {
+                    return None;
+                }
                 // Reflection-токен может записать в Transfer только чистую часть. Контракт сравнил четыре balanceOf и связал обе суммы с одним payer.
-                return Some((f.spent,f.received));
+                return Some((f.spent, f.received));
             }
         }
         let paid =
@@ -199,11 +221,27 @@ pub(super) async fn plan(
     let generation = ctx.settings.generation();
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
     let pool = e.pool.reference.address();
-    let direct=e.family.variant==super::super::pools::family_variant::Variant::DegenSwap
-        && selected.is_some() && selected==ctx.dex_addr("dex.quoter",e.family.id).ok();
-    let module=if direct {
-        Box::pin(super::degen_router::checked(ctx,e,s.order.token_in,&head.selector())).await?
-    }else{Box::pin(safeswap_trade::market(ctx,e.family,pool,(e.pool.token0,e.pool.token1),&head.selector())).await?};
+    let direct = e.family.variant == super::super::pools::family_variant::Variant::DegenSwap
+        && selected.is_some()
+        && selected == ctx.dex_addr("dex.quoter", e.family.id).ok();
+    let module = if direct {
+        Box::pin(super::degen_router::checked(
+            ctx,
+            e,
+            s.order.token_in,
+            &head.selector(),
+        ))
+        .await?
+    } else {
+        Box::pin(safeswap_trade::market(
+            ctx,
+            e.family,
+            pool,
+            (e.pool.token0, e.pool.token1),
+            &head.selector(),
+        ))
+        .await?
+    };
     if selected != Some(module) {
         return Err(safeswap_trade::bad(ctx));
     }
@@ -221,7 +259,13 @@ pub(super) async fn plan(
         output: o.token_out,
         amount: o.amount_in,
         minimum: o.min_out,
-        wire: if direct{v2_wallet_sim::Wire::DegenRouter(pool)}else if e.family.variant==super::super::pools::family_variant::Variant::DegenSwap{v2_wallet_sim::Wire::DegenModule(pool)}else{v2_wallet_sim::Wire::SafeSwap(pool)},
+        wire: if direct {
+            v2_wallet_sim::Wire::DegenRouter(pool)
+        } else if e.family.variant == super::super::pools::family_variant::Variant::DegenSwap {
+            v2_wallet_sim::Wire::DegenModule(pool)
+        } else {
+            v2_wallet_sim::Wire::SafeSwap(pool)
+        },
     };
     let proof = Proof::order(pool, &order, order.minimum, end);
     v2_wallet_sim::measure(ctx, head, order, true).await?;
@@ -247,16 +291,24 @@ pub(in crate::venues::bsc_dex) fn probe(
     wallet: Address,
     now: u64,
 ) -> GatewayResult<(Vec<approve::Approval>, Address, Bytes)> {
-    let native_router=e.family.variant==super::super::pools::family_variant::Variant::DegenSwap
-        && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,o.token_in);
-    let module=ctx.dex_addr(if native_router{"dex.quoter"}else{"dex.router"},e.family.id)?;
+    let native_router = e.family.variant == super::super::pools::family_variant::Variant::DegenSwap
+        && super::super::pools::exact_wallet_tokens::eligible_input(ctx, e.family.id, o.token_in);
+    let module = ctx.dex_addr(
+        if native_router {
+            "dex.quoter"
+        } else {
+            "dex.router"
+        },
+        e.family.id,
+    )?;
     let deadline = U256::from(
         now.checked_add(ctx.int("dex.deadline_s")?)
             .ok_or_else(|| safeswap_trade::bad(ctx))?,
     );
     let p = Proof {
         native_router,
-        degen_module:e.family.variant==super::super::pools::family_variant::Variant::DegenSwap && !native_router,
+        degen_module: e.family.variant == super::super::pools::family_variant::Variant::DegenSwap
+            && !native_router,
         pool: e.pool.reference.address(),
         module,
         payer: wallet,
@@ -277,6 +329,24 @@ pub(in crate::venues::bsc_dex) fn probe(
 mod tests {
     use super::*;
     use serde_json::Value;
+    #[test]
+    fn degen_taxed_funding_is_measured_by_the_attested_contract(){
+        let archive:Value=serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_funded.json.gz").as_slice())).unwrap();
+        let addr=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+        let mut count=0;
+        for r in archive["cases"].as_array().unwrap().iter().filter(|r|r["mode"]=="module" && r["sell"].is_object()){
+            for side in ["buy","sell"]{
+                let x=&r[side]["exact"];let data=x["transaction"]["data"].as_str().unwrap().parse::<Bytes>().unwrap();
+                let call=IVistaFlow::swapFromCall::abi_decode(&data).unwrap();
+                let p=Proof{native_router:false,degen_module:true,pool:addr(&r["pool"]),module:addr(&r["module"]),payer:addr(&r["payer"]),input:call.tokenIn,output:call.tokenOut,budget:call.amount,minimum:call.minimum,deadline:call.deadline};
+                let logs:Vec<crate::venues::bsc_dex::check::simulate::SimLog>=serde_json::from_value(x["logs"].clone()).unwrap();
+                assert_eq!(p.data(),data);assert_eq!(p.measured(&logs),Some((call.amount,call.minimum)));
+                let mut missing=logs.clone();missing.retain(|l|l.address!=p.module);
+                assert_eq!(p.measured(&missing),None);count+=1;
+            }
+        }
+        assert_eq!(count,92);
+    }
     #[test]
     fn signed_wallet_orders_rebuild_from_their_archived_debits_and_credits() {
         let bytes = include_bytes!(
@@ -299,8 +369,8 @@ mod tests {
                 let amount = |key: &str| d[key].as_str().unwrap().parse::<U256>().unwrap();
                 let addr = |key: &str| case[key].as_str().unwrap().parse::<Address>().unwrap();
                 let proof = Proof {
-                    native_router:false,
-                    degen_module:false,
+                    native_router: false,
+                    degen_module: false,
                     pool: addr("pool"),
                     module: addr("module"),
                     payer: addr("payer"),

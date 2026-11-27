@@ -47,7 +47,7 @@ pub(crate) async fn checked(
         )
     };
     use super::family_variant::Variant;
-    if !matches!(e.family.variant, Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::VvsV3)
+    if !matches!(e.family.variant, Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::VvsV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -60,6 +60,7 @@ pub(crate) async fn checked(
         .map_err(|_| bad())?;
     tokio::try_join!(
         async {
+            if e.family.variant==Variant::CypherIntegral{return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
             if e.family.variant == Variant::VvsV3 {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
             }

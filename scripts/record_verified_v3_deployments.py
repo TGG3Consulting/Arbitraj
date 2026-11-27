@@ -6,12 +6,14 @@ from eth_utils import keccak
 from record_base_slipstream_executor import ROOT, calldata, rpc
 from record_v2_chain_pools import NETWORKS, view
 from record_verified_v3_sources import sources
+from record_v3_fee_registry import candidate_fees
 
 
 def verify(network, rows, raw):
     profiles=json.loads((ROOT/"config/first_run_dex.json").read_bytes())
     url=NETWORKS[network][0]
     chain=8453 if network=="base" else 1
+    known_fees = candidate_fees(profiles, ROOT/"tests/data/first_run_dex_2026-11-26")
     found={}
     for dex,row in rows.items():
         ref=row["reference"]
@@ -56,7 +58,8 @@ def verify(network, rows, raw):
             ticks=call(lens,"getPopulatedTicksInWord(address,int16)",["address","int16"],[row["pool"],word])
             r["lens_word"]=word;r["lens_result"]="0x"+ticks.hex()
             r["fee_tiers"]={}
-            for fee in sorted(set([row["fee"],1,5,10,25,50,100,200,250,300,400,500,1000,2000,2500,3000,5000,7500,10000,20000])):
+            # An independently witnessed registration is a candidate, not proof of availability here.
+            for fee in sorted(known_fees | {row["fee"],1,5,10,25,50,100,200,250,300,400,500,1000,2000,2500,3000,5000,7500,10000,20000}):
                 delta=int.from_bytes(call(factory,"feeAmountTickSpacing(uint24)",["uint24"],[fee]),"big",signed=True)
                 if delta>0:r["fee_tiers"][str(fee)]=delta
             if r["fee_tiers"].get(str(row["fee"]))!=spacing:

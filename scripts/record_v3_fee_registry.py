@@ -1,6 +1,7 @@
 """Reconstruct V3 fee registrations from genesis and verify each value on one canonical block."""
 import argparse
 import json
+import gzip
 import time
 from pathlib import Path
 
@@ -95,7 +96,71 @@ def indexed(network,addresses,head):
     return rows
 
 
-def record(network):
+def rpc_read(c, method, params):
+    if method not in {"eth_chainId","eth_getCode","eth_getBlockByNumber","eth_getLogs","eth_getTransactionReceipt"}:
+        raise ValueError("unexpected fee archive method")
+    payload = dict(jsonrpc="2.0", id=1, method=method, params=params)
+    for attempt in range(5):
+        reply = c.session.post(c.endpoint, json=payload, timeout=25)
+        if reply.status_code != 429 or attempt == 4:
+            break
+        time.sleep(2 ** attempt)
+    reply.raise_for_status()
+    body = reply.json()
+    if body.get("error"):
+        raise ValueError((method, body["error"]))
+    return body["result"]
+
+
+def deployment_events(c, chain, factory, height):
+    # A constructor can register fees even when an explorer silently omits the receipt.
+    lo, hi = 0, height
+    try:
+        response = requests.get(f"https://sourcify.dev/server/v2/contract/{chain}/{factory}",
+                                params={"fields":"deployment"},timeout=6)
+        if response.ok:
+            known = int(response.json()["deployment"]["blockNumber"])
+            if 0 < known <= hi:
+                if rpc_read(c,"eth_getCode",[factory,hex(known)])!="0x" and rpc_read(c,"eth_getCode",[factory,hex(known-1)])=="0x":
+                    lo = hi = known
+    except (requests.RequestException,KeyError,TypeError,ValueError):
+        pass
+    while lo < hi:
+        middle = (lo+hi)//2
+        if rpc_read(c,"eth_getCode",[factory,hex(middle)])=="0x":
+            lo = middle+1
+        else:
+            hi = middle
+    block = rpc_read(c,"eth_getBlockByNumber",[hex(lo),False])
+    if rpc_read(c,"eth_getCode",[factory,{"blockHash":block["hash"],"requireCanonical":True}])=="0x":
+        raise ValueError(("factory absent",factory,lo))
+    query = dict(fromBlock=hex(lo), toBlock=hex(lo), address=factory, topics=[TOPIC])
+    logs = rpc_read(c,"eth_getLogs",[query])
+    records=[]
+    for log in logs:
+        t = log["topics"]
+        if (log["blockHash"]!=block["hash"] or log["address"].lower()!=factory or
+                len(t)!=3 or t[0]!=TOPIC or log["data"]!="0x"):
+            raise ValueError(("wrong factory constructor log", factory, lo))
+        fee,=decode(["uint24"],bytes.fromhex(t[1][2:]))
+        spacing,=decode(["int24"],bytes.fromhex(t[2][2:]))
+        records.append(dict(block=lo,hash=block["hash"],tx=log["transactionHash"],
+                            log_index=int(log["logIndex"],16),fee=fee,spacing=spacing))
+    return lo, records
+
+
+def candidate_fees(catalog,fixtures):
+    candidates = {int(f) for p in catalog for f in p["settings"].get("dex.v3_fee_tiers",[])}
+    for network in SPECS:
+        file = fixtures / ("v3_fee_events_"+network+".json.gz")
+        if file.exists():
+            with gzip.open(file, "rt") as stream:
+                for row in json.load(stream)["factories"].values():
+                    candidates.update(map(int,row["tiers"]))
+    return candidates
+
+
+def record(network, full_index=False):
     fixtures=ROOT/"tests/data/first_run_dex_2026-11-26"
     head=json.loads((fixtures/(network+".json")).read_bytes())
     catalog=json.loads((ROOT/"config/first_run_dex.json").read_bytes())
@@ -106,53 +171,63 @@ def record(network):
             factories.setdefault(s["dex.factory"].lower(),[]).append(p["id"])
     if not factories:
         raise ValueError("empty factory selection")
+    coverage = "constructor receipts and registered fee getter at pinned block"
+    events = {address: [] for address in factories}
     if network=="ethereum":
-        try:
-            events=ethereum_events(factories,head)
-        except (requests.RequestException,ValueError,KeyError):
-            events=indexed(network,factories,head)
-    else:
+        events=ethereum_events(factories,head)
+        coverage += "; historical explorer logs checked against original receipts"
+    elif full_index:
         events=indexed(network,factories,head)
+        coverage += "; historical SQD logs checked against original receipts"
+    probes = candidate_fees(catalog,fixtures)
     errors=[]
     for url in SPECS[network][1]:
         try:
             c=Capture(dict(head,endpoint=url))
+            if int(rpc_read(c,"eth_chainId",[]),16)!=head["chain_id"] or rpc_read(c,"eth_getBlockByNumber",[hex(head["block"]),False])["hash"]!=head["selector"]["blockHash"]:
+                raise ValueError("incorrect network or canonical block")
             verified={}
-            for factory,records in events.items():
+            for factory,historical in events.items():
+                creation, original = deployment_events(c,head["chain_id"],factory,head["block"])
+                unique = {(r["tx"],r["log_index"]):r for r in historical}
+                for row in original:
+                    key = row["tx"],row["log_index"]
+                    if key in unique and unique[key]!=row:
+                        raise ValueError(("explorer/constructor disagree",key))
+                    unique[key] = row
+                records = sorted(unique.values(),key=lambda r:(r["block"],r["log_index"]))
                 tiers={r["fee"]:r["spacing"] for r in records}
-                if not tiers:
-                    verified[factory]={"profiles":factories[factory],"events":[],"tiers":{},
-                                       "coverage":"no registration event observed; other fee sources remain possible"}
-                    continue
                 if len(tiers)!=len(records) or any(d<=0 for d in tiers.values()):
                     raise ValueError(("ambiguous fee events",factory))
-                states=posts(c,[(factory,"feeAmountTickSpacing(uint24)",["uint24"],[fee]) for fee in tiers])
-                if [decode(["int24"],row)[0] for row in states]!=list(tiers.values()):
+                candidates = sorted(set(tiers) | probes)
+                states=posts(c,[(factory,"feeAmountTickSpacing(uint24)",["uint24"],[fee]) for fee in candidates])
+                observed = {fee: decode(["int24"],buf)[0] for fee,buf in zip(candidates,states,strict=True)}
+                if any(observed[fee]!=space for fee,space in tiers.items()):
                     raise ValueError(("registry/chain disagreement",factory))
                 for record in records:
-                    query={"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":[record["tx"]],"id":1}
-                    response=c.session.post(url,json=query,timeout=20)
-                    response.raise_for_status()
-                    receipt=response.json()["result"]
+                    receipt=rpc_read(c,"eth_getTransactionReceipt",[record["tx"]])
                     hits=[l for l in receipt["logs"] if int(l["logIndex"],16)==record["log_index"] and l["address"].lower()==factory]
                     if receipt["blockHash"]!=record["hash"] or int(receipt["blockNumber"],16)!=record["block"] or len(hits)!=1:
                         raise ValueError(("foreign fee event",factory,record["tx"]))
                     h=hits[0]["topics"]
                     if hits[0]["data"]!="0x" or len(h)!=3 or h[0]!=TOPIC or int(h[1],16)!=record["fee"] or int(h[2],16)!=record["spacing"]:
                         raise ValueError(("wrong original log",factory,record["tx"]))
-                verified[factory]={"profiles":factories[factory],"events":records,"tiers":tiers}
+                verified[factory]={"profiles":factories[factory],"creation_block":creation,
+                                   "events":records,"tiers":{fee:delta for fee,delta in observed.items() if delta>0},
+                                   "getter_only":[fee for fee,delta in observed.items() if delta>0 and fee not in tiers]}
             break
         except (requests.RequestException,ValueError,RuntimeError,KeyError) as exc:
             errors.append((url,str(exc)[:200]))
     else:
         raise ValueError(errors)
     return dict(network=network,chain_id=head["chain_id"],block=head["block"],selector=head["selector"],
-                event=TOPIC,from_block=0,factories=verified)
+                event=TOPIC,coverage=coverage,probed_fees=sorted(probes),factories=verified)
 
 
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("network",choices=SPECS)
     p.add_argument("output",type=Path)
+    p.add_argument("--full-index",action="store_true",help="Also scan historical Base registration events via the public SQD archive")
     args=p.parse_args()
-    args.output.write_bytes(json.dumps(record(args.network),separators=(",",":")).encode())
+    args.output.write_bytes(json.dumps(record(args.network,args.full_index),separators=(",",":")).encode())

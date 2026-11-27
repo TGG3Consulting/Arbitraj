@@ -31,7 +31,7 @@ pub fn mul_div_up(a: U256, b: U256, c: U256) -> Option<U256> {
 }
 
 /// powUp V3 (FixedPoint.sol L124-L140). None — откат pow или переполнение.
-fn pow_up(x: U256, y: U256) -> Option<U256> {
+pub(super) fn pow_up(x: U256, y: U256) -> Option<U256> {
     let one = one();
     if y == one {
         return Some(x);

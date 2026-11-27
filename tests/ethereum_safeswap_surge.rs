@@ -32,11 +32,53 @@ fn safeswap_pair_and_router_fees_are_independent() {
                 assert_eq!(market[key], original[key]);
             }
         }
+        assert_eq!(dep["creation_code"]["hash"], dep["init"]);
         if index >= 2 {
+            for role in ["factory", "router"] {
+                assert_ne!(
+                    dep["roles"][role]["address"],
+                    dep["implementations"][role]["address"]
+                );
+                assert!(
+                    dep["implementations"][role]["runtime"]
+                        .as_str()
+                        .is_some_and(|h| h.len() == 66)
+                );
+            }
+        }
+        if index == 3 {
+            assert_eq!(dep["access"]["router_version"], 1);
+            let mut legs = 0;
+            for round in markets
+                .iter()
+                .flat_map(|m| m["paid_public"].as_array().unwrap())
+            {
+                for side in ["buy", "sell"] {
+                    let leg = &round[side];
+                    let Some(ok) = leg.get("exact") else { continue };
+                    assert_eq!(ok["transaction"]["to"], dep["access"]["trade"]["address"]);
+                    assert_eq!(ok["status"], "0x1");
+                    let before = ok["before"].as_array().unwrap();
+                    let after = ok["after"].as_array().unwrap();
+                    assert_eq!(raw(&before[0]) - raw(&after[0]), raw(&ok["spent"]));
+                    assert_eq!(raw(&after[1]) - raw(&before[1]), raw(&ok["received"]));
+                    assert_eq!(raw(&before[2]) - raw(&after[2]), raw(&ok["fee"]));
+                    assert!(raw(&ok["fee"]) > U256::ZERO);
+                    assert_eq!(&before[3..], &after[3..]);
+                    for refused in ["above", "expired"] {
+                        assert_eq!(leg[refused]["code"], 3);
+                    }
+                    if side == "sell" {
+                        assert_eq!(ok["spent"], round["buy"]["exact"]["received"]);
+                    }
+                    legs += 1;
+                }
+            }
+            assert_eq!(legs, 4);
             continue;
         }
         assert_eq!(dep["pair_pips"], 2000);
-        assert_eq!(dep["router_pips"], [2500, 2000][index]);
+        assert_eq!(dep["router_pips"], [2500, 2000, 2000][index]);
         let mut same_input = 0;
         for market in markets {
             let Some(rounds) = market["rounds"].as_array() else {

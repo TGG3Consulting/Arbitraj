@@ -1,0 +1,72 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "implementations": [
+    {
+      "template": "0x2bbd14976753f9748b421bba87a47faa0e6f1983",
+      "source_address": "0x2bbd14976753f9748b421bba87a47faa0e6f1983",
+      "kind": "legacy",
+      "runtime_hash": "0x98465a4e7ca49bff67affd1002d97c1a31b39c7f900ebc5ce94c9219a8a0daf6",
+      "upstream": "https://raw.githubusercontent.com/curvefi/curve-factory-crypto/7ed1011/contracts/CurveCryptoSwap2ETH.vy",
+      "verified": "https://sourcify.dev/server/v2/contract/8453/0x2bbd14976753f9748b421bba87a47faa0e6f1983?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+      "match": "match",
+      "source_sha256": "cebf5c2f9fed7f83cee3546e766428f9746d06c48109aac260a8221534143e82",
+      "statement_diff": []
+    },
+    {
+      "template": "0x1c5ecca381961d92b6aaf7bc1656c37021b0f1d9",
+      "source_address": "0x1c5ecca381961d92b6aaf7bc1656c37021b0f1d9",
+      "kind": "legacy",
+      "runtime_hash": "0x81222cb99ad17da45cab7274a1519feb5697c0048c8f190f64704142a4f49975",
+      "upstream": "https://raw.githubusercontent.com/curvefi/curve-factory-crypto/7ed1011/contracts/CurveCryptoSwap2ETH.vy",
+      "verified": "https://sourcify.dev/server/v2/contract/8453/0x1c5ecca381961d92b6aaf7bc1656c37021b0f1d9?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+      "match": "match",
+      "source_sha256": "46e478cc852c0a99102e14c43ff4d8b63788f9ff9a7bd57c36c701bac3d3c01f",
+      "statement_diff": [
+        "@@ -68,0 +69 @@",
+        "+DONATE_FEE: constant(uint256) = 10 * 10 ** 9",
+        "@@ -577,0 +579,12 @@",
+        "+@payable",
+        "+@external",
+        "+def donate(i: uint256, j: uint256, dx: uint256, use_eth: bool = False, receiver: address = msg.sender) -> uint256:",
+        "+    assert msg.sender == Factory(self.factory).admin()",
+        "+    _old_mid_fee: uint256 = self.mid_fee",
+        "+    _old_out_fee: uint256 = self.out_fee",
+        "+    self.mid_fee = DONATE_FEE - 2",
+        "+    self.out_fee = DONATE_FEE - 1",
+        "+    dy: uint256 = self._exchange(msg.sender, msg.value, i, j, dx, 0, use_eth, receiver, ZERO_ADDRESS, EMPTY_BYTES32)",
+        "+    self.mid_fee = _old_mid_fee",
+        "+    self.out_fee = _old_out_fee",
+        "+    return dy"
+      ]
+    },
+    {
+      "template": "0xb828b21ffb7873ea8a6b401b386192fcdbca16b8",
+      "source_address": "0xa343719b9c31ee3c3315fa7b4f32ea9438704384",
+      "kind": "sng",
+      "runtime_hash": "0x042c34dccd8574b0a60e57a8892dff158d56f9e06949a820decb0bcfa0391aed",
+      "upstream": "https://raw.githubusercontent.com/curvefi/stableswap-ng/3332cd4/contracts/main/CurveStableSwapNG.vy",
+      "verified": "https://sourcify.dev/server/v2/contract/8453/0xa343719b9c31ee3c3315fa7b4f32ea9438704384?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+      "match": "match",
+      "source_sha256": "6265b9f8838509153971c374e01955eb552c1e47b33302e2585da3efee7c4b10",
+      "statement_diff": []
+    },
+    {
+      "template": "0xf6134998c7a4e4addf71e2ca1273a480e1d12d5d",
+      "source_address": "0x769a52bc03ab37bd3457d10a841cb068a4f79a49",
+      "kind": "sng",
+      "runtime_hash": "0xdff9a2fe666912c757d8eac38ad7d9d1f0785a50c5649cc0be7fbeb385a3fe7d",
+      "upstream": "https://raw.githubusercontent.com/curvefi/stableswap-ng/3332cd4/contracts/main/CurveStableSwapNG.vy",
+      "verified": "https://sourcify.dev/server/v2/contract/8453/0x769a52bc03ab37bd3457d10a841cb068a4f79a49?fields=sources,compilation,runtimeBytecode.onchainBytecode",
+      "match": "match",
+      "source_sha256": "37e5ea588b17b356c002743fad534c5f9772ff261451bf46a90aec5ba89c50aa",
+      "statement_diff": [
+        "@@ -90 +90 @@",
+        "-admin_fee: public(constant(uint256)) = 5000000000",
+        "+admin_fee: public(constant(uint256)) = 8000000000"
+      ]
+    }
+  ]
+}

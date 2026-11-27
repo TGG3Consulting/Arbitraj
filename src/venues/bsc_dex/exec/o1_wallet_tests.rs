@@ -28,12 +28,22 @@ fn restored_receipt_accepts_only_the_signed_physical_key() {
         .find(|r| r["chain_id"] == 8453 && r["id"] == "o1-launchpad-wrapped")
         .unwrap();
     assert!(profile["settings"].get("dex.router").is_none());
-    let expected: B256 = profile["settings"]["dex.module_runtime_hashes"][0]
+    let expected: B256 = archive["module"]["keccak"]
         .as_str()
         .unwrap()
         .parse()
         .unwrap();
     assert_eq!(alloy_primitives::keccak256(code), expected);
+    let allowed = profile["settings"]["dex.module_runtime_hashes"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        allowed
+            .iter()
+            .filter(|value| value.as_str().unwrap().parse::<B256>().unwrap() == expected)
+            .count(),
+        1
+    );
     let mut n = 0;
     for m in archive["markets"].as_array().unwrap() {
         let id = m["pool"].as_str().unwrap().parse().unwrap();

@@ -113,6 +113,7 @@ pub fn plan(
             },
             // Curve Twocrypto-NG / Tricrypto-NG (решение 442) и crypto v1 фабрики (решение 453):
             // find_pool_for_coins(a, b, i), i < dex.pair_lookup_max.
+            Proto::CurveNg if f.variant == super::family_variant::Variant::Spectra => Vec::new(),
             Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1 => Vec::new(),
             Proto::PancakeV3 | Proto::UniswapV3 | Proto::IziSwap | Proto::KyberElastic => {
                 Vec::new()
@@ -180,7 +181,7 @@ pub fn plan(
         if matches!(
             f.proto,
             Proto::CurveTwocrypto | Proto::CurveTricrypto | Proto::CurveCryptoV1
-        ) {
+        ) || f.variant == super::family_variant::Variant::Spectra {
             match lookup_max(ctx, f.id) {
                 Ok(n) => qs = (0..n).map(Q::CurveCrypto).collect(),
                 Err(why) => {

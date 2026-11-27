@@ -36,6 +36,10 @@ pub fn on_swap(
 ) -> Option<U256> {
     let bal = &v3.live;
     match (&v3.rule, curve) {
+        (VaultV3Rule::PuzzleRanges {virtual_balances, enabled}, VaultCurve::Weighted {weights}) => {
+            if !enabled {return None}
+            super::puzzle_ranges::on_swap(virtual_balances,bal,weights,i,j,a,exact_in)
+        }
         (VaultV3Rule::Weighted, VaultCurve::Weighted { weights }) => {
             weighted(weights, bal, i, j, a, exact_in, None)
         }

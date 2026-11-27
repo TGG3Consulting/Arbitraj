@@ -122,6 +122,13 @@ pub async fn try_many(
     if let Some(mc) = super::multicall::address(ctx) {
         return super::multicall::aggregate(ctx, mc, calls, block).await;
     }
+    independent(ctx,calls,block).await
+}
+
+/// A single JSON-RPC batch with a fresh EVM state for each request.
+pub(crate) async fn independent(ctx:&Ctx, calls:&[(Address,Bytes)], block:&str)
+    -> GatewayResult<Vec<Result<Bytes,String>>> {
+    if calls.is_empty() {return Ok(Vec::new())}
     let params: Vec<(&str, serde_json::Value)> = calls
         .iter()
         .map(|(to, data)| ("eth_call", json!([{ "to": to, "input": data }, block])))

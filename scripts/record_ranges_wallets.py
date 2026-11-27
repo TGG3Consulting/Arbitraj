@@ -65,16 +65,18 @@ def run(endpoint, number):
     def verify(mode, pool, source, target, qty, prefix):
         checks = [balance(source,OWNER),balance(target,OWNER),balance(source,EXEC),balance(target,EXEC)]
         approval = allow(mode,roles,source,qty,deadline)
+        probe=tx(roles["router"],"querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)",
+                 ["address","address","address","uint256","address","bytes"],[pool,source,target,qty,OWNER,b""])
+        probe["from"]=ZERO
+        # A successful Vault.quote mutates the simulated pool. Keep it out of the payment frame.
+        quoted=simulate([*prefix,*approval,probe])[-1]
         def attempt(floor, end):
             op=packet(mode,roles,pool,source,target,qty,end,floor)
-            probe=tx(roles["router"],"querySwapSingleTokenExactIn(address,address,address,uint256,address,bytes)",
-                     ["address","address","address","uint256","address","bytes"],[pool,source,target,qty,OWNER,b""])
-            probe["from"]=ZERO
-            values=simulate([*prefix,*approval,probe,*checks,op,*checks])
+            values=simulate([*prefix,*approval,*checks,op,*checks])
             prep=values[:len(prefix)+len(approval)]
             if any(x["status"]!="0x1" for x in prep):
                 return None,{"stage":"funding_or_approval","error":next(x.get("error") for x in prep if x["status"]!="0x1")}
-            quoted,*rest=values[len(prep):]
+            rest=values[len(prep):]
             if any(x["status"]!="0x1" or len(x["returnData"])!=66 for x in [*rest[:4],*rest[5:]]):
                 raise ValueError(("balance read",pool,source,target))
             b,a=([int(x["returnData"],16) for x in z] for z in (rest[:4],rest[5:]))

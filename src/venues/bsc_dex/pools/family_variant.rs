@@ -27,6 +27,8 @@ pub enum Variant {
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
     BaseNativeV3,
+    /// Кривая Curve торгует IBT и зарегистрированным PT Spectra.
+    Spectra,
     IziModules,
     UmbraeDamm,
     UmbraeDlmm,
@@ -85,6 +87,7 @@ pub enum Variant {
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
     V2DualCreate2,
     SafeSwapV2,
+    SafeSwapProxy,
     ToonSwap,
     V2ExactRouter,
     /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
@@ -111,6 +114,7 @@ pub enum Variant {
     CandySwap,
     /// Direct Vault.swap with wallet debit and payout checked on the approval and signing path.
     BalancerVaultWallet,
+    PuzzleRanges,
     Memebox,
     BunnySwap,
     /// Launch Bonding with virtual reserves and tax on the VIRTUAL side.
@@ -257,6 +261,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
+        "spectra_stableswap_ng" | "spectra_crypto_v1" => Variant::Spectra,
         "izi_static_modules" => Variant::IziModules,
         "umbrae_dlmm" | "umbrae_dlmm_module" => Variant::UmbraeDlmm,
         "umbrae_damm" | "umbrae_damm_module" => Variant::UmbraeDamm,
@@ -275,6 +280,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "toonswap" => Variant::ToonSwap,
         "safeswap_v2" => Variant::SafeSwapV2,
+        "safeswap_proxy_v5" => Variant::SafeSwapProxy,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_router01" => Variant::V2ExactRouter,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
@@ -306,6 +312,7 @@ pub fn of(kind: &str) -> Variant {
         "bunnyswap" | "bunnyswap_module" => Variant::BunnySwap,
         "memebox" | "memebox_v5" => Variant::Memebox,
         "candyswap_v2" | "candyswap_module" => Variant::CandySwap,
+        "puzzle_ranges" => Variant::PuzzleRanges,
         "balancer_v2_wallet" => Variant::BalancerVaultWallet,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,

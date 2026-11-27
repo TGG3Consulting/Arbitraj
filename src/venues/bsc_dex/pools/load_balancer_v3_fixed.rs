@@ -61,8 +61,7 @@ pub async fn fixed(
     }
     let bad = |w: String| ctx.err(ErrorCode::BadResponse, format!("Balancer V3 {pool}: {w}"));
     let conf = |w: String| ctx.err(ErrorCode::NotConfigured, w);
-    let list = fac::all(ctx, f.id).map_err(conf)?;
-    let hooks = balancer_v3_hooks::lists(ctx, f.id).map_err(conf)?;
+    let (list, hooks) = super::puzzle_ranges::bindings(ctx, f).map_err(conf)?;
     let got = call::try_many(ctx, &first_calls(vault, pool, &list), tag).await?;
     let (release, tokens, min_trade, hook) = first(&list, &hooks, &got).map_err(bad)?;
     let more = call::try_many(ctx, &extra::calls(pool, release), tag).await?;

@@ -47,7 +47,7 @@ def registry(url,d,tag):
             raise ValueError(("назначение роли",role))
     deployer=d.get("deployer",f)
     nonce=int(rpc(url,"eth_getTransactionCount",[deployer,tag]),16)
-    if nonce!=len(markets)+1 or len({m["pool"] for m in markets})!=len(markets):
+    if nonce!=d.get("registry_count",len(markets))+1 or len({m["pool"] for m in markets})!=len(markets):
         raise ValueError("реестр не покрывает все создания фабрики")
     receipts=read_batch(url,[("eth_getTransactionReceipt",[m["tx"]]) for m in markets])
     missing = [(i,m) for i,(m,r) in enumerate(zip(markets,receipts,strict=True)) if r is None]
@@ -121,8 +121,16 @@ def registry(url,d,tag):
 
 
 def capture(url,venue,artifact=None):
-    expanded=venue in ("blueprint","vvs")
-    if expanded:
+    expanded=venue in ("blueprint","vvs","community")
+    module=venue in ("vvs","community")
+    if venue=="community":
+        from v3_factory_storage import verify_directory
+        d=json.loads((DATA/"community_v3_ethereum_router.json").read_bytes())
+        complete=json.loads((DATA/"community_v3_ethereum.json").read_bytes())
+        proof=json.loads((DATA/"community_v3_storage.json").read_bytes())
+        if proof["selector"]!=d["selector"] or len(complete["pools"])!=d["registry_count"]:raise ValueError("инвентаризация CommunityV3")
+        verify_directory({**proof,"pools":complete["pools"],"tiers":{fee:entry["spacing"] for fee,entry in complete["tiers"].items()}},d["factory"])
+    elif expanded:
         d=json.loads(gzip.decompress((DATA/f"{venue}_ethereum_directory.json.gz").read_bytes()))
     else:
         d=json.loads((DATA/f"{venue}_ethereum_registry.json").read_bytes())
@@ -134,7 +142,7 @@ def capture(url,venue,artifact=None):
     word=lambda x:"0x"+format(x,"064x")
     changes={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
             "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
-    if venue=="vvs":
+    if module:
         if rpc(url,"eth_getCode",[ADAPTER,tag])!="0x" or not artifact:raise ValueError("VVS isolated module or build")
         code=bound_runtime(artifact,d["factory"],url,tag)
         changes[ADAPTER]={"code":"0x"+code}
@@ -145,7 +153,7 @@ def capture(url,venue,artifact=None):
     wbtc="0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
     budgets={WETH:([10**14,10**16] if expanded else [10**12,10**14]),STABLE:([100_000,1_000_000] if expanded else [1000,100000]),usdc:[100_000,1_000_000],wbtc:[100,1000]}
     swap_signature=SWAP if venue!="vvs" else "0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)").hex()
-    modes=("router","module","v5") if venue=="vvs" else (("router","router02","v5") if "router02" in roles else ("router","v5"))
+    modes=("router","module","v5") if module else (("router","router02","v5") if "router02" in roles else ("router","v5"))
     for m in d["markets"]:
         pool=m["pool"];fee=m["fee"]; cash=next((a for a in budgets if a in m["tokens"]),None)
         if expanded and (cash is None or not all(int(n)>0 for n in m["balances"])):
@@ -169,7 +177,7 @@ def capture(url,venue,artifact=None):
                             return tx(spender,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,fee,OWNER,deadline,amount,minimum,0)])
                         inner=tx(spender,"exactInputSingle("+ORDER02+")",[ORDER02],[(a,b,fee,OWNER,amount,minimum,0)])
                         return tx(spender,"multicall(uint256,bytes[])",["uint256","bytes[]"],[deadline,[bytes.fromhex(inner["data"][2:])]])
-                    checks=[balance(t,w) for w in ((OWNER,EXEC,ADAPTER) if venue=="vvs" else (OWNER,EXEC)) for t in (a,b)]
+                    checks=[balance(t,w) for w in ((OWNER,EXEC,ADAPTER) if module else (OWNER,EXEC)) for t in (a,b)]
                     width=len(checks)
                     base=prefix+[permit,*checks,quote];i=len(base)
                     trial=run(base+[order(1,end),*checks])
@@ -201,7 +209,7 @@ def capture(url,venue,artifact=None):
     return d
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3","blueprint","vvs"],default="wagmi");cli.add_argument("--module",type=Path);args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3","blueprint","vvs","community"],default="wagmi");cli.add_argument("--module",type=Path);args=cli.parse_args()
     errors=[]
     for url in ENDPOINTS:
         try:

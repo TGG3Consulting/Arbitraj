@@ -16,9 +16,9 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde_json::json;
 
 pub(super) fn configured(ctx: &Ctx, e: &Entry) -> bool {
-    e.family.variant.exact_router()
+    registered_router::wallet_module(ctx,e).is_some() || (e.family.variant.exact_router()
         && registered_router::eligible(ctx,e.family.id,e.coin,e.usdt)
-        && registered_router::target(ctx,e).is_ok()
+        && registered_router::target(ctx,e).is_ok())
 }
 pub(super) async fn funded(
     ctx: &Ctx,
@@ -40,6 +40,7 @@ pub(super) async fn funded(
 }
 pub(super) async fn router(ctx: &Ctx, e: &Entry, head: Head) -> GatewayResult<Address> {
     let at = head.selector();
+    if registered_router::wallet_module(ctx,e).is_some() && let Ok(m)=registered_router::checked_module(ctx,e,&at).await{return Ok(m)}
     if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
         Box::pin(super::super::pools::solidly_proxy::router(
             ctx, e, e.usdt, e.coin, &at,
@@ -89,8 +90,9 @@ pub(super) fn leg(
             end,
         )
     } else {
-        Market::from_entry(e).ok_or_else(fail)?
-        .order(
+        let mut m=Market::from_entry(e).ok_or_else(fail)?;
+        m.wallet_module=registered_router::wallet_module(ctx,e)==Some(router);
+        m.order(
             order.token_in,
             order.token_out,
             order.amount_in,

@@ -74,7 +74,9 @@ def tables(network, snapshots, profiles):
         out.append(f"| `{id}` | {params} | {row['source']} |")
     out.extend(omni_mars_deli(network))
     out.extend(base_launch_inventory.recovered(network))
-    if base:out.extend(base_launch_inventory.section())
+    if base:
+        out.extend(base_launch_inventory.section())
+        out.extend(base_launch_inventory.spectra())
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
         out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
@@ -116,17 +118,26 @@ def tables(network, snapshots, profiles):
         with gzip.open(market_path / "surge_ethereum_wallets.json.gz", "rt") as stream:
             surge = json.load(stream)
         out.extend(["", "#### SafeSwap и Surge на Ethereum", "",
-                    "У SafeSwap четыре фабрики. Реестры сверены по CREATE2 и getPair в обоих порядках на одном блоке. Для первых двух фабрик проверены чистые выплаты Router02 и V5, предел на одну минимальную единицу выше и истёкший срок.",
-                    "", "| Фабрика SafeSwap | Зарегистрировано пар | Пар с полным кругом | Выплаченных ног через V5 / Router02 |",
+                    "У SafeSwap четыре фабрики. Реестры сверены по CREATE2 и getPair в обоих порядках на одном блоке. На трёх фабриках сравнивались Router02 и V5. У четвёртой проверен вход через общедоступный SafeSwapTradeRouter с отдельной оплатой в ETH.",
+                    "", "| Фабрика SafeSwap | Зарегистрировано пар | Пар с полным кругом | Выплаченных ног V5 / Router02 / SafeSwapTradeRouter |",
                     "|---|---:|---:|---:|"])
         for venue in safeswap["deployments"]:
             markets = venue["markets"]
             legs = {mode: sum(1 for m in markets for r in m.get("rounds", []) if r["mode"]==mode
                               for leg in ("buy", "sell") if r.get(leg, {}).get("exact", {}).get("status")=="0x1")
                     for mode in ("v5", "router")}
-            settled = sum(any("buy" in r and "sell" in r for r in m.get("rounds", [])) for m in markets)
-            count = f"{legs['v5']} / {legs['router']}" if "pair_pips" in venue else "исполнение не проверено"
+            def paid(row, side):
+                return row.get(side, {}).get("exact", {}).get("status") == "0x1"
+            settled = sum(any(paid(r, "buy") and paid(r, "sell")
+                              for r in m.get("rounds", []) + m.get("paid_public", [])) for m in markets)
+            public = sum(paid(r, side) for m in markets for r in m.get("paid_public", []) for side in ("buy","sell"))
+            count = f"{legs['v5']} / {legs['router']} / {public}"
             out.append(f"| {venue['id']} · `{venue['roles']['factory']['address']}` | {len(markets)} | {settled} | {count} |")
+        for market in safeswap["deployments"][3]["markets"]:
+            for row in market.get("paid_public", []):
+                if paid(row,"buy") and paid(row,"sell"):
+                    b, s = (row[side]["exact"] for side in ("buy","sell"))
+                    out.append(f"\nПубличный роутер proxy-2, пара `{market['pool']}`: {b['spent']} raw WETH → {b['received']} raw LINK → {s['received']} raw WETH. Комиссия покупки и продажи составила {b['fee']} и {s['fee']} wei ETH, помимо газа.")
         out.extend(["", "У исходной пары ставка 0,20%, у её Router02 расчёт выплаты использует 0,25%. У второй фабрики ставка обоих путей 0,20%. Для каждого размера сравниваются выплата и газ. [Реестр, вызовы и балансы](../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz).",
                     "", f"У Surge проверен рынок ETH/SRG по адресу `{surge['address']}` на блоке {surge['height']}. "
                     "Покупка принимает ETH, продажа выплачивает ETH. Продажа тем же адресом в блоке его покупки откатывается. Минимум на продаже применяется к валовой выплате до удержания комиссии.",
@@ -138,10 +149,10 @@ def tables(network, snapshots, profiles):
             guarded = json.load(stream)
         out.extend(["", "| Исполнение | Валюта | Бюджет raw | Куплено SRG raw | Обратно raw | Газ покупки / продажи | Газ разрешений |", "|---|---|---:|---:|---:|---:|---:|"])
         for case in guarded["cases"]:
-            currency = "WETH" if case["cash"] == guarded["wrapped"] else "USDT"
+            currency = "ETH" if case.get("native_cash") else "WETH" if case["cash"] == guarded["wrapped"] else "USDT"
             buy, sell = case["buy"], case["sell"]
             out.append(f"| {case['mode']} | {currency} | {buy['spent']} | {buy['received']} | {sell['received']} | {buy['gas']} / {sell['gas']} | {' / '.join(map(str,case['approval_gas']))} |")
-        out.append("Для SRG покупки и продажи идут в последовательных блоках. В каждом направлении архив проверяет остатки плательщика, минимум на единицу выше выплаты и истечение срока. Прямая форма с WETH и шаг V5 требуют проверенного адреса развёрнутого модуля в настройках владельца. [Симуляции обеих форм и маршрута из USDT](../tests/data/first_run_dex_2026-11-26/surge_ethereum_protected_wallets.json.gz).")
+        out.append("Для SRG покупки и продажи идут в последовательных блоках. В каждом направлении архив проверяет остатки плательщика, минимум на единицу выше выплаты и истечение срока. Прямые формы с ETH и WETH и шаг V5 требуют проверенного адреса развёрнутого модуля в настройках владельца. [Симуляции обеих форм и маршрута из USDT](../tests/data/first_run_dex_2026-11-26/surge_ethereum_protected_wallets.json.gz).")
 
     if not base and "toonswap" in configured:
         toon_path = Path("tests/data/first_run_dex_2026-11-26/toonswap_ethereum_wallets.json.gz")
@@ -1461,7 +1472,7 @@ def tables(network, snapshots, profiles):
             factory=dep["roles"]["factory"]["address"]
             pool=next(m["pool"] for m in dep["markets"] if m.get("rounds"))
             roundtrip="CREATE2 и getPair в обоих порядках"
-            status="Две фабрики с архивными выплатами. Ещё две зарегистрированные фабрики используют proxy"
+            status="Четыре фабрики с архивными выплатами. В первом запуске две фабрики с Router02 и V5, а также proxy-1 с исполнением V5 непосредственно в неизменяемой паре. Для proxy-2 подтверждён архивный путь SafeSwapTradeRouter"
         if not base and id=="surge-protocol-eth":
             pool=surge["address"]
             roundtrip="проверенный код SURGE и собственные события Bought и Sold"
@@ -1480,6 +1491,12 @@ def tables(network, snapshots, profiles):
                 factory=None
                 roundtrip="Один пул USDT/DAGR. Проверены proxy, implementation и связанный poolGuard"
                 status="8 котировок Eco/Exo и 20 результатов в архивной EVM: оба направления, две суммы, SSP и модуль в двух формах заявки, V5 kind 29. Адрес модуля задаёт владелец после развёртывания"
+        if not base and id=="ranges-finance" and id in configured:
+            ranges=json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ranges_ethereum_directory.json.gz").read_bytes()))
+            factory=ranges["roles"]["factory"]
+            pool=pool or ranges["pools"][0]["pool"]
+            roundtrip="getPools, isPoolFromFactory, регистрация Vault и getHook"
+            status=f"Puzzle Ranges · {len(ranges['pools'])} зарегистрированы, {sum(p['initialized'] for p in ranges['pools'])} инициализированы"
         specific=base_launch_inventory.registry_row(network,id)
         if specific:
             selected, factory, roundtrip, status = specific
@@ -1541,6 +1558,8 @@ def tables(network, snapshots, profiles):
                     + ("8/8 обменов изменили собственный пул." if base else
                        "4/4 обмена дополнительно изменили пул Uniswap V3 0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640.")
                     + " Исполнитель сравнивает одиночный Nami с обычным сплитом на тот же объём и направляет сюда только отдельный обмен")
+        if base and str(row["id"])=="4725":
+            task="DEX-43 · адрес в адаптере исключён из подсчёта объёма. Три физических реестра и 88 рынков приведены в разделе Spectra; торговые монеты — IBT/PT."
         if base and str(row["id"]) == "7260" and elfomo.exists():
             task = "DEX-23 · 12 пар в реестре ElfomoFi. Подтверждены прямые выплаты WETH/USDC и cbBTC/USDC, нулевые котировки USDT/USDC"
         if base and str(row["id"]) == "9172" and aero_basic.exists():

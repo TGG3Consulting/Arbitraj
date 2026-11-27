@@ -13,7 +13,7 @@ fn modular(a: U256, b: U256, offset: U256, m: U256) -> U256 {
 
 /// Minimum (a*i + b) % m on 0 <= i < len. After reversing a steep progression,
 /// each wrap contributes its first residue to a progression of modulus <= m/2.
-fn min_residue(mut a: U256, mut b: U256, mut m: U256, mut len: U256) -> U256 {
+pub(in crate::venues::bsc_dex::math) fn min_residue(mut a: U256, mut b: U256, mut m: U256, mut len: U256) -> U256 {
     let mut best = b;
     loop {
         if a > m / U256::from(2) {

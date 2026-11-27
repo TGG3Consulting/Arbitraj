@@ -130,6 +130,9 @@ async fn pass(
     let temple=Box::pin(super::temple_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in temple.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(temple.notes);no_answer+=temple.no_answer;
+    let ranges=Box::pin(super::puzzle_ranges::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in ranges.found {found.entry(coin).or_default().extend(rows);}
+    notes.extend(ranges.notes); no_answer+=ranges.no_answer;
     let pendle=super::pendle::scan(ctx,coins,&quote_list);
     for (coin,rows) in pendle.found{found.entry(coin).or_default().extend(rows);}
     let surge=super::surge::scan(ctx,coins,&quote_list);

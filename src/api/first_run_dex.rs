@@ -292,7 +292,16 @@ mod tests {
                             p.network,
                             p.id
                         );
-                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_v2") {
+                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_proxy_v5") {
+                        let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz");
+                        let archive:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                        let dep=&archive["deployments"][2];
+                        assert_eq!(archive["selector"],snapshot["selector"]);
+                        assert_eq!(dep["creation_code"]["hash"],text.as_str());
+                        assert_eq!(dep["pair_pips"],2000);
+                        assert!(matches!(p.settings.get("dex.factory"),Some(Parameter::Text(a)) if a==dep["roles"]["factory"]["address"].as_str().unwrap()));
+                        assert!(matches!(p.settings.get("dex.pair_runtime_hash"),Some(Parameter::Text(h)) if dep["markets"].as_array().unwrap().iter().all(|m|m["runtime"]==h.as_str())));
+                    } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_v2") {
                         let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_directory.json.gz");
                         let dir:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
                         assert_eq!(dir["selector"],snapshot["selector"]);
@@ -378,6 +387,9 @@ mod tests {
                         let evidence: Value=serde_json::from_str(registry).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);
                         assert_eq!(evidence["init"].as_str(),Some(text.as_str()));
+                    } else if k=="dex.pool_code_hashes" && p.id=="communityv3" {
+                        let deployment:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json")).unwrap();
+                        assert_eq!(deployment["selector"],snapshot["selector"]);assert_eq!(deployment["init"].as_str(),Some(text.as_str()));
                     } else if k=="dex.pool_code_hashes" && p.id=="synthswap-v3" {
                         let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/synth_oracle_base.json.gz");
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();

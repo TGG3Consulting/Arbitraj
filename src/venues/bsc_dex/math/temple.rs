@@ -7,6 +7,7 @@ use alloy_primitives::{Address, U256, U512};
 mod limits;
 #[path = "temple_rounding.rs"]
 mod rounding;
+pub(super) use rounding::min_residue;
 #[cfg(test)]
 #[path = "temple_tests.rs"]
 mod tests;

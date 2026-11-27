@@ -459,7 +459,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
+        market: ${{ fromJSON(inputs.ethereum_open_subset || '["x7-finance","x7-finance-ethereum","9inch-ethereum","deltaswap-ethereum","supernova-cl","supernova-amm","ekubo-v2-ethereum","stelaxis-ethereum","swapr-ethereum","templedao-ethereum","bitswap-ethereum","bitswap-directory-ethereum","concave-ethereum","wagmi-ethereum","lif3-ethereum","antfarm-ethereum","carbon-ethereum","mint-club-base","mint-club-ethereum","omni-v2-base","omni-flux-base","omni-flux-bin-base","spectra-base","marswap-base","marswap-ethereum","deliswap-base","deliswap-cl-base","sectorone-20-base","sectorone-22-base","sectorone-20-ethereum","sectorone-22-ethereum","hello-base","hello-ethereum","umbrae-dlmm","umbrae-damm","launch-bankr","launch-bankr-index-base","launch-o1-launchpad","o1-wrapped-base","base-native-o1","base-native-cl","base-native-bin","recovered-thirdfy","recovered-baseline","integral-size-ethereum","solidly-v2-ethereum","sashimiswap-ethereum","unicly-ethereum","hopeswap-ethereum","archly-ethereum","toonswap-ethereum","dagrow-ethereum","dagrow-protected-ethereum","ranges-ethereum-0","ranges-ethereum-1","ranges-ethereum-2","ranges-ethereum-3","pendle-registry-ethereum","community-v3-router-ethereum","pendle-wallets-ethereum","pendle-protected-ethereum","bundles-swap-ethereum","bundles-protected-ethereum","antfarm-output-ethereum","blueprint-ethereum","vvs-v3-ethereum","safeswap-ethereum","surge-ethereum","surge-protected-ethereum"]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -489,6 +489,8 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/native" BaseNativeMarkets
           python scripts/record_o1_wrapped.py "$RUNNER_TEMP/native/BaseNativeMarkets.json" "$RUNNER_TEMP/market.json" --combined "${MARKET#base-native-}"
+      - if: matrix.market == 'spectra-base'
+        run: python scripts/record_spectra_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'omni-flux-bin-base'
         run: python scripts/record_omni_flux_wallets.py --bin "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'omni-flux-base'
@@ -619,6 +621,10 @@ jobs:
         run: python scripts/record_surge_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'blueprint-ethereum'
         run: python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json" --venue blueprint
+      - if: matrix.market == 'community-v3-router-ethereum'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/community" CommunityV3Adapter
+          python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json" --venue community --module "$RUNNER_TEMP/community/CommunityV3Adapter.json"
       - if: matrix.market == 'vvs-v3-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/vvs" VvsV3Adapter

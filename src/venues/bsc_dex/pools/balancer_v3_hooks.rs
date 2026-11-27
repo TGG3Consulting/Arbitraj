@@ -57,6 +57,13 @@ pub fn lists(ctx: &Ctx, id: &str) -> Result<Lists, String> {
 /// причину отказа (текст). Ошибок иных нет.
 pub fn kind(l: &Lists, h: &HooksConfig, r: Release) -> Result<HookKind, String> {
     let x = h.hooksContract;
+    if let Release::PuzzleRanges(expected) = r {
+        if x == expected && !x.is_zero() && !h.enableHookAdjustedAmounts
+            && !h.shouldCallComputeDynamicSwapFee && !h.shouldCallBeforeSwap && h.shouldCallAfterSwap {
+            return Ok(HookKind::None);
+        }
+        return Err(format!("Puzzle Ranges: другой контракт или режим крючка {x:#x}"));
+    }
     if h.shouldCallBeforeSwap || h.shouldCallAfterSwap {
         return Err(format!(
             "у пула крючок {x:#x} до / после обмена (beforeSwap {}, afterSwap {}) — расчёт не сверен, пул не берётся",

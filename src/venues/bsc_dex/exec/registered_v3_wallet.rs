@@ -29,12 +29,14 @@ pub struct Market {
     pub fee: U24,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub fee_event: bool,
+    #[serde(default, skip_serializing_if = "standard_event")]
+    pub wallet_module: bool,
 }
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
     pub(in crate::venues::bsc_dex) fn from_entry(e: &super::super::pools::registry::Entry) -> Option<Self> {
         Some(Self {
-            pool: e.pool.reference.address(), fee: U24::from(e.pool.fee_pips?),
+            pool: e.pool.reference.address(), fee: U24::from(e.pool.fee_pips?), wallet_module:false,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
     }
@@ -68,7 +70,7 @@ impl RouterMarket for Market {
     }
     fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool {
         let word = |i: usize| U256::from_be_slice(&data[32 * i..32 * (i + 1)]);
-        spent <= budget
+        (!self.wallet_module || spent==budget) && spent <= budget
             && !spent.bit(255)
             && !received.bit(255)
             && word(side) == spent
@@ -83,6 +85,7 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
+        if self.wallet_module{return super::super::pools::solidly_v3::execution_data(self.pool,input,output,amount,minimum,deadline)}
         IV3Router::exactInputSingleCall {
             params: IV3Router::ExactIn {
                 tokenIn: input,
@@ -208,12 +211,14 @@ pub(super) async fn plan(
         if Some(plan.router)!=selected || ctx.settings.generation()!=generation {return Err(fail());}
         return Ok(plan);
     }
-    let target =
-        registered_router::checked(ctx, e, o.token_in, o.token_out, &head.selector()).await?;
+    let guarded=selected.is_some() && registered_router::wallet_module(ctx,e)==selected;
+    let target=if guarded{registered_router::checked_module(ctx,e,&head.selector()).await?}else{
+        registered_router::checked(ctx, e, o.token_in, o.token_out, &head.selector()).await?
+    };
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let market = Market::from_entry(e).ok_or_else(fail)?;
+    let mut market = Market::from_entry(e).ok_or_else(fail)?;market.wallet_module=guarded;
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,

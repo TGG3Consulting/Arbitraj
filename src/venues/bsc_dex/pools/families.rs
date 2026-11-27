@@ -463,7 +463,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // dex.v2_fee_pct), но tradable=false — своего роутера нет; исполнение — шаг V2 контракта-исполнителя (обмен
         // прямо в паре, exec_kind::via_executor). fork=true — как у v3_fork: не в классический прямой путь и без UR.
         // Сверка расчёта — обмен через код исполнителя в симуляции (quote/v2_pair_quote.rs), а не getAmountsOut роутера.
-        "v2_fork_executor" | "v2_fork_executor_create2" | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => {
+        "safeswap_proxy_v5" | "v2_fork_executor" | "v2_fork_executor_create2" | "v2_fork_executor_create2_live_fee" | "candyswap_v2" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
         // V3-форк (решение 122 F): в графе и сигналах — чтение, события, проверка и математика как у V3 своего ABI
@@ -546,7 +546,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // CURVE_ETH исполнителя v5.
         "curve_stableswap_oracle" => (PoolKind::StableSwap, Proto::CurveStable, true, false, false),
         // Curve StableSwap-NG (решение 275): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
-        "curve_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
+        "curve_stableswap_ng" | "spectra_stableswap_ng" => (PoolKind::StableSwap, Proto::CurveNg, true, false, false),
         // Nomiswap Stable (решение 284): в графе и сигналах; исполнение — шаг NOMI_STABLE контракта-исполнителя (только v2).
         "nomiswap_stable" => (PoolKind::StableSwap, Proto::NomiStable, true, false, false),
         // Metric OMM (решение 285): в графе и сигналах по лесенке ответов пула; исполнение — шаг METRIC (только v2).
@@ -563,7 +563,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Balancer V2 (решение 289): в графе и сигналах (формулы пулов); исполнение — шаг BALANCER (только v2).
         "balancer_v2" | "balancer_v2_wallet" => (PoolKind::VaultPool, Proto::BalancerV2, true, false, false),
         // Balancer V3 (решение 441): в графе и сигналах (расчёт хранилища V3); исполнение — шаг BALANCER_V3 (с v4).
-        "balancer_v3" => (PoolKind::VaultPool, Proto::BalancerV3, true, false, false),
+        "balancer_v3" | "puzzle_ranges" => (PoolKind::VaultPool, Proto::BalancerV3, true, false, false),
         // Liquidity Book V2.1 (решение 290): в графе и сигналах (порт getSwapOut); исполнение — шаг LB (только v2).
         "lb_v21" | "lb_v21_clone" => (PoolKind::LbBin, Proto::LbV21, true, false, false),
         // Curve Twocrypto-NG / Tricrypto-NG (решение 442): в графе и сигналах (порт get_y и комиссии пула); исполнение —
@@ -572,7 +572,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "curve_tricrypto_ng" => (PoolKind::Crypto, Proto::CurveTricrypto, true, false, false),
         // Curve crypto v1 (решение 453): фабрика crypto v1 и tricrypto 2021 — в графе и сигналах; исполнение — шаг
         // STABLE_U256 исполнителя (exchange(uint256, uint256, dx, 0) у обоих есть).
-        "curve_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
+        "curve_crypto_v1" | "spectra_crypto_v1" => (PoolKind::Crypto, Proto::CurveCryptoV1, true, false, false),
         "curve_tricrypto_v1" => (
             PoolKind::Crypto,
             Proto::CurveTricryptoV1,
@@ -888,6 +888,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                     | Variant::DiamondV2
                     | Variant::V2RouterCreate2
                     | Variant::V2DualCreate2
+                    | Variant::SafeSwapProxy
                     | Variant::SafeSwapV2
                     | Variant::ToonSwap
                     | Variant::V2ExactRouter
@@ -896,6 +897,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             ) {
                 list.push(super::verify_algebra_dir::SETTING);
             }
+            if f.variant == Variant::SafeSwapProxy { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]); }
             if f.variant == Variant::WhiteSwap {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
@@ -1058,6 +1060,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::CurveStable => list.push("dex.stable_pools"),
         // Curve StableSwap-NG (решение 275): реестр фабрики NG (get_coins / is_meta) подтверждает пул; версии реализации
         // пула, с которыми сверена математика (version() пула — verify_curve_ng.rs).
+        Proto::CurveNg if f.variant==Variant::Spectra => list.extend(["dex.factory","dex.spectra_registry","dex.curve_ng_versions","dex.curve_ng_templates","dex.pair_lookup_max"]),
         Proto::CurveNg => list.extend(["dex.factory", "dex.curve_ng_versions"]),
         // Nomiswap Stable (решение 284): фабрика — реестр getPair (проверка пары), поиск по getPair и событие PairCreated.
         Proto::NomiStable => list.push("dex.factory"),
@@ -1083,6 +1086,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         // Balancer V3 (решение 441): хранилище (состояние, обмен), роутер V3 — квотер сверки querySwapSingleTokenExactIn
         // (dex.quoter), списки фабрик по выпускам (пустой список — у DEX нет фабрик этого выпуска).
+        Proto::BalancerV3 if f.variant == Variant::PuzzleRanges => {
+            list.extend(["dex.vault", "dex.quoter", "dex.factory", "dex.ranges_hook"]);
+        }
         Proto::BalancerV3 => {
             list.extend(["dex.vault", "dex.quoter"]);
             // Решение 452: все списки фабрик по выпускам (balancer_v3_factories::LISTS) и списки крючков комиссии.
@@ -1112,6 +1118,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         ]),
         // Curve crypto v1 фабрики (решение 453): реестр фабрики (get_coins, find_pool_for_coins) и адреса шаблонов
         // пула, с исходником которых сверена формула (код прокси EIP-1167 пула).
+        Proto::CurveCryptoV1 if f.variant==Variant::Spectra => list.extend(["dex.factory","dex.spectra_registry","dex.curve_crypto_v1_templates","dex.pair_lookup_max"]),
         Proto::CurveCryptoV1 => list.extend(["dex.factory", "dex.curve_crypto_v1_templates"]),
         // Tricrypto 2021 (решение 453): фабрики нет — список адресов пулов из журнала развёртывания curvefi.
         Proto::CurveTricryptoV1 => list.push("dex.stable_pools"),

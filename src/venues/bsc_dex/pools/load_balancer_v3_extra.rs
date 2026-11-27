@@ -50,6 +50,7 @@ pub enum Extra {
 pub fn calls(pool: Address, r: Release) -> Vec<(Address, Bytes)> {
     let c = |d: Vec<u8>| (pool, Bytes::from(d));
     match r {
+        Release::PuzzleRanges(_) => vec![c(P::getNormalizedWeightsCall {}.abi_encode()), c(super::puzzle_ranges::IRanges::getHookCall {}.abi_encode())],
         Release::Weighted => vec![c(P::getNormalizedWeightsCall {}.abi_encode())],
         Release::WeightedMin => vec![
             c(P::getNormalizedWeightsCall {}.abi_encode()),
@@ -103,6 +104,12 @@ pub fn decode(r: Release, got: &[Result<Bytes, String>]) -> Result<Extra, String
         }
     };
     Ok(match r {
+        Release::PuzzleRanges(expected) => {
+            let weights=P::getNormalizedWeightsCall::abi_decode_returns(ok(0)?).map_err(dec)?;
+            let bound=super::puzzle_ranges::IRanges::getHookCall::abi_decode_returns(ok(1)?).map_err(dec)?;
+            if bound != expected {return Err("Puzzle Ranges: хранилище и пул используют разные крючки".into())}
+            Extra::Weighted {weights,min:Vec::new()}
+        }
         Release::Weighted | Release::WeightedMin => {
             let weights = P::getNormalizedWeightsCall::abi_decode_returns(ok(0)?).map_err(dec)?;
             let min = if r == Release::WeightedMin {

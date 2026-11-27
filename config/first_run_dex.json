@@ -2411,12 +2411,12 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "communityv3",
-    "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x00a38533c68327abe0cc265436e036066e2d6b38 · tests/data/first_run_dex_2026-11-26/community_v3_ethereum.json",
+    "source": "https://forum.cow.fi/t/communityv3-liquidity-source-integration-proposal/3647 · https://eth.blockscout.com/api/v2/smart-contracts/0xd53be749711e7dff31f4940d42386310b23c4c1e · community_v3_ethereum_router.json",
     "settings": {
-      "dex.kind": "v3_fork",
+      "dex.kind": "registered_uni_v3",
       "dex.factory": "0x00a38533c68327abe0cc265436e036066e2d6b38",
-      "dex.tick_lens": "0xbfd8137f7d1516D3ea5cA83523914859ec47F573",
-      "dex.quoter_virtual": true,
+      "dex.tick_lens": "0x4a2c8e133ae07ced79254d2841ce7fd0bb674d8e",
+      "dex.quoter_virtual": false,
       "dex.v3_fee_tiers": [
         "100",
         "500",
@@ -2443,7 +2443,16 @@
         "30000",
         "40000",
         "50000"
-      ]
+      ],
+      "dex.router": "0xd53be749711e7dff31f4940d42386310b23c4c1e",
+      "dex.quoter": "0xcc1c929d41106d78d798315afffef6a832ede90a",
+      "dex.router_runtime_hash": "0x126baca4c80c7fe4a1d776aafcf9f20b5f0e97c009d346fa0fcc8572b3264535",
+      "dex.factory_runtime_hash": "0x3a211598ad06c045ed08c18a425c9dbd9ef28fa8a27256ebf47a117ae1d3427b",
+      "dex.quoter_runtime_hash": "0xe1da0219b8a85831316963c61fcfcae2400ac13c6ad9ecc3c776b7ae7eda5415",
+      "dex.pool_code_hashes": [
+        "0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54"
+      ],
+      "dex.v3_quoter_method": "quoteExactInputSingle"
     }
   },
   {
@@ -4548,7 +4557,8 @@
       "dex.v2_fee_pct": "0.2",
       "dex.v2_router_fee_pips": 2500,
       "dex.sub_dex": [
-        "safemoonswap-v2-ethereum"
+        "safemoonswap-v2-ethereum",
+        "safemoonswap-proxy-1-ethereum"
       ]
     }
   },
@@ -4570,6 +4580,29 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.2",
       "dex.v2_router_fee_pips": 2000
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "safemoonswap-proxy-1-ethereum",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x84d02e4ef772a3915def2d0c3f5d9452f1376795 · https://sourcify.dev/server/v2/contract/1/0x0344486a5041eee39d98e18abb9f8f0f5d2c0c71 · tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "safeswap_proxy_v5",
+      "dex.factory": "0x84d02e4ef772a3915def2d0c3f5d9452f1376795",
+      "dex.factory_runtime_hash": "0xfc1ea81db44e2de921b958dc92da921a18968ff3f3465bd475fb86dd1af03986",
+      "dex.proxy_implementations": [
+        "0x0344486a5041eee39d98e18abb9f8f0f5d2c0c71"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x50c22a78b5350f952da611f4489bb1810d245099162e5fb4b7bdfe0aed907002"
+      ],
+      "dex.pool_code_hashes": [
+        "0xf517ab64379ffb90f6f9d00e62165e5c0fe7a7003b0a292fde5cc0d81b4a0ee4"
+      ],
+      "dex.pair_runtime_hash": "0xe148487d2c0c0da7d5337720240a84d1899d70af4d08e8ee86b39de1e2905da1",
+      "dex.v2_fee_source": "fixed",
+      "dex.v2_fee_pct": "0.2"
     }
   },
   {
@@ -4934,6 +4967,72 @@
       "dex.multi_pair": true,
       "dex.module_runtime_hashes": [
         "0xf857566ae350f6c5d6e330c5bbecaad2bafd363ad68c245af4f006e344ccfee5"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "ranges-finance",
+    "source": "https://ranges.finance/deployments/1/range.json",
+    "settings": {
+      "dex.kind": "puzzle_ranges",
+      "dex.quoter": "0x8726019313cd59d2e33dbe643aac94a59d5518df",
+      "dex.vault": "0x955244edc797a1c1b04134b600f819ac23c76081",
+      "dex.factory": "0x5d6d1dc0d045a8de284c7ab5fe83acd7bdc5d4e0",
+      "dex.ranges_hook": "0xf31e1f37e1f9c2c531e6bc3ad89ffc9206ce85d9"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "spectra-v2-base-legacy-1",
+    "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
+    "settings": {
+      "dex.kind": "spectra_crypto_v1",
+      "dex.factory": "0x7ea3097e2af59ea705398544e0f58eddb7bd1852",
+      "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
+      "dex.pair_lookup_max": 1,
+      "dex.curve_crypto_v1_templates": [
+        "0x2bbd14976753f9748b421bba87a47faa0e6f1983"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "spectra-v2-base-legacy-2",
+    "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
+    "settings": {
+      "dex.kind": "spectra_crypto_v1",
+      "dex.factory": "0x04ec86bf37dfd77397bcc2e386cb37f175b4e106",
+      "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
+      "dex.pair_lookup_max": 1,
+      "dex.curve_crypto_v1_templates": [
+        "0x1c5ecca381961d92b6aaf7bc1656c37021b0f1d9"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "spectra-v2-base",
+    "source": "tests/data/first_run_dex_2026-11-26/spectra_base_directory.json.gz",
+    "settings": {
+      "dex.kind": "spectra_stableswap_ng",
+      "dex.factory": "0x928d0c9443f49a0e33f877f4e1f19270691c2ad2",
+      "dex.spectra_registry": "0x786da12e9836a9ff9b7d92e8bac1c849e2ace378",
+      "dex.pair_lookup_max": 1,
+      "dex.curve_ng_versions": [
+        "v7.0.0"
+      ],
+      "dex.curve_ng_templates": [
+        "0xb828b21ffb7873ea8a6b401b386192fcdbca16b8",
+        "0xf6134998c7a4e4addf71e2ca1273a480e1d12d5d"
+      ],
+      "dex.sub_dex": [
+        "spectra-v2-base-legacy-1",
+        "spectra-v2-base-legacy-2"
       ]
     }
   }

@@ -44,6 +44,9 @@ pub async fn states(
     block: u64,
 ) -> Vec<GatewayResult<Loaded>> {
     let tag = block_tag(block);
+    if f.variant == Variant::Spectra && let Err(e) = Box::pin(super::spectra::check(ctx, f, contract, &tag)).await {
+        return pairs.iter().map(|_| Err(e.clone())).collect();
+    }
     let built: Vec<GatewayResult<PoolState>> = match f.proto {
         // Решение 472: вариант Curve 2021 — A_precise() и свой шаблон (load_curve_plain.rs).
         // Решение 472 (доделка): метапул — курс LP базового пула (load_curve_meta.rs).

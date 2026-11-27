@@ -155,7 +155,7 @@ pub fn requests(ctx: &Ctx, e: &Entry, plan: &Plan) -> GatewayResult<Vec<(Address
 }
 
 pub(super) fn individual(ctx: &Ctx, e: &Entry) -> bool {
-    e.family.variant == super::super::pools::family_variant::Variant::SupernovaIntegral
+    matches!(e.family.variant, super::super::pools::family_variant::Variant::SupernovaIntegral | super::super::pools::family_variant::Variant::PuzzleRanges)
         || virtual_quoter::on(ctx, e.family.id, e.family.proto)
 }
 
@@ -164,7 +164,11 @@ pub(super) fn individual(ctx: &Ctx, e: &Entry) -> bool {
 pub async fn measure_plan(ctx: &Ctx, e: &Entry, plan: &Plan, tag: &str) -> Measured {
     let n = plan.buy.len() + plan.sell.len();
     let mut remote = Vec::with_capacity(n);
-    if individual(ctx, e) {
+    if e.family.variant == super::super::pools::family_variant::Variant::PuzzleRanges {
+        let calls=requests(ctx,e,plan)?;
+        let answers=call::independent(ctx,&calls,tag).await?;
+        remote.extend((0..n).map(|i| quoted(ctx,e,answers.get(i))));
+    } else if individual(ctx, e) {
         let ins = plan.buy.iter().map(|p| (e.usdt, p.amount_in));
         for (token_in, amount) in ins.chain(plan.sell.iter().map(|p| (e.coin, p.amount_in))) {
             remote.push(match quoter::out_at(ctx, e, token_in, amount, tag).await {

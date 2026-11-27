@@ -84,6 +84,12 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
+        if let Some(target)=registered_router::wallet_module(ctx,e) && let Some(mut m)=Market::from_entry(e)
+            && (head.is_none() || registered_router::checked_module(ctx,e,&head.unwrap().selector()).await.is_ok()){
+            m.wallet_module=true;
+            let order=Execution{mode:RouteMode::Direct,target,wire:Wire::RegisteredV3(m)};
+            if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,order,head).await{options.push(option)}
+        }
         if let Some(target) = executor && e.family.variant != Variant::VvsV3 {
             let (kind,data)=if plain {
                 use alloy::sol_types::SolValue;

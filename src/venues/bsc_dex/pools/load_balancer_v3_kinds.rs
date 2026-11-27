@@ -38,6 +38,7 @@ pub fn calls(pool: Address, fx: &Fixed, pre: Option<(Address, Address)>) -> Vec<
     let c = |to: Address, d: Vec<u8>| (to, Bytes::from(d));
     let mut l = Vec::new();
     let r = fx.release;
+    if matches!(r, Release::PuzzleRanges(_)) { l.push(c(pool, super::puzzle_ranges::IRanges::getRangePoolDynamicDataCall {}.abi_encode())); }
     if r.stable() {
         l.push(c(pool, P::getAmplificationParameterCall {}.abi_encode()));
     }
@@ -152,7 +153,9 @@ pub fn decode(
     };
     let (curve, rule) = match (&fx.extra, r) {
         (Extra::Weighted { weights, min }, _) => {
-            let rule = if r == Release::WeightedMin {
+            let rule = if matches!(r,Release::PuzzleRanges(_)) {
+                super::puzzle_ranges::state(cur.take()?,live,weights)?
+            } else if r == Release::WeightedMin {
                 VaultV3Rule::WeightedMin { min: min.clone() }
             } else {
                 VaultV3Rule::Weighted

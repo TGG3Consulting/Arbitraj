@@ -294,7 +294,7 @@ fn surge_protected_wallet_recovers_exact_transfers_and_keeps_v5_cash_units() {
     let wallet = addr(&d["payer"]);
     let wrapped = addr(&d["wrapped"]);
     let market = addr(&d["market"]);
-    let mut legs = [0usize; 3];
+    let mut legs = [0usize; 4];
     for case in d["cases"].as_array().unwrap() {
         let cash = addr(&case["cash"]);
         assert_eq!(case["buy"]["after"], case["sell"]["before"]);
@@ -323,7 +323,15 @@ fn surge_protected_wallet_recovers_exact_transfers_and_keeps_v5_cash_units() {
             );
             assert_eq!(paid["failures"].as_array().unwrap().len(), 2);
             let t = &paid["calldata"];
-            let direct = case["mode"] == "module";
+            let native = case["native_cash"] == true;
+            let direct = case["mode"] == "module" || native;
+            if native {
+                assert_eq!(case["approval_gas"][0], 0);
+                assert_eq!(
+                    number(&t["value"]),
+                    if name == "buy" { amount } else { U256::ZERO }
+                );
+            }
             let target = addr(&t["to"]);
             assert_eq!(
                 target,
@@ -331,11 +339,19 @@ fn surge_protected_wallet_recovers_exact_transfers_and_keeps_v5_cash_units() {
             );
             assert_eq!(addr(&t["from"]), wallet);
             if direct {
-                legs[0] += 1;
+                legs[if native { 3 } else { 0 }] += 1;
                 let data: Bytes = serde_json::from_value(t["data"].clone()).unwrap();
                 let p = Proof {
                     call: Call {
-                        form: Form::SurgeToken,
+                        form: if native {
+                            if name == "buy" {
+                                Form::SurgeModuleEthIn
+                            } else {
+                                Form::SurgeModuleEthOut
+                            }
+                        } else {
+                            Form::SurgeToken
+                        },
                         wrapped,
                         fee: U256::ZERO,
                     },
@@ -374,5 +390,5 @@ fn surge_protected_wallet_recovers_exact_transfers_and_keeps_v5_cash_units() {
             }
         }
     }
-    assert_eq!(legs, [4, 4, 4]);
+    assert_eq!(legs, [4, 4, 4, 4]);
 }

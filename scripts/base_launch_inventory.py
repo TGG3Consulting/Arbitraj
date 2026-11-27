@@ -105,3 +105,17 @@ def registry_row(network,id):
         d=evidence("base_launch_hooks.json.gz");m=next(r for r in d["rows"] if r["group"]==id and "terms" in r)
         return m["id"],d["manager"],"Initialize, keccak PoolKey и регистрация на хуке","DEX-40 · публичные кошельковые выплаты по каждой выборке приведены выше"
     return None
+
+
+def spectra():
+    d=evidence("spectra_base_directory.json.gz")
+    active=sum(r["maturity"]>d["timestamp"] for r in d["markets"])
+    both=sum(all(v for k,v in r.items() if k.startswith("quote_")) for r in d["markets"])
+    return ["","#### Spectra V2 на Base","",
+            f"На блоке {d['block']} реестр Spectra хранит {len(d['markets'])} PT. Две фабрики CryptoSwap V1 перечисляют 24 и 22 пула, а StableSwap NG — 42. "
+            f"Четыре положительных get_dy (обе стороны и два размера) получены на {both} пулах. У {active} PT срок погашения ещё впереди. Завершение срока меняет условия погашения PT, а возможность продажи IBT/PT определяется текущими резервами и фактической передачей токенов. "
+            f"[Каждый пул, его PT, IBT, underlying, YT, срок, резервы и котировки](../{DATA/'spectra_base_directory.json.gz'}).","",
+            "У обоих шаблонов StableSwap NG версия v7.0.0. Первые семь пулов отдают администратору 50% комиссии, остальные 35 — 80%. "
+            "Обмен CryptoSwap совпадает с исходником Curve; у второй фабрики есть дополнительная операция donate для администратора. Граф рассчитывает каждую из этих кривых один раз на физический пул. "
+            "Профиль читает цену двух фактических монет IBT и PT. Для отдельного погашения в underlying понадобятся условия конкретного ERC4626, а до срока также встречные YT. "
+            f"[Разница проверенных исходников и хеши исполнения](../{DATA/'spectra_base_sources.json'}).",""]

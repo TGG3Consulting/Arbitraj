@@ -140,7 +140,7 @@ fn bin_math_matches_actual_debit_and_payout_in_the_preceding_wallet_state() {
             }
         }
     }
-    assert!(by_mode["router"] >= 21 && by_mode["v5"] >= 15);
+    assert!(by_mode["router"] >= 26 && by_mode["v5"] >= 20);
     assert!(one_way);
     assert!(skipped_positive_reserves);
 }

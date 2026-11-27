@@ -109,8 +109,8 @@ fn plan(ctx: &Ctx, c: &Candidate) -> Result<Plan, String> {
     let vault = ctx
         .dex_addr("dex.vault", c.family.id)
         .map_err(|e| e.message)?;
-    let hooks = balancer_v3_hooks::lists(ctx, c.family.id)?;
-    Ok((pool, vault, fac::all(ctx, c.family.id)?, hooks))
+    let (list, hooks) = super::puzzle_ranges::bindings(ctx, c.family)?;
+    Ok((pool, vault, list, hooks))
 }
 
 /// Вызовы проверки: getPoolTokenInfo и getHooksConfig хранилища, isPoolFromFactory каждой фабрики. Ошибок нет.

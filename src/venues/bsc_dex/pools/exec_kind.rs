@@ -196,6 +196,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "v2_fork_dual_router01"
         | "toonswap"
         | "v2_fork_dual_create2"
+        | "safeswap_proxy_v5"
         | "safeswap_v2"
         | "v2_fork_dual_create2_live_fee"
         | "v2_diamond_router" | "v2_diamond_create" | "gemswap_v2"
@@ -253,6 +254,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // (docs/sources/curve_arbitrum/0x6eB2…7d80.vy L444); монета пары — всегда нативный ETH пула, поэтому шаг —
         // CURVE_ETH (exec/executor/entry.rs stable → curve_eth, только исполнитель v5).
         "curve_stableswap"
+        | "spectra_stableswap_ng"
         | "curve_stableswap_ng"
         | "curve_stableswap_plain"
         | "curve_stableswap_meta"
@@ -271,7 +273,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // L859-L866: вход transferFrom(sender) L709-L716, выход transfer(receiver) L733-L738; curve-crypto-contract
         // a0f8401 «2021-09-13. Arbitrum/CryptoSwap.vy» L591-L686: transferFrom(msg.sender) L614, transfer(msg.sender)
         // L669) — шаг STABLE_U256, без нового кода исполнителя.
-        "curve_crypto_v1" | "curve_tricrypto_v1" | "curve_crypto2_v1" => ExecKind::StableU256,
+        "spectra_crypto_v1" | "curve_crypto_v1" | "curve_tricrypto_v1" | "curve_crypto2_v1" => ExecKind::StableU256,
         "saddle_stableswap" => ExecKind::Saddle,
         // Решение 284: swap пары — подпись V2, выход — getAmountOut(address, uint256) самой пары (шаг 12, только v2).
         "nomiswap_stable" => ExecKind::NomiStable,
@@ -293,7 +295,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "lb_v21" | "lb_v21_clone" => ExecKind::Lb,
         // Решение 441: Vault V3 — unlock / swap / settle / sendTo любым контрактом (Vault.sol 20241204-v3-vault L133-L163,
         // L197-L291: onlyWhenUnlocked, без белого списка); шаг 23, только исполнитель v4 (EVM-проба — после записи с узла).
-        "balancer_v3" => ExecKind::BalancerV3,
+        "balancer_v3" | "puzzle_ranges" => ExecKind::BalancerV3,
         // Решение 445: LBPair v2.0 swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв −
         // накопленные комиссии (lfj-gg/joe-v2@v2.0.0 src/LBPair.sol L335-L347, TokenHelper.sol L61-L71); шаг 24 (LB20).
         "lb_v20" | "sectorone_lb_v20" => ExecKind::Lb20,

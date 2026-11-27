@@ -25,6 +25,8 @@ use super::super::ctx::Ctx;
 /// Выпуск фабрики → правило onSwap пула.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Release {
+    /// Фабрика Puzzle Ranges и связанный с ней контракт обновления виртуальных остатков.
+    PuzzleRanges(Address),
     /// Весовой 20241205-v3-weighted-pool.
     Weighted,
     /// Весовой 20260115-v3-weighted-pool-v2 (нижние балансы, баланс входа + 1).

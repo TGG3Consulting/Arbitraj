@@ -76,6 +76,7 @@ alloy::sol! {
             uint256 limitRaw;
             bytes userData;
         }
+        function getPoolTokens(address pool) external view returns (address[] memory);
         function getPoolTokenInfo(address pool) external view returns (address[] memory tokens, TokenInfo[] memory tokenInfo, uint256[] memory balancesRaw, uint256[] memory lastBalancesLiveScaled18);
         function getCurrentLiveBalances(address pool) external view returns (uint256[] memory balancesLiveScaled18);
         function getPoolTokenRates(address pool) external view returns (uint256[] memory decimalScalingFactors, uint256[] memory tokenRates);

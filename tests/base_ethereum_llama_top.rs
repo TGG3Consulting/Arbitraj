@@ -183,3 +183,47 @@ fn a_mixed_0x_transaction_attributes_only_the_two_sided_rfq_leg_to_its_maker() {
         2
     );
 }
+
+#[test]
+fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volume() {
+    let document = include_str!("../docs/BASE_ETHEREUM_SETTINGS.md");
+    let snapshot = json(include_str!(
+        "data/first_run_dex_2026-11-26/catalog_recheck.json"
+    ));
+    for (key, heading, catalog_rows, expected_known) in [
+        ("base", "### Base · DEX", 211, 191),
+        ("ethereum", "### Ethereum · DEX", 193, 168),
+    ] {
+        let network = document.split_once(heading).unwrap().1;
+        let table = network
+            .split_once("#### DefiLlama")
+            .unwrap()
+            .1
+            .split_once("| ID | Площадка | 24 ч, USD |")
+            .unwrap()
+            .1;
+        let volumes = snapshot[key]["volume"]["by_id"].as_object().unwrap();
+        let mut ids = BTreeSet::new();
+        let mut known = 0;
+        for row in table
+            .lines()
+            .skip(2)
+            .take_while(|line| line.starts_with("| "))
+        {
+            let mut cells = row.split('|').skip(1).map(str::trim);
+            let id = cells.next().unwrap();
+            assert!(id.parse::<u64>().is_ok() && ids.insert(id), "{key} {id}");
+            let volume = cells.nth(1).unwrap();
+            if let Some(number) = volumes.get(id).and_then(Value::as_f64) {
+                known += 1;
+                assert!(volume.parse::<f64>().is_ok(), "{key} {id}: {volume}");
+                if row.contains("оборот < 5 000 USD, отложено") {
+                    assert!(number < 5_000.0, "{key} {id}: {number}");
+                }
+            } else {
+                assert_eq!(volume, "нет данных", "{key} {id}");
+            }
+        }
+        assert_eq!((ids.len(), known), (catalog_rows, expected_known));
+    }
+}

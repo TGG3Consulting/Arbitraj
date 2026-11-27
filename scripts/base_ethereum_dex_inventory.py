@@ -2059,6 +2059,17 @@ def tables(network, snapshots, profiles):
                     "16 выплат через V5 и 16 через пул. У WETH/cbETH в резерв входят native ETH, у двух проверенных "
                     "размеров пятого рынка первая операция откатилась. Для торговли используется V5 шаг 9 с общим сроком "
                     "и чистым минимумом. Сетевой оборот отдельно по фабрикам не распределялся.")
+        if not base and str(row["id"]) == "728":
+            deployments = [json.loads(gzip.decompress((data_dir / f"defiplaza_{kind}_ethereum.json.gz").read_bytes()))
+                           for kind in ("multi", "stable")]
+            candidates = [market["pool"] for market in deployments]
+            task = ("MultiPlaza на блоке 26 494 988 обслуживает 16 валют. В кассе по 148 raw USDC и USDT. "
+                    "Восемь прямых обменов подтвердили физический приход и строгое условие output > min. "
+                    "Покупки на 1 и на 10 USDC дали по 147 raw USDT. В StablePlaza доступны TUSD, DAI, USDC и USDT. "
+                    "Комиссия из SPconfig равна 10 б.п. У 12 выплат проверены обе стороны кошелька, газ и откат при повышении "
+                    "минимума на 1 raw. 1 USDC дал 1,000520 USDT до расходов на газ. "
+                    "[MultiPlaza](../tests/data/first_run_dex_2026-11-26/defiplaza_multi_ethereum.json.gz) · "
+                    "[StablePlaza](../tests/data/first_run_dex_2026-11-26/defiplaza_stable_ethereum.json.gz).")
         if str(row["id"]) == "8322":
             fx=json.loads(gzip.decompress((data_dir/"textile_fx.json.gz").read_bytes()))
             chain=fx["chains"][network]

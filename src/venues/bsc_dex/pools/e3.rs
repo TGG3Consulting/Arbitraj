@@ -73,18 +73,19 @@ pub(crate) async fn presend(
     ctx: &Ctx,
     legs: &[Vec<crate::venues::bsc_dex::exec::chain::Step>],
 ) -> GatewayResult<()> {
-    let mut steps = legs
+    let steps: Vec<_> = legs
         .iter()
         .flatten()
         .filter(|s| s.entry.family.variant == super::family_variant::Variant::E3Lb)
-        .peekable();
-    if steps.peek().is_none() {
+        .map(|s| (s.entry.clone(), s.order.token_in))
+        .collect();
+    if steps.is_empty() {
         return Ok(());
     }
     let at = super::nami::block(ctx, "latest").await?;
-    for s in steps {
-        super::sectorone::check(ctx, &s.entry, &at, false).await?;
-        input(ctx, s.entry.pool.reference.address(), s.order.token_in, &at).await?;
+    for (entry, token) in steps {
+        super::sectorone::check(ctx, &entry, &at, false).await?;
+        input(ctx, entry.pool.reference.address(), token, &at).await?;
     }
     Ok(())
 }

@@ -10,7 +10,7 @@ import rlp
 from eth_abi import decode, encode
 from eth_utils import keccak
 
-from record_llama_top_contracts import DATA
+DATA = Path(__file__).resolve().parents[1] / "tests/data/first_run_dex_2026-11-26"
 
 URL = "https://base.gateway.tenderly.co"
 LOG_URL = "https://base.rpc.blxrbdn.com"
@@ -112,6 +112,10 @@ def capture(network="base"):
             fields.extend([(f"dp{j}",t,"decimals()",(),"uint8"),(f"balance{j}",t,"balanceOf(address)",(a,),"uint256"),
                            (f"assimilator{j}",a,"assimilator(address)",(t,),"address")])
         r.update(named(fields))
+        roles=[(f"{field}{j}",r[f"assimilator{j}"],method,(),typ)
+               for j in range(2) for field,method,typ in (
+                   ("bound_token","token()","address"),("rate","getRate()","uint256"),("oracle","oracle()","address"))]
+        r.update(named(roles))
         quotes=[]
         for j,(ip,op) in enumerate([(t0,t1),(t1,t0)]):
             for n in [1,10]:

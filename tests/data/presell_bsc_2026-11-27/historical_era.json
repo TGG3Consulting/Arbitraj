@@ -1,0 +1,35 @@
+{
+  "header_providers": [
+    "https://bsc-dataseed.bnbchain.org",
+    "https://bsc-rpc.publicnode.com"
+  ],
+  "block": {
+    "number": "0x81be182",
+    "hash": "0x3f793faa391eb7c9349a057e9cab2b3c08ca17e03b65f20f0021c38130316789",
+    "stateRoot": "0x3edca937f49d90db94d6474c3867db2b1ab2d9ce5d64411aaea4340776390aac",
+    "timestamp_utc": "2026-11-27T13:15:46Z"
+  },
+  "ownNode": {
+    "request": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "method": "eth_createAccessList",
+      "params": [
+        {
+          "from": "0xa9c3cacff416e644dec51986dfd0e17cc2132817",
+          "to": "0x00312400303d02c323295f6e8b7309bc30fb6bce",
+          "data": "0x70a08231000000000000000000000000a9c3cacff416e644dec51986dfd0e17cc2132817"
+        },
+        "0x81be182"
+      ]
+    },
+    "response": {
+      "jsonrpc": "2.0",
+      "id": 4,
+      "error": {
+        "code": -32000,
+        "message": "historical state 3edca937f49d90db94d6474c3867db2b1ab2d9ce5d64411aaea4340776390aac is not available"
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::RegisteredV3(a)) => c.registered_v3 = Some(Box::new((*a).clone())),
         Some(DirectCall::AntfarmOutput(a)) => c.antfarm_output = Some(Box::new((*a).clone())),
         Some(DirectCall::Antfarm(a)) => c.antfarm = Some(Box::new((*a).clone())),
+        Some(DirectCall::O1(t)) => c.o1 = Some(Box::new((*t).clone())),
         Some(DirectCall::Temple(t)) => c.temple = Some(Box::new((*t).clone())),
         Some(DirectCall::Carbon(a)) => {
             c.carbon = Some(super::carbon_fact::Proof {
@@ -39,6 +40,7 @@ pub(super) enum Saved<'a> {
     RegisteredV3(&'a super::registered_v3_wallet::Proof),
     AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
     Antfarm(&'a super::antfarm_wallet::Proof),
+    O1(&'a super::o1_wallet::Proof),
     Temple(&'a super::temple_wallet::Proof),
     Carbon(&'a super::carbon_fact::Proof),
     MintClub(&'a super::mint_club_fact::Proof),
@@ -51,6 +53,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.registered_v3.as_deref().map(Saved::RegisteredV3),
         c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
+        c.o1.as_deref().map(Saved::O1),
         c.temple.as_deref().map(Saved::Temple),
         c.carbon.as_ref().map(Saved::Carbon),
         c.mint_club.as_ref().map(Saved::MintClub),
@@ -64,7 +67,7 @@ pub(super) fn first(c: &SwapCtx) -> Option<Saved<'_>> {
     entries(c).next()
 }
 pub(in crate::venues::bsc_dex) async fn included(
-    c: &SwapCtx,
+    c: &mut SwapCtx,
     ctx: &Ctx,
     hash: B256,
     receipt: &Receipt,
@@ -72,12 +75,14 @@ pub(in crate::venues::bsc_dex) async fn included(
     if receipt.status.to::<u64>() != 1 {
         return Ok(());
     }
+    if let Some(p)=c.antfarm.as_mut(){p.included(ctx,hash,receipt).await?;}
+    if let Some(p)=c.antfarm_output.as_mut(){p.included(ctx,hash,receipt).await?;}
     for saved in entries(c) {
         match saved {
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
-            Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
-            Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
+            Saved::AntfarmOutput(_) | Saved::Antfarm(_) => {},
+            Saved::O1(p) => p.included(ctx, hash, receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,
             Saved::MintClub(p) => p.included(ctx, hash, receipt).await?,
@@ -104,6 +109,7 @@ impl Saved<'_> {
             Self::Antfarm(p) => p
                 .amounts(&r.logs, wallet, input, output)
                 .ok_or("Antfarm: выплата или списание по исходному поручению не подтверждены"),
+            Self::O1(p) => p.amounts(&r.logs, wallet, input, output).ok_or("o1: ключ, списание или выплата расходятся с подписанным поручением"),
             Self::Temple(p) => p.amounts(&r.logs, wallet, input, output).ok_or(
                 "TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты",
             ),

@@ -48,6 +48,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
     Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
     Vault(B256),
+    O1(B256),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
@@ -201,11 +202,15 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
     if let Wire::AntfarmOutput(t)=&o.wire {
-        let proof=super::super::exec::antfarm_output_wallet::Proof{terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
+        let proof=super::super::exec::antfarm_output_wallet::Proof{runtime:None,terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
     if let Wire::Antfarm(t)=&o.wire {
-        let proof=super::super::exec::antfarm_wallet::Proof{terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
+        let proof=super::super::exec::antfarm_wallet::Proof{runtime:None,terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
+    if let Wire::O1(id)=&o.wire {
+        let proof=super::super::exec::o1_wallet::Proof{id:*id,module:o.target,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
     if let Wire::Temple(key)=&o.wire {
@@ -259,6 +264,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
+        Wire::O1(id) => super::super::exec::o1_wallet::data(*id,o.input,o.output,o.amount,minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
         ),

@@ -94,7 +94,9 @@ fn registered_markets_and_both_sources_of_working_capital_are_distinct() {
 
 #[test]
 fn reverse_sale_uses_both_post_purchase_reserves_and_the_owners_remaining_tokens() {
-    let proof = read(include_bytes!("data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"));
+    let proof = read(include_bytes!(
+        "data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"
+    ));
     let cases = proof["roundtrips"].as_array().unwrap();
     assert_eq!(cases.len(), 4);
     let mut samples = BTreeSet::new();
@@ -115,13 +117,20 @@ fn reverse_sale_uses_both_post_purchase_reserves_and_the_owners_remaining_tokens
         assert_eq!(val(&rs[7]) - val(&rs[3]), n);
         assert_eq!(val(&rs[4]), val(&rs[8]));
         for (words, value) in rs[9..11].iter().zip(reserves) {
-            let hex = words["returnData"].as_str().unwrap().strip_prefix("0x").unwrap();
+            let hex = words["returnData"]
+                .as_str()
+                .unwrap()
+                .strip_prefix("0x")
+                .unwrap();
             for (i, reserve) in value.as_array().unwrap().iter().enumerate() {
-                assert_eq!(U256::from_str_radix(&hex[64*i..64*(i+1)],16).unwrap(), amount(reserve));
+                assert_eq!(
+                    U256::from_str_radix(&hex[64 * i..64 * (i + 1)], 16).unwrap(),
+                    amount(reserve)
+                );
             }
         }
-        assert_eq!(calls[rs.len()-4]["to"], proof["module"]);
-        let tail = &rs[rs.len()-8..];
+        assert_eq!(calls[rs.len() - 4]["to"], proof["module"]);
+        let tail = &rs[rs.len() - 8..];
         assert_eq!(tail[3]["status"], "0x0");
         assert!(tail[3]["logs"].as_array().unwrap().is_empty());
         assert_eq!(tail[4]["status"], "0x1");

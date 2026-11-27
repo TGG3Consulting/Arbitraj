@@ -19,16 +19,11 @@ use crate::{
     gateway::errors::{ErrorCode, GatewayError, GatewayResult},
 };
 use alloy::{rpc::types::Log, sol, sol_types::SolCall};
-use alloy_primitives::{Address, B256, Bytes, U256, address, b256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 
-const VAULT: Address = address!("ba12222222228d8ba445958a75a0704d566bf2c8");
-const VAULT_RUNTIME: B256 =
-    b256!("9eb70db20a41bfbf4b022fd070fa7f154b7c4aec98177120dde7a958384f4e66");
-pub(in crate::venues::bsc_dex) const RUNTIME: B256 =
-    b256!("add73a0cfd328651975402b29fec7941b65397b9d414919e87c8199956ea3edb");
 sol! {
     struct Bound {
         address input;address output;uint16 tier;uint16 fundingTier;bool supporting;bool useLoan;
@@ -44,8 +39,14 @@ sol! {
     }
 }
 
+pub(in crate::venues::bsc_dex) fn selector() -> [u8; 4] {
+    executeCall::SELECTOR
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Terms {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atf: Option<Address>,
     pub module: Address,
     pub input: Address,
     pub output: Address,
@@ -59,7 +60,7 @@ pub struct Terms {
 }
 impl Terms {
     pub(in crate::venues::bsc_dex) fn new(
-        module: Address,
+        module: (Address, Address),
         input: Address,
         output: Address,
         tier: u16,
@@ -68,7 +69,8 @@ impl Terms {
         fill: &OutputFill,
     ) -> Self {
         Self {
-            module,
+            atf: Some(module.1),
+            module: module.0,
             input,
             output,
             tier,
@@ -81,7 +83,11 @@ impl Terms {
         }
     }
     pub(in crate::venues::bsc_dex) fn stock_approval(&self) -> Option<(Address, U256)> {
-        (!self.use_loan).then_some((antfarm_book::FEE_TOKEN, self.max_atf))
+        if self.use_loan {
+            None
+        } else {
+            Some((self.atf?, self.max_atf))
+        }
     }
     pub fn data(&self, minimum: U256, deadline: U256) -> Bytes {
         executeCall {
@@ -107,6 +113,8 @@ impl Terms {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<B256>,
     pub terms: Terms,
     pub payer: Address,
     pub minimum: U256,
@@ -116,7 +124,12 @@ impl Proof {
     pub fn data(&self) -> Bytes {
         self.terms.data(self.minimum, self.deadline)
     }
-    pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
+    pub(crate) async fn included(
+        &mut self,
+        ctx: &Ctx,
+        hash: B256,
+        r: &Receipt,
+    ) -> GatewayResult<()> {
         signed_call::included(
             ctx,
             hash,
@@ -126,7 +139,19 @@ impl Proof {
             U256::ZERO,
             self.data(),
         )
-        .await
+        .await?;
+        let (fee_token, runtime) = super::super::pools::antfarm_profile::inclusion(
+            ctx,
+            r.block_hash,
+            self.terms.module,
+            true,
+            self.terms.atf,
+            self.runtime,
+        )
+        .await?;
+        self.terms.atf = Some(fee_token);
+        self.runtime = Some(runtime);
+        Ok(())
     }
     pub(in crate::venues::bsc_dex) fn measured(
         &self,
@@ -147,7 +172,7 @@ impl Proof {
         output: Address,
     ) -> Option<(U256, U256)> {
         let t = &self.terms;
-        let atf = antfarm_book::FEE_TOKEN;
+        let atf = t.atf?;
         if (wallet, input, output) != (self.payer, t.input, t.output)
             || self.minimum.is_zero()
             || self.deadline.is_zero()
@@ -210,45 +235,39 @@ pub(in crate::venues::bsc_dex) async fn module(
     e: &Entry,
     h: Head,
 ) -> GatewayResult<Address> {
-    let a = ctx.dex_addr("dex.antfarm_output_wallet", e.family.id)?;
-    if !antfarm_book_market(e)
-        || a.is_zero()
-        || !super::super::pools::direct_module::configured(ctx, e.family.id)?.contains(&RUNTIME)
-    {
+    if !antfarm_book_market(e) {
         return Err(unavailable(ctx));
     }
-    solidly_classic_factory::bind(ctx, a, RUNTIME, None, &h.selector()).await?;
-    Ok(a)
+    super::super::pools::antfarm_profile::module(ctx, e.family.id, &h.selector(), true)
+        .await
+        .map(|(a, _)| a)
 }
 fn antfarm_book_market(e: &Entry) -> bool {
     matches!(e.pool.state, PoolState::Antfarm(_))
 }
 pub(in crate::venues::bsc_dex) async fn funds(
     ctx: &Ctx,
+    id: &str,
     payer: Address,
     output: Address,
     h: Head,
     use_loan: bool,
 ) -> GatewayResult<Funds> {
-    if payer.is_zero() || output.is_zero() || output == antfarm_book::FEE_TOKEN {
+    let atf = ctx.dex_addr("dex.antfarm_fee_token", id)?;
+    if atf.is_zero() || payer.is_zero() || output.is_zero() || output == atf {
         return Err(unavailable(ctx));
     }
     if !use_loan {
-        let atf = view(
-            ctx,
-            antfarm_book::FEE_TOKEN,
-            Funding::balanceOfCall { owner: payer },
-            h,
-        )
-        .await?;
+        let atf = view(ctx, atf, Funding::balanceOfCall { owner: payer }, h).await?;
         return Ok(Funds::Wallet { atf });
     }
+    let (vault, vault_hash) = super::super::pools::antfarm_profile::vault(ctx, id)?;
     let tag = h.selector();
     let (_, paused, collector, output_balance) = tokio::try_join!(
-        solidly_classic_factory::bind(ctx, VAULT, VAULT_RUNTIME, None, &tag),
-        view(ctx, VAULT, Funding::getPausedStateCall {}, h),
-        view(ctx, VAULT, Funding::getProtocolFeesCollectorCall {}, h),
-        view(ctx, output, Funding::balanceOfCall { owner: VAULT }, h)
+        solidly_classic_factory::bind(ctx, vault, vault_hash, None, &tag),
+        view(ctx, vault, Funding::getPausedStateCall {}, h),
+        view(ctx, vault, Funding::getProtocolFeesCollectorCall {}, h),
+        view(ctx, output, Funding::balanceOfCall { owner: vault }, h)
     )?;
     if paused.paused || collector.is_zero() || output_balance.is_zero() {
         return Err(unavailable(ctx));
@@ -276,9 +295,10 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let h = super::super::quote::white_state::head(ctx, &format!("{height:#x}")).await?;
-    let (target, source, book) = tokio::try_join!(
-        module(ctx, e, h),
-        funds(ctx, payer, o.token_out, h, use_loan),
+    let tag = h.selector();
+    let ((target, runtime), source, book) = tokio::try_join!(
+        super::super::pools::antfarm_profile::module(ctx, e.family.id, &tag, true),
+        funds(ctx, e.family.id, payer, o.token_out, h, use_loan),
         antfarm_book::read(
             ctx,
             e.family,
@@ -298,7 +318,7 @@ pub(super) async fn plan(
         .filter(|f| f.credit >= o.min_out)
         .ok_or_else(|| unavailable(ctx))?;
     let terms = Terms::new(
-        target,
+        (target, book.market.atf),
         o.token_in,
         o.token_out,
         book.market.tier,
@@ -313,6 +333,7 @@ pub(super) async fn plan(
             .ok_or_else(|| unavailable(ctx))?,
     );
     let proof = Proof {
+        runtime: Some(runtime),
         terms: terms.clone(),
         payer,
         minimum: o.min_out,

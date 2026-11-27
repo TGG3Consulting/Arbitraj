@@ -13,6 +13,7 @@ fn from_row(d: &Value, row: &Value) -> Market {
     let tokens = [addr(&row["tokens"][0]), addr(&row["tokens"][1])];
     let oracle = &d["oracles"][row["oracle"].as_str().unwrap()];
     Market {
+        pool:addr(&row["pair"]),
         tokens,
         atf: addr(&d["fee_token"]),
         tier: row["fee"].as_u64().unwrap() as u16,
@@ -335,6 +336,7 @@ fn inverse_net_payout_finds_the_first_integer_trade_above_both_physical_fee_floo
     let market = |tokens, tier, r0, r1| {
         let reserves = [U256::from(r0), U256::from(r1)];
         Market {
+            pool: Address::ZERO,
             tokens,
             atf,
             tier,

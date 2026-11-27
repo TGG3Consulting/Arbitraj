@@ -292,6 +292,11 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k=="dex.pool_code_hashes" && p.id=="antfarm-ethereum" {
+                        let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz");
+                        let r:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();
+                        assert_eq!(r["selector"],snapshot["selector"]);
+                        assert!(r["init_hashes"].as_array().unwrap().iter().any(|v|v.as_str()==text.strip_prefix("0x")));
                     } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"), Some(Parameter::Text(kind)) if kind=="solidly_v2_proxy") {
                         let bytes = include_bytes!("../../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz");
                         let data: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();

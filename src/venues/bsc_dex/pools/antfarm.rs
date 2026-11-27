@@ -1,25 +1,11 @@
 //! Read the authenticated Antfarm pair and fee oracle at one canonical Ethereum block.
 use super::super::{ctx::Ctx, math::antfarm::Market};
+use super::antfarm_profile::Profile;
 use super::{families::Family, nami_batch as batch};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::sol;
-use alloy_primitives::{Address, B256, U256, address, b256, keccak256};
+use alloy_primitives::{Address, B256, U256};
 use serde_json::Value;
-
-pub(super) const FACTORY: Address = address!("e48aee124f9933661d4dd3eb265fa9e153e32cbe");
-pub(super) const ROUTER: Address = address!("6d9f0eb21d77c6d24be49a579508471e937d5418");
-pub(in crate::venues::bsc_dex) const ATF: Address = address!("518b63da813d46556fea041a88b52e3caa8c16a8");
-const FACTORY_CODE: B256 =
-    b256!("f2d8ede580acbe903f4236f3ea575e17dcdbfb7369a9fcf433b863d010e197fc");
-const ROUTER_CODE: B256 = b256!("ab093829729d83c3859f76c3343b65622c0cd740c2b40a661bc2e0b5f6a45cb4");
-const PAIR_CODE: [B256; 2] = [
-    b256!("c7e0d34bd74d343e4a4e51a38239e7bd12d95de9570a730445913fcf8a08086d"),
-    b256!("359924a3c31734039b5b61c2442549d28b1697852bff9c3dcfdcef0c27d94f03"),
-];
-const INIT: [B256; 2] = [
-    b256!("2f47d72b208014a5ba4f32371ac96dd421a39152dcaf104e8232b6c9f1a92280"),
-    b256!("b174de46ec9038ead3d74ed04c79d4885d8e642175833c4da037d5e052492e5b"),
-];
 
 sol! {
     interface IFarm {
@@ -43,18 +29,19 @@ sol! {
     }
 }
 
-pub(super) fn derived(tokens: [Address; 2], tier: u16) -> Address {
-    let mut salt = [0u8; 62];
-    salt[..20].copy_from_slice(tokens[0].as_slice());
-    salt[20..40].copy_from_slice(tokens[1].as_slice());
-    salt[40..42].copy_from_slice(&tier.to_be_bytes());
-    salt[42..].copy_from_slice(ATF.as_slice());
-    FACTORY.create2(keccak256(salt), INIT[usize::from(tokens[0] == ATF)])
-}
-
 pub(super) async fn market(
     ctx: &Ctx,
     f: &Family,
+    pool: Address,
+    edge: (Address, Address),
+    at: &Value,
+) -> GatewayResult<Market> {
+    let profile = Profile::read(ctx, f.id)?;
+    bound_market(ctx, profile, pool, edge, at).await
+}
+pub(super) async fn bound_market(
+    ctx: &Ctx,
+    p: Profile,
     pool: Address,
     edge: (Address, Address),
     at: &Value,
@@ -69,8 +56,6 @@ pub(super) async fn market(
             .as_str()
             .and_then(|s| s.parse::<B256>().ok())
             .is_none()
-        || ctx.dex_addr("dex.factory", f.id)? != FACTORY
-        || ctx.dex_addr("dex.quoter", f.id)? != ROUTER
         || edge.0 == edge.1
         || pool.is_zero()
     {
@@ -91,20 +76,23 @@ pub(super) async fn market(
     );
     let bind = |a, h| super::solidly_classic_factory::bind(ctx, a, h, None, at);
     let (_, _, _, [a, b, fee, owner, res, supply, escrow, oracle]) = tokio::try_join!(
-        bind(FACTORY, FACTORY_CODE),
-        bind(ROUTER, ROUTER_CODE),
-        bind(pool, PAIR_CODE[usize::from(edge.0 == ATF || edge.1 == ATF)]),
+        bind(p.factory, p.factory_hash),
+        bind(p.router, p.router_hash),
+        bind(
+            pool,
+            p.runtime[usize::from(edge.0 == p.atf || edge.1 == p.atf)]
+        ),
         roles
     )?;
     let a = batch::decode(&a, IFarm::token0Call {})?;
     let b = batch::decode(&b, IFarm::token1Call {})?;
     let tier = batch::decode(&fee, IFarm::feeCall {})?;
-    let embedded = a == ATF;
+    let embedded = a == p.atf;
     if (a, b) != edge && (b, a) != edge
-        || b == ATF
+        || b == p.atf
         || !embedded && a >= b
-        || batch::decode(&owner, IFarm::factoryCall {})? != FACTORY
-        || derived([a, b], tier) != pool
+        || batch::decode(&owner, IFarm::factoryCall {})? != p.factory
+        || p.derived([a, b], tier) != pool
     {
         return Err(bad());
     }
@@ -114,21 +102,34 @@ pub(super) async fn market(
         fee: tier,
     };
     let bal = IFarm::balanceOfCall { account: pool };
-    let [ab, ba, router_atf, b0, b1, bfee] = batch::read(
+    let [
+        ab,
+        ba,
+        router_atf,
+        router_factory,
+        factory_atf,
+        b0,
+        b1,
+        bfee,
+    ] = batch::read(
         ctx,
         [
-            batch::view(at, FACTORY, reg(a, b)),
-            batch::view(at, FACTORY, reg(b, a)),
-            batch::view(at, ROUTER, IFarm::antfarmTokenCall {}),
+            batch::view(at, p.factory, reg(a, b)),
+            batch::view(at, p.factory, reg(b, a)),
+            batch::view(at, p.router, IFarm::antfarmTokenCall {}),
+            batch::view(at, p.router, IFarm::factoryCall {}),
+            batch::view(at, p.factory, IFarm::antfarmTokenCall {}),
             batch::view(at, a, bal.clone()),
             batch::view(at, b, bal.clone()),
-            batch::view(at, ATF, bal.clone()),
+            batch::view(at, p.atf, bal.clone()),
         ],
     )
     .await?;
     if batch::decode(&ab, reg(a, b))? != pool
         || batch::decode(&ba, reg(b, a))? != pool
-        || batch::decode(&router_atf, IFarm::antfarmTokenCall {})? != ATF
+        || batch::decode(&router_factory, IFarm::factoryCall {})? != p.factory
+        || batch::decode(&factory_atf, IFarm::antfarmTokenCall {})? != p.atf
+        || batch::decode(&router_atf, IFarm::antfarmTokenCall {})? != p.atf
     {
         return Err(bad());
     }
@@ -148,7 +149,7 @@ pub(super) async fn market(
         let src = batch::decode(&src, IFarm::pairCall {})?;
         let coin = batch::decode(&coin, IFarm::token1Call {})?;
         let index = [a, b].iter().position(|t| *t == coin).ok_or_else(bad)?;
-        if src != derived([ATF, coin], 10) {
+        if src != p.derived([p.atf, coin], 10) {
             return Err(bad());
         }
         let [back, registered] = batch::read(
@@ -157,9 +158,9 @@ pub(super) async fn market(
                 batch::view(at, src, IFarm::antfarmOracleCall {}),
                 batch::view(
                     at,
-                    FACTORY,
+                    p.factory,
                     IFarm::getPairCall {
-                        a: ATF,
+                        a: p.atf,
                         b: coin,
                         fee: 10,
                     },
@@ -171,7 +172,7 @@ pub(super) async fn market(
             || batch::decode(
                 &registered,
                 IFarm::getPairCall {
-                    a: ATF,
+                    a: p.atf,
                     b: coin,
                     fee: 10,
                 },
@@ -192,8 +193,9 @@ pub(super) async fn market(
     }
     let r = batch::decode(&res, IFarm::getReservesCall {})?;
     Ok(Market {
+        pool,
         tokens: [a, b],
-        atf: ATF,
+        atf: p.atf,
         tier,
         reserves: [U256::from(r.x), U256::from(r.y)],
         balances: [

@@ -28,7 +28,7 @@ enum Venue {
     WalletRouter(Address),
     FundedExecutor,
     Temple,
-    Antfarm,
+    Antfarm(Option<Address>),
     Carbon,
     MintClub(Option<Protection>),
 }
@@ -93,7 +93,7 @@ impl Market {
             }
         } else if antfarm_wallet::enabled(e) {
             anchor = Some(Box::pin(antfarm_probe::anchor(ctx, e, number)).await?);
-            Venue::Antfarm
+            Venue::Antfarm(ctx.dex_addr("dex.vault",e.family.id).ok().filter(|v|!v.is_zero()))
         } else if matches!(&e.pool.state, PoolState::Temple(_)) {
             anchor = Some(Box::pin(temple::probe_state(ctx, e, number)).await?);
             Venue::Temple
@@ -140,9 +140,7 @@ impl Market {
         self.anchor.as_ref().map(|(h, _)| h.hash)
     }
     fn self_funded(&self, e: &Entry, source: Address) -> bool {
-        matches!(self.venue, Venue::Antfarm)
-            && (antfarm_probe::uses_funding_pair(e, source)
-                || source == antfarm_probe_wallet::VAULT)
+        matches!(self.venue, Venue::Antfarm(vault) if antfarm_probe::uses_funding_pair(self.entry(e), source) || vault == Some(source))
     }
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
@@ -172,7 +170,7 @@ impl Market {
             let call = super::registered_v3::leg(ctx, e, router, wallet, order, now)?;
             return Ok(Leg { entry: None, call });
         }
-        if matches!(self.venue, Venue::Antfarm)
+        if matches!(self.venue, Venue::Antfarm(_))
             && let Some((head, _)) = &self.anchor
         {
             let v = Box::pin(antfarm_probe_wallet::select(
@@ -206,7 +204,7 @@ impl Market {
         wallet: Address,
         list: &mut Vec<Call>,
     ) -> GatewayResult<Option<usize>> {
-        if !matches!(self.venue, Venue::Antfarm) {
+        if !matches!(self.venue, Venue::Antfarm(_)) {
             return Ok(None);
         }
         let (to, input) = antfarm_probe::request(ctx, e)?;
@@ -249,7 +247,7 @@ impl Market {
     ) -> GatewayResult<Option<Box<Entry>>> {
         let (amount, bought) = amounts;
         match self.venue {
-            Venue::Antfarm => {
+            Venue::Antfarm(_) => {
                 let r = observed.ok_or_else(|| {
                     ctx.err(
                         ErrorCode::BadResponse,

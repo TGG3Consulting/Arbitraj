@@ -8,6 +8,7 @@ from pathlib import Path
 from eth_abi import decode
 from eth_utils import keccak
 from record_base_slipstream_executor import ROOT, calldata, rpc, simulate_block
+from record_antfarm_module import attest_module
 from record_antfarm_wallets import ATF, ROUTER, MAX, PARAM, WETH, ENDPOINTS
 
 VAULT = "0xba12222222228d8ba445958a75a0704d566bf2c8"
@@ -78,6 +79,8 @@ def capture(url, d, runtime):
         # Only the new module is injected. Balances, allowances, oracles, pools and Vault remain canonical.
         return simulate_block(url, tag, {MODULE: {"code": "0x" + runtime}}, calls)
 
+    binding=attest_module(url,tag,{MODULE:{"code":"0x"+runtime}},MODULE,PAYER,runtime,"execute("+ORDER+")",
+                          {"router()":ROUTER,"feeToken()":ATF,"vault()":VAULT})
     uni = "0x7a250d5630b4cf539739df2c5dacb4c659f2488d"
     usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7"
 
@@ -329,6 +332,7 @@ def capture(url, d, runtime):
         payer=PAYER,
         module=MODULE,
         runtime_hash="0x" + keccak(hexstr=runtime).hex(),
+        binding=binding,
         vault=VAULT,
         vault_balances={k: str(v) for k, v in vault_bal.items()},
         fee_percentage=str(fees),

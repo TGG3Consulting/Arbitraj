@@ -10,10 +10,12 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
     let data: Value =
         serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
     let module: Address = serde_json::from_value(data["module"].clone()).unwrap();
-    assert_eq!(
-        serde_json::from_value::<B256>(data["runtime_hash"].clone()).unwrap(),
-        RUNTIME
+    let runtime: B256 = serde_json::from_value(data["runtime_hash"].clone()).unwrap();
+    let reg = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz"
     );
+    let registry: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&reg[..])).unwrap();
+    let atf: Address = serde_json::from_value(registry["fee_token"].clone()).unwrap();
     for row in data["cases"].as_array().unwrap() {
         let calls = row["calls"].as_array().unwrap();
         let i = calls
@@ -24,6 +26,7 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
         let payer = serde_json::from_value(calls[i]["from"].clone()).unwrap();
         let original = executeCall::abi_decode_validate(&calldata).unwrap().order;
         let t = Terms {
+            atf: Some(atf),
             module,
             input: original.input,
             output: original.output,
@@ -36,12 +39,26 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
             max_loan_fee: original.maxLoanFee,
         };
         let p = Proof {
+            runtime: Some(runtime),
             terms: t,
             payer,
             minimum: original.minCredit,
             deadline: original.deadline,
         };
         let mut saved: Proof = serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
+        let mut old = serde_json::to_value(&p).unwrap();
+        old.as_object_mut().unwrap().remove("runtime");
+        old["terms"].as_object_mut().unwrap().remove("atf");
+        let mut legacy: Proof = serde_json::from_value(old).unwrap();
+        let binding = super::super::super::pools::antfarm_profile::receipt_runtime;
+        assert_eq!(
+            binding(true, legacy.terms.atf, legacy.runtime),
+            Some(runtime)
+        );
+        assert_eq!(binding(true, saved.terms.atf, saved.runtime), Some(runtime));
+        assert_eq!(binding(true, None, Some(runtime)), None);
+        assert_eq!(legacy.data(), calldata);
+        legacy.terms.atf = Some(atf);
         assert_eq!(saved.data(), calldata);
         let logs: Vec<SimLog> = serde_json::from_value(row["results"][i]["logs"].clone()).unwrap();
         let expected = (
@@ -49,6 +66,7 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
             row["credit"].as_str().unwrap().parse().unwrap(),
         );
         assert_eq!(saved.measured(&logs), Some(expected));
+        assert_eq!(legacy.measured(&logs), Some(expected));
         assert_eq!(saved.terms.stock_approval().is_some(), !original.useLoan);
         let mut partial = logs.clone();
         let settled = logs.iter().find(|l| l.address == module).unwrap().clone();
@@ -57,10 +75,7 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
         if !original.useLoan {
             let lost_refund: Vec<_> = logs
                 .iter()
-                .filter(|l| {
-                    !(l.address == antfarm_book::FEE_TOKEN
-                        && l.topics.get(2) == Some(&payer.into_word()))
-                })
+                .filter(|l| !(l.address == atf && l.topics.get(2) == Some(&payer.into_word())))
                 .cloned()
                 .collect();
             assert!(saved.measured(&lost_refund).is_none());

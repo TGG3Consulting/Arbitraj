@@ -834,7 +834,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             else {list.extend(["dex.proxy_implementations","dex.proxy_runtime_hashes"]);}
             if f.tradable {list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
-        Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter"]),
+        Proto::V2 if f.variant == Variant::Antfarm => list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.router_runtime_hash","dex.antfarm_fee_token","dex.pool_code_hashes","dex.antfarm_pair_runtime_hashes"]),
         Proto::V2 if f.variant == Variant::Temple => {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}

@@ -14,12 +14,27 @@ ABI="(address,address,uint16,uint16,bool,uint256,uint256,uint256,uint256,uint256
 TOPIC="0x"+keccak(text="Settled(address,address,address,uint256,uint256,uint256,uint256)").hex()
 
 
+def attest_module(url, tag, overrides, target, from_, runtime, execute, getters):
+    selector = keccak(text=execute)[:4]
+    if b"\x63" + selector not in bytes.fromhex(runtime):
+        raise ValueError("missing execute selector in accepted runtime")
+    calls = [{"from": from_, "to": target, "data": "0x" + keccak(text=k)[:4].hex()} for k in getters]
+    result = simulate_block(url, tag, overrides, calls)
+    if len(result) != len(calls):
+        raise ValueError("incomplete module roles")
+    for r, expected in zip(result, getters.values(), strict=True):
+        if r["status"] != "0x1" or r["returnData"].lower() != "0x" + expected[2:].lower().zfill(64):
+            raise ValueError("module bound to a different deployment")
+    return {"selector": "0x" + selector.hex(), "calls": calls, "returns": [r["returnData"] for r in result]}
+
+
 def record(url,data,runtime):
     d=data["directory"]
     tag=d["selector"]
     for a in (OWNER,MODULE):
         if rpc(url,"eth_getCode",[a,tag])!="0x":raise ValueError("simulation address already in use")
     overrides={OWNER:{"balance":hex(10**18)},MODULE:{"code":"0x"+runtime}}
+    binding=attest_module(url,tag,overrides,MODULE,OWNER,runtime,"execute("+ABI+")",{"router()":ROUTER,"feeToken()":ATF})
     end=d["block_time"]+300
     def approved(token,limit):
         return tx(token,"approve(address,uint256)",["address","uint256"],[MODULE,limit])
@@ -74,7 +89,7 @@ def record(url,data,runtime):
                                   controls=list(map(evidence,res[n+m:n+m+k])),event=ev,logs=actual["logs"]))
     if len({c["pool"] for c in cases})<2 or {c["mode"] for c in cases}!={"held_fee","buy_fee"}:
         raise ValueError("insufficient protected fee coverage")
-    return dict(selector=tag,state_root=d["state_root"],module=MODULE,runtime_hash="0x"+keccak(hexstr=runtime).hex(),cases=cases)
+    return dict(selector=tag,state_root=d["state_root"],module=MODULE,binding=binding,runtime_hash="0x"+keccak(hexstr=runtime).hex(),cases=cases)
 
 
 if __name__=="__main__":

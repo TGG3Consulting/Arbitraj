@@ -6863,6 +6863,14 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 
 В `dex.factory` указывается GemswapFactory. Пара — клон EIP-1167, зарегистрированный по сортированным адресам и типу `1`. В `dex.proxy_implementations` и `dex.proxy_runtime_hashes` задайте реализацию GemswapPair и хеш её кода из профиля. Конфигурация проверяет точный код клона, две записи реестра, CREATE2 с типом пула в salt и фактическую `swapFee()`. Код фабрики устанавливает 25 базисных пунктов при создании. Для прямых обменов на официальный GemswapRouter требуются `dex.router` и `dex.router_runtime_hash`. Для V5 используются разрешение самого кошелька и фактический входной токен. У выбранного размера учитываются выход на кошелёк, разрешение, газ и возможный дефицит ликвидности. [Матрица выплат и газ](../tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz).
 
+### `dex.antfarm_fee_token` и `dex.antfarm_pair_runtime_hashes`
+
+В области конкретной Antfarm задайте фабрику в `dex.factory`, официальный роутер в `dex.quoter`, их runtime в `dex.factory_runtime_hash` и `dex.router_runtime_hash`. Укажите токен расчёта комиссий в `dex.antfarm_fee_token`. Для `dex.pool_code_hashes` и `dex.antfarm_pair_runtime_hashes` порядок одинаковый: сначала обычная пара, затем пара с токеном комиссии в token0. Первая установка Ethereum содержит данные всех 39 адресов реестра. При обновлении бот перепроверяет CREATE2, код, обе записи фабрики, роли роутера и оракула. [Архив реестра](../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz).
+
+### `dex.antfarm_vault_runtime_hash`
+
+Укажите хеш кода кредитора из `dex.vault` в области этого DEX. Адрес должен совпадать с getter `vault()` модуля, а выдаваемая сумма и комиссия проверяются на блоке котировки. Без подтверждённого кода кредитора бот может использовать достаточный запас ATF владельца либо отдельный входной модуль. [Измерения обоих источников](../tests/data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz).
+
 ### `dex.antfarm_output_wallet`
 
 - **Кейс:** Комиссия обычной пары Antfarm в Ethereum оплачивается из конечной выплаты. Используется оборотный ATF владельца или заём валюты выплаты в Balancer Vault.

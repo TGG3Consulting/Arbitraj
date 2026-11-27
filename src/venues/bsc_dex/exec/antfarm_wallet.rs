@@ -30,8 +30,14 @@ sol! {
     function execute(Swap order);
 }
 
+pub(in crate::venues::bsc_dex) fn selector() -> [u8; 4] {
+    executeCall::SELECTOR
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Terms {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub atf: Option<Address>,
     pub module: Address,
     pub input: Address,
     pub output: Address,
@@ -59,6 +65,7 @@ impl Terms {
             return None;
         }
         Some(Self {
+            atf: Some(book.market.atf),
             module,
             input,
             output,
@@ -94,6 +101,8 @@ impl Terms {
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Proof {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<B256>,
     pub terms: Terms,
     pub payer: Address,
     pub minimum: U256,
@@ -103,7 +112,12 @@ impl Proof {
     pub fn data(&self) -> Bytes {
         self.terms.data(self.minimum, self.deadline)
     }
-    pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
+    pub(crate) async fn included(
+        &mut self,
+        ctx: &Ctx,
+        hash: B256,
+        r: &Receipt,
+    ) -> GatewayResult<()> {
         signed_call::included(
             ctx,
             hash,
@@ -113,7 +127,19 @@ impl Proof {
             U256::ZERO,
             self.data(),
         )
-        .await
+        .await?;
+        let (fee_token, runtime) = super::super::pools::antfarm_profile::inclusion(
+            ctx,
+            r.block_hash,
+            self.terms.module,
+            false,
+            self.terms.atf,
+            self.runtime,
+        )
+        .await?;
+        self.terms.atf = Some(fee_token);
+        self.runtime = Some(runtime);
+        Ok(())
     }
     pub(in crate::venues::bsc_dex) fn measured(
         &self,
@@ -164,7 +190,7 @@ impl Proof {
             .checked_sub(fill::moved_logs(logs, output, Some(wallet), None))?;
         // In this instruction a separate fee is purchased inside the bounded input or embedded in the swap.
         // The wallet may receive a refund in ATF. It cannot be charged an extra ATF balance.
-        let atf = antfarm_book::FEE_TOKEN;
+        let atf = t.atf?;
         let separate = input != atf && output != atf;
         let net_refund = if separate {
             fill::moved_logs(logs, atf, None, Some(wallet)).checked_sub(fill::moved_logs(
@@ -195,23 +221,6 @@ fn bad(ctx: &Ctx) -> crate::gateway::errors::GatewayError {
         "Antfarm: не подтверждены модуль, выплата либо бюджет основной сделки и комиссии",
     )
 }
-pub(in crate::venues::bsc_dex) async fn fresh(
-    ctx: &Ctx,
-    e: &mut Entry,
-    h: white_state::Head,
-) -> GatewayResult<()> {
-    antfarm_book::module(ctx, e.family, &h.selector()).await?;
-    let s = antfarm_book::read(
-        ctx,
-        e.family,
-        e.pool.reference.address(),
-        (e.coin, e.usdt),
-        h,
-    )
-    .await?;
-    e.pool.state = PoolState::Antfarm(Box::new(s));
-    Ok(())
-}
 pub(super) async fn plan(
     ctx: &Ctx,
     step: &Step,
@@ -223,18 +232,24 @@ pub(super) async fn plan(
         return Err(bad(ctx));
     }
     let generation = ctx.settings.generation();
-    let mut e = step.entry.clone();
+    let e = &step.entry;
     let h = white_state::head(ctx, &format!("{height:#x}")).await?;
-    fresh(ctx, &mut e, h).await?;
-    let PoolState::Antfarm(book) = &e.pool.state else {
-        return Err(bad(ctx));
-    };
-    let module = ctx.dex_addr("dex.router", e.family.id)?;
+    let tag = h.selector();
+    let ((module, runtime), book) = tokio::try_join!(
+        super::super::pools::antfarm_profile::module(ctx, e.family.id, &tag, false),
+        antfarm_book::read(
+            ctx,
+            e.family,
+            e.pool.reference.address(),
+            (e.coin, e.usdt),
+            h
+        )
+    )?;
     if selected != Some(module) {
         return Err(bad(ctx));
     }
     let o = &step.order;
-    let terms = Terms::from_budget(book, module, o.token_in, o.token_out, o.amount_in)
+    let terms = Terms::from_budget(&book, module, o.token_in, o.token_out, o.amount_in)
         .ok_or_else(|| bad(ctx))?;
     let deadline = U256::from(
         h.timestamp
@@ -243,6 +258,7 @@ pub(super) async fn plan(
             .ok_or_else(|| bad(ctx))?,
     );
     let proof = Proof {
+        runtime: Some(runtime),
         terms: terms.clone(),
         payer,
         minimum: o.min_out,
@@ -307,6 +323,12 @@ mod tests {
             "../../../../tests/data/first_run_dex_2026-11-26/antfarm_protected_ethereum.json.gz"
         );
         let d: Value = serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+        let reg = include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz"
+        );
+        let registry: Value = serde_json::from_reader(GzDecoder::new(&reg[..])).unwrap();
+        let atf: Address = serde_json::from_value(registry["fee_token"].clone()).unwrap();
+        let runtime: B256 = serde_json::from_value(d["runtime_hash"].clone()).unwrap();
         let mut checked = 0;
         for row in d["cases"].as_array().unwrap() {
             let tx = &row["transaction"];
@@ -317,6 +339,7 @@ mod tests {
             let wallet: Address = serde_json::from_value(tx["from"].clone()).unwrap();
             let module = serde_json::from_value(tx["to"].clone()).unwrap();
             let terms = Terms {
+                atf: Some(atf),
                 module,
                 input,
                 output,
@@ -329,13 +352,34 @@ mod tests {
                 funding_budget: c.maxFundingDebit,
             };
             let mut proof = Proof {
+                runtime: Some(runtime),
                 terms,
                 payer: wallet,
                 minimum: c.minimum,
                 deadline: c.deadline,
             };
+            let mut old = serde_json::to_value(&proof).unwrap();
+            old.as_object_mut().unwrap().remove("runtime");
+            old["terms"].as_object_mut().unwrap().remove("atf");
+            let mut restored: Proof = serde_json::from_value(old).unwrap();
+            assert_eq!(restored.data(), calldata);
+            let binding = super::super::super::pools::antfarm_profile::receipt_runtime;
+            assert_eq!(
+                binding(false, restored.terms.atf, restored.runtime),
+                Some(runtime)
+            );
+            assert_eq!(
+                binding(false, proof.terms.atf, proof.runtime),
+                Some(runtime)
+            );
+            assert_eq!(binding(false, Some(atf), None), None);
+            restored.terms.atf = Some(atf);
             assert_eq!(proof.data(), calldata);
             let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
+            assert_eq!(
+                restored.amounts(&logs, wallet, input, output),
+                proof.amounts(&logs, wallet, input, output)
+            );
             if row["mode"] == "held_fee" {
                 assert!(proof.amounts(&logs, wallet, input, output).is_none());
                 continue;

@@ -113,8 +113,8 @@ pub(super) async fn landed(
 ) -> GatewayResult<TradeResult> {
     let queue = release_if_ours(p, hash, nonce, false).await;
     match SwapCtx::of(pend).filter(SwapCtx::complete) {
-        Some(c) => {
-            super::exec::market_receipt::included(&c,&p.ctx,hash,&r).await.map_err(|e|{
+        Some(mut c) => {
+            super::exec::market_receipt::included(&mut c,&p.ctx,hash,&r).await.map_err(|e|{
                 let error=match &c.chain {Some(chain)=>e.with_tx(chain.clone()),None=>e};
                 c.attach(error)
             })?;

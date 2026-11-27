@@ -3,7 +3,7 @@
 use super::super::{
     ctx::Ctx, exec::antfarm_output_wallet as output, quote::white_state::Head, wallet::signer,
 };
-use super::{antfarm_book, families::Family, solidly_classic_factory};
+use super::{antfarm_profile, families::Family};
 use crate::core::types::{AntfarmBook, AntfarmFunds, AntfarmLimits};
 use alloy_primitives::{Address, B256};
 use std::{
@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex},
 };
 use tokio::sync::OnceCell;
-type Key = (B256, Address, Address);
+type Key = (B256, Address, Address, B256);
 type Cell = Arc<OnceCell<Option<AntfarmFunds>>>;
 static CAPS: LazyLock<Mutex<VecDeque<(Key, Cell)>>> = LazyLock::new(Mutex::default);
 fn cell(key: Key) -> Cell {
@@ -28,20 +28,35 @@ fn cell(key: Key) -> Cell {
 }
 async fn observed(
     ctx: &Ctx,
+    id: &str,
     payer: Address,
     asset: Address,
     h: Head,
     loan: bool,
 ) -> Option<AntfarmFunds> {
+    let generation = ctx.settings.generation();
     let key = if loan {
-        (h.hash, Address::ZERO, asset)
+        let (vault, hash) = antfarm_profile::vault(ctx, id).ok()?;
+        (h.hash, vault, asset, hash)
     } else {
-        (h.hash, payer, antfarm_book::FEE_TOKEN)
+        (
+            h.hash,
+            payer,
+            ctx.dex_addr("dex.antfarm_fee_token", id).ok()?,
+            B256::ZERO,
+        )
     };
     // Cache deterministic absence at this block. A transport failure can recover on the next read.
     *cell(key)
         .get_or_try_init(|| async {
-            match output::funds(ctx, payer, asset, h, loan).await {
+            let r = output::funds(ctx, id, payer, asset, h, loan).await;
+            if generation != ctx.settings.generation() {
+                return Err(ctx.err(
+                    crate::gateway::errors::ErrorCode::StaleData,
+                    "Antfarm: изменился источник оборотных средств",
+                ));
+            }
+            match r {
                 Ok(v) => Ok(Some(v)),
                 Err(e) if e.code == crate::gateway::errors::ErrorCode::NoRoute => Ok(None),
                 Err(e) => Err(e),
@@ -62,26 +77,20 @@ pub(in crate::venues::bsc_dex) async fn available(
     {
         return None;
     }
-    let module = ctx
-        .dex_addr("dex.antfarm_output_wallet", f.id)
-        .ok()
-        .filter(|a| !a.is_zero())?;
-    let payer = signer::address(ctx).ok()?;
-    if !super::direct_module::configured(ctx, f.id)
-        .ok()?
-        .contains(&output::RUNTIME)
-    {
-        return None;
-    }
-    solidly_classic_factory::bind(ctx, module, output::RUNTIME, None, &h.selector())
+    let generation = ctx.settings.generation();
+    let (module, _) = antfarm_profile::module(ctx, f.id, &h.selector(), true)
         .await
         .ok()?;
+    let payer = signer::address(ctx).ok()?;
     let [a, b] = book.market.tokens;
     let (stock, la, lb) = tokio::join!(
-        observed(ctx, payer, a, h, false),
-        observed(ctx, payer, a, h, true),
-        observed(ctx, payer, b, h, true)
+        observed(ctx, f.id, payer, a, h, false),
+        observed(ctx, f.id, payer, a, h, true),
+        observed(ctx, f.id, payer, b, h, true)
     );
+    if generation != ctx.settings.generation() {
+        return None;
+    }
     Some(AntfarmLimits {
         payer,
         module,

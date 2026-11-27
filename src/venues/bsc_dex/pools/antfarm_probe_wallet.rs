@@ -8,21 +8,19 @@ use super::super::{
     quote::{gas_base, white_state::Head},
     wallet::approve::{self, Approval},
 };
-use super::{antfarm, antfarm_book, registry::Entry};
+use super::{antfarm, antfarm_book, antfarm_profile, registry::Entry};
 use crate::{
     core::types::{AntfarmBook, AntfarmMarket, PoolState},
     gateway::errors::{ErrorCode, GatewayResult},
 };
 use alloy::{sol, sol_types::SolCall};
-use alloy_primitives::{Address, Bytes, U256, address};
+use alloy_primitives::{Address, Bytes, U256};
 use serde_json::{Value, json};
 
 sol! {interface IERC {
     function balanceOf(address owner) external view returns(uint256);
     function allowance(address owner,address spender) external view returns(uint256);
 }}
-pub(in crate::venues::bsc_dex) const VAULT: Address =
-    address!("ba12222222228d8ba445958a75a0704d566bf2c8");
 type Parts = (Vec<Approval>, Address, Bytes);
 type OrderData = (Address, Bytes, Option<(Address, U256)>);
 pub(in crate::venues::bsc_dex) struct Choice {
@@ -51,12 +49,7 @@ fn call<C: SolCall>(payer: Address, to: Address, c: C) -> Call {
 fn units(r: &CallResult) -> Option<U256> {
     (r.ok() && r.return_data.len() == 32).then(|| U256::from_be_slice(&r.return_data))
 }
-fn order_data(
-    ctx: &Ctx,
-    e: &Entry,
-    o: &Order,
-    now: u64,
-) -> GatewayResult<OrderData> {
+fn order_data(ctx: &Ctx, e: &Entry, o: &Order, now: u64) -> GatewayResult<OrderData> {
     let b = book(e).ok_or_else(|| bad(ctx))?;
     let deadline = U256::from(
         now.checked_add(ctx.int("dex.deadline_s")?)
@@ -68,7 +61,7 @@ fn order_data(
             .output_order(o.token_in, true, o.amount_in)
             .ok_or_else(|| bad(ctx))?;
         let terms = output::Terms::new(
-            target,
+            (target, b.market.atf),
             o.token_in,
             o.token_out,
             b.market.tier,
@@ -119,7 +112,11 @@ impl Frame<'_> {
             &calls,
             &[],
             &[],
-            Base::for_chain(self.ctx.chain_id(), self.h.number.to(), self.h.timestamp.to()),
+            Base::for_chain(
+                self.ctx.chain_id(),
+                self.h.number.to(),
+                self.h.timestamp.to(),
+            ),
             Some(self.h.hash),
         )
         .await?;
@@ -207,11 +204,12 @@ impl GasMark {
         let base = serde_json::from_value::<U256>(header["baseFeePerGas"].clone()).ok()?;
         let price = gas_base::planned(ctx, base).ok()?;
         let reference = if !book(e)?.market.tokens.contains(&wrapped) {
-            let tokens = [antfarm::ATF, wrapped];
+            let profile = antfarm_profile::Profile::read(ctx, e.family.id).ok()?;
+            let tokens = [profile.atf, wrapped];
             antfarm::market(
                 ctx,
                 e.family,
-                antfarm::derived(tokens, 10),
+                profile.derived(tokens, 10),
                 (tokens[0], tokens[1]),
                 &h.selector(),
             )
@@ -239,7 +237,7 @@ impl GasMark {
             return convert(&b.market, self.wrapped, amount);
         }
         let atf = convert(self.reference.as_ref()?, self.wrapped, amount)?;
-        if token == antfarm::ATF {
+        if token == b.market.atf {
             return Some(atf);
         }
         let (fund, _) = b
@@ -247,7 +245,7 @@ impl GasMark {
             .iter()
             .filter(|(m, _)| m.tokens[1] == token)
             .max_by_key(|(m, _)| m.reserves[0])?;
-        convert(fund, antfarm::ATF, atf)
+        convert(fund, b.market.atf, atf)
     }
 }
 struct Score {
@@ -306,12 +304,17 @@ pub(in crate::venues::bsc_dex) async fn select(
             },
         )
     };
+    let vault = ctx.dex_addr("dex.vault", e.family.id)?;
     let queries = [
-        call(wallet, antfarm::ATF, IERC::balanceOfCall { owner: wallet }),
-        call(wallet, o.token_out, IERC::balanceOfCall { owner: VAULT }),
+        call(
+            wallet,
+            source.market.atf,
+            IERC::balanceOfCall { owner: wallet },
+        ),
+        call(wallet, o.token_out, IERC::balanceOfCall { owner: vault }),
         allowance(o.token_in, ordinary.unwrap_or(target)),
         allowance(o.token_in, target),
-        allowance(antfarm::ATF, target),
+        allowance(source.market.atf, target),
     ];
     let obs = frame.run(&queries).await?;
     let mut modes = Vec::new();
@@ -322,7 +325,7 @@ pub(in crate::venues::bsc_dex) async fn select(
         .zip(units(&obs[4]))
         .filter(|(n, _)| !n.is_zero());
     let loan = if let Some(balance) = units(&obs[1]).filter(|v| !v.is_zero()) {
-        match output::funds(ctx, wallet, o.token_out, h, true).await {
+        match output::funds(ctx, e.family.id, wallet, o.token_out, h, true).await {
             Ok(Funds::Vault { fee_per_1e18, .. }) => Some(Funds::Vault {
                 output_balance: balance,
                 fee_per_1e18,
@@ -334,7 +337,7 @@ pub(in crate::venues::bsc_dex) async fn select(
     };
     if let Some(a) = units(&obs[3]) {
         for (f, _) in &source.funding {
-            if f.tokens != [antfarm::ATF, o.token_out] {
+            if f.tokens != [source.market.atf, o.token_out] {
                 continue;
             }
             if let Some((n, allowed)) = stock {

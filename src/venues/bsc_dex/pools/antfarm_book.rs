@@ -2,7 +2,8 @@
 use super::super::{check::sim_base::Base, ctx::Ctx, quote::white_state::Head};
 use super::antfarm_oracle::Observation;
 use super::{
-    antfarm::{self, ATF, FACTORY, IFarm},
+    antfarm::{self, IFarm},
+    antfarm_profile::{self, Profile},
     families::Family,
     nami_batch as batch,
 };
@@ -18,11 +19,9 @@ use std::{
 };
 use tokio::sync::OnceCell;
 
-pub(in crate::venues::bsc_dex) use super::antfarm::ATF as FEE_TOKEN;
-
 type Source = (AntfarmMarket, Option<U256>);
 type Cell = Arc<OnceCell<Vec<Source>>>;
-type Key = (B256, Address);
+type Key = (B256, Profile, Address);
 static CACHE: LazyLock<Mutex<VecDeque<(Key, Cell)>>> = LazyLock::new(Mutex::default);
 
 fn cell(key: Key) -> Cell {
@@ -84,23 +83,23 @@ async fn projected(
 
 async fn sources(
     ctx: &Ctx,
-    f: &Family,
+    p: Profile,
     asset: Address,
     at: &Value,
     now: u32,
 ) -> GatewayResult<Vec<Source>> {
     let request = IFarm::getFeesForPairCall {
-        token0: ATF,
+        token0: p.atf,
         token1: asset,
     };
-    let [raw] = batch::read(ctx, [batch::view(at, FACTORY, request.clone())]).await?;
+    let [raw] = batch::read(ctx, [batch::view(at, p.factory, request.clone())]).await?;
     let mut result = Vec::new();
     for tier in batch::decode(&raw, request)?
         .into_iter()
         .filter(|&t| t != 0)
     {
-        let pool = antfarm::derived([ATF, asset], tier);
-        let market = antfarm::market(ctx, f, pool, (ATF, asset), at).await?;
+        let pool = p.derived([p.atf, asset], tier);
+        let market = antfarm::bound_market(ctx, p, pool, (p.atf, asset), at).await?;
         if market.lp_supply <= U256::from(1000) || market.reserves.contains(&U256::ZERO) {
             continue;
         }
@@ -123,20 +122,25 @@ pub(in crate::venues::bsc_dex) async fn read(
     edge: (Address, Address),
     head: Head,
 ) -> GatewayResult<AntfarmBook> {
+    let generation = ctx.settings.generation();
+    let p = Profile::read(ctx, f.id)?;
     let at = head.selector();
-    let market = antfarm::market(ctx, f, pool, edge, &at).await?;
+    let market = antfarm::bound_market(ctx, p, pool, edge, &at).await?;
     let mut funding = Vec::new();
-    if !market.tokens.contains(&ATF) {
+    if !market.tokens.contains(&p.atf) {
         let now = Base::next_time(ctx.chain_id(), head.timestamp.to()) as u32;
         for asset in market.tokens {
-            let v = cell((head.hash, asset));
+            let v = cell((head.hash, p, asset));
             funding.extend(
-                v.get_or_try_init(|| sources(ctx, f, asset, &at, now))
+                v.get_or_try_init(|| sources(ctx, p, asset, &at, now))
                     .await?
                     .iter()
                     .cloned(),
             );
         }
+    }
+    if generation != ctx.settings.generation() {
+        return Err(ctx.err(ErrorCode::StaleData, "Antfarm: изменился профиль фабрики"));
     }
     Ok(AntfarmBook {
         market,
@@ -151,15 +155,7 @@ pub(in crate::venues::bsc_dex) async fn module(
     f: &Family,
     at: &Value,
 ) -> GatewayResult<Address> {
-    let m = ctx.dex_addr("dex.router", f.id)?;
-    let verified =
-        alloy_primitives::b256!("c0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f");
-    if !super::direct_module::configured(ctx, f.id)?.contains(&verified) {
-        return Err(ctx.err(
-            ErrorCode::NotConfigured,
-            "Antfarm: отсутствует подтверждённый runtime модуля кошелька",
-        ));
-    }
-    super::solidly_classic_factory::bind(ctx, m, verified, None, at).await?;
-    Ok(m)
+    antfarm_profile::module(ctx, f.id, at, false)
+        .await
+        .map(|(a, _)| a)
 }

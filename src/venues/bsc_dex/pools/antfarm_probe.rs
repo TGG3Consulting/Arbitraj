@@ -1,7 +1,7 @@
 //! Снимок для пробы Antfarm. Обратная нога читает состояние после пробной покупки,
 //! включая купленные ATF, дивиденды пары и обновление часового оракула.
 use super::super::{ctx::Ctx, node::multicall, quote::white_state};
-use super::antfarm::{IFarm, derived};
+use super::antfarm::IFarm;
 use super::registry::Entry;
 use crate::core::types::{AntfarmBook, AntfarmMarket, PoolState};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
@@ -31,11 +31,11 @@ pub(in crate::venues::bsc_dex) fn uses_funding_pair(e: &Entry, address: Address)
         || book
             .funding
             .iter()
-            .any(|(m, _)| derived(m.tokens, m.tier) == address)
+            .any(|(m, _)| m.pool == address)
 }
 
 fn reads(m: &AntfarmMarket, calls: &mut Vec<(Address, Bytes)>, project: bool) {
-    let pool = derived(m.tokens, m.tier);
+    let pool = m.pool;
     let bal: Bytes = IFarm::balanceOfCall { account: pool }.abi_encode().into();
     calls.extend([
         (pool, IFarm::getReservesCall {}.abi_encode().into()),

@@ -185,6 +185,8 @@ pub struct CarbonState {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AntfarmMarket {
+    #[serde(default)]
+    pub pool: Address,
     pub tokens: [Address; 2],
     pub atf: Address,
     pub tier: u16,

@@ -3975,7 +3975,20 @@
       "dex.module_runtime_hashes": [
         "0xc0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f",
         "0xadd73a0cfd328651975402b29fec7941b65397b9d414919e87c8199956ea3edb"
-      ]
+      ],
+      "dex.antfarm_fee_token": "0x518b63da813d46556fea041a88b52e3caa8c16a8",
+      "dex.factory_runtime_hash": "0xf2d8ede580acbe903f4236f3ea575e17dcdbfb7369a9fcf433b863d010e197fc",
+      "dex.router_runtime_hash": "0xab093829729d83c3859f76c3343b65622c0cd740c2b40a661bc2e0b5f6a45cb4",
+      "dex.pool_code_hashes": [
+        "0x2f47d72b208014a5ba4f32371ac96dd421a39152dcaf104e8232b6c9f1a92280",
+        "0xb174de46ec9038ead3d74ed04c79d4885d8e642175833c4da037d5e052492e5b"
+      ],
+      "dex.antfarm_pair_runtime_hashes": [
+        "0xc7e0d34bd74d343e4a4e51a38239e7bd12d95de9570a730445913fcf8a08086d",
+        "0x359924a3c31734039b5b61c2442549d28b1697852bff9c3dcfdcef0c27d94f03"
+      ],
+      "dex.vault": "0xba12222222228d8ba445958a75a0704d566bf2c8",
+      "dex.antfarm_vault_runtime_hash": "0x9eb70db20a41bfbf4b022fd070fa7f154b7c4aec98177120dde7a958384f4e66"
     }
   },
   {

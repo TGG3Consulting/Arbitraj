@@ -158,12 +158,12 @@ pub async fn trade(
                 ))
             })?;
         drop(slot);
-        let sc = SwapCtx {
+        let mut sc = SwapCtx {
             tip_bnb: d.tip_bnb,
             ..sc
         };
         if let Some(receipt)=&d.receipt {
-            super::market_receipt::included(&sc,ctx,d.chain.hash,receipt).await
+            super::market_receipt::included(&mut sc,ctx,d.chain.hash,receipt).await
                 .map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
         }
         let mut r = result::with_native_fact(

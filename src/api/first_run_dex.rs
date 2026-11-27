@@ -188,6 +188,11 @@ mod tests {
             assert_eq!(changed["cases"].as_array().unwrap().len(), 8);
             pairs.push(serde_json::json!({"network":network,"dex":id,"creation_code_hash":recorded["init_hash"]}));
         }
+        let theorem: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/theorem_ethereum.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(theorem["directory"]["selector"], eth["selector"]);
+        pairs.push(serde_json::json!({"network":"ethereum","dex":"theorem-ethereum","creation_code_hash":theorem["directory"]["init"]}));
         let goblins: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/goblins_base_wallets.json.gz").as_slice(),
         )).unwrap();

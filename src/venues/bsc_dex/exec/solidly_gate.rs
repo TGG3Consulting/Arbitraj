@@ -290,7 +290,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             super::super::pools::direct_module::verify(ctx, f, module, "latest").await?;
             continue;
         }
-        if f.variant==Variant::CypherIntegral{
+        if f.variant.caller_algebra(){
             let at=match &role_block{Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::cypher::checked(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue

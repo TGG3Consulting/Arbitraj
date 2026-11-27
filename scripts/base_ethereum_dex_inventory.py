@@ -1790,6 +1790,19 @@ def tables(network, snapshots, profiles):
                 if len(same) == 1:
                     task = f"Фабрика подтверждена в сетевой записи источника и в профиле `{same[0]['id']}`"
                     slug = same[0]["id"].removesuffix("-" + network)
+                    if slug == "theorem" and network == "ethereum":
+                        snapshot = data_dir / "theorem_ethereum.json.gz"
+                        captured = json.loads(gzip.decompress(snapshot.read_bytes()))
+                        directory, wallets = captured["directory"], captured["wallets"]
+                        assert directory["roles"]["factory"]["address"] == candidates[0] and directory["selector"] == wallets["selector"]
+                        active = sum(int(m["liquidity"]) > 0 for m in directory["markets"])
+                        counts = {wire: sum("received" in c.get(side, {}) for c in wallets["cases"] if c["wire"] == wire
+                                            for side in ("buy", "sell")) for wire in ("router", "v5")}
+                        task += (f" · {len(directory['markets'])} зарегистрированных пулов, {active} с активной ликвидностью. "
+                                 f"На двух размерах V5 подтвердил {counts['v5']} выплат с проверкой чистого минимума, "
+                                 f"официальный Router — {counts['router']}. При покупке A7A5 за USDT Router дважды выдал на атом "
+                                 f"меньше подписанного минимума. Прямой путь проверяет runtime обеих валют. "
+                                 f"[Фабрика, плагины, квитанции и отказы](../{snapshot.as_posix()})")
                     if slug == "goblins" and base:
                         directory_path = data_dir / "goblins_base_directory.json.gz"
                         directory = json.loads(gzip.decompress(directory_path.read_bytes()))

@@ -6504,5 +6504,47 @@
       "dex.cl_fee_module_hash": "0x019b3d8ec15246efccb5ab46d85d7703ce56ebb541adca2812cd6cba5d1c3077",
       "dex.pair_runtime_hash": "0xa2cf7f366f3d8d11e611acecf7916a27308ba041bf1e161bddbd4ecbb9402b6a"
     }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "theorem-ethereum",
+    "source": "https://app.theorem.markets/markets · https://docs.theorem.markets/trading/swaps · tests/data/first_run_dex_2026-11-26/theorem_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "algebra_integral_theorem",
+      "dex.factory": "0xd265f57c36ac60d3f7931ec5c7396966f0c246a7",
+      "dex.factory_runtime_hash": "0xb0dbbf4cbb60583af18fec365513ac8fcd2d0ab153d96291b4b4669466893460",
+      "dex.quoter": "0xaab91422ad832f2a1e05ea8ab70cafdf0da597a1",
+      "dex.quoter_runtime_hash": "0x19db1dc2b288d3a90a0c78a5c8c7592766b9dfa5e34d4cb746ee2dd5f799b689",
+      "dex.router": "0xf494e400e924188d9be68d128fa4a49606e5f1d8",
+      "dex.router_runtime_hash": "0xf15ebef54a4b14eb713ce3b539780d1e7a9cb10ae1d8f2f260787133c4afdb63",
+      "dex.algebra_pool_deployer": "0xfe3becd788320465ab649015f34f7771220a88b2",
+      "dex.pool_code_hashes": [
+        "0x62441ebe4e4315cf3d49d5957f94d66b253dbabe7006f34ad7f70947e60bf15c"
+      ],
+      "dex.plugin_runtime_hashes": [
+        "0x0e815fa17df9a38cb5b5337923f316fc53c713e6691c437116ebbf449d977b2b",
+        "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a"
+      ],
+      "dex.plugin_beacon_bindings": [
+        "0x585893b0e269f1717ac877e75339a2f89b94d573 0x2105a3ca212415ea232cb45c3d9a073ea881378afadc776198c59f79d018f97e 0x6f82caedf6a44429380439373204a596a1ac7b2c 0x52fc30c8419794edd5d6f507c3e69d3ab50dc2bc1230ded19dac0c8ab06e716d",
+        "0x6770c0bb027994679a9f34848330fea72a7db7bf 0x2105a3ca212415ea232cb45c3d9a073ea881378afadc776198c59f79d018f97e 0xaaa81db3cb943c20b032d16d9cbf471a3757931d 0x7ed3848148a2fd333233b424afeec9c6310443f7114177f0a5b5edbcb97ff1a0"
+      ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0xf442ff10b8def89514560a66c0ad28777094636a 0xb46a69a0d54f20cec51d75ca2245c12f83ae9681ab35034f056989075654de1f"
+      ],
+      "dex.pmm_ladder_usd": [
+        "0.0001",
+        "0.001",
+        "0.01",
+        "0.1",
+        "1",
+        "5",
+        "10",
+        "50"
+      ],
+      "dex.pmm_ladder_counter": true
+    }
   }
 ]

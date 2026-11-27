@@ -111,6 +111,7 @@ pub(crate) mod safeswap_trade;
 pub(crate) mod degenswap;
 pub(crate) mod cypher;
 pub(crate) mod cypher_quotes;
+mod theorem;
 pub(crate) mod degenswap_quotes;
 pub(crate) mod safeswap_quotes;
 pub(in crate::venues::bsc_dex) mod surge;

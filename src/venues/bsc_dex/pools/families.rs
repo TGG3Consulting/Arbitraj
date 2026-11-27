@@ -516,7 +516,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "thena_fusion" | "algebra_v19_single" => (PoolKind::Cl, Proto::Algebra, true, false, false),
         // Algebra Integral (THENA V3, DexSwap; решение 188): как thena_fusion — в графе (математика swap_algebra),
         // исполнение — шаг ALGEBRA контракта-исполнителя (тот же swap + algebraSwapCallback, exec_kind.rs).
-        "algebra_integral_cypher" => (PoolKind::OraclePmm, Proto::AlgebraIntegral, true, false, false),
+        "algebra_integral_cypher" | "algebra_integral_theorem" => (PoolKind::OraclePmm, Proto::AlgebraIntegral, true, false, false),
         "algebra_integral"
         | "algebra_integral_treble"
         | "algebra_integral_base_plugin_v1"
@@ -1027,7 +1027,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // (dex.quoter_virtual = да убирает dex.quoter из списка, virtual_quoter.rs); без него пул не подключается.
         Proto::AlgebraIntegral => {
             list.extend(["dex.factory", "dex.quoter"]);
-            if f.variant==Variant::CypherIntegral{list.extend(["dex.algebra_pool_deployer","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.plugin_runtime_hashes","dex.custom_deployers","dex.pmm_ladder_usd",super::verify_algebra_dir::SETTING]);}
+            if f.variant==Variant::CypherIntegral {list.push("dex.custom_deployers");}
+            if f.variant.caller_algebra(){list.extend(["dex.algebra_pool_deployer","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.plugin_runtime_hashes","dex.pmm_ladder_usd",super::verify_algebra_dir::SETTING]);}
             if matches!(f.variant,Variant::BasePluginV1 | Variant::TrebleIntegral | Variant::SupernovaIntegral) {
                 list.extend(["dex.factory_runtime_hash","dex.plugin_factory","dex.plugin_runtime_hashes",super::verify_algebra_dir::SETTING]);
             }

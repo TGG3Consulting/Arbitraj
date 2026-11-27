@@ -16,6 +16,7 @@ struct Pricing {
     payer: Address,
     quoter: Address,
     custom: Address,
+    tuple: bool,
 }
 impl Pricing {
     async fn new(
@@ -27,12 +28,17 @@ impl Pricing {
     ) -> GatewayResult<Self> {
         Ok(Self {
             payer: signer::address(ctx)?,
+            tuple: f.variant == super::family_variant::Variant::TheoremIntegral,
             quoter: ctx.dex_addr("dex.quoter", f.id)?,
             custom: cypher::checked(ctx, f, pool, pair, at).await?,
         })
     }
     fn params(&self, a: Address, b: Address, n: U256, at: &Value) -> Value {
-        json!([{"from":self.payer,"to":self.quoter,"data":nami::custom_calldata(a,b,n,self.custom)},at])
+        let data = if self.tuple { super::theorem::calldata(a,b,n,self.custom) } else { nami::custom_calldata(a,b,n,self.custom) };
+        json!([{"from":self.payer,"to":self.quoter,"data":data},at])
+    }
+    fn output(&self, raw: &[u8], amount: U256) -> Option<U256> {
+        if self.tuple {super::theorem::output(raw,amount)} else {nami::decoded(raw)}
     }
     async fn levels(
         &self,
@@ -62,7 +68,7 @@ impl Pricing {
             };
             let raw: Bytes = serde_json::from_str(raw.get())
                 .map_err(|e| ctx.err(ErrorCode::BadResponse, e.to_string()))?;
-            if let Some(got) = nami::decoded(&raw).filter(|v| !v.is_zero()) {
+            if let Some(got) = self.output(&raw,n).filter(|v| !v.is_zero()) {
                 out.push(LadderPoint {
                     amount_in: n,
                     amount_out: got,
@@ -90,7 +96,7 @@ pub(in crate::venues::bsc_dex) async fn out(
     )
     .await?;
     let raw: Bytes = rpc::call(ctx, "eth_call", frame.params(a, b, n, &at)).await?;
-    nami::decoded(&raw).ok_or_else(|| {
+    frame.output(&raw,n).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
             "Cypher: ответ официального квотера не по ABI",

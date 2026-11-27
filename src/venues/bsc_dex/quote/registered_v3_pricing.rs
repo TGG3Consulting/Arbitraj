@@ -96,7 +96,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};
                 (0,Bytes::from(fee.abi_encode()))
-            } else {(if e.family.variant == Variant::MaverickTwoRouter {7} else if classic {3}else if e.family.variant==Variant::CypherIntegral{2}else{1},Bytes::new())};
+            } else {(if e.family.variant == Variant::MaverickTwoRouter {7} else if classic {3}else if e.family.variant.caller_algebra(){2}else{1},Bytes::new())};
             let wire = Wire::V5(V5Step {
                 kind,
                 pool,

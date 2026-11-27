@@ -118,6 +118,9 @@ pub(in crate::venues::bsc_dex) async fn checked(
             if bytecode.is_empty() {
                 return Err(bad());
             }
+            if f.variant == super::family_variant::Variant::TheoremIntegral {
+                super::theorem::plugin(ctx,f,pool,plugin,at).await?;
+            }
             let hash = template(&bytecode, pool);
             if !ctx
                 .dex_list("dex.plugin_runtime_hashes", f.id)?

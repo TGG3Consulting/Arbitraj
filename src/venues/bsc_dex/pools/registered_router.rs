@@ -49,7 +49,7 @@ pub(crate) async fn checked(
     use super::family_variant::Variant;
     if e.family.variant == Variant::MaverickTwoRouter {return Box::pin(super::maverick_two_router::checked(ctx,e,input,output,at)).await;}
     if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
-    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSlipstream | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2)
+    if !matches!(e.family.variant, Variant::EmpireNominal | Variant::CypherIntegral | Variant::TheoremIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::RegisteredSlipstream | Variant::RegisteredSpacingV3 | Variant::VvsV3 | Variant::ShibaswapV2)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -62,7 +62,7 @@ pub(crate) async fn checked(
         .map_err(|_| bad())?;
     tokio::try_join!(
         async {
-            if e.family.variant==Variant::CypherIntegral{return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
+            if e.family.variant.caller_algebra(){return Box::pin(super::cypher::router(ctx,e,router,at)).await;}
             if e.family.variant.separate_v3_router() {
                 return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
             }

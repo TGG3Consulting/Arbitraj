@@ -34,6 +34,8 @@ pub struct Market {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub algebra_deployer:Option<Address>,
     #[serde(default, skip_serializing_if = "standard_event")]
+    pub algebra_short_event: bool,
+    #[serde(default, skip_serializing_if = "standard_event")]
     pub fee_event: bool,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub wallet_module: bool,
@@ -49,7 +51,7 @@ pub struct Market {
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
     pub(in crate::venues::bsc_dex) fn from_entry(ctx:&Ctx,e: &super::super::pools::registry::Entry) -> Option<Self> {
-        let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
+        let algebra=e.family.variant.caller_algebra();
         let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         use super::super::pools::family_variant::Variant;
@@ -68,6 +70,7 @@ impl Market {
             maverick_chain: if maverick {Some(ctx.chain_id()?)} else {None},
             slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
             pool: e.pool.reference.address(), maverick, fee: if algebra || maverick{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
+            algebra_short_event:e.family.variant==Variant::TheoremIntegral,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
     }
@@ -102,7 +105,7 @@ impl RouterMarket for Market {
     }
     fn event(self) -> (&'static str, usize) {
         if self.maverick {return super::maverick_two_wire::EVENT;}
-        if self.algebra_deployer.is_some(){return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)",224)}
+        if self.algebra_deployer.is_some() && !self.algebra_short_event{return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)",224)}
         if self.fee_event {
             return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)",224);
         }

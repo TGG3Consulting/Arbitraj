@@ -186,7 +186,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::Stabull=>{e.valid=false;Applied::Refresh("Обновилось состояние Curve Stabull".into())}
         _ if e.family.variant==super::family_variant::Variant::MaverickOne=>{e.valid=false;Applied::Refresh("Изменилось состояние Maverick V1".into())}
         _ if e.family.variant==super::family_variant::Variant::Surge=>{e.valid=false;Applied::Refresh("Обновилось состояние Surge".into())}
-        _ if e.family.variant==super::family_variant::Variant::CypherIntegral=>{e.valid=false;Applied::Refresh("Изменились пул или плагин Cypher".into())}
+        _ if e.family.variant.caller_algebra()=>{e.valid=false;Applied::Refresh("Изменились рынок Algebra или его плагин".into())}
         _ if e.family.variant.protected_router_wallet()=>{e.valid=false;Applied::Refresh("Изменились условия защищённого обмена".into())}
         _ if e.family.variant==super::family_variant::Variant::IntegralSize=>{e.valid=false;Applied::Refresh("Изменилось состояние пары Integral SIZE".into())}
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}

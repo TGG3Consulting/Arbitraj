@@ -70,7 +70,7 @@ pub(crate) async fn checked(
             if matches!(e.family.variant, Variant::RegisteredUniV3|Variant::RegisteredSpacingV3) {
                 return registered_v3::fresh(ctx,e,at).await;
             }
-            if e.family.variant==Variant::EmpireNominal {return Box::pin(super::empire::fresh(ctx,e,at)).await;}
+            if e.family.variant.empire_nominal() {return Box::pin(super::empire::fresh(ctx,e,at)).await;}
             let pool=e.pool.reference.address();
             let factory=ctx.dex_addr("dex.factory",id)?;
             let query=super::abi_v2v3::IV2Factory::getPairCall {tokenA:input,tokenB:output};

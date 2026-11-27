@@ -929,7 +929,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             }
             if matches!(f.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash"]); }
             if f.variant.empire() { list.push("dex.factory_runtime_hash"); }
-            if f.variant==Variant::EmpireModule {list.extend(["dex.quoter","dex.module_runtime_hashes"]);} else if f.variant.empire() {list.push("dex.router_runtime_hash");}
+            if f.variant.empire_module() {list.extend(["dex.quoter","dex.module_runtime_hashes"]);} else if f.variant.empire() {list.push("dex.router_runtime_hash");}
             if f.variant == Variant::ToonSwap { list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]); }
             if f.variant == Variant::CandySwap && f.tradable {list.push("dex.module_runtime_hashes");}
             if f.variant == Variant::KewlV2 { list.push("dex.pair_runtime_hash"); }

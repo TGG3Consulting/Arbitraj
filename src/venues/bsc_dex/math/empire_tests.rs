@@ -82,3 +82,14 @@ fn all_module_receipts_preserve_gross_credit_and_wallet_guards() {
     }
     assert_eq!(verified, [16, 16]);
 }
+
+#[test]
+fn compiled_wallet_fee_matches_the_accounting_units() {
+    let contract = include_str!("../../../../contracts/EmpireWallet.sol");
+    for (name, value) in [
+        ("FEE_UNITS", super::empire::FEE_UNITS),
+        ("FEE_SCALE", super::empire::FEE_SCALE),
+    ] {
+        assert!(contract.contains(&format!("uint256 private constant {name}={value};")));
+    }
+}

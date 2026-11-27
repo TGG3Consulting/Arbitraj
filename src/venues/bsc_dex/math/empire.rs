@@ -4,6 +4,12 @@ use super::{swap_cl::Swapped, v2};
 use crate::core::types::EmpireState;
 use alloy_primitives::U256;
 
+/// EmpirePair.swap, balance0Adjusted и balance1Adjusted (исходник Ethereum, пара 0x163b…4633).
+/// https://eth.blockscout.com/address/0x163b890f4892d593945579028ec44ef0f20a4633?tab=contract
+pub(crate) const FEE_UNITS: u32 = 3;
+pub(crate) const FEE_SCALE: u32 = 1000;
+pub(crate) const FEE_PIPS: u32 = FEE_UNITS * 1_000_000 / FEE_SCALE;
+const KEEP_UNITS: u32 = FEE_SCALE - FEE_UNITS;
 impl EmpireState {
     pub(crate) fn credit(&self, zero_in: bool, amount: U256) -> Option<U256> {
         let i = usize::from(!zero_in);
@@ -26,7 +32,12 @@ impl EmpireState {
         let physical = self.balances[i].checked_add(amount)?;
         let logical = physical.checked_add(self.debt[i])?;
         let credit = self.credit(zero_in, amount)?;
-        let output = v2::amount_out(credit, rin, rout, (U256::from(997), U256::from(1000)))?;
+        let output = v2::amount_out(
+            credit,
+            rin,
+            rout,
+            (U256::from(KEEP_UNITS), U256::from(FEE_SCALE)),
+        )?;
         if credit.is_zero() || output.is_zero() || output >= rout {
             return None;
         }
@@ -39,11 +50,13 @@ impl EmpireState {
         let effective_in = logical.saturating_sub(rin);
         let effective_out = other.saturating_sub(rout - output);
         let adjusted = |b: U256, x: U256| {
-            b.checked_mul(U256::from(1000))?
-                .checked_sub(x.checked_mul(U256::from(3))?)
+            b.checked_mul(U256::from(FEE_SCALE))?
+                .checked_sub(x.checked_mul(U256::from(FEE_UNITS))?)
         };
         if adjusted(logical, effective_in)?.checked_mul(adjusted(other, effective_out)?)?
-            < rin.checked_mul(rout)?.checked_mul(U256::from(1_000_000))?
+            < rin
+                .checked_mul(rout)?
+                .checked_mul(U256::from(FEE_SCALE.pow(2)))?
         {
             return None;
         }
@@ -80,8 +93,8 @@ impl EmpireState {
         })?;
         let required = rin
             .checked_mul(amount)?
-            .checked_mul(U256::from(1000))?
-            .div_ceil((rout - amount).checked_mul(U256::from(997))?);
+            .checked_mul(U256::from(FEE_SCALE))?
+            .div_ceil((rout - amount).checked_mul(U256::from(KEEP_UNITS))?);
         let debit = required.checked_add(rin.saturating_sub(starting))?;
         let (fill, _) = self.paid(zero_in, debit)?;
         (fill.amount_out >= amount).then_some(Swapped {

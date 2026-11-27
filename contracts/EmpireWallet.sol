@@ -21,6 +21,10 @@ interface IEmpireCoin {
 }
 
 contract EmpireWallet {
+    // EmpirePair.swap, balance0Adjusted/balance1Adjusted at
+    // https://eth.blockscout.com/address/0x163b890f4892d593945579028ec44ef0f20a4633?tab=contract
+    uint256 private constant FEE_UNITS=3;
+    uint256 private constant FEE_SCALE=1000;
     IEmpireRegistry public immutable factory;
     bool transient private entered;
     error InvalidOrder();
@@ -69,8 +73,8 @@ contract EmpireWallet {
         uint256 logical=funded+(pair.sweepableToken()==input?pair.sweptAmount():0);
         if(logical<=rin || logical>type(uint112).max || rin==0) revert InsufficientBacking();
         if(credit>logical-rin) credit=logical-rin;
-        uint256 net=credit*997;
-        uint256 gross=net*rout/(rin*1000+net);
+        uint256 net=credit*(FEE_SCALE-FEE_UNITS);
+        uint256 gross=net*rout/(rin*FEE_SCALE+net);
         if(gross==0 || gross>payout.balanceOf(pool)) revert InsufficientBacking();
         pair.swap(zero?0:gross,zero?gross:0,recipient,"");
         received=payout.balanceOf(recipient)-start;

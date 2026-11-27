@@ -71,7 +71,8 @@ pub(super) async fn read(
         || batch::decode(&listed, lookup)? != pool
         || batch::decode(&creator, owner)? != factory
         || ctx.dex_text("dex.v2_fee_source", id)? != "fixed"
-        || ctx.dex_dec("dex.v2_fee_pct", id)? != rust_decimal::Decimal::new(3, 1)
+        || ctx.dex_dec("dex.v2_fee_pct", id)?
+            != rust_decimal::Decimal::new(i64::from(super::super::math::empire::FEE_PIPS), 4)
         || gen_at_start != ctx.settings.generation()
     {
         return Err(failure());
@@ -92,8 +93,11 @@ pub(super) async fn read(
     if gen_at_start != ctx.settings.generation() {
         return Err(failure());
     }
-    if f.variant == Variant::EmpireNominal && !exact_tokens {
-        return Err(ctx.err(ErrorCode::NotApplicable, "Empire: номинальная выплата требует точных переводов обоих токенов"));
+    if f.variant.empire_nominal() && !exact_tokens {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            "Empire: номинальная выплата требует точных переводов обоих токенов",
+        ));
     }
     let rs = batch::decode(&rs, reserves)?;
     Ok(EmpireState {

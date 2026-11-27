@@ -33,10 +33,15 @@ pub(super) async fn plan(
     }
     let pool = direct_module::market(ctx, &step.entry)?;
     let router = ctx.dex_addr("dex.router", step.entry.family.id)?;
-    if step.entry.family.variant==super::super::pools::family_variant::Variant::EmpireModule {
-        let at=super::super::pools::nami::block(ctx,"latest").await?;
-        tokio::try_join!(super::super::pools::empire::fresh(ctx,&step.entry,&at),direct_module::verify_factory(ctx,step.entry.family,router,&at))?;
-    }else{direct_module::verify(ctx, step.entry.family, router, "latest").await?;}
+    if step.entry.family.variant.empire_module() {
+        let at = super::super::pools::nami::block(ctx, "latest").await?;
+        tokio::try_join!(
+            super::super::pools::empire::fresh(ctx, &step.entry, &at),
+            direct_module::verify_factory(ctx, step.entry.family, router, &at)
+        )?;
+    } else {
+        direct_module::verify(ctx, step.entry.family, router, "latest").await?;
+    }
     let order = &step.order;
     let approvals = if all {
         approve::fork_all(ctx, order.token_in, router, order.amount_in)?
@@ -52,6 +57,21 @@ pub(super) async fn plan(
         order.min_out,
         deadline,
     )?;
+    if step.entry.family.variant.empire_module() {
+        plan.set_direct_market(super::plan::DirectCall::Empire(std::sync::Arc::new(
+            super::empire_wallet::Proof {
+                module: router,
+                pool,
+                payer: wallet,
+                input: order.token_in,
+                output: order.token_out,
+                amount: order.amount_in,
+                minimum: order.min_out,
+                deadline,
+            },
+        )));
+        return Ok(plan);
+    }
     plan.set_direct_market(super::plan::DirectCall::Module {
         pool,
         input: order.token_in,

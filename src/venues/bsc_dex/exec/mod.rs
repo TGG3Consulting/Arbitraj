@@ -69,6 +69,7 @@ pub(super) mod prop_wallet;
 pub(super) mod prop_abi;
 pub(super) mod prop_plan;
 pub(super) mod stabull_wallet;
+pub(super) mod empire_wallet;
 pub(super) mod angstrom_wallet;
 pub(super) mod angstrom_plan;
 pub(super) mod stabull_plan;

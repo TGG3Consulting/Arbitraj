@@ -234,6 +234,8 @@ impl Variant {
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
+    pub(crate) fn empire_module(self)->bool {matches!(self,Self::EmpireModule)}
+    pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
     pub fn wallet_module(self)->bool { matches!(self,Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}

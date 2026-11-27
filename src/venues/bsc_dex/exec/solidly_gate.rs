@@ -195,7 +195,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
         if f.variant.empire() {
             let at=match &role_block{Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::empire::fresh(ctx,e,at)).await?;
-            if f.variant==Variant::EmpireModule {
+            if f.variant.empire_module() {
                 Box::pin(super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at)).await?;
             }
             continue;

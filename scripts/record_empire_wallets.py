@@ -88,14 +88,14 @@ def capture(endpoint, doc, artifact):
          "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     sim=lambda calls:simulate_block(endpoint,c.selector,env,calls)
     modes=("nominal","fot","v5")
-    prefix=[]
+    setup=[]
     identity=None
     if artifact:
         create,identity=deployment(endpoint,c.selector,doc["factory"],artifact)
         [created]=sim([create])
         if created["status"]!="0x1":raise ValueError("CREATE failed")
         identity["creation_gas"]=int(created["gasUsed"],16)
-        prefix=[create]
+        setup=[create]
         modes=("module","v5module")
     rows=[]
     for record in doc["pools"]:
@@ -110,7 +110,7 @@ def capture(endpoint, doc, artifact):
         surplus={t for i,t in enumerate(tokens) if initial["physical"][i]>initial["reserves"][i]}
         row=dict(pool=pool,tokens=tokens,sweepable=sweepable,initial=initial,samples=[])
         for size in (10**12,10**15):
-            deposit=[*prefix,tx(WETH,"deposit()",value=size)]
+            deposit=[*setup,tx(WETH,"deposit()",value=size)]
             purchases={}
             for mode in modes:
                 if WETH in surplus and mode in ("v5","fot"):
@@ -131,7 +131,7 @@ def capture(endpoint, doc, artifact):
         if initial["debt"] and sweepable==WETH:
             for size in (initial["debt"]-1,initial["debt"]+10**12):
                 for mode in modes:
-                    funds=[*prefix,tx(WETH,"deposit()",value=size)]
+                    funds=[*setup,tx(WETH,"deposit()",value=size)]
                     result,_=leg(sim,funds,pool,[WETH,other],size,mode,deadline)
                     row["debt_boundary"].append(dict(input=size,mode=mode,result=result))
         rows.append(row)

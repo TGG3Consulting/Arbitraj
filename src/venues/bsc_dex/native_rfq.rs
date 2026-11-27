@@ -21,6 +21,13 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+pub(in crate::venues::bsc_dex) mod book;
+pub(in crate::venues::bsc_dex) mod routing;
+pub(in crate::venues::bsc_dex) mod settlement;
+pub(in crate::venues::bsc_dex) fn enabled(ctx: &Ctx) -> bool {
+    ctx.flag("native_rfq.trading").unwrap_or(false)
+}
+mod abi;
 mod client;
 mod wire;
 const PROFILE: &str = "native_rfq.roles";
@@ -111,7 +118,36 @@ impl Profile {
         };
         let optional = async {
             if let Some(m) = self.module {
-                verify(m).await?
+                verify(m).await?;
+                let read = async |method: &str| -> GatewayResult<B256> {
+                    let selector = Bytes::copy_from_slice(&keccak256(method.as_bytes())[..4]);
+                    let result: Bytes = rpc::call(
+                        ctx,
+                        "eth_call",
+                        json!([{"to":m.address,"input":selector},head.selector()]),
+                    )
+                    .await?;
+                    if result.len() != 32 {
+                        return Err(bad(ctx, "Неполное подтверждение ролей модуля Native"));
+                    }
+                    Ok(B256::from_slice(&result))
+                };
+                let (router, pool, router_hash, pool_hash) = tokio::try_join!(
+                    read("router()"),
+                    read("pool()"),
+                    read("routerHash()"),
+                    read("poolHash()")
+                )?;
+                if router != self.router.address.into_word()
+                    || pool != self.pool.address.into_word()
+                    || router_hash != self.router.hash
+                    || pool_hash != self.pool.hash
+                {
+                    return Err(bad(
+                        ctx,
+                        "Модуль Native привязан к другому Router или RFQPool",
+                    ));
+                }
             }
             Ok(())
         };

@@ -7,6 +7,7 @@ import requests
 from eth_abi import decode, encode
 from eth_utils import keccak
 from record_fraxswap_swaps import bound_runtime
+from record_fynd_markets import rpc as read_chain
 from record_hello_wallets import BASE_ENDPOINTS,ETH_ENDPOINTS,BASE_WETH,ETH_WETH,DATA,HOLDERS
 from record_base_slipstream_executor import EXEC,STEP,RUNTIME,calldata,rpc
 from record_registered_v3_module import ADAPTER
@@ -76,7 +77,7 @@ def replay(d,dex,url,artifact):
             if paid<=0 or paid>qty or net!=value or pre[2:]!=post[2:]:raise ValueError("не совпала выплата или остаток")
             if wire.startswith("module") and paid!=qty:raise ValueError("модуль провёл частичный вход")
             return prefix+approvals+[exact],dict(stage="paid",input=str(qty),paid=str(paid),net=str(net),full=paid==qty,gas=int(r[-7]["gasUsed"],16),calls=calls,results=r)
-        dec=decode(["uint8"],bytes.fromhex(rpc(url,"eth_call",[tx(cash,"decimals()"),at])[2:]))[0]
+        dec=decode(["uint8"],bytes.fromhex(read_chain(url,"eth_call",[tx(cash,"decimals()"),at])[2:]))[0]
         sizes=[10**max(dec-5,0),10**max(dec-3,0)] if cash==weth else [10**max(dec-4,0),10**max(dec-2,0)]
         cases=[]
         for qty in sizes:

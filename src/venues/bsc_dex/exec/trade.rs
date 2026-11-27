@@ -93,7 +93,7 @@ pub async fn trade(
 /// иначе прямой. Ошибок нет (адрес не читается — подпись бандла, сама сделка вернёт ошибку настройки).
 fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'static str {
     match route.mode {
-        RouteMode::Rfq(_) | RouteMode::RfqIndicative => "Hashflow RFQT",
+        RouteMode::Rfq(_) | RouteMode::RfqIndicative => "RFQ",
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative => "Hanji",
         RouteMode::Smart => result::BY_SMART,

@@ -2,40 +2,13 @@
 use super::super::{exec::fill::moved_logs, node::abi::IERC20};
 use alloy::{
     rpc::types::Log,
-    sol,
     sol_types::{SolCall, SolEvent, SolValue},
 };
 use alloy_primitives::{Address, B256, Bytes, FixedBytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-sol! {
-    struct OrderV6 {
-        address pool;
-        address maker;
-        address recipient;
-        address input;
-        address output;
-        uint256 sell;
-        uint256 buy;
-        uint256 minimum;
-        uint256 expiry;
-        uint256 nonce;
-        uint256[10] confidence;
-        bytes16 quoteId;
-        bool multiHop;
-        uint256 mode;
-        bytes signature;
-        address feeRecipient;
-        uint256 feeRate;
-        bytes feeSignature;
-    }
-    interface IGuard {
-        function execute(address input,address output,uint256 amount,uint256 minimum,uint256 deadline,bytes offer) external returns(uint256);
-        event Settled(bytes16 indexed quoteId,address indexed payer,address indexed maker,bytes32 offerDigest,address input,address output,uint256 spent,uint256 received);
-    }
-    event RFQTrade(address recipient,address soldToken,address boughtToken,uint256 sold,uint256 bought,bytes16 quoteId,address maker);
-}
+use super::abi::{IGuard, OrderV6, RFQTrade};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub(in crate::venues::bsc_dex) struct Proof {
     pub pool: Address,

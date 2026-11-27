@@ -168,7 +168,9 @@ def fynd(network):
         f"Публичная проверка hosted API без ключа вернула HTTP {f['unauthenticated_health']['status']}. Для торгового допуска необходимы ключ участника, "
         "подключение Fynd AMM routing, живая подпись для собственного допустимого маршрута и архивный замер чистой выплаты. "
         f"[Канонические контракты, PoolId и контрольные отказы](../tests/data/first_run_dex_2026-11-26/fynd_{network}_markets.json.gz). "
-        "[Правила Fynd](https://docs.fynd.xyz/get-started/fynd-amm.md). [Получение ключа и условия интеграции](https://docs.fynd.xyz/get-started/hosted-api.md).",""]
+        "[Правила Fynd](https://docs.fynd.xyz/get-started/fynd-amm.md). [Получение ключа и условия интеграции](https://docs.fynd.xyz/get-started/hosted-api.md).","",
+        "В Telegram владелец может получить через /start один ключ для hosted Fynd и индексатора Tycho. Для доступа к подписанным свопам Fynd отдельно включает интегратору AMM routing. API 0.118.4 принимает точный вход и фильтры исключения пулов, протоколов и токенов. Для строки Fynd AMM каждый шаг ответа должен ссылаться на подтверждённый PoolId этой сети; проверяются также исполняемые calldata, получатель, срок, плата и фактическая выплата. Смешанные маршруты учитываются по отдельным шагам. [Схемы QuoteRequest, RouteFilter и Swap](https://docs.fynd.xyz/reference/api.md).","",
+        "Отдельная схема InBlock (JIT) сохраняет исходный маршрут при отсутствии замены. Для включения своего роутера команда Fynd согласует условия и регистрирует декодер IJITDecoder; плательщик одобряет FyndJITRouter и указывает конечного получателя. В опубликованном реестре JIT указан Ethereum Mainnet, 0x7e67f82476bb4bd4c5078F63e5a588dFD9CDD91E. Реализация на Base и действующая персональная котировка по одному Fynd AMM здесь остаются неподтверждёнными. [Регистрация агрегатора](https://docs.fynd.xyz/get-started/fynd-in-block-solver/fynd-in-block-for-dex-aggregators.md). [Размещения InBlock](https://docs.fynd.xyz/get-started/fynd-in-block-solver.md).",""]
 
 
 def vecta():

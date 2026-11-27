@@ -1,11 +1,13 @@
 //! Ручная проверка и симуляция Hashflow Taker API v3 по запросу оператора.
 //! https://docs.hashflow.com/hashflow/taker/getting-started-api-v3
 pub(super) mod availability;
+mod dispatch;
 mod execute;
 pub(super) mod feed;
 mod market;
 pub(super) mod routing;
-pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, failed, marker, record, reserve};
+pub(in crate::venues::bsc_dex) use execute::{ReceiptProof, failed, record};
+pub(in crate::venues::bsc_dex) use dispatch::{marker,reserve,native_send};
 #[cfg(test)]
 mod recovery_tests;
 pub(super) mod model;

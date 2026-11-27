@@ -90,6 +90,10 @@ pub(in crate::venues::bsc_dex) async fn included(
     hash: B256,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(n)=&c.native_rfq{
+        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Native RFQ"))?.nonce;
+        n.included(ctx,hash,nonce,receipt).await?;
+    }
     if receipt.status.to::<u64>() != 1 {
         return Ok(());
     }

@@ -1,12 +1,11 @@
 //! Исполнение RFQT через существующую очередь nonce и разбор квитанций DEX.
-use super::super::{ctx::Ctx, exec, parts::Parts, send, wallet};
-use super::{routing, sim, wire};
-use crate::core::types::{RouteMode, SendMethod, Side, TradeRequest, TradeResult, TxOutcome};
+use super::super::{exec, parts::Parts, send, wallet};
+use super::{routing, sim, wire,dispatch::{Dispatch,Gate}};
+use crate::core::types::{RouteMode, Side, TradeRequest, TradeResult, TxOutcome};
 use super::model::Request;
 use crate::gateway::{
     errors::{ErrorCode, GatewayResult},
     events::MarketEvent,
-    pending::PendingRef,
     settlement_intent as intent,
 };
 use alloy::sol_types::SolEvent;
@@ -56,137 +55,6 @@ impl ReceiptProof {
     }
 }
 
-struct Dispatch {
-    key: String,
-    expiry: u64,
-    source: String,
-    parse: exec::swap_ctx::SwapCtx,
-}
-tokio::task_local! {static DISPATCH: Dispatch;}
-
-/// Сверяет срок непосредственно перед сохранением хеша и передаёт в журнал восстановления только публичные поля.
-pub(in crate::venues::bsc_dex) fn marker(
-    ctx: &Ctx,
-    hash: B256,
-    nonce: u64,
-    ready: &[send::ready::Ready],
-    need: U256,
-) -> GatewayResult<Option<PendingRef>> {
-    DISPATCH
-        .try_with(|d| {
-            if super::super::num::to_units(ctx.dec("hashflow.gas_budget_native")?, 18)
-                .is_none_or(|cap| need > cap)
-                || !super::enabled(ctx)
-                || ctx.text("hashflow.source")? != d.source
-                || !routing::expiry_ok(d.expiry, ctx.int("hashflow.min_validity_ms")?)
-                || send::tip(ready).is_some()
-            {
-                return Err(ctx.err(
-                    ErrorCode::NoRoute,
-                    "Допуск, срок RFQ или состав каналов изменился до отправки",
-                ));
-            }
-            let how = if ready.iter().all(|r| r.method == SendMethod::Bundle) {
-                SendMethod::Bundle
-            } else {
-                SendMethod::Single
-            };
-            let pending = send::track::Tracked::bare(TxOutcome::Pending, None);
-            let chain = exec::chain_tx::chain_tx(
-                hash,
-                nonce,
-                ready.iter().map(|r| r.ch.id.to_string()).collect(),
-                how,
-                &pending,
-                None,
-            );
-            let mut parse = d.parse.clone();
-            parse.chain = Some(chain);
-            Ok(Some(PendingRef {
-                nonce: Some(nonce),
-                venue_ref: Some(hash.to_string()),
-                parse: Some(serde_json::to_value(parse).map_err(|_| {
-                    ctx.err(
-                        ErrorCode::Internal,
-                        "Не удалось сохранить контекст Hashflow",
-                    )
-                })?),
-                ..Default::default()
-            }))
-        })
-        .unwrap_or(Ok(None))
-}
-
-/// До вызова любого канала сохраняет остановку очереди. При отмене future во время сетевого запроса nonce остаётся зарезервированным.
-pub(in crate::venues::bsc_dex) async fn reserve(
-    ctx: &Ctx,
-    slot: &wallet::nonce::Slot,
-    marker: &PendingRef,
-) -> GatewayResult<()> {
-    let Some(parse) = exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some()) else {
-        return Ok(());
-    };
-    let chain = parse
-        .chain
-        .ok_or_else(|| ctx.err(ErrorCode::Internal, "Нет номера транзакции RFQ"))?;
-    let w = ctx.wallet()?;
-    let hold = slot.hold();
-    let state = hold.halt(
-        "Ожидается подтверждение отправки Hashflow".into(),
-        chain.nonce,
-        chain.hash,
-    );
-    let body = serde_json::to_string(&state).map_err(|_| {
-        ctx.err(
-            ErrorCode::Internal,
-            "Не сформирована запись очереди кошелька",
-        )
-    })?;
-    let db = ctx.journal.db();
-    crate::storage::wallet_queue::save(db, &w.queue_key, body)
-        .await
-        .map_err(|_| {
-            ctx.err(
-                ErrorCode::OutcomeUnknown,
-                "Не удалось сохранить резервирование nonce Hashflow",
-            )
-            .pending(marker.clone())
-        })?;
-    let (valid, k) = DISPATCH.with(|d| {
-        (
-            super::enabled(ctx)
-                && ctx.text("hashflow.source").ok().as_ref() == Some(&d.source)
-                && ctx
-                    .int("hashflow.min_validity_ms")
-                    .is_ok_and(|min| routing::expiry_ok(d.expiry, min)),
-            d.key.clone(),
-        )
-    });
-    if valid {
-        return Ok(());
-    }
-    let error = |_| {
-        ctx.err(
-            ErrorCode::OutcomeUnknown,
-            "Передачи в сеть не было, запись очереди требует сверки",
-        )
-        .pending(marker.clone())
-    };
-    let entry = intent::load(db, &k)
-        .await
-        .map_err(error)?
-        .ok_or_else(|| error(String::new()))?;
-    intent::archive_attempt(db, &k, &entry, "RFQ закрыта до первой сетевой отправки")
-        .await
-        .map_err(error)?;
-    let free = hold.free();
-    wallet::queue_store::save(ctx, &free).await;
-    Err(ctx.err(
-        ErrorCode::NoRoute,
-        "Срок или допуск RFQ изменился во время резервирования до отправки",
-    ))
-}
-
 /// При подтверждённом откате или принятой отмене освобождает логический этап для законного повтора. Утерянный ответ и неясный nonce сохраняют исходный маркер.
 pub(in crate::venues::bsc_dex) async fn failed(
     p: &Parts,
@@ -209,6 +77,11 @@ pub(in crate::venues::bsc_dex) async fn failed(
     let Ok(Some(entry)) = intent::load(db, &k).await else {
         return e;
     };
+    if let Some(n)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.native_rfq){
+        if tx.outcome!=TxOutcome::Reverted{return e}
+        let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e};
+        if receipt.status.to::<u64>()!=0 || n.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e}
+    }
     if entry.result.is_none() && entry.lookup.venue_ref.as_ref() == Some(&tx.hash.to_string()) {
         let _ = intent::archive_attempt(db, &k, &entry, "Квитанция подтверждает отсутствие обмена")
             .await;
@@ -248,6 +121,9 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
     else {
         return Ok(None);
     };
+    if exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|c|c.native_rfq).is_some_and(|n|!n.wallet(&p.ctx)){
+        return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
+    }
     if let Some(intent::Outcome::Order(x)) = entry.result {
         if x.trade.request.qty == r.qty {
             return Ok(Some(x.trade));
@@ -312,17 +188,17 @@ pub(in crate::venues::bsc_dex) async fn record(
         return Ok(result.trade.clone());
     }
     let parse = exec::swap_ctx::SwapCtx::of(&entry.lookup).ok_or_else(|| err(String::new()))?;
-    let proof = parse.rfq.ok_or_else(|| err(String::new()))?;
-    let (_, qd) = parse.decs.ok_or_else(|| err(String::new()))?;
-    let gross = super::super::num::to_decimal(
-        if t.request.side == Side::Buy {
-            proof.amount
-        } else {
-            proof.proceeds
-        },
-        qd,
-    )
-    .ok_or_else(|| err(String::new()))?;
+    let (_, qd)=parse.decs.ok_or_else(||err(String::new()))?;
+    let gross=if let Some(native)=parse.native_rfq{
+        let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
+        let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
+        native.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
+        if t.request.side==Side::Buy{native.sold()}else{native.matches(&receipt).ok_or_else(||err(String::new()))?}
+    }else{
+        let proof=parse.rfq.ok_or_else(||err(String::new()))?;
+        if t.request.side==Side::Buy{proof.amount}else{proof.proceeds}
+    };
+    let gross=super::super::num::to_decimal(gross,qd).ok_or_else(||err(String::new()))?;
     let s = intent::SpotFill {
         trade: t.clone(),
         gross_quote: gross,
@@ -346,13 +222,13 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     let ctx = &p.ctx;
     ctx.bound()?;
     let who = wallet::signer::address(ctx)?;
-    let q = p.rfqs.take(who, id).ok_or_else(|| {
-        routing::no(
-            p,
-            "Подписанная RFQ отсутствует в памяти кошелька; требуется новая котировка",
-        )
-    })?;
-    let result = selected(p, req.clone(), id, who, &q).await;
+    let old=p.rfqs.take(who,id);
+    let native=p.native_quotes.take(who,id);
+    let (result,fallback_fee)=match (old,native){
+        (Some(q),None)=>(selected(p,req.clone(),id,who,&q).await,q.fallback_fee),
+        (None,Some(t))=>(super::super::native_rfq::routing::trade(p,req.clone(),&t).await,t.fallback_fee),
+        _=>return Err(routing::no(p,"Подписанная RFQ отсутствует или неоднозначна, нужна новая котировка")),
+    };
     let Err(e) = result else {
         return result;
     };
@@ -367,7 +243,7 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     if let Some(original) = prior(p, &req).await? {
         return Ok(original);
     }
-    let Some(planned_fee) = q.fallback_fee else {
+    let Some(planned_fee) = fallback_fee else {
         return Err(e);
     };
     let quoting = p.quoting();
@@ -504,11 +380,9 @@ async fn selected(
     let dispatch = Dispatch {
         key: key(p, &req)?,
         expiry: q.preview.expires,
-        source: q.source.clone(),
+        gate: Gate::Hashflow(q.source.clone()),
         parse: parse.clone(),
     };
-    let db = ctx.journal.db();
-    let k = key(p, &req)?;
     let send = exec::txs::send(
         &env,
         &slot,
@@ -518,33 +392,7 @@ async fn selected(
         false,
         Some(hold),
     );
-    let sent = intent::scope(
-        db,
-        &k,
-        intent::Request::Order(Box::new(req.clone())),
-        DISPATCH.scope(dispatch, send),
-    )
-    .await;
-    let done = match sent {
-        Ok(d) => d,
-        Err(e) if e.tx.is_some() => return Err(parse.attach(e)),
-        Err(e) => {
-            if let Some(entry) = intent::load(db, &k).await.map_err(|_| {
-                ctx.err(
-                    ErrorCode::OutcomeUnknown,
-                    "Проверка журнала отправки Hashflow недоступна",
-                )
-            })? {
-                return Err(ctx
-                    .err(
-                        ErrorCode::OutcomeUnknown,
-                        "Hashflow зарегистрирован перед отправкой; нужен исход по хешу",
-                    )
-                    .pending(entry.lookup));
-            }
-            return Err(e);
-        }
-    };
+    let done=super::dispatch::submit(p,&req,dispatch,send).await?;
     if done.chain.outcome == TxOutcome::Included
         && !done.receipt.as_ref().is_some_and(|r| proof.matches(r))
     {

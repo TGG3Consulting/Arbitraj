@@ -35,6 +35,7 @@ pub struct Parts {
     pub(super) hanji: super::hanji::feed::Cache,
     pub(super) slot_markets: super::fermi::markets::Cache,
     pub(super) rfqs: super::hashflow::routing::Book,
+    pub(super) native_quotes: super::native_rfq::book::Cache,
     pub heads: Heads,
     pub tokens: Tokens,
     pub(super) scaled_units: super::scaled_token::Units,
@@ -65,6 +66,7 @@ impl Parts {
         Self {
             ctx,
             rfqs: Default::default(),
+            native_quotes: Default::default(),
             slot_markets: Default::default(),
             hanji: Default::default(),
             heads: Heads::default(),

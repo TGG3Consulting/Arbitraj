@@ -97,6 +97,9 @@ impl Inclusion {
         }
     }
 }
+pub(in crate::venues::bsc_dex) async fn verify(ctx:&Ctx,hash:B256,r:&Receipt)->GatewayResult<()>{
+    Inclusion::from(ctx,hash,r).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Нет привязки квитанции к позиции в блоке"))?.verify(ctx).await
+}
 pub async fn observe(ctx: &Ctx, tx: B256, r: &Receipt) -> GatewayResult<()> {
     if !settlement_proofs::active() {
         return Ok(());

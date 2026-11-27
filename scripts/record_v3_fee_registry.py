@@ -21,10 +21,37 @@ KINDS = {"uniswap_v3","pancakeswap_v3","v3_fork","v3_fork_pancake","registered_u
          "hello_v3","vvs_v3","base_native_v3"}
 
 
+def ethereum_events(addresses,head):
+    rows={}
+    for factory in addresses:
+        url="https://api.routescan.io/v2/network/mainnet/evm/1/etherscan/api"
+        p=dict(module="logs",action="getLogs",address=factory,fromBlock=0,toBlock=head["block"],topic0=TOPIC,page=1,offset=100)
+        records=[]
+        while True:
+            reply=requests.get(url,params=p,timeout=25)
+            reply.raise_for_status()
+            body=reply.json()
+            batch=body["result"]
+            if not isinstance(batch,list) or (body["status"]!="1" and body["message"] not in ("No records found","No logs found")):
+                raise ValueError(("fee log archive",factory,body["message"]))
+            for log in batch:
+                topics=log["topics"]
+                if log["address"].lower()!=factory or len(topics)!=3 or topics[0]!=TOPIC or log["data"]!="0x":
+                    raise ValueError("unexpected log returned by the fee archive")
+                fee,=decode(["uint24"],bytes.fromhex(topics[1][2:]))
+                spacing,=decode(["int24"],bytes.fromhex(topics[2][2:]))
+                records.append(dict(block=int(log["blockNumber"],16),hash=log["blockHash"],tx=log["transactionHash"],
+                                    log_index=int(log["logIndex"],16),fee=fee,spacing=spacing))
+            if len(batch)<p["offset"]:break
+            p["page"]+=1
+        rows[factory]=records
+    return rows
+
+
 def indexed(network,addresses,head):
     url=f"https://portal.sqd.dev/datasets/{SPECS[network][0]}/finalized-stream"
     start=0
-    span=1_000_000
+    span=500_000
     rows={address:[] for address in addresses}
     while start<=head["block"]:
         end=min(start+span-1,head["block"])
@@ -44,6 +71,11 @@ def indexed(network,addresses,head):
                 break
             except (requests.RequestException,ValueError) as exc:
                 errors.append(str(exc)[:80])
+                # Sparse queries may still exceed a public worker's execution allowance.
+                # Keep start fixed so a shorter retry cannot skip a block.
+                if attempt==2 and end-start>25_000:
+                    end=start+(end-start)//4
+                    q["toBlock"]=end
                 time.sleep(min(2**attempt,10))
         else:
             raise ValueError(("fee event index unavailable",start,end,errors))
@@ -74,7 +106,13 @@ def record(network):
             factories.setdefault(s["dex.factory"].lower(),[]).append(p["id"])
     if not factories:
         raise ValueError("empty factory selection")
-    events=indexed(network,factories,head)
+    if network=="ethereum":
+        try:
+            events=ethereum_events(factories,head)
+        except (requests.RequestException,ValueError,KeyError):
+            events=indexed(network,factories,head)
+    else:
+        events=indexed(network,factories,head)
     errors=[]
     for url in SPECS[network][1]:
         try:
@@ -83,13 +121,25 @@ def record(network):
             for factory,records in events.items():
                 tiers={r["fee"]:r["spacing"] for r in records}
                 if not tiers:
-                    verified[factory]={"profiles":factories[factory],"events":[],"tiers":{}}
+                    verified[factory]={"profiles":factories[factory],"events":[],"tiers":{},
+                                       "coverage":"no registration event observed; other fee sources remain possible"}
                     continue
-                if len(tiers)!=len(records) or any(f<=0 or d<=0 for f,d in tiers.items()):
+                if len(tiers)!=len(records) or any(d<=0 for d in tiers.values()):
                     raise ValueError(("ambiguous fee events",factory))
                 states=posts(c,[(factory,"feeAmountTickSpacing(uint24)",["uint24"],[fee]) for fee in tiers])
                 if [decode(["int24"],row)[0] for row in states]!=list(tiers.values()):
                     raise ValueError(("registry/chain disagreement",factory))
+                for record in records:
+                    query={"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":[record["tx"]],"id":1}
+                    response=c.session.post(url,json=query,timeout=20)
+                    response.raise_for_status()
+                    receipt=response.json()["result"]
+                    hits=[l for l in receipt["logs"] if int(l["logIndex"],16)==record["log_index"] and l["address"].lower()==factory]
+                    if receipt["blockHash"]!=record["hash"] or int(receipt["blockNumber"],16)!=record["block"] or len(hits)!=1:
+                        raise ValueError(("foreign fee event",factory,record["tx"]))
+                    h=hits[0]["topics"]
+                    if len(h)!=3 or h[0]!=TOPIC or int(h[1],16)!=record["fee"] or int(h[2],16)!=record["spacing"]:
+                        raise ValueError(("wrong original log",factory,record["tx"]))
                 verified[factory]={"profiles":factories[factory],"events":records,"tiers":tiers}
             break
         except (requests.RequestException,ValueError,RuntimeError,KeyError) as exc:

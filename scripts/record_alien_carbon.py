@@ -5,7 +5,6 @@ from hashlib import sha256
 from pathlib import Path
 
 import requests
-from eth_abi import encode
 
 from record_balancer_markets import Capture
 from record_balancer_v1 import fingerprint,rpc
@@ -85,7 +84,11 @@ def capture(url,artifact):
                                [src,dst,[(sid,part)]],["uint128"])
                 except ValueError:
                     continue
-                if qty>0 and (part if by_target else qty)<=y:ids.append((sid,part))
+                # The view is net of the aggregate pair fee. Pick two independently funded
+                # samples for this split control even at the upper edge of integer rounding.
+                fee_den=1_000_000-row["fee_ppm"]
+                gross_high=part if by_target else ((qty+1)*1_000_000-1)//fee_den
+                if qty>0 and gross_high<=y:ids.append((sid,part))
                 if len(ids)==2:break
             if len(ids)==2:
                 other,=c.one(proxy,name+"(address,address,(uint256,uint128)[])",["address","address","(uint256,uint128)[]"],
@@ -98,8 +101,6 @@ def capture(url,artifact):
     original=dict(source=SOURCE,chain_id=8453,height=pin["block"],selector=at,state_root=head["stateRoot"],roles=roles,default_fee=default_fee,
                   implementation_pair_count=len(empty),directory=directory,controls=controls,version=version)
     module=protected(url,original,artifact,market,8453,at["blockHash"])
-    creation=bytes.fromhex(artifact["creation"])+encode(["address"],[proxy])
-    module.update(creation_sha256=sha256(creation).hexdigest(),creation="0x"+creation.hex(),compiler=artifact["solc"])
     return {"original":original,"protected":module}
 
 

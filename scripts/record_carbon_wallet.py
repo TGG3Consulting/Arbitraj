@@ -2,6 +2,7 @@
 from record_carbon_ethereum import ETH_MARKET
 import argparse
 import json
+from hashlib import sha256
 from pathlib import Path
 import requests
 from eth_abi import encode, decode
@@ -74,7 +75,20 @@ def capture(url, source, artifact, market=ETH_MARKET, chain_id=1, block=BLOCK):
                          input=str(spent),output=str(received),before=list(map(str,a)),after=list(map(str,c)),
                          transaction=calls[n+14],logs=fill["logs"],gas=int(fill["gasUsed"],16),
                          exact_refusal=result[n+6]["error"],expired=result[n+7]["error"]))
-    return dict(selector=tag,state_root=source["state_root"],controller=market.controller,module=MODULE,
+    creation = bytes.fromhex(artifact["creation"])+encode(["address"],[market.controller])
+    roles=source["roles"]
+    if isinstance(roles,list):
+        implementation=roles[1]
+        factory_hash,implementation_hash=source["hashes"]
+    else:
+        implementation=roles["implementation"]["address"]
+        factory_hash=roles["proxy"]["keccak256"]
+        implementation_hash=roles["implementation"]["keccak256"]
+    manifest=dict(kind="carbon_v1",chainId=chain_id,market=market.controller,implementation=implementation,
+                  factoryHash=factory_hash,implementationHash=implementation_hash,sourceBlock=tag["blockHash"],
+                  data="0x"+creation.hex(),creationSha256=sha256(creation).hexdigest(),
+                  runtimeSha256=sha256(bytes.fromhex(runtime[2:])).hexdigest(),runtimeKeccak="0x"+keccak(hexstr=runtime).hex(),solc=artifact["solc"])
+    return dict(selector=tag,state_root=source["state_root"],controller=market.controller,module=MODULE,manifest=manifest,
                 runtime_hash="0x"+keccak(hexstr=runtime).hex(),controls=rows)
 
 

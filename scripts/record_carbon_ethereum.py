@@ -34,6 +34,10 @@ class Market:
 ETH_MARKET=Market(CTRL,WETH,FUNDING)
 
 
+class InsufficientOrderLiquidity(ValueError):
+    """The original trade, after funding, failed its gross target inventory check."""
+
+
 def collect(c,controller=CTRL):
     pairs,=c.one(controller,"pairs()",[],[],["address[2][]"])
     if len(set(pairs))!=len(pairs):raise ValueError("duplicate Carbon pair")
@@ -72,11 +76,17 @@ def wallet(c,row,source,target,amount,by_target,end,market=None):
             if not ok:continue
             other,=decode(["uint128"],data)
             if other and (by_target or other<=y):candidates.append((other,sid))
-    if not candidates:return None
-    other,sid=(min if by_target else max)(candidates)
-    spent,received=(other,amount) if by_target else (amount,other)
-    result=settle(c,source,target,[(sid,amount)],spent,received,by_target,end,market)
-    return dict(result,id=str(sid),quote_comparisons=len(candidates))
+    refused=[]
+    for other,sid in sorted(candidates,reverse=not by_target):
+        spent,received=(other,amount) if by_target else (amount,other)
+        try:
+            result=settle(c,source,target,[(sid,amount)],spent,received,by_target,end,market)
+        except InsufficientOrderLiquidity:
+            refused.append(dict(id=str(sid),source=source,target=target,amount=str(amount),quoted=str(other),
+                                error="InsufficientLiquidity()"))
+            continue
+        return dict(result,id=str(sid),quote_comparisons=len(candidates),refused=refused)
+    return None
 
 
 def settle(c,source,target,actions,spent,received,by_target,end,market=None):
@@ -98,6 +108,8 @@ def settle(c,source,target,actions,spent,received,by_target,end,market=None):
     calls=prep+balances+[order(limit-1 if by_target else limit+1,end),order(limit,1)]+balances+[order(limit,end)]+balances
     res=simulate_block(c.endpoint,c.selector,{OWNER:{"balance":hex(20*10**18)}},calls)
     n=len(prep)
+    if all(r["status"]=="0x1" for r in res[:n+2]) and res[n+6].get("error",{}).get("data")=="0xbb55fd27":
+        raise InsufficientOrderLiquidity(actions)
     if [i for i,r in enumerate(res) if r["status"]!="0x1"]!=[n+2,n+3]:raise ValueError((actions,source,name,[(i,r.get("error")) for i,r in enumerate(res) if r["status"]!="0x1"]))
     def bal(i):return [int(r["returnData"],16) for r in res[i:i+2]]
     before=bal(n);middle=bal(n+4);after=bal(n+7)

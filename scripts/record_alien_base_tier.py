@@ -64,12 +64,26 @@ def record(url):
                 raise ValueError(("reverted swap changed cash",src,n))
             return dict(source=src,target=dst,requested=str(n),status="reverted",error=result[0].get("error"),
                         gas=int(result[0]["gasUsed"],16),spent="0",received="0")
-        if spent!=n or out<=0 or not clean:
-            raise ValueError(("missing or wrong cash",src,n))
+        if not 0<spent<=n or out<=0 or not clean:
+            raise ValueError(("missing or wrong cash",src,n,spent,out,clean))
+        swap=result[0]
+        # Verify the matching raw input at the venue even when V5 sweeps unused source back.
+        transferred=0
+        refunded=0
+        for log in swap["logs"]:
+            topics=log.get("topics",[])
+            if log["address"].lower()!=src or len(topics)!=3 or topics[0]!="0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef":
+                continue
+            origin,dest=["0x"+word[-40:] for word in topics[1:]]
+            if origin==EXEC and dest==pool:transferred+=int(log["data"],16)
+            if origin==EXEC and dest==OWNER:refunded+=int(log["data"],16)
+        if transferred!=spent or refunded!=n-spent:
+            raise ValueError(("unexplained refund",src,n,spent,transferred,refunded))
         results,again,net,clean=run([order(src,dst,n,out+1,ts+600),order(src,dst,n,out,0),order(src,dst,n,out,ts+600)])
         if [v["status"] for v in results]!=["0x0","0x0","0x1"] or (again,net)!=(spent,out) or not clean:
             raise ValueError("minimum/deadline or recipient mismatch")
-        return dict(source=src,target=dst,requested=str(n),status="paid",spent=str(spent),received=str(out),gas=int(results[-1]["gasUsed"],16))
+        return dict(source=src,target=dst,requested=str(n),status="paid" if spent==n else "partial",
+                    refunded=str(refunded),spent=str(spent),received=str(out),gas=int(results[-1]["gasUsed"],16))
     cash=[]
     for amount in (10**12,10**14,10**15):
         prep=[tx(WETH,"deposit()",value=amount),allowance(WETH,amount)]
@@ -81,7 +95,7 @@ def record(url):
         reverse=prep+[order(WETH,AERO,amount,net,ts+600),allowance(AERO,net)]
         sell=measured(reverse,AERO,WETH,net)
         cash.append(dict(buy=buy,sell_after_buy=sell))
-    if not any(r["sell_after_buy"] and r["sell_after_buy"]["status"]=="paid" for r in cash):
+    if not any(r["sell_after_buy"] and r["sell_after_buy"]["status"] in ("paid","partial") for r in cash):
         raise ValueError("no original round trip settled")
     return dict(network="base",block=anchor["block"],selector=at,source=SOURCE,factory=FACTORY,pool=pool,
                 fee=750,spacing=spacing,tokens=roles[1:],liquidity=str(int.from_bytes(fields[5],"big")),round_trips=cash)

@@ -213,6 +213,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "slipstream"
         | "slipstream_aero"
         | "slipstream_aero_metaquoter"
+        | "topaz_cl"
         | "slipstream_dynamic_fee"
         | "v3_fork_ramses"
         | "slipstream_ramses"
@@ -288,7 +289,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "smardex" | "smardex_exact_equality" => ExecKind::Smardex,
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
-        "pendle_market_v5" | "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" => ExecKind::Balancer,
+        "maverick_v1_module" | "pendle_market_v5" | "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" => ExecKind::Balancer,
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
@@ -322,7 +323,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
-        "safeswap_trade_module" | "surge_v5" | "dagrow_v5" | "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
+        "degenswap_module" | "safeswap_trade_module" | "surge_v5" | "dagrow_v5" | "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
         // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
         // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
         // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
@@ -432,6 +433,7 @@ mod tests {
             "bundles_swap",
             "antfarm", // Signed router and separate ATF budget.
             "surge_native",
+            "maverick_v1",
             "pendle_market", // котировки до задания защищённого модуля
             "dagrow", // SSP с кошелька
             "temple", // официальный view, без шага V5

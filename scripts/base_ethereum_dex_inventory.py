@@ -80,6 +80,7 @@ def tables(network, snapshots, profiles):
         out.extend(base_launch_inventory.umia())
         out.extend(base_launch_inventory.vecta())
     out.extend(base_launch_inventory.fynd(network))
+    out.extend(base_launch_inventory.spoke(network))
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
         out.extend(["","#### Umbrae на Base","",f"На высоте {ud['height']} фабрика DLMM зарегистрировала {len(ud['markets']['dlmm'])} пар, отдельная фабрика DAMM — {len(ud['markets']['damm'])}. Различаются исходники реализации, события, учёт платы и ABI обмена. [Реестры и реализации](../tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json)."])
@@ -301,12 +302,27 @@ def tables(network, snapshots, profiles):
                     f"комиссия 25 базисных пунктов. Получено {len(fills)} выплат через GemswapRouter и V5 в {len(directed)} из "
                     f"{2*len(cv['markets'])} направлений. При одинаковой фактической выплате разница газа V5 минус Router "
                     f"составила от {min(both):,} до {max(both):,}, стоимость разрешения и текущий газ учитываются при выборе. "
-                    f"У DAI/USDC резерв USDC всего одна минимальная единица. DegenSwap в каталоге Ethereum представлен "
-                    f"отдельной страницей с пустым списком пулов. Одноимённый SDK указывает на Fantom (chainId 250), адаптер "
-                    f"DefiLlama — на Degen. По обоим адресам фабрик в Ethereum на контрольном блоке код пуст. "
-                    f"[Проверенные альтернативные адреса](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_identity.json) · "
+                    f"У DAI/USDC резерв USDC всего одна минимальная единица. "
                     f"[Кошелёк, исходный блок и квитанции](../{cv_path.as_posix()}) · "
                     f"[Официальные адреса]({cv['sources'][0]})."])
+    if not base and "degenswap-ethereum" in configured:
+        ds=Path("tests/data/first_run_dex_2026-11-26")
+        def observed(id):
+            with gzip.open(ds/f"{id}_ethereum_wallets.json.gz","rt",encoding="utf8") as f:return json.load(f)
+        degen=observed("degenswap")
+        native=[r for case in degen["outcomes"] for r in case.get("rounds",[])]
+        npositive=sum(all(int(v or 0)>0 for v in p["balances"]+p["reserves"]) for p in degen["markets"])
+        out.extend(["",f"DegenSwap Ethereum · Фабрика зарегистрировала {len(degen['markets'])} пар WETH, у {npositive} положительны оба резерва и оба баланса. Штатный роутер подтвердил {len(native)} покупок из {len(degen['outcomes'])} размеров. У {sum('sell_error' in r for r in native)} обратных продаж штатная проверка расхода и минимальной выплаты не прошла. Роутер уменьшает подписанный минимум, когда комиссия взимается в выходной валюте. Для индивидуального модуля проверяются плательщик, физические токены, CREATE2, изменяемые сборы и точная дельта получателя. [Реестр и результаты по размерам](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_wallets.json.gz)."])
+        cypher=observed("cypher_v2")
+        native=[r for case in cypher["outcomes"] if case["mode"]=="router" for r in case.get("rounds",[])]
+        executor=[r for case in cypher["outcomes"] if case["mode"]=="v5" for r in case.get("rounds",[])]
+        out.extend(["",f"Cypher V2 Ethereum · {len(cypher['markets'])} зарегистрированных пар. Из {len(native)} объёмов Router подтвердил {sum('sell' in r for r in native)} полных оборотов, V5 подтвердил {sum('sell' in r for r in executor)} из {len(executor)}. В остальных случаях обе формы вернули INSUFFICIENT_OUTPUT_AMOUNT на продаже. У каждой пары собственная изменяемая комиссия fee()/100000. [Реестр, квитанции и расходы](../tests/data/first_run_dex_2026-11-26/cypher_v2_ethereum_wallets.json.gz)."])
+        with gzip.open(ds/"cypher_v4_ethereum_directory.json.gz","rt",encoding="utf8") as f:cl=json.load(f)
+        out.extend(["",f"Cypher V4 Ethereum · Фабрика Algebra зарегистрировала {len(cl['markets'])} пулов. Обычные и пользовательские развёртывания используют разные ключи реестра и комиссии плагинов. [Адреса и конфигурации на каноническом блоке](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_directory.json.gz)."])
+        baseline=observed("baseline")
+        rows=[case for pool in baseline["markets"] for case in pool["cases"]]
+        deals=sum(isinstance(case.get(side),dict) and case[side].get("stage")=="accepted" for case in rows for side in ("buy","sell"))
+        out.extend(["",f"Baseline Ethereum · Отдельный реестр Relay и V4 PoolManager связывает {len(baseline['markets'])} bToken с физическим WETH. У Router и V5 проверены два объёма с каждой стороны, выплата, минимальный выход и истечение срока. Из {2*len(rows)} обменов подтверждено {deals}. [Оплата и поступление на Ethereum](../tests/data/first_run_dex_2026-11-26/baseline_ethereum_wallets.json.gz)."])
     if not base and "bitswap" in configured:
         bs=read(Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json"))
         directory_path=Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_directory_wallets.json.gz")
@@ -1536,6 +1552,11 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if str(row["id"]) in {"2644","7882"}:
+            kind,role=("maverick","Factory") if str(row["id"])=="2644" else ("topaz","CLFactory")
+            snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
+            candidates=[snapshot["roles"][role]["address"]]
+            task=f"DEX-46 · {len(snapshot['markets'])} зарегистрированных рынков, см. кошельковые результаты выше"
         if not base and str(row["id"]) == "9435":
             directory = read(Path("tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"))
             candidates = [directory["venue"]]

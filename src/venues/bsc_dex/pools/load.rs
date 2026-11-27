@@ -80,6 +80,13 @@ pub async fn state(
         let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
     }
+    if f.variant==Variant::MaverickOne {
+        let pool=reference.address();
+        let at=super::nami::block(ctx,&tag).await?;
+        Box::pin(super::maverick_one::market(ctx,f,pool,pair,&at)).await?;
+        let state=Box::pin(super::maverick_one_quotes::ladder(ctx,tokens,reg,f,pool,[pair.0,pair.1],usdt,&at)).await?;
+        return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant.umbrae() {
         let pool=reference.address();
         let at=super::nami::block(ctx,&tag).await?;
@@ -105,7 +112,7 @@ pub async fn state(
         let state=Box::pin(super::surge::market(ctx,f,reference.address(),pair,&at)).await?;
         return Ok(Loaded{state:PoolState::Surge(Box::new(state)),ticks:None,bins:None,fee_pips:None});
     }
-    if f.variant==Variant::SafeSwapTrade {
+    if f.variant.protected_router_wallet() {
         let at=super::nami::block(ctx,&tag).await?;
         let state=Box::pin(super::safeswap_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
         return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
@@ -745,6 +752,7 @@ pub async fn state(
                 }
                 // CLPool.fee() делегирует фабрике getSwapFee(pool), в том числе модулю комиссии.
                 // https://github.com/aerodrome-finance/slipstream/blob/main/contracts/core/CLPool.sol
+                Variant::TopazCl => {let at=super::nami::block(ctx,&tag).await?;Some(Box::pin(super::topaz::fee(ctx,f,*a,pair,sp,&at)).await?)},
                 Variant::SlipstreamDynamicFee => Some(fee_fresh::read(ctx, *a, &tag).await?),
                 _ => None,
             };

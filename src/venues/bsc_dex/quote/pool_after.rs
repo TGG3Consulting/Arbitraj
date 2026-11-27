@@ -32,6 +32,7 @@ use super::pool_quote;
 
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
+    if e.family.variant==super::super::pools::family_variant::Variant::TopazCl{return false;}
     match (&e.pool.state, e.pool.kind) {
         (PoolState::VaultPool(d),PoolKind::VaultPool)=>super::super::math::ranges_sequence::supported(d),
         (PoolState::UmbraeDamm(_) | PoolState::ToonSwap(_), PoolKind::V2) => true,

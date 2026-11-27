@@ -63,6 +63,7 @@ pub enum Variant {
     SlipstreamAeroMetaquoter,
     /// Aerodrome Base CLFactory.getSwapFee(pool), читается через CLPool.fee() на блоке.
     SlipstreamDynamicFee,
+    TopazCl,
     /// Solidly V3 Ethereum/Base, slot0 с комиссией, встроенный quoteSwap и свой ABI оплаты.
     SolidlyCl,
     /// V2 с фиксированной реализацией пары: адрес сверяется по хешу байткода создания CREATE2.
@@ -90,6 +91,7 @@ pub enum Variant {
     SafeSwapV2,
     SafeSwapProxy,
     SafeSwapTrade,
+    DegenSwap,
     ToonSwap,
     V2ExactRouter,
     /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
@@ -126,6 +128,7 @@ pub enum Variant {
     Temple,
     Dagrow,
     Pendle,
+    MaverickOne,
     Surge,
     Antfarm,
     Bundles,
@@ -199,6 +202,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
     pub fn launch(self)->bool {matches!(self,Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
@@ -207,7 +211,7 @@ impl Variant {
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
+    pub fn wallet_module(self)->bool { matches!(self,Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
@@ -232,7 +236,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -249,6 +253,7 @@ pub fn of(kind: &str) -> Variant {
         "kyber_elastic_v5" | "kyber_elastic_module" => Variant::ElasticV5,
         "slipstream_aero" => Variant::SlipstreamAero,
         "slipstream_aero_metaquoter" => Variant::SlipstreamAeroMetaquoter,
+        "topaz_cl" => Variant::TopazCl,
         "slipstream_dynamic_fee" => Variant::SlipstreamDynamicFee,
         "solidly_v3" | "solidly_v3_module" => Variant::SolidlyCl,
         "curve_stableswap_plain" => Variant::CurvePlain,
@@ -282,6 +287,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "toonswap" => Variant::ToonSwap,
         "safeswap_v2" => Variant::SafeSwapV2,
+        "degenswap_module" => Variant::DegenSwap,
         "safeswap_trade_module" => Variant::SafeSwapTrade,
         "safeswap_proxy_v5" => Variant::SafeSwapProxy,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
@@ -306,6 +312,7 @@ pub fn of(kind: &str) -> Variant {
         "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
+        "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,
         "surge_native" | "surge_v5" => Variant::Surge,
         "pendle_market" | "pendle_market_v5" => Variant::Pendle,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,

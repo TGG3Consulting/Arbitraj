@@ -63,6 +63,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             });
             continue;
         }
+        if c.family.variant==super::family_variant::Variant::MaverickOne {out.push(Box::pin(super::maverick_one::verify(ctx,c)).await);continue;}
         if c.family.variant.umbrae() {out.push(Box::pin(super::umbrae::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Bundles {out.push(Box::pin(super::bundles::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Antfarm {out.push(Box::pin(super::antfarm::verify(ctx,c)).await);continue;}

@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -28,8 +28,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     let mut quotes = Vec::new();
     let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
     for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native())) {
-        if matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade){
-            let safe=e.family.variant==Variant::SafeSwapTrade;
+        if matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap){
+            let safe=e.family.variant.protected_router_wallet();
             let Ok(target)=ctx.dex_addr("dex.router",e.family.id) else{continue};
             if super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt){continue}
             let input=if i.side==crate::core::types::Side::Buy{i.usdt}else{i.coin};
@@ -81,6 +81,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 super::super::exec::o1_wallet::at(ctx,&e,&h.selector()).await
             } else if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
+            } else if e.family.variant==Variant::MaverickOne {
+                super::super::pools::maverick_one::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await.map(|_|())
             } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
             } else if e.family.variant == Variant::CandySwap {
@@ -109,7 +111,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.push(option);
         }
         if graph && let Ok(Some(target)) = executor::address(ctx) {
-            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant.registered_module() {
+            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant==Variant::MaverickOne || e.family.variant.registered_module() {
                 (
                     17,
                     Bytes::copy_from_slice(e.pool.reference.address().into_word().as_slice()),
@@ -126,7 +128,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             let via = Execution {
                 mode: RouteMode::Graph,
                 target,
-                wire: if e.family.variant.registered_module(){
+                wire: if e.family.variant==Variant::MaverickOne || e.family.variant.registered_module(){
                     Wire::funded(step,vec![e.pool.reference.address()],None)
                 }else{Wire::V5(step)},
             };

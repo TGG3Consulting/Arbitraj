@@ -450,9 +450,10 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
-        "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
+        "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
+        "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
-        "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
+        "degenswap_module" | "safeswap_trade_module" | "pendle_market" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "surge_native" | "surge_v5" | "dagrow" | "dagrow_v5" | "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
@@ -649,6 +650,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "slipstream"
         | "slipstream_aero"
         | "slipstream_aero_metaquoter"
+        | "topaz_cl"
         | "slipstream_dynamic_fee"
         | "solidly_v3"
         | "slipstream_ramses" => (PoolKind::V3, Proto::Slipstream, true, false, false),
@@ -834,6 +836,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant==Variant::MaverickOne => {list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.pmm_ladder_usd"]);if f.tradable{list.extend(["dex.router","dex.module_runtime_hashes"]);}}
         Proto::V2 if f.variant.umbrae() => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.umbrae_roles"]);
             if f.variant==Variant::UmbraeDlmm {list.extend(["dex.quoter","dex.pmm_ladder_usd"]);}
@@ -850,6 +853,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.factory","dex.factory_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
+        Proto::V2 if f.variant==Variant::DegenSwap => list.extend([
+            "dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.pool_code_hashes",
+            "dex.pair_runtime_hash","dex.router","dex.module_runtime_hashes","dex.pmm_ladder_usd",
+        ]),
         Proto::V2 if f.variant==Variant::SafeSwapTrade => list.extend([
             "dex.factory", "dex.factory_runtime_hash", "dex.quoter", "dex.quoter_runtime_hash",
             "dex.safeswap_spender", "dex.router_runtime_hash", "dex.pool_code_hashes", "dex.pair_runtime_hash",
@@ -1204,6 +1211,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         // решение 59; события создания PoolCreated) и квотер (сверка ISlipstreamQuoterV2.quoteExactInputSingle по
         // tickSpacing, решение 73). Своего читателя тиков нет — битмап читается прямо у пула (load_slipstream.rs),
         // dex.tick_lens не нужен. Роутера нет (tradable=false — исполнение отсечено выше, UR/Permit2 не добавлены).
+        Proto::Slipstream if f.variant==Variant::TopazCl=>list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.quoter_runtime_hash","dex.cl_fee_module","dex.cl_fee_module_hash","dex.pair_runtime_hash"]),
         Proto::Slipstream if f.variant == Variant::SolidlyCl => {
             list.push("dex.factory");
             if f.fork {

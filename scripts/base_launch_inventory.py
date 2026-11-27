@@ -101,7 +101,7 @@ def registry_row(network,id):
         return None,None,"проверены поиск по названию и опубликованные проектные материалы","DEX-41 · недостаточно исходных данных для привязки фабрики и рынка Base"
     if id=="marswap-base":
         with gzip.open(DATA/"marswap-base.json.gz") as f:d=json.load(f)
-        return None,d["factory"],"allPairsLength = 0 и INIT_CODE_PAIR_HASH","фабрика проверена на Base; 0 зарегистрированных пар на снимке"
+        return None,d["factory"],"allPairsLength=0; INIT_CODE_PAIR_HASH, factory/WETH роутера подтверждены","DEX-41 · профиль первого запуска; на оригинальной пустой фабрике 12 выплат в изолированном состоянии, на контрольном блоке 0 пар"
     if id in ("bankr","bankr-index-base","o1-launchpad"):
         d=evidence("base_launch_hooks.json.gz");m=next(r for r in d["rows"] if r["group"]==id and "terms" in r)
         return m["id"],d["manager"],"Initialize, keccak PoolKey и регистрация на хуке","DEX-40 · публичные кошельковые выплаты по каждой выборке приведены выше"
@@ -169,6 +169,8 @@ def fynd(network):
         "подключение Fynd AMM routing, живая подпись для собственного допустимого маршрута и архивный замер чистой выплаты. "
         f"[Канонические контракты, PoolId и контрольные отказы](../tests/data/first_run_dex_2026-11-26/fynd_{network}_markets.json.gz). "
         "[Правила Fynd](https://docs.fynd.xyz/get-started/fynd-amm.md). [Получение ключа и условия интеграции](https://docs.fynd.xyz/get-started/hosted-api.md).","",
+        "Публичный интерфейс swap.fynd.xyz предлагает пользователю маршруты со своей подписью Fynd, если AMM выигрывает по цене. Владелец может получить пользовательскую котировку через этот интерфейс. Для автоматизированной интеграции требуется разрешённый канал выдачи свежих подписей для его маршрута. У опубликованной модели комиссия равна 90% преимущества совокупного маршрута после газа или 5 bps при отсутствии публичного маршрута сравнения. Она удерживается только с ноги AMM. [Публичный обмен](https://swap.fynd.xyz/). [Правила AMM](https://docs.fynd.xyz/get-started/fynd-amm.md).","",
+        "Лицензия Fynd 1.0 требует проводить операции на основе его котировки через действующий Designated Router сети. Пункт 4.2 исключает доходность торговли собственным капиталом из базы Revenue Share. Для выручки сервиса и вознаграждения solver предусмотрена отдельная доля 20%. Газ, фактическая плата AMM и сборы роутера учитываются в чистой цене. [Разделы 1.11–1.15, 3 и 4 лицензии](https://github.com/propeller-heads/fynd/blob/8839d44f4b482ac480daf122a41ddb59ad91dae8/LICENSE.md).","",
         "В Telegram владелец может получить через /start один ключ для hosted Fynd и индексатора Tycho. Для доступа к подписанным свопам Fynd отдельно включает интегратору AMM routing. API 0.118.4 принимает точный вход и фильтры исключения пулов, протоколов и токенов. Для строки Fynd AMM каждый шаг ответа должен ссылаться на подтверждённый PoolId этой сети; проверяются также исполняемые calldata, получатель, срок, плата и фактическая выплата. Смешанные маршруты учитываются по отдельным шагам. [Схемы QuoteRequest, RouteFilter и Swap](https://docs.fynd.xyz/reference/api.md).","",
         "Отдельная схема InBlock (JIT) сохраняет исходный маршрут при отсутствии замены. Для включения своего роутера команда Fynd согласует условия и регистрирует декодер IJITDecoder; плательщик одобряет FyndJITRouter и указывает конечного получателя. В опубликованном реестре JIT указан Ethereum Mainnet, 0x7e67f82476bb4bd4c5078F63e5a588dFD9CDD91E. Реализация на Base и действующая персональная котировка по одному Fynd AMM здесь остаются неподтверждёнными. [Регистрация агрегатора](https://docs.fynd.xyz/get-started/fynd-in-block-solver/fynd-in-block-for-dex-aggregators.md). [Размещения InBlock](https://docs.fynd.xyz/get-started/fynd-in-block-solver.md).",""]
 
@@ -191,3 +193,25 @@ def vecta():
         "Модуль контролирует полный вход и чистую выплату. На 1 USDC покупка стоила 150 300 gas против 163 801 в V5; "
         "обратная продажа — 128 920 против 142 483 gas. Реальный адрес нового модуля задаёт владелец при его размещении. "
         "[Списания, выплаты, газ и контрольные отказы](../tests/data/first_run_dex_2026-11-26/vecta_base_wallets.json.gz).",""]
+
+def spoke(network):
+    out=[]
+    for name,title,slug in (("maverick","Maverick V1","maverick-v1"),("topaz","Topaz CL","topaz-cl")):
+        stem=f"{name}_v1_{network}"
+        d=evidence(stem+"_directory.json.gz"); w=evidence(stem+"_wallets.json.gz")
+        samples=w["samples"]
+        ok={m["pool"] for m in samples for c in m["cases"] for side in ("buy","sell") if c.get(side) and c[side]["stage"]=="paid"}
+        counts={}
+        for m in samples:
+            for c in m["cases"]:
+                counts[c["wire"]]=counts.get(c["wire"],0)+sum(bool(c.get(k)) and c[k]["stage"]=="paid" for k in ("buy","sell"))
+        roles=", ".join(f"{k} `{v['address']}`" for k,v in d["roles"].items())
+        out.extend([f"#### {title}","",f"На высоте {d['height']} фабрика зарегистрировала {len(d['markets'])} пулов. Проверено {len(samples)}, кошельковая симуляция показала выплату у {len(ok)} пулов. {roles}.",""])
+        label={"router":"официальный роутер","module":"модуль кошелька","module_v5":"модуль через V5","v5":"V5"}
+        out.append("Выплаченные операции по обеим сторонам: "+", ".join(f"{label[k]} {v}" for k,v in counts.items())+". Каждый такой обмен прошёл при минимуме, равном чистому зачислению; минимум на один атом выше и просроченный вызов завершились отказом.")
+        if name=="maverick":
+            out.extend(["",f"Модуль MaverickV1Adapter привязан к фабрике этой сети. Архивный runtime `{w['module_hash']}`. Владелец задаёт фактический dex.router после размещения модуля и переключает dex.kind с maverick_v1 на maverick_v1_module. Официальный PoolInformation на точном входе возвращает только выход. Модуль проверяет полное списание, callback зарегистрированной пары и реальное зачисление. Владелец задаёт размеры лестницы dex.pmm_ladder_usd согласно своему бюджету."])
+        else:
+            out.extend(["","Плата пула fee() учитывает отправителя и состояние TWAP в блоке. Фабрика поддерживает запасную ставку на случай отказа модуля. Цена перед отправкой проверяется от своего адреса. Повторный шаг по тому же рынку требует нового состояния модуля."])
+        out.extend([f"[Реестр и размещения](../tests/data/first_run_dex_2026-11-26/{stem}_directory.json.gz). [Канонические симуляции](../tests/data/first_run_dex_2026-11-26/{stem}_wallets.json.gz). [Документация контрактов]({d['source']}).",""])
+    return out

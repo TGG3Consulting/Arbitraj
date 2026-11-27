@@ -146,6 +146,12 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::temple::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
+        if f.variant==Variant::MaverickOne {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::maverick_one::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            Box::pin(super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at)).await?;
+            continue;
+        }
         if f.variant.umbrae() {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::umbrae::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
@@ -194,7 +200,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::concave::checked(ctx,e,false,at)).await?;
             continue;
         }
-        if f.variant == Variant::SafeSwapTrade {
+        if f.variant.protected_router_wallet() {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::safeswap_trade::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
@@ -289,7 +295,7 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             f.variant,
             Variant::SlipstreamAero
                 | Variant::SlipstreamAeroMetaquoter
-                | Variant::SlipstreamDynamicFee
+                | Variant::SlipstreamDynamicFee | Variant::TopazCl
         ) && let PoolRef::Contract(pool) = e.pool.reference
         {
             aero_fresh(q, e, pool).await?;
@@ -342,7 +348,7 @@ async fn aero_fresh(q: &Quoting, e: &Entry, pool: Address) -> GatewayResult<()> 
         );
         return Err(ctx.err(ErrorCode::NoRoute, why));
     };
-    let now = if f.variant == Variant::SlipstreamDynamicFee {
+    let now=if f.variant==Variant::TopazCl {let at=super::super::pools::nami::block(ctx,"latest").await?;Box::pin(super::super::pools::topaz::fee(ctx,f,pool,(e.pool.token0,e.pool.token1),spacing,&at)).await?} else if f.variant == Variant::SlipstreamDynamicFee {
         super::super::pools::fee_fresh::read(ctx, pool, "latest").await?
     } else {
         aero_cl::fee_latest(ctx, f, pool, spacing).await?

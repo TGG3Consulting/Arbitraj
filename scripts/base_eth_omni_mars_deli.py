@@ -97,7 +97,7 @@ def other_markets(network):
         "[Исходник роутера с привязкой Permit2 и фабрики](https://sourcify.dev/server/v2/contract/8453/0x423fae8ee58833f283e8845479bd705514110ec3?fields=all) · "
         "[Каталог и фактические выплаты](../tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz).",
         "", f"У фабрики MarSwap `{mars['factory']}` на блоке {mars['height']} метод `allPairsLength()` вернул {mars['markets_count']}. "
-        f"Её `INIT_CODE_PAIR_HASH()` совпадает с Ethereum: `{mars['init_hash']}`. Адреса фабрик этих сетей различаются. "
+        f"Её `INIT_CODE_PAIR_HASH()` совпадает с Ethereum: `{mars['init_hash']}`. Адреса фабрик этих сетей различаются. На этом блоке код штатного MarsRouter подтвердил обе роли factory/WETH. В изолированном блоке создана пара официальной фабрики, в которую внесена тестовая ликвидность. Два размера в обоих направлениях дали 12 выплат кошельку. Каждая отказала при минимуме на атом выше и истёкшем сроке. Профиль предлагает Router02 и V5 с процентной ставкой. Режим платы ETH измерен отдельно. [Транзакции симуляции](../tests/data/first_run_dex_2026-11-26/marswap_base_simulated.json.gz). "
         "[Каноническая запись](../tests/data/first_run_dex_2026-11-26/marswap-base.json.gz).",
         "", "В опубликованных материалах проекта DeJungle указатель на фабрику отсутствует. "
         "Нужны адрес развёртывания на Base, регистрация рынка и исполнение в кошельке.",

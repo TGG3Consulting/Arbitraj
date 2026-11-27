@@ -124,6 +124,9 @@ async fn pass(
     }
     notes.extend(metric.notes);
     no_answer += metric.no_answer;
+    let mav=Box::pin(super::maverick_one_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in mav.found{found.entry(coin).or_default().extend(rows);}
+    notes.extend(mav.notes);no_answer+=mav.no_answer;
     let carbon=super::carbon_directory::scan(ctx,coins,&quote_list).await;
     for (coin,rows) in carbon.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(carbon.notes);no_answer+=carbon.no_answer;

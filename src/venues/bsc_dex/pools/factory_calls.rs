@@ -76,7 +76,7 @@ pub fn plan(
 ) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
-        if matches!(f.variant,super::family_variant::Variant::Carbon | super::family_variant::Variant::Pendle | super::family_variant::Variant::Surge | super::family_variant::Variant::Dagrow | super::family_variant::Variant::Temple){continue;} // pairs() у Controller перечисляется в carbon_directory
+        if matches!(f.variant,super::family_variant::Variant::MaverickOne | super::family_variant::Variant::Carbon | super::family_variant::Variant::Pendle | super::family_variant::Variant::Surge | super::family_variant::Variant::Dagrow | super::family_variant::Variant::Temple){continue;} // pairs() у Controller перечисляется в carbon_directory
         // Решение 475 (T462-01): KyberSwap Elastic — getPool(a, b, swapFeeUnits) фабрики Elastic по уровням
         // dex.v3_fee_tiers: та же сигнатура getPool(address,address,uint24), что у V3, реестр — в обе стороны
         // (ks-elastic-sc 4ab08c0a contracts/Factory.sol L44, createPool L106-L109; фабрика v1 — Sourcify 42161

@@ -23,6 +23,10 @@ pub(super) struct WalletQuoter {
 
 pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
     match variant {
+        Variant::DegenSwap => Some(WalletQuoter{
+            request: super::super::pools::degenswap_quotes::request,
+            payout: super::super::pools::degenswap_quotes::payout,
+        }),
         Variant::SafeSwapTrade => Some(WalletQuoter {
             request: safeswap_quotes::request,
             payout: safeswap_quotes::payout,

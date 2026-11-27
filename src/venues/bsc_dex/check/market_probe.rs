@@ -48,7 +48,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -107,7 +107,7 @@ impl Market {
                     }
                 }
             }
-        } else if e.family.variant==super::super::pools::family_variant::Variant::SafeSwapTrade {
+        } else if e.family.variant.protected_router_wallet() {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             let at=head.selector();
             Box::pin(super::super::pools::safeswap_trade::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&at)).await?;

@@ -33,7 +33,7 @@ pub(in crate::venues::bsc_dex) fn bad(ctx: &Ctx) -> GatewayError {
         "SafeSwap Trade: изменились реестр, код, плательщик или разрешённый роутер",
     )
 }
-fn hash(ctx: &Ctx, id: &str, key: &str) -> GatewayResult<B256> {
+pub(super) fn hash(ctx: &Ctx, id: &str, key: &str) -> GatewayResult<B256> {
     ctx.dex_text(key, id)?
         .parse::<B256>()
         .ok()
@@ -116,6 +116,9 @@ pub(in crate::venues::bsc_dex) async fn market(
     (a, b): (Address, Address),
     at: &Value,
 ) -> GatewayResult<Address> {
+    if f.variant==super::family_variant::Variant::DegenSwap {
+        return Box::pin(super::degenswap::market(ctx,f,pool,(a,b),at)).await;
+    }
     if ctx.chain_id() != Some(1) {
         return Err(bad(ctx));
     }

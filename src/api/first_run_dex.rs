@@ -166,6 +166,13 @@ mod tests {
             pairs.push(serde_json::json!({"network":network,"dex":format!("dex-on-crypto-{network}"),
                 "creation_code_hash":data["init_hash"]}));
         }
+        let base_mars: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/marswap_base_simulated.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(base_mars["selector"], base["selector"]);
+        assert_eq!(base_mars["original_count"], 0);
+        assert_eq!(base_mars["cases"].as_array().unwrap().len(), 12);
+        pairs.push(serde_json::json!({"network":"base","dex":"marswap-base","creation_code_hash":base_mars["init_hash"]}));
         let omni: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz").as_slice(),
         )).unwrap();
@@ -302,6 +309,12 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k=="dex.pool_code_hashes" && matches!(p.id.as_str(),"cypher-v2-ethereum"|"degenswap-ethereum") {
+                        let data:&[u8]=if p.id=="degenswap-ethereum" {include_bytes!("../../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_directory.json.gz")}else{include_bytes!("../../tests/data/first_run_dex_2026-11-26/cypher_v2_ethereum_directory.json.gz")};
+                        let d:Value=serde_json::from_reader(flate2::read::GzDecoder::new(data)).unwrap();
+                        assert_eq!(d["selector"],snapshot["selector"]);
+                        assert_eq!(d["init"]["hash"],text.as_str());
+                        assert!(matches!(p.settings.get("dex.factory"),Some(Parameter::Text(a)) if d["factory"]["address"]==a.as_str()));
                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_trade_module") {
                         let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz");
                         let archive:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();

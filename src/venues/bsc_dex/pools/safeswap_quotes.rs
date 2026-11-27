@@ -46,7 +46,7 @@ pub(in crate::venues::bsc_dex) fn payout(raw: &[u8]) -> Option<U256> {
 }
 async fn pass(
     ctx: &Ctx,
-    module: Address,
+    market: (&Family, Address, Address),
     (input, output): (Address, Address),
     sizes: &[U256],
     at: &Value,
@@ -54,21 +54,16 @@ async fn pass(
     if sizes.is_empty() {
         return Ok(Vec::new());
     }
-    let calls = sizes
-        .iter()
-        .map(|&amount| {
-            batch::view(
-                at,
-                module,
-                Market::quoteCall {
-                    input,
-                    output,
-                    amount,
-                    separate: false,
-                },
-            )
-        })
-        .collect::<Vec<_>>();
+    let (f,pool,module)=market;
+    let degen=f.variant==super::family_variant::Variant::DegenSwap;
+    let calls=sizes.iter().map(|&amount|{
+        if degen {
+            let (to,data)=super::degenswap_quotes::wire(ctx,f,pool,input,output,amount)?;
+            Ok(("eth_call",serde_json::json!([{"to":to,"data":data},at])))
+        } else {
+            Ok(batch::view(at,module,Market::quoteCall{input,output,amount,separate:false}))
+        }
+    }).collect::<GatewayResult<Vec<_>>>()?;
     let replies = rpc::batch(ctx, &calls).await?;
     if replies.len() != sizes.len() {
         return Err(ctx.err(
@@ -85,7 +80,8 @@ async fn pass(
         };
         let bytes: Bytes = serde_json::from_str(raw.get())
             .map_err(|e| ctx.err(ErrorCode::BadResponse, e.to_string()))?;
-        if let Some(amount_out) = payout(&bytes) {
+        let amount_out=if degen { super::degenswap_quotes::payout(&bytes) } else { payout(&bytes) };
+        if let Some(amount_out) = amount_out {
             points.push(LadderPoint {
                 amount_in: amount,
                 amount_out,
@@ -111,11 +107,11 @@ pub(super) async fn load(
         ladder_counter::amounts(ctx, tokens, reg, f.id, counter),
         ladder_counter::amounts(ctx, tokens, reg, f.id, coin)
     )?;
-    let bought = pass(ctx, module, (counter, coin), &buy_sizes, at).await?;
+    let bought = pass(ctx, (f,pool,module), (counter, coin), &buy_sizes, at).await?;
     sell_sizes.extend(bought.iter().map(|p| p.amount_out));
     sell_sizes.sort_unstable();
     sell_sizes.dedup();
-    let sold = pass(ctx, module, (coin, counter), &sell_sizes, at).await?;
+    let sold = pass(ctx, (f,pool,module), (coin, counter), &sell_sizes, at).await?;
     Ok(load_metric::state(
         pair,
         coin,

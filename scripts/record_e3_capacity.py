@@ -16,12 +16,23 @@ def examine(r,pool,tokens,step,router,stamp,run):
         if src==WETH:
             funding=tx(WETH,"deposit()",[],[],cap+1)
         else:
+            budget=12*10**18
             for fee in (500,3000,100,10000):
                 params="(address,address,uint24,address,uint256,uint256,uint160)"
-                buy=tx(UNI,"exactOutputSingle("+params+")",[params],[(WETH,src,fee,OWNER,cap+1,4*10**18,0)],4*10**18)
+                buy=tx(UNI,"exactOutputSingle("+params+")",[params],[(WETH,src,fee,OWNER,cap+1,budget,0)],budget)
                 warm=run([buy,read(src)])
                 if ok(warm[0]) and int.from_bytes(result(warm[1]))>=cap+1:
                     funding=buy;break
+            if funding is None and src!=USDC:
+                # exactOutput перечисляет токены в обратном порядке. Посредник USDC приобретается
+                # средствами этого же кошелька, состояние проверяемого пула E3 остаётся исходным.
+                for first_fee,second_fee in ((500,100),(500,500),(3000,100),(3000,500),(500,3000)):
+                    path=bytes.fromhex(src[2:])+second_fee.to_bytes(3,"big")+bytes.fromhex(USDC[2:])+first_fee.to_bytes(3,"big")+bytes.fromhex(WETH[2:])
+                    params="(bytes,address,uint256,uint256)"
+                    buy=tx(UNI,"exactOutput("+params+")",[params],[(path,OWNER,cap+1,budget)],budget)
+                    warm=run([buy,read(src)])
+                    if ok(warm[0]) and int.from_bytes(result(warm[1]))>=cap+1:
+                        funding=buy;break
         if funding is None:
             rows.append(dict(pool=pool,input=src,output=dst,capacity=cap,unfunded=True));continue
         for mode,spender in [('official',router),('v5',EXEC)]:

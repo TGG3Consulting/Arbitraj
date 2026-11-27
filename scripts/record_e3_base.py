@@ -37,7 +37,7 @@ def archive(capacity=False):
     addresses=r.many([(FACTORY,"getLBPairAtIndex(uint256)",(i,),"address") for i in range(count)])
     word=lambda x:"0x"+format(x,"064x")
     runtime="0x"+RUNTIME.read_text().strip().removeprefix("0x")
-    state={OWNER:{"balance":hex(5*10**18)},EXEC:{"code":runtime,"stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    state={OWNER:{"balance":hex((13 if capacity else 5)*10**18)},EXEC:{"code":runtime,"stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     def run(calls):
         frame={"blockOverrides":{"time":hex(stamp)},"stateOverrides":state,"calls":calls}
         block,=rpc(r.url,"eth_simulateV1",[{"blockStateCalls":[frame],"validation":False},selector])

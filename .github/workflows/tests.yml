@@ -650,6 +650,7 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bancor" BancorV3Adapter
           python scripts/record_bancor_v3_wallet.py "$RUNNER_TEMP/bancor/BancorV3Adapter.json" "$RUNNER_TEMP/market.json"
+          python scripts/export_bancor_v3_create.py "$RUNNER_TEMP/bancor/BancorV3Adapter.json" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/bancor-v3-create.json"
       - if: matrix.market == 'bancor-v3-ethereum'
         run: python scripts/record_bancor_v3.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'uniswap-v1-ethereum'
@@ -822,6 +823,7 @@ jobs:
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/uniswap-v1-create.json
+            ${{ runner.temp }}/bancor-v3-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json
             ${{ runner.temp }}/antfarm-protected.json

@@ -204,40 +204,37 @@ pub(in crate::venues::bsc_dex) async fn module(
     }
     Ok((target, fact.runtime))
 }
-pub(in crate::venues::bsc_dex) fn receipt_runtime(
-    output: bool,
+pub(in crate::venues::bsc_dex) fn saved_binding(
     atf: Option<Address>,
     runtime: Option<B256>,
-) -> Option<B256> {
-    match (atf, runtime) {
-        (Some(t), Some(h)) if !t.is_zero() && h != B256::ZERO && h != keccak256([]) => Some(h),
-        (None, None) => legacy_runtime(output),
-        _ => None,
-    }
-}
-/// Историческая аттестация применяется только к уже подписанным поручениям старого формата.
-fn legacy_runtime(output: bool) -> Option<B256> {
-    let roles: [B256; 2] = serde_json::from_str(include_str!(
-        "../../../../config/legacy_antfarm_receipt_runtimes.json"
-    ))
-    .ok()?;
-    Some(roles[usize::from(output)])
+) -> Result<(Address, B256), ErrorCode> {
+    let atf = atf
+        .filter(|t| !t.is_zero())
+        .ok_or(ErrorCode::OutcomeUnknown)?;
+    let runtime = runtime
+        .filter(|h| *h != B256::ZERO && *h != keccak256([]))
+        .ok_or(ErrorCode::OutcomeUnknown)?;
+    Ok((atf, runtime))
 }
 pub(in crate::venues::bsc_dex) async fn inclusion(
     ctx: &Ctx,
     block: Option<B256>,
     target: Address,
-    output: bool,
     atf: Option<Address>,
-    saved_hash: Option<B256>,
-) -> GatewayResult<(Address, B256)> {
+    runtime: Option<B256>,
+) -> GatewayResult<()> {
     let fail = || {
         ctx.err(
             ErrorCode::OutcomeUnknown,
             "Antfarm: не подтверждены исходный runtime и токен комиссии на блоке квитанции",
         )
     };
-    let runtime = receipt_runtime(output, atf, saved_hash).ok_or_else(fail)?;
+    let (atf, runtime) = saved_binding(atf, runtime).map_err(|code| {
+        ctx.err(
+            code,
+            "Antfarm: в исходном поручении отсутствуют проверенный runtime или токен комиссии",
+        )
+    })?;
     let tag = json!({"blockHash":block.ok_or_else(fail)?,"requireCanonical":true});
     let (_, [raw]) = tokio::try_join!(
         solidly_classic_factory::plain(ctx, target, runtime, &tag),
@@ -245,10 +242,10 @@ pub(in crate::venues::bsc_dex) async fn inclusion(
     )
     .map_err(|_| fail())?;
     let fee_token = IModule::feeTokenCall::abi_decode_returns_validate(&raw).map_err(|_| fail())?;
-    if fee_token.is_zero() || atf.is_some_and(|t| t != fee_token) {
+    if atf != fee_token {
         return Err(fail());
     }
-    Ok((fee_token, runtime))
+    Ok(())
 }
 
 #[cfg(test)]
@@ -310,10 +307,8 @@ mod tests {
         let output = archive(include_bytes!(
             "../../../../tests/data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"
         ));
-        for (mode, fixture) in [(false, stock), (true, output)] {
+        for fixture in [stock, output] {
             let deployed = hash(&fixture["runtime_hash"]);
-            assert_eq!(legacy_runtime(mode), Some(deployed));
-            assert_ne!(legacy_runtime(!mode), Some(deployed));
             assert!(
                 cfg["dex.module_runtime_hashes"]
                     .as_array()
@@ -322,8 +317,12 @@ mod tests {
                     .any(|v| hash(v) == deployed)
             );
             let newer = B256::repeat_byte(8);
-            assert_eq!(receipt_runtime(mode, Some(p.atf), Some(newer)), Some(newer));
-            assert_eq!(receipt_runtime(mode, None, None), Some(deployed));
+            assert_eq!(saved_binding(Some(p.atf), Some(newer)), Ok((p.atf, newer)));
+            assert_eq!(saved_binding(None, None), Err(ErrorCode::OutcomeUnknown));
+            assert_eq!(
+                saved_binding(Some(p.atf), None),
+                Err(ErrorCode::OutcomeUnknown)
+            );
         }
     }
 }

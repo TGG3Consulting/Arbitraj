@@ -307,11 +307,25 @@ mod tests {
                         assert_eq!(data["selector"],snapshot["selector"]);
                         assert_eq!(data["init"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if matches!(kind.as_str(),"algebra_integral_base_plugin_v1"|"algebra_integral_treble")) {
-                        let path=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("tests/data/first_run_dex_2026-11-26/base_algebra_{}.json.gz",p.id));
-                        let file=std::fs::File::open(path).unwrap();
+                        let root=std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/first_run_dex_2026-11-26");
+                        let multi = p.id == "thirdfy";
+                        let path=root.join(if multi { "thirdfy_base_wallets.json.gz".to_owned() } else { format!("base_algebra_{}.json.gz",p.id) });
+                        let file=std::fs::File::open(&path).unwrap_or_else(|err| panic!("{}: {err}",path.display()));
                         let data:Value=serde_json::from_reader(flate2::read::GzDecoder::new(file)).unwrap();
                         assert_eq!(data["selector"],snapshot["selector"]);
-                        assert_eq!(data["reads"]["POOL_INIT_CODE_HASH()"].as_str(),Some(text.as_str()));
+                        let entries = if multi {
+                            let all=data["markets"].as_array().unwrap();
+                            assert_eq!(all.len(),6);
+                            all.as_slice()
+                        } else { std::slice::from_ref(&data) };
+                        for entry in entries {
+                            assert_eq!(entry["selector"],snapshot["selector"]);
+                            assert_eq!(entry["reads"]["POOL_INIT_CODE_HASH()"].as_str(),Some(text.as_str()));
+                            if multi {
+                                assert!(matches!(p.settings.get("dex.factory"),Some(Parameter::Text(a)) if entry["roles"]["factory"]["address"]==a.as_str()));
+                                assert!(matches!(p.settings.get("dex.factory_runtime_hash"),Some(Parameter::Text(h)) if entry["roles"]["factory"]["keccak"]==h.as_str()));
+                            }
+                        }
                     } else if k == "dex.pool_code_hashes"
                         && matches!(p.settings.get("dex.kind"), Some(Parameter::Text(kind)) if (p.chain_id == 8453 && kind == "solidly_v1") || (p.chain_id == 1 && kind == "solidly_v1_generator")) {
                         let network = if p.chain_id == 1 { "ethereum" } else { "base" };

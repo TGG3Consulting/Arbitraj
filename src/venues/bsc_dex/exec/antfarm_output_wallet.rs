@@ -124,12 +124,7 @@ impl Proof {
     pub fn data(&self) -> Bytes {
         self.terms.data(self.minimum, self.deadline)
     }
-    pub(crate) async fn included(
-        &mut self,
-        ctx: &Ctx,
-        hash: B256,
-        r: &Receipt,
-    ) -> GatewayResult<()> {
+    pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
         signed_call::included(
             ctx,
             hash,
@@ -140,18 +135,14 @@ impl Proof {
             self.data(),
         )
         .await?;
-        let (fee_token, runtime) = super::super::pools::antfarm_profile::inclusion(
+        super::super::pools::antfarm_profile::inclusion(
             ctx,
             r.block_hash,
             self.terms.module,
-            true,
             self.terms.atf,
             self.runtime,
         )
-        .await?;
-        self.terms.atf = Some(fee_token);
-        self.runtime = Some(runtime);
-        Ok(())
+        .await
     }
     pub(in crate::venues::bsc_dex) fn measured(
         &self,

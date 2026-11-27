@@ -72,7 +72,7 @@ def registry(url,tag):
     return dict(roles=roles,clone_hash="0x"+keccak(template).hex(),clone_init="0x"+init.hex(),markets=rows)
 
 
-def funded(markets,target,tested,run,end):
+def funded(markets,target,tested,run,end,spender=ROUTER,direct=router):
     seeds={WETH:10**15, DAI:10**18, STABLES[0]:10**6, STABLES[1]:10**6}
     paths=[]
     queue=deque((token,[]) for token in seeds)
@@ -93,7 +93,7 @@ def funded(markets,target,tested,run,end):
                  ["uint256","address[]","address","uint256"],[n,[WETH,seed],OWNER,end],10**17)
         prefix=[fund]
         for a,b,pool in path:
-            leg=[approval(a,ROUTER,n),router(a,b,n,1,end)]
+            leg=[approval(a,spender,n),direct(a,b,n,1,end)]
             trial=run(prefix+[balance(b,OWNER)]+leg+[balance(b,OWNER)])
             if any(r["status"]!="0x1" for r in trial):break
             n=int(trial[-1]["returnData"],16)-int(trial[-4]["returnData"],16)
@@ -103,11 +103,7 @@ def funded(markets,target,tested,run,end):
     return None
 
 
-def capture(url):
-    tag={"blockHash":BLOCK,"requireCanonical":True}
-    header=rpc(url,"eth_getBlockByHash",[BLOCK,False]);end=int(header["timestamp"],16)+200
-    if header["hash"]!=BLOCK or rpc(url,"eth_chainId",[])!="0x1":raise ValueError("wrong chain or header")
-    d=registry(url,tag)
+def wallet_cases(url,tag,end,markets,spender,direct,executor):
     if any(x!="0x" for x in read_batch(url,[("eth_getCode",[a,tag]) for a in [OWNER,EXEC]])):
         raise ValueError("simulation address already occupied")
     word=lambda v:"0x"+format(v,"064x")
@@ -115,24 +111,24 @@ def capture(url):
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     run=lambda ls:simulate_block(url,tag,overrides,ls)
     fills=[];unavailable=[]
-    for m in d["markets"]:
+    for m in markets:
         for k,a in enumerate(m["tokens"]):
             b=m["tokens"][1-k];pair=m["pool"]
-            account=funded(d["markets"],a,pair,run,end)
+            account=funded(markets,a,pair,run,end,spender,direct)
             if not account:
                 unavailable.append(dict(pool=pair,source=a,phase="funding"))
                 continue
             pre,quantity,path=account
             reserves=run(pre+[tx(pair,"getReserves()")])
             if any(v["status"]!="0x1" for v in reserves):raise ValueError("funded state unavailable")
-            rs=decode(["uint112","uint112","uint32"],bytes.fromhex(reserves[-1]["returnData"][2:]))
+            rs=decode(["uint256"]*3,bytes.fromhex(reserves[-1]["returnData"][2:]))
             capacity=min(quantity,rs[k])
             smaller=max(1,capacity//100)
             larger=min(quantity,max(smaller+1,capacity//10))
             for n in sorted({smaller,larger} - {0}):
-                for name,spender in [("router",ROUTER),("v5",EXEC)]:
-                    base=pre+[approval(a,spender,n)]
-                    stage=lambda minimum,expiry:router(a,b,n,minimum,expiry) if name=="router" else swap(pair,a,b,n,minimum,expiry,m["fee_bps"]*100)
+                for name,target in [("router",spender),("v5",EXEC)]:
+                    base=pre+[approval(a,target,n)]
+                    stage=lambda minimum,expiry:direct(a,b,n,minimum,expiry) if name=="router" else executor(m,a,b,n,minimum,expiry)
                     bal=[balance(t,w) for w in (OWNER,EXEC) for t in (a,b)]
                     trial=run(base+bal+[stage(1,end)]+bal)
                     i=len(base);result=trial[i+4]
@@ -150,6 +146,16 @@ def capture(url):
                         before=list(map(str,old)),after=list(map(str,new)),reserves=list(map(str,rs[:2])),gas=int(controls[i+10]["gasUsed"],16),
                         approval_gas=int(controls[i-1]["gasUsed"],16),logs=controls[i+10]["logs"],
                         strict=controls[i+4]["error"],expired=controls[i+5]["error"]))
+    return fills,unavailable
+
+
+def capture(url):
+    tag={"blockHash":BLOCK,"requireCanonical":True}
+    header=rpc(url,"eth_getBlockByHash",[BLOCK,False]);end=int(header["timestamp"],16)+200
+    if header["hash"]!=BLOCK or rpc(url,"eth_chainId",[])!="0x1":raise ValueError("wrong chain or header")
+    d=registry(url,tag)
+    fills,unavailable=wallet_cases(url,tag,end,d["markets"],ROUTER,router,
+        lambda m,a,b,n,v,e:swap(m["pool"],a,b,n,v,e,m["fee_bps"]*100))
     if not any(v["pool"]==REFERENCE for v in fills):raise ValueError("no payable pCNV/DAI leg")
     d.update(selector=tag,state_root=header["stateRoot"],sources=SOURCES,owner=OWNER,cases=fills,unavailable=unavailable)
     return d

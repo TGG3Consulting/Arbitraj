@@ -46,19 +46,17 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
             deadline: original.deadline,
         };
         let mut saved: Proof = serde_json::from_slice(&serde_json::to_vec(&p).unwrap()).unwrap();
-        let mut old = serde_json::to_value(&p).unwrap();
-        old.as_object_mut().unwrap().remove("runtime");
-        old["terms"].as_object_mut().unwrap().remove("atf");
-        let mut legacy: Proof = serde_json::from_value(old).unwrap();
-        let binding = super::super::super::pools::antfarm_profile::receipt_runtime;
+        let mut incomplete = serde_json::to_value(&p).unwrap();
+        incomplete.as_object_mut().unwrap().remove("runtime");
+        incomplete["terms"].as_object_mut().unwrap().remove("atf");
+        let incomplete: Proof = serde_json::from_value(incomplete).unwrap();
+        assert_eq!(incomplete.data(), calldata);
+        let binding = super::super::super::pools::antfarm_profile::saved_binding;
         assert_eq!(
-            binding(true, legacy.terms.atf, legacy.runtime),
-            Some(runtime)
+            binding(incomplete.terms.atf, incomplete.runtime),
+            Err(ErrorCode::OutcomeUnknown)
         );
-        assert_eq!(binding(true, saved.terms.atf, saved.runtime), Some(runtime));
-        assert_eq!(binding(true, None, Some(runtime)), None);
-        assert_eq!(legacy.data(), calldata);
-        legacy.terms.atf = Some(atf);
+        assert_eq!(binding(p.terms.atf, p.runtime), Ok((atf, runtime)));
         assert_eq!(saved.data(), calldata);
         let logs: Vec<SimLog> = serde_json::from_value(row["results"][i]["logs"].clone()).unwrap();
         let expected = (
@@ -66,7 +64,7 @@ fn original_output_funding_instruction_and_receipt_survive_recovery() {
             row["credit"].as_str().unwrap().parse().unwrap(),
         );
         assert_eq!(saved.measured(&logs), Some(expected));
-        assert_eq!(legacy.measured(&logs), Some(expected));
+        assert!(incomplete.measured(&logs).is_none());
         assert_eq!(saved.terms.stock_approval().is_some(), !original.useLoan);
         let mut partial = logs.clone();
         let settled = logs.iter().find(|l| l.address == module).unwrap().clone();

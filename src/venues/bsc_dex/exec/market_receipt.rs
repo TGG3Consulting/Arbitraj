@@ -67,7 +67,7 @@ pub(super) fn first(c: &SwapCtx) -> Option<Saved<'_>> {
     entries(c).next()
 }
 pub(in crate::venues::bsc_dex) async fn included(
-    c: &mut SwapCtx,
+    c: &SwapCtx,
     ctx: &Ctx,
     hash: B256,
     receipt: &Receipt,
@@ -75,13 +75,12 @@ pub(in crate::venues::bsc_dex) async fn included(
     if receipt.status.to::<u64>() != 1 {
         return Ok(());
     }
-    if let Some(p)=c.antfarm.as_mut(){p.included(ctx,hash,receipt).await?;}
-    if let Some(p)=c.antfarm_output.as_mut(){p.included(ctx,hash,receipt).await?;}
     for saved in entries(c) {
         match saved {
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
-            Saved::AntfarmOutput(_) | Saved::Antfarm(_) => {},
+            Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
+            Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
             Saved::O1(p) => p.included(ctx, hash, receipt).await?,
             Saved::Temple(p) => p.included(ctx, hash, receipt).await?,
             Saved::Carbon(p) => p.included(ctx, hash, receipt).await?,

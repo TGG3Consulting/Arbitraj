@@ -112,12 +112,7 @@ impl Proof {
     pub fn data(&self) -> Bytes {
         self.terms.data(self.minimum, self.deadline)
     }
-    pub(crate) async fn included(
-        &mut self,
-        ctx: &Ctx,
-        hash: B256,
-        r: &Receipt,
-    ) -> GatewayResult<()> {
+    pub(crate) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
         signed_call::included(
             ctx,
             hash,
@@ -128,18 +123,14 @@ impl Proof {
             self.data(),
         )
         .await?;
-        let (fee_token, runtime) = super::super::pools::antfarm_profile::inclusion(
+        super::super::pools::antfarm_profile::inclusion(
             ctx,
             r.block_hash,
             self.terms.module,
-            false,
             self.terms.atf,
             self.runtime,
         )
-        .await?;
-        self.terms.atf = Some(fee_token);
-        self.runtime = Some(runtime);
-        Ok(())
+        .await
     }
     pub(in crate::venues::bsc_dex) fn measured(
         &self,
@@ -358,28 +349,20 @@ mod tests {
                 minimum: c.minimum,
                 deadline: c.deadline,
             };
-            let mut old = serde_json::to_value(&proof).unwrap();
-            old.as_object_mut().unwrap().remove("runtime");
-            old["terms"].as_object_mut().unwrap().remove("atf");
-            let mut restored: Proof = serde_json::from_value(old).unwrap();
-            assert_eq!(restored.data(), calldata);
-            let binding = super::super::super::pools::antfarm_profile::receipt_runtime;
+            let mut incomplete = serde_json::to_value(&proof).unwrap();
+            incomplete.as_object_mut().unwrap().remove("runtime");
+            incomplete["terms"].as_object_mut().unwrap().remove("atf");
+            let incomplete: Proof = serde_json::from_value(incomplete).unwrap();
+            assert_eq!(incomplete.data(), calldata);
+            let binding = super::super::super::pools::antfarm_profile::saved_binding;
             assert_eq!(
-                binding(false, restored.terms.atf, restored.runtime),
-                Some(runtime)
+                binding(incomplete.terms.atf, incomplete.runtime),
+                Err(ErrorCode::OutcomeUnknown)
             );
-            assert_eq!(
-                binding(false, proof.terms.atf, proof.runtime),
-                Some(runtime)
-            );
-            assert_eq!(binding(false, Some(atf), None), None);
-            restored.terms.atf = Some(atf);
+            assert_eq!(binding(proof.terms.atf, proof.runtime), Ok((atf, runtime)));
             assert_eq!(proof.data(), calldata);
             let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
-            assert_eq!(
-                restored.amounts(&logs, wallet, input, output),
-                proof.amounts(&logs, wallet, input, output)
-            );
+            assert!(incomplete.amounts(&logs, wallet, input, output).is_none());
             if row["mode"] == "held_fee" {
                 assert!(proof.amounts(&logs, wallet, input, output).is_none());
                 continue;

@@ -63,7 +63,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 .unwrap();
             let market = Market {
                 pool,
-                maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:extended,slipstream:None,wallet_module:false,
+                maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:extended,router02:None,slipstream:None,wallet_module:false,
                 fee: U24::from(node["fee"].as_u64().unwrap() as u32),
             };
             let bound = Proof {
@@ -129,7 +129,7 @@ fn community_wallet_recovers_the_signed_pool_exact_debit_and_terminal_minimum() 
         let data: Bytes = serde_json::from_value(tx["data"].clone()).unwrap();
         let market = archive["markets"].as_array().unwrap().iter().find(|e| e["pool"] == row["pool"]).unwrap();
         let proof = Proof {
-            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:false,slipstream:None,wallet_module:true },
+            market: Market { pool:parse(&row["pool"]), fee:U24::from(market["fee"].as_u64().unwrap() as u32), maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:None,wallet_module:true },
             target:parse(&tx["to"]), payer:parse(&tx["from"]),input:parse(&row["source"]),output:parse(&row["target"]),
             budget:amount(&row["spent"]),minimum:amount(&row["received"]),deadline:U256::from_be_slice(&data[data.len()-32..]),
         };
@@ -179,7 +179,7 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
                     let tx=x["calldata"].as_str().unwrap().parse::<Bytes>().unwrap();
                     let call=ICypherRouter::exactInputSingleCall::abi_decode(&tx).unwrap().args;
                     assert_eq!(call.deployer,parse(&m["deployer"]));
-                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,maverick_chain:None,maverick:false,fee_event:false,slipstream:None,wallet_module:false,algebra_deployer:Some(call.deployer)},
+                    let p=Proof{market:Market{pool:parse(&m["pool"]),fee:U24::ZERO,maverick_chain:None,maverick:false,fee_event:false,router02:None,slipstream:None,wallet_module:false,algebra_deployer:Some(call.deployer)},
                         target:parse(&d["router"]),payer:parse(&x["payer"]),input:call.tokenIn,output:call.tokenOut,budget:call.amountIn,minimum:call.minimum,deadline:call.deadline};
                     assert_eq!(p.data(),tx);assert_eq!(p.payer,call.recipient);assert_eq!(x["spent"],p.budget.to_string().as_str());
                     let q=leg["official_quote"]["response"].as_str().unwrap().parse::<Bytes>().unwrap();
@@ -220,7 +220,7 @@ fn early_slipstream_recovers_actual_payment_and_spacing_from_saved_order() {
         let calldata:Bytes=tx["data"].as_str().unwrap().parse().unwrap();
         let decoded=super::super::ur::IUniversalRouter::executeCall::abi_decode(&calldata).unwrap();
         let bound=Proof{market:Market{pool:address(&row["pool"]),fee:U24::ZERO,wallet_module:false,
-            maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:false,slipstream:Some((m["tick_spacing"].as_i64().unwrap() as i32,
+            maverick_chain:None,maverick:false,algebra_deployer:None,fee_event:false,router02:None,slipstream:Some((m["tick_spacing"].as_i64().unwrap() as i32,
                    address(&meta["permit2"]["address"])))},payer:address(&raw["owner"]),
             target:address(&tx["to"]),input,output,budget:units(&row["amount"]),minimum:units(&row["received"]),deadline:decoded.deadline};
         let mut proof:Proof=serde_json::from_value(serde_json::to_value(bound).unwrap()).unwrap();
@@ -234,4 +234,46 @@ fn early_slipstream_recovers_actual_payment_and_spacing_from_saved_order() {
         assert!(proof.measured(&logs).is_none());
     }
     assert_eq!((full,partial),(10,2));
+}
+
+#[test]
+fn both_router02_keys_reproduce_paid_calldata_and_receipts_after_restart() {
+    use crate::venues::bsc_dex::exec::v3_router02::Key;
+    use alloy_primitives::aliases::I24;
+    let fixture = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz");
+    let books: Value = serde_json::from_reader(GzDecoder::new(fixture.as_slice())).unwrap();
+    let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+    let units = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    for (name, count) in [("wagmi", 16), ("thick", 16), ("2thick", 12)] {
+        let book = &books[name];
+        let mut verified = 0;
+        for row in book["cases"].as_array().unwrap().iter().filter(|r| r["wire"] == "router02") {
+            let market = book["markets"].as_array().unwrap().iter().find(|m| m["pool"] == row["pool"]).unwrap();
+            let key = if name == "2thick" { Key::Spacing(I24::try_from(market["spacing"].as_i64().unwrap()).unwrap()) } else { Key::Fee };
+            let tx = &row["tx"];
+            let signed: Bytes = tx["data"].as_str().unwrap().parse().unwrap();
+            let proof = Proof {
+                market: Market {
+                    pool: addr(&row["pool"]), fee: U24::from(market["current_fee"].as_u64().unwrap() as u32),
+                    algebra_deployer: None, fee_event:false, wallet_module:false,
+                    maverick:false, maverick_chain:None, slipstream:None, router02:Some(key),
+                },
+                target:addr(&tx["to"]), payer:addr(&tx["from"]), input:addr(&row["input"]),
+                output:addr(&row["output"]), budget:units(&row["spent"]), minimum:units(&row["received"]),
+                deadline:U256::from_be_slice(&signed[4..36]),
+            };
+            let restored: Proof = serde_json::from_value(serde_json::to_value(proof).unwrap()).unwrap();
+            let logs: Vec<Log> = serde_json::from_value(row["logs"].clone()).unwrap();
+            assert_eq!(restored.data(), signed);
+            assert_eq!(restored.amounts(&logs,restored.payer,restored.input,restored.output),
+                       Some((restored.budget,restored.minimum)));
+            let mut other = restored.clone();
+            other.market.router02 = None;
+            assert_ne!(other.data(), signed);
+            other.minimum += U256::from(1);
+            assert!(other.amounts(&logs,other.payer,other.input,other.output).is_none());
+            verified += 1;
+        }
+        assert_eq!(verified, count);
+    }
 }

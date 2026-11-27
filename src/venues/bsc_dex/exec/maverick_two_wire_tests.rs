@@ -44,7 +44,7 @@ fn signed_market_matches_multicall_and_unique_pool_swap_on_both_chains() {
                             algebra_deployer: None,
                             fee_event: false,
                             wallet_module: false,
-                            slipstream: None,
+                            router02:None,slipstream: None,
                             maverick: true,
                             maverick_chain: snap["chain_id"].as_u64(),
                         },

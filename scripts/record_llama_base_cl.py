@@ -28,7 +28,9 @@ VENUES = {
 
 def registry(reader, cap, name, head):
     start, factory, router, quoter, origins = VENUES[name]
-    roles = {"factory":factory, "router":router, "quoter":quoter}
+    lens = {"thick":"0xb80a72281c76464cc0e1fbf2431a897393e0d757",
+            "2thick":"0x547db6759b0af9e050855106993e3cefc16e937e"}.get(name,"0x0cdee061c75d43c82520ed998c23ac2991c9ac6d")
+    roles = {"factory":factory, "router":router, "quoter":quoter, "lens":lens}
     code = reader.many(("eth_getCode", [a,cap.selector]) for a in roles.values())
     bindings = {k: {"address":a,"bytes":len(c[2:])//2,"runtime":"0x"+keccak(hexstr=c).hex()}
                 for (k,a),c in zip(roles.items(),code,strict=True)}
@@ -74,6 +76,30 @@ def registry(reader, cap, name, head):
         for typ,ex in zip(["address"]*5+["int24"],expected,strict=True):assert decode([typ],next(values))[0]==ex
         m["current_fee"],m["liquidity"],*cash=[int.from_bytes(next(values),"big") for _ in range(4)]
         m["balances"]=list(map(str,cash))
+    # Validate the selected TickLens against both original storage getters on each
+    # pool. An empty bitmap is valid evidence only for that word.
+    slots=posts(cap, [(m["pool"],"slot0()",[],[]) for m in records])
+    checks=[]
+    for m, slot in zip(records,slots,strict=True):
+        tick=decode(["uint160","int24"],slot[:64])[1]
+        word=(tick//m["spacing"])//256
+        for index in range(max(-32768,word-1),min(32767,word+1)+1):
+            checks.append((m,index))
+    ops=[]
+    for m,index in checks:
+        ops.extend([(m["pool"],"tickBitmap(int16)",["int16"],[index]),
+                    (lens,"getPopulatedTicksInWord(address,int16)",["address","int16"],[m["pool"],index])])
+    words=iter(posts(cap,ops));ticks=[]
+    for m,index in checks:
+        bitmap=int.from_bytes(next(words),"big")
+        points,=decode(["(int24,int128,uint128)[]"],next(words))
+        initialized={(index*256+bit)*m["spacing"] for bit in range(256) if (bitmap>>bit)&1}
+        assert len(points)==len(initialized) and {p[0] for p in points}==initialized
+        m.setdefault("lens_words",[]).append([index,str(bitmap),len(points)])
+        ticks.extend((m["pool"],row) for row in points)
+    values=posts(cap,[(p,"ticks(int24)",["int24"],[row[0]]) for p,row in ticks])
+    for (_,(_,net,gross)),actual in zip(ticks,values,strict=True):
+        assert decode(["uint128","int128"],actual[:64])==(gross,net)
     return dict(name=name,chain_id=8453,height=head["block"],selector=cap.selector,state_root=reader.header["stateRoot"],
                 sources=origins,roles=bindings,init="0x"+init.hex(),key_type=keytype,markets=sorted(records,key=lambda row:row["pool"]))
 

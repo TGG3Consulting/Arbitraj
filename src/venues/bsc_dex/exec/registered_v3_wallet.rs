@@ -43,6 +43,8 @@ pub struct Market {
     pub maverick_chain: Option<u64>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub slipstream: Option<(i32,Address)>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub router02: Option<super::v3_router02::Key>,
 }
 fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
@@ -50,7 +52,15 @@ impl Market {
         let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
         let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
+        let router02 = match ctx.dex_text("dex.v3_wallet_router_abi", e.family.id).ok().as_deref() {
+            Some("router02_fee") => Some(super::v3_router02::Key::Fee),
+            Some("router02_spacing") => Some(super::v3_router02::Key::Spacing(
+                alloy_primitives::aliases::I24::try_from(e.pool.tick_spacing.filter(|s| *s>0)?).ok()?)),
+            Some("classic") | None => None,
+            _ => return None,
+        };
         Some(Self {
+            router02,
             maverick_chain: if maverick {Some(ctx.chain_id()?)} else {None},
             slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
             pool: e.pool.reference.address(), maverick, fee: if algebra || maverick{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
@@ -125,6 +135,9 @@ impl RouterMarket for Market {
         }
         if let Some(deployer)=self.algebra_deployer{return ICypherRouter::exactInputSingleCall{args:ICypherRouter::Params{tokenIn:input,tokenOut:output,deployer,recipient:wallet,deadline,amountIn:amount,minimum,limit:Default::default()}}.abi_encode().into()}
         if self.wallet_module{return super::super::pools::solidly_v3::execution_data(self.pool,input,output,amount,minimum,deadline)}
+        if let Some(key) = self.router02 {
+            return key.order(self.fee, (input,output), amount, minimum, wallet, deadline);
+        }
         IV3Router::exactInputSingleCall {
             params: IV3Router::ExactIn {
                 tokenIn: input,

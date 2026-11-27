@@ -205,12 +205,6 @@ pub async fn run(
     fast: Opts,
     acc: Option<&DexAccountId>,
 ) -> Result<(Calc, Vec<String>, Option<Bal>), String> {
-    // К этому моменту направление и торговый счёт уже выбраны. Удерживаем интерес
-    // только до завершения этой предпроверки, в том числе при отмене её future.
-    let _presell_interest = if let Some(account) = acc && d.asset.contract.is_some() {
-        core.inner.deps.gw.get_as(&d.sell_on, Some(account)).await.ok()
-            .and_then(|venue| venue.warm_presell(&d.asset))
-    } else { None };
     let mut t = Timing {
         on,
         ..Timing::default()
@@ -379,6 +373,22 @@ async fn steps(
     let r = super::risk::can_open(core, d);
     t.stop_ms = at.map(|a| a.elapsed().as_millis());
     r?;
+    // У отклонённого направления нет предпродажи. Держим интерес только пока
+    // проходит предпроверка выбранного кошелька с продажей на DEX.
+    let _presell_interest = if let Some(account) = acc
+        && d.asset.contract.is_some()
+        && super::trade_ops::kind(core, &d.sell_on).ok() == Some(VenueKind::Dex)
+    {
+        core.inner
+            .deps
+            .gw
+            .get_as(&d.sell_on, Some(account))
+            .await
+            .ok()
+            .and_then(|venue| venue.warm_presell(&d.asset))
+    } else {
+        None
+    };
     // Решение 266 (precheck.parallel = да): шаги сторон и запрос удержаний вывода A — одновременно (precheck_par.rs),
     // итоги — в прежнем порядке шагов; удержания (held) решаются ниже, на прежнем месте. Иначе — по очереди, как раньше.
     let mut held = None;

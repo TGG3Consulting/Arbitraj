@@ -19,9 +19,15 @@ def from_receipts(reader,factory,final_nonce,path):
     for candidate in source["events"]:
         block=reader.rpc("eth_getBlockByNumber",[hex(candidate["block"]),False])
         assert block["hash"]==candidate["blockHash"] and candidate["block"]<=reader.height
-        receipt=reader.rpc("eth_getTransactionReceipt",[candidate["tx"]])
-        assert receipt["status"]=="0x1" and receipt["blockHash"]==block["hash"] and receipt["transactionHash"]==candidate["tx"]
-        row,=[r for r in receipt["logs"] if int(r["logIndex"],16)==candidate["index"]]
+        if candidate["tx"]:
+            receipt=reader.rpc("eth_getTransactionReceipt",[candidate["tx"]])
+            assert receipt["status"]=="0x1" and receipt["blockHash"]==block["hash"] and receipt["transactionHash"]==candidate["tx"]
+            rows=receipt["logs"]
+        else:
+            rows=reader.rpc("eth_getLogs",[{"blockHash":block["hash"],"address":factory["address"],"topics":[factory["event"]]}])
+        row,=[r for r in rows if int(r["logIndex"],16)==candidate["index"]]
+        assert row["blockHash"]==block["hash"] and row["topics"]==candidate["topics"] and row["data"]==candidate["data"]
+        assert len(row["transactionHash"])==66
         logs.append(deployment(row,factory["address"],factory["event"]))
     assert len({x["pool"] for x in logs})==len(logs)==final_nonce-1
     return sorted(logs,key=lambda row:(row["block"],row["index"]))

@@ -1,5 +1,9 @@
 """Attribute a source row to a spot deployment only for the documented protocol and chain role."""
 
+import gzip
+import json
+from pathlib import Path
+
 # Explicit roles prevent a shared Uniswap V4 PoolManager, ERC20 or permit2 address from identifying a DEX.
 MARKETS = {
     "base": {
@@ -91,7 +95,33 @@ def describe(network,source_id,adapter,configured,candidates):
         matched.add(address)
     text = "Совпадение по "+key+" в исходнике и профиле "+", ".join(f"`{id}`" for id in ids)+"."
     if source_id=="799":
-        text += " Остальные адреса сетевой секции принадлежат реакторам Gladius. Для них требуется отдельная проверка подписанных ордеров."
+        data = Path(__file__).resolve().parents[1]/"tests/data/first_run_dex_2026-11-26"
+        roles = json.loads((data/"gladius_source_roles.json").read_bytes())[network]
+        archive = f"gladius_{network}_protected.json.gz"
+        proof = json.loads(gzip.decompress((data/archive).read_bytes()))
+        records = roles["records"]
+        reactor = proof["roles"]["reactor"]["address"]
+        if roles["selector"] != proof["selector"] or {r["emitter"] for r in records} != {reactor}:
+            raise ValueError("Gladius: receipt emitter or settlement block differs")
+        second = roles.get("source_second_address")
+        expected = {reactor} | ({second["address"]} if second else set())
+        if addresses-matched != expected:
+            raise ValueError(f"Rubicon: unresolved {network} contract role")
+        text += f" Gladius: {len(records)} исторических оплат, Fill выпущен `{reactor}`."
+        if second:
+            paid = sum(r["filler"] == second["address"] for r in records)
+            text += (f" Второй адрес источника `{second['address']}` выступил плательщиком в {paid} квитанциях, "
+                     "его reactor() вернул первый адрес.")
+        text += (f" На собственных подписанных тестовых ордерах защищённый модуль провёл {len(proof['cases'])} ERC20-обмена. "
+                 "В настройках Gladius нужны адрес и код своего модуля; для новой цены нужен действующий подписанный ордер, "
+                 "актуальный расход по Quoter и оплачиваемая симуляция со стороны владельца.")
+        observations = roles["current_public_get"]
+        if "error" in observations:
+            text += f" Замер официального GET в {observations['at']}: {observations['error']}."
+        elif observations.get("status") != 200:
+            text += f" Замер официального GET в {observations['at']}: HTTP {observations['status']}."
+        text += (f" [Кассовые квитанции](../tests/data/first_run_dex_2026-11-26/{archive}) · "
+                 "[Размещения, роли в Fill и хеши квитанций](../tests/data/first_run_dex_2026-11-26/gladius_source_roles.json).")
         return text
     if addresses-matched:
         text += f" Других адресов в сетевой секции: {len(addresses-matched)}. Их назначение проверяется отдельно."

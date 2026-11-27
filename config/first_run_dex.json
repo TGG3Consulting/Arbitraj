@@ -4071,7 +4071,10 @@
       "dex.v3_fee_tiers": [
         "500",
         "3000",
-        "10000"
+        "10000",
+        "100",
+        "400",
+        "2000"
       ],
       "dex.quoter_virtual": true,
       "dex.pmm_ladder_usd": [

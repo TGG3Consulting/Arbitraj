@@ -41,6 +41,8 @@ def prove_account(header,proof,factory):
             ref=node[1]
         else:raise ValueError("СѓР·РµР» trie")
     nonce,balance,storage,code=rlp.decode(value)
+    if "codeHash" in proof and "0x"+code.hex()!=proof["codeHash"]:
+        raise ValueError("accountProof не подтверждает код фабрики")
     if int.from_bytes(nonce,"big")!=int(proof["nonce"],16) or "0x"+storage.hex()!=proof["storageHash"]:
         raise ValueError("accountProof РЅРµ РїРѕРґС‚РІРµСЂР¶РґР°РµС‚ nonce/storage")
     return storage

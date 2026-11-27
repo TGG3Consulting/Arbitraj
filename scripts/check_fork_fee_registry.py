@@ -1,10 +1,12 @@
 """Отдельная, автономная проверка полноты регистраций и чувствительности к удалению реального тарифа."""
 from copy import deepcopy
+import gzip
 import json
 from pathlib import Path
 import sys
 
 from record_fork_fee_registry import FIXTURES, ROOT, SPECS, verify
+from v3_factory_storage import prove_account
 
 
 def check(snapshot):
@@ -20,6 +22,13 @@ def check(snapshot):
         if row["state_root"] != reference["state_root"] or row["kind"] != SPECS[row["id"]][0]:
             raise ValueError("factory proof bound to the wrong state root or ABI")
         verify(row)
+        wrong_code=dict(row["proof"],codeHash="0x"+"ff"*32)
+        try:
+            prove_account({"stateRoot":reference["state_root"]},wrong_code,row["factory"])
+        except ValueError:
+            pass
+        else:
+            raise ValueError("foreign runtime accepted by account proof")
         tiers={int(f):sp for f,sp in row["tiers"].items()}
         activations={v["fee"]:v["spacing"] for v in row["activations"]}
         if not tiers or activations!=tiers or len(activations)!=len(row["activations"]):
@@ -41,4 +50,6 @@ def check(snapshot):
 
 
 if __name__=="__main__":
-    check(json.loads(Path(sys.argv[1]).read_bytes()))
+    path=Path(sys.argv[1])
+    raw=path.read_bytes()
+    check(json.loads(gzip.decompress(raw) if path.suffix==".gz" else raw))

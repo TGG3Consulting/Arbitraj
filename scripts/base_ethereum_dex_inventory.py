@@ -1023,6 +1023,21 @@ def tables(network, snapshots, profiles):
                    "На Base дополнительные регистрации вне проверенного набора возможны. "
                    "Список применяется к поиску пулов по фабрике при включённом `index.factory_scan`. "
                    f"[Исходные события, шаг тика и проверенные ставки](../{fee_file.as_posix()}).")
+    fork_file = fee_file.with_name(f"fork_fee_registry_{network}.json.gz")
+    if fork_file.exists():
+        archive = json.loads(gzip.decompress(fork_file.read_bytes()))
+        summaries = []
+        for factory in archive["factories"]:
+            tiers = {int(f) for f in factory["tiers"]}
+            used = {m["fee"] for m in factory["markets"]}
+            unused = ", ".join(str(f) for f in sorted(tiers - used))
+            summaries.append(f"`{factory['id']}` — {len(factory['markets'])} пулов, {len(tiers)} ставок"
+                             + (f", без пулов на ставках {unused}" if unused else ""))
+        out.append(f"**Регистрация ставок iZiSwap и Kyber Elastic.** На блоке {archive['block']} полный корень хранилища "
+                   "каждой фабрики подтверждает зарегистрированные пулы и ставки, включая ещё ни разу не использованные. "
+                   + ". ".join(summaries) + ". Для каждой ставки сохранены ответы до и после её активации. "
+                   "У Kyber исходная квитанция содержит SwapFeeEnabled. У iZiSwap и BitSwap регистрация проходит без события. "
+                   f"[Доказательства обеих фабрик](../{fork_file.as_posix()}).")
     if base and "alien-carbon-base" in configured:
         file = Path("tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz")
         archived = json.loads(gzip.decompress(file.read_bytes()))

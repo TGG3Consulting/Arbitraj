@@ -49,6 +49,7 @@ use super::super::super::pools::registry::Entry;
 use super::super::super::pools::stable_native;
 use super::super::super::quote::pool_quote;
 use super::code::Version;
+use crate::venues::bsc_dex::pools::euler_hook;
 use super::kind::{FluidStep, InfKey, Params, STABLE_NATIVE, ShellStep, V4Key};
 
 fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
@@ -59,6 +60,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
+    if f.variant.euler(){return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));}
     if f.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Ambient || f.variant.aqua() || f.variant.llamma() || f.variant.ammalgam() || f.variant.defiplaza() || matches!(f.variant,super::super::super::pools::family_variant::Variant::Mooniswap | super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
@@ -97,6 +99,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
             let Some((_,role,venue))=crate::venues::bsc_dex::pools::yield_basis::key(*id) && (role==0)==(*manager==venue){return Ok((k,venue));}
         return Err("YieldBasis: неверный физический идентификатор рынка".into());
     }
+    if f.variant.euler() && k==ExecKind::UniV4 && let PoolRef::Contract(hook)=pool && !hook.is_zero(){return Ok((k,*hook));}
     if k.singleton() {
         return match pool {
             PoolRef::Singleton { manager, .. } => Ok((k, *manager)),
@@ -133,6 +136,11 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// Router), если он собирается, иначе сигнал. Принимает: окружение (кошелёк), запись реестра. Возвращает: как
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
+    if e.family.variant.euler(){
+        if let Some((_,manager))=euler_hook::step(ctx,e){return Ok((ExecKind::UniV4,manager));}
+        return (e.family.executor_kind==Some(ExecKind::Balancer)).then(||pinned_module_target(ctx,e)).flatten()
+            .map(|a|(ExecKind::Balancer,a)).ok_or_else(||"EulerSwap: не подтверждены ключ V4 или модуль".into());
+    }
     let (k, a, hooks) = shape(e)?;
     if e.family.variant.ammalgam(){return super::super::super::pools::ammalgam::graph_target(ctx,e).map(|a|(k,a)).ok_or_else(||"Ammalgam: не подтверждены рынок и модуль".into());}
     if e.family.variant.defiplaza(){return super::super::defiplaza_plan::graph_target(ctx,e).map(|target|(k,target)).ok_or_else(||"DefiPlaza: касса и пара изменились".into());}
@@ -166,6 +174,7 @@ pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
 /// pool_gate::admitted (снимки кошельков и итогов пробы). Равенство с fits — тест tests/bsc_dex_pool_pass_401.rs.
 /// Принимает: окружение (кошелёк), запись реестра. Ошибок нет.
 pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
+    if e.family.variant.euler(){return euler_hook::step(ctx,e).is_some() || (e.family.executor_kind==Some(ExecKind::Balancer) && pinned_module_target(ctx,e).is_some());}
     if e.family.variant.llamma(){return e.family.executor_kind==Some(ExecKind::StableU256) && crate::venues::bsc_dex::pools::llamma::shape(e).is_some();}
     if e.family.variant.ammalgam(){return super::super::super::pools::ammalgam::graph_target(ctx,e).is_some();}
     if e.family.variant.defiplaza(){return e.family.executor_kind==Some(ExecKind::Basin) && super::super::defiplaza_plan::graph_target(ctx,e).is_some();}
@@ -218,6 +227,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
 /// пула менеджера — ключ есть, валюты ключа ERC-20 = пара записи. Принимает: запись реестра. Возвращает: вид шага, адрес
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
 pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
+    if e.family.variant.euler() && let Some(k)=euler_hook::key(e){return Ok((ExecKind::UniV4,k.hooks,k.hooks));}
     let (k, a) = supported(e.family, &e.pool.reference)?;
     if e.family.variant.llamma() && crate::venues::bsc_dex::pools::llamma::shape(e).is_none(){return Err("LLAMMA: физические валюты или адрес не совпадают с рынком".into());}
     if e.family.variant.issuer_shares() &&
@@ -250,6 +260,9 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 /// менеджера-синглтона, у CURVE нет состояния StableSwap или токен входа не из пары пула; NotConfigured — комиссия V2
 /// не задана или не в целых долях 1e-6. `token_in` — токен входа шага (нужен виду CURVE для порядка i → j).
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
+    if e.family.variant.euler() && let Some((key,manager))=euler_hook::step(ctx,e) && (token_in==key.currency0 || token_in==key.currency1){
+        return Ok((Params::UniV4{key},manager));
+    }
     if e.family.variant.llamma(){
         let (k,amm)=supported(e.family,&e.pool.reference).map_err(|w|ctx.err(ErrorCode::NoRoute,w))?;
         let i=crate::venues::bsc_dex::pools::llamma::shape(e).and_then(|s|s.side(token_in)).filter(|_|k==ExecKind::StableU256).ok_or_else(||ctx.err(ErrorCode::NoRoute,"LLAMMA: неизвестный актив или рынок"))? as u8;

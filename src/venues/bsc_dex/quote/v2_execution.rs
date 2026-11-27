@@ -118,6 +118,8 @@ pub(super) async fn option(
         }
     }
     let fee_mode = match &execution.wire {
+        v2_wallet_sim::Wire::V5Funded(step,_) if c.entry.family.variant.euler() && step.kind==17=>
+            Some(RouterFeeMode::EulerModuleV5{module:step.pool,executor:execution.target}),
         v2_wallet_sim::Wire::V5Funded(step,_) if step.native.is_some() && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)=>
             Some(RouterFeeMode::NativeWallet{target:execution.target,native_cash:true}),
         super::v2_wallet_sim::Wire::Ranges(_) | super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),

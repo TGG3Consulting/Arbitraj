@@ -94,13 +94,21 @@ pub(super) async fn options(
     let pool = e.pool.reference.address();
     let mut rows = Vec::new();
     let mut targets = Vec::new();
+    if graph && e.family.variant.euler() && let Ok(Some(executor))=executor::address(ctx)
+        && let Some((key,manager))=crate::venues::bsc_dex::pools::euler_hook::step(ctx,e)
+        && crate::venues::bsc_dex::pools::euler_hook::canonical(ctx,e.family,pool,(e.pool.token0,e.pool.token1),&at).await.ok()==e.key {
+        let step=V5Step{native:None,kind:19,pool:manager,data:key.pool_key().abi().into()};
+        let route=Execution{mode:RouteMode::Graph,target:executor,wire:Wire::funded(step,vec![pool],None)};
+        if let Ok(option)=v2_execution::option(q,i,e.clone(),payer,route,Some(h)).await {rows.push(option);}
+    }
     if exact_wallet_tokens::eligible(ctx, e.family.id, input, output) {
         if !e.family.variant.euler(){targets.push(pool);}
         if let Ok(router) = ctx.dex_addr("dex.quoter", e.family.id) {
             targets.push(router);
         }
     }
-    if e.family.executor_kind.is_some()
+    let module=e.family.executor_kind.is_some_and(|k| !e.family.variant.euler() || k==crate::venues::bsc_dex::pools::exec_kind::ExecKind::Balancer);
+    if module
         && let Ok(module) = ctx.dex_addr("dex.router", e.family.id)
     {
         targets.push(module);

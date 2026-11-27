@@ -161,6 +161,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             let backing=Box::pin(super::super::pools::euler_swap::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             if !backing.installed{return Err(ctx.err(ErrorCode::NoRoute,"EulerSwap: LP отключил оператор пула"));}
+            if let Some(saved)=&e.key{
+                let actual=super::super::pools::euler_hook::canonical(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at).await?;
+                if actual!=*saved{return Err(ctx.err(ErrorCode::NoRoute,"EulerSwap: изменился ключ хука"));}
+                continue;
+            }
             Box::pin(super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at)).await?;
             continue;
         }

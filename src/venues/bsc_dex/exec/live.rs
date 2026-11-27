@@ -60,8 +60,16 @@ pub async fn share(
         .iter()
         .map(|h| {
             // Решение 382: перечитанная после расхождения с квотером запись (Quoting.pinned), иначе из памяти.
-            super::quoter_refetch::entry(q, &h.pool)
-                .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Пул маршрута больше не в реестре"))
+            let mut e=super::quoter_refetch::entry(q,&h.pool)
+                .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Пул маршрута больше не в реестре"))?;
+            if let Some(crate::core::types::RouterFeeMode::EulerModuleV5{module,executor})=h.fee_mode {
+                if direct_mode || !e.family.variant.euler() || e.family.executor_kind!=Some(super::super::pools::exec_kind::ExecKind::Balancer)
+                    || ctx.dex_addr("dex.router",e.family.id)?!=module || super::executor::address(ctx)?!=Some(executor){
+                    return Err(ctx.err(ErrorCode::NoRoute,"EulerSwap: выбранный модуль или исполнитель изменился"));
+                }
+                e.key=None;
+            }
+            Ok(e)
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;
     // Родной MarSwap при положительной оплате ETH считает эту ногу без процента.

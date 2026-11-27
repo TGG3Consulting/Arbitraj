@@ -169,10 +169,13 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     let Ok(pool) = c.pool.parse::<Address>() else {
         return Verdict::Rejected("EulerSwap: неверный адрес пула".into());
     };
-    let found = super::verify_woo::found(c, PoolRef::Contract(pool));
+    let mut found = super::verify_woo::found(c, PoolRef::Contract(pool));
     let result = async {
         let at = super::nami::block(ctx, "latest").await?;
-        market(ctx, c.family, pool, (found.token0, found.token1), &at).await
+        let pair=(found.token0,found.token1);
+        let backing=market(ctx,c.family,pool,pair,&at).await?;
+        found.key=super::euler_hook::canonical(ctx,c.family,pool,pair,&at).await.ok();
+        Ok::<_,crate::gateway::errors::GatewayError>(backing)
     }
     .await;
     match result {

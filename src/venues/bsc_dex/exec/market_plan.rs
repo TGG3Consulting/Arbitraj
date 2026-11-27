@@ -353,6 +353,12 @@ pub(super) fn router_shape(
     native_asset:bool,cash:Address,
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::EulerModuleV5{module,executor})=hop.fee_mode {
+        if !direct && !native_asset && route.legs.len()==1 && route.mode==crate::core::types::RouteMode::Graph
+            && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.euler() && q.ctx.dex_addr("dex.router",e.family.id).ok()==Some(module))
+            && super::executor::takes(&q.ctx,&q.reg,route,false)?==Some(executor){return Ok(());}
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"EulerSwap: изменились исполнитель, валюта или модуль"));
+    }
     if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::FluxEth{..})=hop.fee_mode {
         if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));

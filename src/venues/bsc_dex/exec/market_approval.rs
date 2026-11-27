@@ -17,7 +17,7 @@ enum Spender {
 fn selected(mode: Option<RouterFeeMode>) -> Spender {
     use RouterFeeMode::*;
     match mode {
-        Some(Llamma{v5:Some(executor),..}|YieldBasis{v5:Some(executor),..}|BancorLegacy{v5:Some(executor),..})=>Spender::Selected(executor),
+        Some(EulerModuleV5{executor,..}|Llamma{v5:Some(executor),..}|YieldBasis{v5:Some(executor),..}|BancorLegacy{v5:Some(executor),..})=>Spender::Selected(executor),
         Some(
             NativeWallet { target, .. }
             | ProtectedWallet { target }

@@ -374,6 +374,7 @@ pub mod load_lb_bins;
 pub(crate) mod topaz;
 pub mod load_maverick;
 mod euler_directory;
+pub(crate) mod euler_hook;
 pub(crate) mod euler_swap;
 pub(crate) mod euler_quotes;
 pub(crate) mod stabull;

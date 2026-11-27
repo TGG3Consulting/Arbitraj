@@ -159,6 +159,8 @@ pub enum RouterFeeMode {
     Llamma {target:alloy_primitives::Address,maximum:alloy_primitives::U256,desired:Option<alloy_primitives::U256>,v5:Option<alloy_primitives::Address>},
     /// Settlement through the configured Mooniswap wallet, preserving native ETH or wrapped ERC20.
     Mooniswap {target:alloy_primitives::Address,native:bool,native_cash:bool},
+    /// Личный EulerSwapWallet в шаге 17 существующего исполнителя.
+    EulerModuleV5 {module:alloy_primitives::Address,executor:alloy_primitives::Address},
     DefiPlaza {target:alloy_primitives::Address,native:bool,native_cash:bool},
     /// Original YieldBasis market paid through a module bound to its Ethereum factory.
     YieldBasis {

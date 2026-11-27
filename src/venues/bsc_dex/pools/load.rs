@@ -1341,7 +1341,12 @@ pub async fn entry(
         block,
     )
     .await?;
-    Ok(built(ctx, p, ticker, usdt, block, l))
+    let mut entry=built(ctx, p, ticker, usdt, block, l);
+    if p.family.variant.euler() && entry.key.is_none() && ctx.dex_addr("dex.pool_manager",p.family.id).is_ok()
+        && let Ok(at)=super::nami::block(ctx,&format!("0x{block:x}")).await {
+        entry.key=super::euler_hook::canonical(ctx,p.family,p.reference.address(),(p.token0,p.token1),&at).await.ok();
+    }
+    Ok(entry)
 }
 
 /// Запись реестра из найденного пула и уже прочитанного состояния (и пачечное чтение, load_batch.rs). Ошибок нет.

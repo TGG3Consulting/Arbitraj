@@ -2083,6 +2083,8 @@ def tables(network, snapshots, profiles):
                   f"Кошелёк получил выплату в {len(wallet['cases'])} проверках, ещё {len(wallet['refusals'])} попыток при положительной котировке отклонил EVault (E_AccountLiquidity). "
                   "Periphery поддерживает точный вход и выход. Защищённый модуль проверяет конечный приход и исходный расход; V5 принимает адрес выбранного пула в шаге 17. "
                   "Один счёт LP или хранилище в разных пулах ограничивает совместный объём. Ставка V2 зависит от направления и хука; протокольная доля удерживается внутри неё.")
+            direct_hook=base_launch_inventory.evidence(f"eulerswap_{network}_v4.json.gz")
+            task+=f" Через штатный PoolManager Uniswap V4 и шаг 19 без размещения модуля получены {len(direct_hook['cases'])} выплат и {len(direct_hook['refusals'])} отказов EVault; форма выбирается после учёта газа."
             if not base:
                 extra=base_launch_inventory.evidence("eulerswap_ethereum_unlisted_wallets.json.gz")
                 task+=(f" Вне дополнительного реестра у 0x719529…68a8 получены {len(extra['cases'])} выплат, включая 1 USDC → 1,000782 USDT. "

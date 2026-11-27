@@ -53,6 +53,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             let i = s.tokens.iter().position(|&t| t == token_in).ok_or("Umbrae DAMM: неизвестный токен входа")?;
             pair(s.reserves[1-i], U256::ONE, s.reserves[i], U256::ONE)
         }
+        (PoolState::Bundles(book),PoolKind::V2) => {
+            let s=&book.market; let i=usize::from(token_in==s.tokens[1]);
+            pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)
+        }
         (PoolState::Antfarm(book),PoolKind::V2) => {
             let s=&book.market; let i=usize::from(token_in==s.tokens[1]);
             if s.balances[i]>s.reserves[i] {return Err("Antfarm: баланс требует отдельной оценки лучшего курса".into());}
@@ -117,6 +121,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
                 (*reserve1, *reserve0)
             };
             pair(rout, U256::ONE, rin, U256::ONE)
+        }
+        (PoolState::Dagrow(s),PoolKind::V2) => {
+            if token_in==s.stable {pair(s.reserves[1],s.stable_scale,s.reserves[0],U256::ONE)}
+            else {pair(s.reserves[0],U256::ONE,s.reserves[1],s.stable_scale)}
         }
         (PoolState::ToonSwap(s),PoolKind::V2) => { let i=usize::from(!zfo); let rin=if s.balances[i]>s.reserves[i] {U256::ONE} else {s.reserves[i]}; pair(s.reserves[1-i],U256::ONE,rin,U256::ONE) }
         (PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }, PoolKind::V2) => {

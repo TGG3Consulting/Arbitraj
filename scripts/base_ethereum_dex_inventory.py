@@ -109,6 +109,32 @@ def tables(network, snapshots, profiles):
                     out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
         out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
 
+    if not base:
+        market_path = Path("tests/data/first_run_dex_2026-11-26")
+        with gzip.open(market_path / "safeswap_ethereum_wallets.json.gz", "rt") as stream:
+            safeswap = json.load(stream)
+        with gzip.open(market_path / "surge_ethereum_wallets.json.gz", "rt") as stream:
+            surge = json.load(stream)
+        out.extend(["", "#### SafeSwap и Surge на Ethereum", "",
+                    "У SafeSwap четыре фабрики. Реестры сверены по CREATE2 и getPair в обоих порядках на одном блоке. Для первых двух фабрик проверены чистые выплаты Router02 и V5, предел на одну минимальную единицу выше и истёкший срок.",
+                    "", "| Фабрика SafeSwap | Зарегистрировано пар | Пар с полным кругом | Выплаченных ног через V5 / Router02 |",
+                    "|---|---:|---:|---:|"])
+        for venue in safeswap["deployments"]:
+            markets = venue["markets"]
+            legs = {mode: sum(1 for m in markets for r in m.get("rounds", []) if r["mode"]==mode
+                              for leg in ("buy", "sell") if r.get(leg, {}).get("exact", {}).get("status")=="0x1")
+                    for mode in ("v5", "router")}
+            settled = sum(any("buy" in r and "sell" in r for r in m.get("rounds", [])) for m in markets)
+            count = f"{legs['v5']} / {legs['router']}" if "pair_pips" in venue else "исполнение не проверено"
+            out.append(f"| {venue['id']} · `{venue['roles']['factory']['address']}` | {len(markets)} | {settled} | {count} |")
+        out.extend(["", "У исходной пары ставка 0,20%, у её Router02 расчёт выплаты использует 0,25%. У второй фабрики ставка обоих путей 0,20%. Для каждого размера сравниваются выплата и газ. [Реестр, вызовы и балансы](../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_wallets.json.gz).",
+                    "", f"У Surge проверен рынок ETH/SRG по адресу `{surge['address']}` на блоке {surge['height']}. "
+                    "Покупка принимает ETH, продажа выплачивает ETH. Продажа тем же адресом в блоке его покупки откатывается. Минимум на продаже применяется к валовой выплате до удержания комиссии.",
+                    "", "| Покупка, wei ETH | Получено, raw SRG | Продажа, wei ETH net | Газ покупки / продажи |", "|---:|---:|---:|---:|"])
+        for r in surge["cases"]:
+            out.append(f"| {r['input']} | {r['bought']} | {r['received']} | {r['buy']['gas']} / {r['sell']['gas']} |")
+        out.append("Газ оплачивается отдельно. В этих двух случаях валовая и чистая выплаты совпали при ставке снимка. Для USDT нужен отдельный исполнимый денежный маршрут. [Квитанции и контрольные отказы](../tests/data/first_run_dex_2026-11-26/surge_ethereum_wallets.json.gz).")
+
     if not base and "toonswap" in configured:
         toon_path = Path("tests/data/first_run_dex_2026-11-26/toonswap_ethereum_wallets.json.gz")
         with gzip.open(toon_path, "rt", encoding="utf8") as stream:
@@ -141,6 +167,7 @@ def tables(network, snapshots, profiles):
                     "Guard `0xdde4b3cf28ad1409d6c79cf1bdc298424362e2ab`, реализация `0x0005144b17cf95d6b0f2d682abbccf5596db0a27`. "
                     "За 1 USDT пул котировал 0,876418871064609516 DAGR для Eco и 0,841008007587251556 DAGR для Exo. "
                     "Для торговли важны адрес плательщика, флаг паузы продаж и обе реализации. Резервы выражены с 18 знаками, платёж USDT имеет 6. "
+                    "SSP сравнивает точный вход и точный выход, защитный модуль измеряет конечные балансы кошелька. На двух размерах и обеих сторонах прошли 20 вызовов: 8 прямых, 8 защищённых прямых, 4 через V5. Для штатного SSP возврат в изменяемый USDT требует защиты конечной выплаты. [Денежные результаты и откаты](../tests/data/first_run_dex_2026-11-26/dagrow_ethereum_protected_wallets.json.gz). "
                     "[Архив котировок с исходными единицами](../tests/data/first_run_dex_2026-11-26/dagrow_ethereum_directory.json.gz) · [Описание протокола](https://dagrow.app/whitepaper/)."])
     if not base and {"unicly","hopeswap","archly-ethereum"}.issubset(configured):
         out.extend(["", "### Unicly, HopeSwap и Archly на Ethereum", "",
@@ -1421,6 +1448,16 @@ def tables(network, snapshots, profiles):
             if any(r["pool"]==pool.lower() for r in market_registry["pools"]):
                 factory=configured[id]["settings"]["dex.factory"]
                 roundtrip="CREATE2, реестр пар и учёт обоих токенов у Router02"
+        if not base and id=="safemoonswap_ethereum":
+            dep=safeswap["deployments"][0]
+            factory=dep["roles"]["factory"]["address"]
+            pool=next(m["pool"] for m in dep["markets"] if m.get("rounds"))
+            roundtrip="CREATE2 и getPair в обоих порядках"
+            status="Две фабрики с архивными выплатами. Ещё две зарегистрированные фабрики используют proxy"
+        if not base and id=="surge-protocol-eth":
+            pool=surge["address"]
+            roundtrip="проверенный код SURGE и собственные события Bought и Sold"
+            status="Проверены нативные покупки и продажи ETH/SRG в последовательных блоках. Для других контрактов SRG20 нужен отдельный реестр"
         if not base and id in ("bundles-swap","dagrow"):
             stem="bundles" if id=="bundles-swap" else "dagrow"
             with gzip.open(f"tests/data/first_run_dex_2026-11-26/{stem}_ethereum_directory.json.gz","rt") as handle:
@@ -1434,7 +1471,7 @@ def tables(network, snapshots, profiles):
                 pool=observed["roles"]["pool"]["address"]
                 factory=None
                 roundtrip="Один пул USDT/DAGR. Проверены proxy, implementation и связанный poolGuard"
-                status="8 котировок для двух плательщиков. Комиссия Eco 1%, Exo 5%. Исторический getAmountsOut учитывает конкретного плательщика"
+                status="8 котировок Eco/Exo и 20 результатов в архивной EVM: оба направления, две суммы, SSP и модуль в двух формах заявки, V5 kind 29. Адрес модуля задаёт владелец после развёртывания"
         specific=base_launch_inventory.registry_row(network,id)
         if specific:
             selected, factory, roundtrip, status = specific

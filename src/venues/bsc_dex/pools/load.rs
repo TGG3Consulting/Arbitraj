@@ -86,11 +86,21 @@ pub async fn state(
         }else{Box::pin(super::umbrae_quotes::ladder(ctx,tokens,reg,f,pool,m.tokens,usdt,&at)).await?};
         return Ok(Loaded{state,ticks:None,bins:None,fee_pips:None});
     }
+    if f.variant==Variant::Bundles {
+        let at=super::nami::block(ctx,&tag).await?;
+        let book=Box::pin(super::bundles::book(ctx,f,reference.address(),pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::Bundles(Box::new(book)),ticks:None,bins:None,fee_pips:None});
+    }
     if f.variant==Variant::Antfarm {
         let h=super::super::quote::white_state::head(ctx,&tag).await?;
         let mut s=Box::pin(super::antfarm_book::read(ctx,f,reference.address(),pair,h)).await?;
         s.limits=Box::pin(super::antfarm_capacity::available(ctx,f,&s,h)).await;
         return Ok(Loaded{state:PoolState::Antfarm(Box::new(s)),ticks:None,bins:None,fee_pips:None});
+    }
+    if f.variant==Variant::Dagrow {
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::dagrow::state(ctx,f,reference.address(),Some(pair),&at)).await?;
+        return Ok(Loaded{state:PoolState::Dagrow(Box::new(state)),ticks:None,bins:None,fee_pips:None});
     }
     if f.variant==Variant::Temple {
         let PoolRef::Multi{contract,..}=reference else{return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: нужна пара с указанным активом выплаты"));};

@@ -45,6 +45,11 @@ pub fn request(
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::request(ctx,e,token_in,amount);}
+    if let PoolState::Dagrow(s)=&e.pool.state {
+        let output=if token_in==s.stable{s.dagr}else if token_in==s.dagr{s.stable}else{return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: неизвестная валюта"))};
+        return Ok((s.pool,super::super::pools::dagrow::ISsp::getAmountsOutCall{n:amount,path:vec![token_in,output],payer:s.payer}.abi_encode().into()));
+    }
+    if let PoolState::Bundles(book)=&e.pool.state{return super::super::pools::bundles::quote_request(ctx,e,book,token_in,amount);}
     if matches!(e.pool.state, PoolState::Antfarm(_)) {return super::super::pools::antfarm_probe::request(ctx,e);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::request(ctx,e,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
@@ -532,6 +537,12 @@ pub fn request(
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
+    if let PoolState::Dagrow(_)=&e.pool.state {
+        let values=super::super::pools::dagrow::ISsp::getAmountsOutCall::abi_decode_returns(out).ok()?;
+        let [paid,got]=values.as_slice() else{return None};
+        return (*paid==amount && !got.is_zero()).then_some(*got);
+    }
+    if let PoolState::Bundles(book)=&e.pool.state{return super::super::pools::bundles::quote_result(book,out,amount);}
     if let PoolState::Antfarm(book)=&e.pool.state {return super::super::pools::antfarm_probe::expected(book,out,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::payout(e,token_in,amount,out);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {

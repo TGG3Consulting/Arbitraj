@@ -292,6 +292,14 @@ mod tests {
                             p.network,
                             p.id
                         );
+                     } else if k=="dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="safeswap_v2") {
+                        let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/safeswap_ethereum_directory.json.gz");
+                        let dir:Value=serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+                        assert_eq!(dir["selector"],snapshot["selector"]);
+                        let address=match p.settings.get("dex.factory").unwrap() {Parameter::Text(a)=>a,_=>unreachable!()};
+                        let r=dir["deployments"].as_array().unwrap().iter().find(|r|r["roles"]["factory"]["address"]==address.as_str()).unwrap();
+                        assert_eq!(r["init"].as_str(),Some(text.as_str()));
+                        assert!(matches!(p.settings.get("dex.v2_router_fee_pips"),Some(Parameter::Integer(pips)) if r["router_pips"].as_u64()==Some(*pips as u64)));
                     } else if k=="dex.pool_code_hashes" && matches!(p.id.as_str(),"blueprint"|"vvs-v3-ethereum") {
                         let raw:&[u8]=if p.id=="blueprint" { include_bytes!("../../tests/data/first_run_dex_2026-11-26/blueprint_ethereum_directory.json.gz") }
                             else { include_bytes!("../../tests/data/first_run_dex_2026-11-26/vvs_ethereum_directory.json.gz") };
@@ -299,6 +307,11 @@ mod tests {
                         assert_eq!(r["selector"],snapshot["selector"]);
                         assert_eq!(r["init"].as_str(),Some(text.as_str()));
                         assert_eq!(r["nonce"].as_u64().unwrap(),r["markets"].as_array().unwrap().len() as u64+1);
+                    } else if k=="dex.pool_code_hashes" && p.id=="bundles-swap" {
+                        let bytes=include_bytes!("../../tests/data/first_run_dex_2026-11-26/bundles_ethereum_directory.json.gz");
+                        let d:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();
+                        assert_eq!(d["selector"],snapshot["selector"]);
+                        assert!(["Pair","OraclePair"].iter().any(|c|d["classes"][*c]["init"]==text.as_str()));
                     } else if k=="dex.pool_code_hashes" && p.id=="antfarm-ethereum" {
                         let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz");
                         let r:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();

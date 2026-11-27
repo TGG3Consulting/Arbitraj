@@ -21,6 +21,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     Umbrae,
     O1,
     Antfarm,
+    Dagrow,
     Temple,
     Carbon,
     MintClub,
@@ -30,6 +31,7 @@ pub(in crate::venues::bsc_dex) enum Market {
 pub(super) struct Selection {
     target: Option<Address>,
     carbon: Option<B256>,
+    dagrow:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
 }
 impl Selection {
@@ -41,12 +43,14 @@ impl Selection {
             return Self {
                 target: Some(target),
                 carbon: None,
+                dagrow:None,
                 proceeds: Some((tier, loan)),
             };
         }
         Self {
             target: super::mint_club_direct::selected(leg),
             carbon: super::carbon_direct::selected(leg).1,
+            dagrow:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
             proceeds: None,
         }
     }
@@ -59,6 +63,7 @@ impl Market {
             _ if super::o1_wallet::enabled(e) => Some(Self::O1),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
+            PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             PoolState::Carbon(_) => Some(Self::Carbon),
             PoolState::MintClub(_) => Some(Self::MintClub),
@@ -81,6 +86,7 @@ impl Market {
             Self::O1 => "o1: выберите проверенный модуль для расчёта WETH",
             Self::Umbrae => "Umbrae: требуется выбранный адрес исполнения",
             Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
+            Self::Dagrow => "DAGrow: требуются исходные условия поручения",
             Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
             Self::Carbon => "Carbon: требуется подтвержденный вектор действий контроллера",
             Self::MintClub => {
@@ -95,6 +101,7 @@ impl Market {
             Self::O1 => "o1 Standard WETH",
             Self::Umbrae => "Umbrae",
             Self::Antfarm => "Antfarm",
+            Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
             Self::Carbon => "Carbon",
             Self::MintClub => "Mint Club",
@@ -147,6 +154,7 @@ impl Market {
                 ))
                 .await
             }
+            Self::Dagrow=>Box::pin(super::dagrow_wallet::plan(ctx,s,wallet,height,selected.dagrow)).await,
             Self::Temple => {
                 Box::pin(super::temple_wallet::plan(
                     ctx,
@@ -192,7 +200,7 @@ pub(super) fn router_shape(
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
     let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && (e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (e.family.variant==Variant::Dagrow || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));
@@ -213,6 +221,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (PoolState::Antfarm(_), _) => Some(super::super::pools::antfarm_probe_wallet::part(
             ctx, e, order, now,
         )),
+        (_,Variant::Dagrow)=>Some(super::dagrow_wallet::probe(ctx,e,order,wallet,now)),
         (_, Variant::Temple) => Some(super::temple_wallet::probe(ctx, e, order, wallet, now)),
         (PoolState::MintClub(_), _) => Some(super::mint_club_direct::probe(
             ctx, e, order, wallet, protection,

@@ -115,7 +115,7 @@ pub(super) async fn at(ctx: &Ctx, f: &Family, tag: &Value) -> GatewayResult<Addr
     Ok(address)
 }
 
-pub(super) async fn plain(
+pub(in crate::venues::bsc_dex) async fn plain(
     ctx: &Ctx,
     address: Address,
     runtime: B256,

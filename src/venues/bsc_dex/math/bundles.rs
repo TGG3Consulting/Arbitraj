@@ -1,30 +1,6 @@
 //! Чистая выплата Bundles Swap и фактические остатки пары после сжигания и начисления дивидендов.
+pub use crate::core::types::bundles::{Book, Market};
 use alloy_primitives::{Address, U256};
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Market {
-    pub pool: Address,
-    pub tokens: [Address; 2],
-    pub tier: u16,
-    pub reserves: [U256; 2],
-    /// Сырые ERC20 balanceOf пары в порядке token0, token1, BUN.
-    pub balances: [U256; 3],
-    pub fee_reserve: U256,
-    pub supply: U256,
-    /// Индекс токена пары, оцениваемого оракулом в BUN, и цена в UQ112x112.
-    pub oracle: Option<(usize, U256)>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Book {
-    pub market: Market,
-    pub fee_pair: Market,
-    pub bun: Address,
-    pub weth: Address,
-    pub router_balance: U256,
-    pub deposits: U256,
-}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Fill {
@@ -39,7 +15,13 @@ fn portion(n: U256, rate: u16, div: u32) -> Option<U256> {
 }
 
 impl Market {
-    fn ceiling_fee(&self, i: usize, amount: U256, output: U256, embedded: bool) -> Option<U256> {
+    pub(super) fn ceiling_fee(
+        &self,
+        i: usize,
+        amount: U256,
+        output: U256,
+        embedded: bool,
+    ) -> Option<U256> {
         let tier = self.tier;
         let k = 1000 + u32::from(tier);
         if embedded {
@@ -58,7 +40,7 @@ impl Market {
         Some(rate.checked_mul(value)? >> 112)
     }
 
-    fn price(&self, i: usize, n: U256, embedded: bool) -> Option<U256> {
+    pub(super) fn price(&self, i: usize, n: U256, embedded: bool) -> Option<U256> {
         let k = U256::from(1000);
         let t = U256::from(self.tier);
         let net = if embedded && i == 0 {
@@ -168,17 +150,7 @@ impl Book {
             return None;
         }
         // Встроенный _getAmountsIn Router увеличивает gross на 10/1000, затем всегда прибавляет 1 raw WETH.
-        let needed = |target: U256| -> Option<U256> {
-            if target.is_zero() {
-                return None;
-            }
-            let adjusted = target.checked_mul(U256::from(1010))? / U256::from(1000);
-            f.reserves[1]
-                .checked_mul(adjusted)?
-                .checked_div(f.reserves[0].checked_sub(adjusted)?)?
-                .checked_add(U256::ONE)
-        };
-        let cost = needed(fee)?;
+        let cost = self.refill_cost(fee)?;
         let (principal, credit, wrapped, fee) = if source == self.weth {
             let principal = n.checked_mul(n)?.checked_div(n.checked_add(cost)?)?;
             let credit = m.price(i, principal, false)?;

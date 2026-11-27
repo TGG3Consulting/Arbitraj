@@ -41,7 +41,9 @@ pub fn has_ticks(e: &Entry) -> bool {
 /// Пуст ли пул (см. шапку). Bin без прочитанных бинов — не пуст (не прочитан — это решает достоверность). Ошибок нет.
 pub fn empty(e: &Entry) -> bool {
     match &e.pool.state {
+        PoolState::Dagrow(s) => s.reserves.contains(&U256::ZERO) || s.fees.iter().all(Option::is_none),
         PoolState::UmbraeDamm(s) => s.reserves.contains(&U256::ZERO),
+        PoolState::Bundles(s) => s.market.supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))
             && (s.defense_balance.is_zero() || s.ratio.is_none_or(|r|r.contains(&U256::ZERO)))),

@@ -110,7 +110,8 @@ async fn pass(
     notes.splice(0..0, woo_notes);
     no_answer += woo_no_answer;
     // Решение 292: пулы StableSwap из dex.stable_pools (Saddle, Curve 2020) — кандидаты по монетам самого пула.
-    let extra = stable_list::scan(ctx, coins, &quote_list, size).await;
+    let mut extra = stable_list::scan(ctx, coins, &quote_list, size).await;
+    super::infinity_seeds::extend(ctx, coins, &quote_list, &mut extra);
     for (coin, list) in extra.found {
         found.entry(coin).or_default().extend(list);
     }
@@ -129,7 +130,10 @@ async fn pass(
     let temple=Box::pin(super::temple_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in temple.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(temple.notes);no_answer+=temple.no_answer;
-    let n_calls = temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
+    let dag=Box::pin(super::dagrow::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in dag.found{found.entry(coin).or_default().extend(rows);}
+    notes.extend(dag.notes);no_answer+=dag.no_answer;
+    let n_calls = dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

@@ -171,7 +171,9 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant.umbrae() => {e.valid=false;Applied::Refresh("Обновлено состояние рынка Umbrae".into())}
         _ if e.family.variant.launch() => {e.valid=false;Applied::Refresh("Изменились условия обмена launchpad или состояние внешних контрактов".into())}
         _ if e.family.variant.deli() => {e.valid=false;Applied::Refresh("Изменили состояние Deli и внешних контрактов".into())}
+        _ if e.family.variant==super::family_variant::Variant::Bundles => {e.valid=false;Applied::Refresh("Изменились резервы Bundles Swap".into())}
         _ if e.family.variant==super::family_variant::Variant::Antfarm => {e.valid=false;Applied::Refresh("Изменилось состояние пары Antfarm".into())}
+        _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
         _ if e.family.variant==super::family_variant::Variant::Carbon => {e.valid=false;Applied::Refresh("Заявки или плата Carbon изменились".into())}
 

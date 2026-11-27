@@ -82,6 +82,7 @@ pub enum Variant {
     V2RouterCreate2,
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
     V2DualCreate2,
+    SafeSwapV2,
     ToonSwap,
     V2ExactRouter,
     /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
@@ -115,7 +116,9 @@ pub enum Variant {
     MintClub,
     Carbon,
     Temple,
+    Dagrow,
     Antfarm,
+    Bundles,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -207,10 +210,10 @@ impl Variant {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn dual_v2_execution(self) -> bool {
-        matches!(self,Self::Gemswap | Self::V2ExactRouter | Self::V2DualCreate2 | Self::ToonSwap | Self::V2DualCreate2LiveFee) || self.diamond_router()
+        matches!(self,Self::Gemswap | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee) || self.diamond_router()
     }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
+        matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::SafeSwapV2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
@@ -265,6 +268,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
         "toonswap" => Variant::ToonSwap,
+        "safeswap_v2" => Variant::SafeSwapV2,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_router01" => Variant::V2ExactRouter,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
@@ -283,6 +287,8 @@ pub fn of(kind: &str) -> Variant {
         "v2_diamond_create" => Variant::KewlV2,
         "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
+        "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
+        "dagrow" | "dagrow_v5" => Variant::Dagrow,
         "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,
         "mint_club_v2" => Variant::MintClub,

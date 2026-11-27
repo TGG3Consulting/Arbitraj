@@ -172,6 +172,13 @@ fn side(
                 .ok_or("Umbrae DAMM: неверные границы резервов")?;
             Ok((amount,full))
         }
+        (PoolState::Bundles(book),PoolKind::V2) => {
+            let i=usize::from(book.market.tokens[1]==token_in);
+            let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
+            let budget=super::super::math::full_math::mul_div(book.market.reserves[i],U256::from((grow*SCALE) as u128),U256::from(SCALE as u128)).ok_or("Bundles Swap: граница превышает резерв")?;
+            let amount=book.swap(token_in,true,budget).map_or(U256::ZERO,|(s,_)|pick(s.amount_in,s.amount_out));
+            Ok((amount,false))
+        }
         (PoolState::Antfarm(book),PoolKind::V2) => {
             let i=usize::from(book.market.tokens[1]==token_in);
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
@@ -207,6 +214,12 @@ fn side(
         (PoolState::Memebox(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)
+        }
+        (PoolState::Dagrow(s), PoolKind::V2) => {
+            let side=usize::from(token_in==s.dagr);
+            if s.fees[side].is_none() || s.stable_scale.is_zero() {return Ok((U256::ZERO,true));}
+            let raw=[s.reserves[0]/s.stable_scale,s.reserves[1]];
+            xy_band(raw[side],raw[1-side],b,buy)
         }
         (PoolState::ToonSwap(s), PoolKind::V2) => { let i=usize::from(!zfo); xy_band(s.reserves[i],s.reserves[1-i],b,buy) }
         (PoolState::CandySwap(s), PoolKind::V2) => {

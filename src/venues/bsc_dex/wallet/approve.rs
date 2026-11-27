@@ -179,6 +179,12 @@ pub async fn fork_missing(
     fork_known(ctx, token, router, have, amount)
 }
 
+/// Для обновляемого SSP разрешение ограничено бюджетом именно этого поручения.
+pub(in crate::venues::bsc_dex) fn fork_exact(ctx:&Ctx,token:Address,target:Address,have:Option<U256>,amount:U256)->GatewayResult<Vec<Approval>>{
+    if have==Some(amount){return Ok(Vec::new())}
+    erc20_changes(ctx,token,target,have,amount,false)
+}
+
 /// Те же разрешения при известном allowance зафиксированного блока.
 pub(in crate::venues::bsc_dex) fn fork_known(
     ctx: &Ctx,

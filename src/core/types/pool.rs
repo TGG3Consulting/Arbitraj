@@ -226,6 +226,20 @@ pub struct AntfarmBook {
     pub limits: Option<AntfarmLimits>,
 }
 
+/// DAGrow SSP. Резервы хранятся в 18-разрядных единицах контракта, балансы — в исходных ERC20.
+#[derive(Debug,Clone,PartialEq,Serialize,Deserialize)]
+pub struct DagrowState {
+    pub pool:Address,
+    pub stable:Address,
+    pub dagr:Address,
+    pub payer:Address,
+    pub reserves:[U256;2],
+    pub balances:[U256;2],
+    pub stable_scale:U256,
+    /// Bps по результату verifySwap указанного payer отдельно для покупки и продажи.
+    pub fees:[Option<u16>;2],
+}
+
 /// TempleStableAMMRouter. Порядок резервов — TEMPLE, зарегистрированный стейбл.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TempleState {
@@ -497,7 +511,9 @@ pub enum PoolState {
     UmbraeDamm(Box<UmbraeDammState>),
     Carbon(Box<CarbonState>),
     Temple(Box<TempleState>),
+    Dagrow(Box<DagrowState>),
     Antfarm(Box<AntfarmBook>),
+    Bundles(Box<super::bundles::Book>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     ToonSwap(Box<ToonState>),

@@ -49,6 +49,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
+    Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
     AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
     Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
@@ -146,7 +147,9 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
         if current.len()!=32{return Err(fail());}
-        approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)
+        if matches!(o.wire, Wire::Dagrow(t) if t.pool==t.target){
+            approve::fork_exact(ctx,token,o.target,Some(U256::from_be_slice(&current)),amount)
+        } else {approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)}
     };
     let mut approvals=if wrapped==Some(o.input){Vec::new()}else{
         let cap=match &o.wire {Wire::Carbon(c)=>c.cap(),Wire::MintClub(c) if c.mint=>c.limit,_=>o.amount};
@@ -183,9 +186,12 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
-    if spent != Some(o.amount) || received.is_zero() || received < o.minimum {
+    let exact_target=matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
+    let charged=spent.ok_or_else(fail)?;
+    if charged.is_zero() || charged>o.amount || (!exact_target && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::Dagrow(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::SolidlyRouter(market)=&o.wire {
         let proof=super::super::exec::solidly_router_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -223,6 +229,9 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
         let strict_carbon=match &o.wire{Wire::Carbon(c)=>Some(c.tighten(o.amount,received).ok_or_else(fail)?),_=>None};
         calls[offset + n + 2].input = match &o.wire {
+            Wire::Dagrow(t) if exact_target=>{
+                let mut proof=t.proof(&o,o.minimum,deadline);proof.amount=charged.checked_sub(U256::ONE).ok_or_else(fail)?;proof.data()
+            }
             Wire::Carbon(_)=>strict_carbon.as_ref().ok_or_else(fail)?.data(),
             Wire::MintClub(c)=>c.tighten(spent.ok_or_else(fail)?,received).ok_or_else(fail)?.data(o.payer),
             _=>calldata(&o, deadline, strict),
@@ -258,6 +267,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::MintClub(c) => c.data(o.payer),
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
+        Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::O1(id) => super::super::exec::o1_wallet::data(*id,o.input,o.output,o.amount,minimum,deadline),

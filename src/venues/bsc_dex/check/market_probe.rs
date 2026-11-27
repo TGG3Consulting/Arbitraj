@@ -27,6 +27,7 @@ enum Venue {
     Regular,
     WalletRouter(Address),
     FundedExecutor,
+    Dagrow,
     Temple,
     Antfarm(Option<Address>),
     Carbon,
@@ -94,6 +95,14 @@ impl Market {
         } else if antfarm_wallet::enabled(e) {
             anchor = Some(Box::pin(antfarm_probe::anchor(ctx, e, number)).await?);
             Venue::Antfarm(ctx.dex_addr("dex.vault",e.family.id).ok().filter(|v|!v.is_zero()))
+        } else if let PoolState::Dagrow(s)=&e.pool.state {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            let at=head.selector();
+            let fresh=super::super::pools::dagrow::state(ctx,e.family,s.pool,Some((e.coin,e.usdt)),&at).await?;
+            if e.family.executor_kind.is_none() && fresh.payer!=wallet{return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: пробе требуется кошелёк выбранного тарифа"))}
+            if super::super::pools::dagrow::balance(ctx,e.usdt,wallet,&at).await?<amount{return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: не хватает собственных средств для пробы"))}
+            let mut market=Box::new(e.clone()); market.pool.state=PoolState::Dagrow(Box::new(fresh));market.pool.block=number;
+            anchor=Some((head,market)); Venue::Dagrow
         } else if matches!(&e.pool.state, PoolState::Temple(_)) {
             anchor = Some(Box::pin(temple::probe_state(ctx, e, number)).await?);
             Venue::Temple
@@ -145,7 +154,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -266,7 +275,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

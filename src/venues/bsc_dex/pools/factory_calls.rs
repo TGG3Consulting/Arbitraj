@@ -76,7 +76,7 @@ pub fn plan(
 ) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
-        if matches!(f.variant,super::family_variant::Variant::Carbon | super::family_variant::Variant::Temple){continue;} // pairs() у Controller перечисляется в carbon_directory
+        if matches!(f.variant,super::family_variant::Variant::Carbon | super::family_variant::Variant::Dagrow | super::family_variant::Variant::Temple){continue;} // pairs() у Controller перечисляется в carbon_directory
         // Решение 475 (T462-01): KyberSwap Elastic — getPool(a, b, swapFeeUnits) фабрики Elastic по уровням
         // dex.v3_fee_tiers: та же сигнатура getPool(address,address,uint24), что у V3, реестр — в обе стороны
         // (ks-elastic-sc 4ab08c0a contracts/Factory.sol L44, createPool L106-L109; фабрика v1 — Sourcify 42161
@@ -92,6 +92,7 @@ pub fn plan(
             // SmarDex (решение 288): getPair(a, b) — как V2 (SmardexFactory.sol L20).
             // Camelot V2 (решение 443): getPair(a, b) — как V2 (CamelotFactory.sol L19).
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => vec![Q::UmbraeBins],
+            Proto::V2 if f.variant==super::family_variant::Variant::Bundles => [10,105,222,500,1000,2000].into_iter().map(Q::Antfarm).collect(),
             Proto::V2 if f.variant==super::family_variant::Variant::Antfarm => [10,50,100,150,250,500,750,1000].into_iter().map(Q::Antfarm).collect(),
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => vec![Q::V2],
             // Решение 470: Aero Basic — getPool(a, b) фабрики своей кривой.

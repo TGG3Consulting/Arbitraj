@@ -67,6 +67,8 @@ pub fn swap(
     match (&e.pool.state, e.pool.kind) {
         (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::fill(s, token_in, exact_in, amount)
             .map(|f| f.swapped).ok_or_else(none),
+        (PoolState::Bundles(book),PoolKind::V2)=>book.swap(token_in,exact_in,amount).map(|(fill,_)|fill)
+            .ok_or_else(||why("Bundles Swap: чистая выплата, минимальная комиссия или обеспечение недоступны")),
         (PoolState::Antfarm(book),PoolKind::V2) => book.swap(token_in,exact_in,amount)
             .ok_or_else(||why("Antfarm: объём или комиссия ATF не обеспечены по прочитанным рынкам")),
         (PoolState::Temple(s),PoolKind::V2) => {
@@ -79,6 +81,7 @@ pub fn swap(
             let p=super::super::math::carbon_match::plan(s,token_in,!exact_in,size).ok_or_else(none)?;
             Ok(Swapped{amount_in:U256::from(p.spent),amount_out:U256::from(p.received),complete:true})
         }
+        (PoolState::Dagrow(s),PoolKind::V2)=>s.fill(token_in,exact_in,amount).ok_or_else(none),
         (PoolState::MintClub(s), PoolKind::V2) => super::super::math::mint_club::fill(s,token_in,exact_in,amount).map(|f| f.swapped).ok_or_else(none),
         (PoolState::Virtuals(s), PoolKind::V2) => super::super::math::virtuals::quote(s,token_in,exact_in,amount).ok_or_else(none),
         (PoolState::Memebox(s), PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,exact_in,amount)

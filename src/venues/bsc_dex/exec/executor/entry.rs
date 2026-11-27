@@ -180,6 +180,13 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
     }
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if let PoolState::Dagrow(s)=&e.pool.state {
+        let module=ctx.dex_addr("dex.router",e.family.id)?;
+        if k!=ExecKind::Basin || pool!=s.pool || module!=s.payer || (token_in!=s.stable && token_in!=s.dagr){
+            return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: плательщик или пара изменились"));
+        }
+        return Ok((Params::Basin,module));
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Temple {
         let PoolState::Temple(m)=&e.pool.state else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: состояние пары отсутствует"));};
         if k!=ExecKind::Basin || m.pair!=pool || (token_in!=e.pool.token0 && token_in!=e.pool.token1) ||

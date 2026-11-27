@@ -77,10 +77,10 @@ def capture(endpoint,wallet):
             for size in values:
                 for mode in ("v5","router"):
                     try:
-                        rounds=direct_wallet(c,m,[size],stamp,2000,router,wrapped=WETH,modes=(mode,),cash=money,funding=None if native else fund,audit=True)
+                        rounds=direct_wallet(c,m,[size],stamp,2000,router,wrapped=WETH,modes=(mode,),cash=money,funding=None if native else fund,audit=True,keep_partial=True)
                         m["rounds"].extend(rounds)
                     except (KeyError,ValueError) as error:m["unavailable"].append(dict(mode=mode,size=str(size),cause=str(error)[:220]))
-        if not all(any(t["mode"]==mode for m in markets for t in m.get("rounds",[]))for mode in ("v5","router")):raise ValueError("missing execution mode for "+name)
+        if not all(any(t["mode"]==mode and "sell" in t for m in markets for t in m.get("rounds",[]))for mode in ("v5","router")):raise ValueError("missing execution mode for "+name)
     return dict(selector=c.selector,state_root=h["stateRoot"],chain=1,height=int(h["number"],16),deployments=result)
 
 if __name__=="__main__":

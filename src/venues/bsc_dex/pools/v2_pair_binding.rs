@@ -23,7 +23,7 @@ fn matches(actual: &[u8], expected: B256) -> bool {
     !actual.is_empty() && keccak256(actual) == expected
 }
 
-pub(super) async fn code(ctx: &Ctx, id: &str, pool: Address, at: &Value) -> GatewayResult<()> {
+pub(in crate::venues::bsc_dex) async fn code(ctx: &Ctx, id: &str, pool: Address, at: &Value) -> GatewayResult<()> {
     let generation = ctx.settings.generation();
     let factory = ctx.dex_addr("dex.factory", id)?;
     let factory_hash = expected(ctx, id, "dex.factory_runtime_hash")?;

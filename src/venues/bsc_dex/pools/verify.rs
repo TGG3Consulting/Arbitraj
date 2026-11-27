@@ -107,7 +107,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
-            _ if c.family.variant.launch() || matches!(c.family.variant,Variant::UmbraeDamm | Variant::UmbraeDlmm | Variant::Antfarm | Variant::Temple | Variant::Gemswap | Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon | Variant::DeliConstant) => stable_u.push(i),
+            _ if c.family.variant.launch() || matches!(c.family.variant,Variant::UmbraeDamm | Variant::UmbraeDlmm | Variant::Bundles | Variant::Antfarm | Variant::Temple | Variant::Dagrow | Variant::Gemswap | Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon | Variant::DeliConstant) => stable_u.push(i),
             _ if c.family.variant == Variant::RingFew => ring.push(i),
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
@@ -427,13 +427,13 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 },
             },
         };
-        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2ExactRouter | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
+        if matches!(c.family.variant,Variant::KewlV2 | Variant::V2ExactRouter | Variant::SafeSwapV2 | Variant::V2DualCreate2LiveFee) && let Verdict::Taken(f)=&verdict {
             let block=match &create_block {
                 Some(at)=>at,
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
-                Ok(at) if matches!(c.family.variant,Variant::V2ExactRouter|Variant::V2DualCreate2LiveFee) => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,
+                Ok(at) if matches!(c.family.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,
                 Ok(at)=>super::kewl::pair(ctx,c.family.id,f.reference.address(),(f.token0,f.token1),at).await,
                 Err(e)=>Err(e.clone()),
             };
@@ -479,6 +479,7 @@ fn found(
             | Variant::DeltaSwap
             | Variant::V2RouterCreate2
             | Variant::V2DualCreate2
+            | Variant::SafeSwapV2
             | Variant::ToonSwap
             | Variant::V2ExactRouter
             | Variant::V2DualCreate2LiveFee

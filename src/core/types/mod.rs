@@ -6,6 +6,7 @@
 //!
 //! Это стык: менять только через запрос на изменение стыка (docs/AGENTS.md).
 
+pub mod bundles;
 pub mod account;
 pub mod balance;
 pub mod chain;
@@ -72,7 +73,7 @@ pub use hold::{HoldItem, WithdrawHold, WithdrawReady};
 pub use manual_feed::{ManualButton, ManualRecord, RecordKind};
 pub use market::{Asset, Direction, OrderBook, PriceLevel, VenueId};
 pub use pool::{
-    AmpV2Data, AntfarmBook, AntfarmFunds, AntfarmLimits, AntfarmMarket, BasinFunction, BasinWellData, CarbonOrder, CarbonState, CarbonStrategy, ColReserves, CryptoData, CryptoMath, CryptoTweak, TempleState,
+    AmpV2Data, AntfarmBook, AntfarmFunds, AntfarmLimits, AntfarmMarket, BasinFunction, BasinWellData, CarbonOrder, CarbonState, CarbonStrategy, ColReserves, CryptoData, CryptoMath, CryptoTweak, TempleState, DagrowState,
     DebtReserves, UmbraeDammState, MemeboxState, MintClubState, CandySwapState, ToonState, EtherVistaState, VirtualsState, EkuboData, EkuboMev, EkuboTick, EkuboTwamm, FeeRule, FictiveData, HookGroup,
     HookInfo, LadderPoint, LbBinData, OraclePmmData, PmmData, Pool, PoolKind, PoolRef, PoolState,
     ProteusData, ProteusUtility, SmartColDebtData, SolidlyFee, SolidlyGate, StableData,

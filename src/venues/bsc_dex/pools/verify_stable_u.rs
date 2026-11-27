@@ -60,7 +60,9 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             continue;
         }
         if c.family.variant.umbrae() {out.push(Box::pin(super::umbrae::verify(ctx,c)).await);continue;}
+        if c.family.variant==super::family_variant::Variant::Bundles {out.push(Box::pin(super::bundles::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Antfarm {out.push(Box::pin(super::antfarm::verify(ctx,c)).await);continue;}
+        if c.family.variant==super::family_variant::Variant::Dagrow {out.push(Box::pin(super::dagrow::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Temple {out.push(Box::pin(super::temple_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Carbon {out.push(Box::pin(super::carbon_directory::verify(ctx,c)).await);continue;}
         out.push(match one(ctx, c, size).await {

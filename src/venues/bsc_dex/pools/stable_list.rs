@@ -133,7 +133,7 @@ pub fn pairs(
 /// пула, монеты подписки (адрес → тикер), встречные. Возвращает: записи справочника. Ошибок нет.
 pub fn candidates(
     dex_id: &str,
-    pool: Address,
+    pool: impl std::fmt::LowerHex,
     pool_tokens: &[Address],
     coins: &HashMap<Address, String>,
     quotes: &[Address],

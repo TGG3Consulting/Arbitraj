@@ -96,7 +96,9 @@ pub fn needs(f: &Family) -> bool {
             | Variant::DeliCl
             | Variant::DeliConstant
             | Variant::UmbraeDamm | Variant::UmbraeDlmm
+            | Variant::Bundles
             | Variant::Antfarm
+            | Variant::Dagrow
             | Variant::Temple
             | Variant::Carbon
             | Variant::MintClub

@@ -41,7 +41,7 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False,keep_partial=False):
     cash = cash or wrapped
     if cash != wrapped and funding is None:raise ValueError("independent funding required")
     token=next(t for t in market["tokens"] if t!=cash)
@@ -90,7 +90,12 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
                 continue
             fund=funding(size) if funding else tx(wrapped,"deposit()",value=size)
             buy,next_prefix=leg([fund],cash,token,size,mode)
-            sell,_=leg(next_prefix,token,cash,int(buy["exact"]["received"]),mode)
+            try:
+                sell,_=leg(next_prefix,token,cash,int(buy["exact"]["received"]),mode)
+            except ValueError as error:
+                if not keep_partial:raise
+                trials.append(dict(mode=mode,size=str(size),buy=buy,sell_error=str(error)[:220]))
+                continue
             trials.append(dict(mode=mode,size=str(size),buy=buy,sell=sell))
     return trials
 

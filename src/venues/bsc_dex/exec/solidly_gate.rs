@@ -113,6 +113,13 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             cap = merged_cap(ctx, f.id, gate, cap)?;
             continue;
         }
+        if f.variant==Variant::Dagrow {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            let state=Box::pin(super::super::pools::dagrow::state(ctx,f,e.pool.reference.address(),Some((e.pool.token0,e.pool.token1)),at)).await?;
+            let original=match &e.pool.state{crate::core::types::PoolState::Dagrow(s)=>s,_=>return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: состояние отсутствует"))};
+            if state.payer!=original.payer || state.fees!=original.fees {return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: изменились плательщик или доступный тариф"))}
+            continue;
+        }
         if f.variant==Variant::Temple {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::temple::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;

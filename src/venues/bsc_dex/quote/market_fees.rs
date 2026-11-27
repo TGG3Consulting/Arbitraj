@@ -12,6 +12,10 @@ pub(super) fn by_volume(
     token_in: Address,
     input: U256,
 ) -> Option<GatewayResult<Decimal>> {
+    if let PoolState::Dagrow(s)=&e.pool.state {
+        let side=usize::from(token_in==s.dagr);
+        return Some(s.fees[side].map(|n|Decimal::new(i64::from(n),2)).ok_or_else(||ctx.err(ErrorCode::NoRoute,"DAGrow: направление остановлено")));
+    }
     if let PoolState::Temple(state) = &e.pool.state {
         return Some(
             super::super::math::temple::is_defense(state, token_in, input)
@@ -42,6 +46,7 @@ pub(super) fn rate(ctx: &Ctx, e: &Entry) -> Option<GatewayResult<Decimal>> {
                 }),
         ),
         PoolState::Antfarm(_)
+        | PoolState::Dagrow(_)
         | PoolState::Temple(_)
         | PoolState::Carbon(_)
         | PoolState::MintClub(_)

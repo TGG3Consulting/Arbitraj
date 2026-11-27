@@ -19,10 +19,18 @@ use crate::{
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde_json::{Value, json};
 
+alloy::sol! { interface ISafeRouter {
+    function getAmountOut(uint256 amountIn,uint256 reserveIn,uint256 reserveOut) external pure returns(uint256);
+} }
+fn safeswap_router_pips(ctx:&Ctx,e:&Entry)->GatewayResult<u32> {
+    let rate=ctx.dex_int("dex.v2_router_fee_pips",e.family.id)?;
+    u32::try_from(rate).ok().filter(|v|*v<1_000_000).ok_or_else(||ctx.err(ErrorCode::NotConfigured,"SafeSwap: нужна ставка роутера от 0 до 999999 миллионных"))
+}
+
 pub(in crate::venues::bsc_dex) fn is_native(e: &Entry) -> bool {
     matches!(
         e.family.variant,
-        Variant::Gemswap | Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::ToonSwap | Variant::V2DualCreate2LiveFee | Variant::DiamondV2 | Variant::KewlV2
+        Variant::Gemswap | Variant::V2RouterCreate2 | Variant::V2DualCreate2 | Variant::SafeSwapV2 | Variant::ToonSwap | Variant::V2DualCreate2LiveFee | Variant::DiamondV2 | Variant::KewlV2
     )
 }
 
@@ -49,6 +57,24 @@ async fn approved(
     hash: B256,
     at: &Value,
 ) -> GatewayResult<()> {
+    if e.family.variant==Variant::SafeSwapV2 {
+        use super::super::pools::{solidly_classic_factory,v2_pair_binding};
+        use alloy::sol_types::SolCall;
+        let fee=safeswap_router_pips(ctx,e)?;
+        let reference=U256::from(1_000_000_000_000_000_000u64);
+        let unit=U256::from(1_000_000u64);
+        let query=ISafeRouter::getAmountOutCall{amountIn:unit,reserveIn:unit,reserveOut:reference};
+        let ((),(),quote)=tokio::try_join!(
+            solidly_classic_factory::plain(ctx,router,hash,at),
+            v2_pair_binding::code(ctx,e.family.id,e.pool.reference.address(),at),
+            rpc::call::<Bytes>(ctx,"eth_call",json!([{"to":router,"data":Bytes::from(query.abi_encode())},at]))
+        )?;
+        let wanted=super::super::math::v2::amount_out(unit,unit,reference,(unit-U256::from(fee),unit));
+        if wanted!=Some(super::super::node::call::decode::<ISafeRouter::getAmountOutCall>(&quote)?) {
+            return Err(ctx.err(ErrorCode::QuoteMismatch,"SafeSwap: ставка роутера не совпала с его формулой"));
+        }
+        return Ok(());
+    }
     if e.family.variant==Variant::Gemswap {
         return Box::pin(super::super::pools::concave::checked(ctx,e,true,at)).await;
     }
@@ -152,13 +178,17 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     };
     let mut options = Vec::new();
     for e in i.entries.iter().filter(|e| is_native(e)) {
-        if let Ok((target, _)) = profile(&q.ctx, e.family.id) {
+        let native_fee=if e.family.variant==Variant::SafeSwapV2 {safeswap_router_pips(&q.ctx,e).ok()}else{e.pool.fee_pips};
+        if let Ok((target, _)) = profile(&q.ctx, e.family.id)
+            && (e.family.variant!=Variant::SafeSwapV2 || native_fee.is_some()) {
+            let mut native=e.clone();
+            native.pool.fee_pips=native_fee;
             let execution = Execution {
                 mode: RouteMode::Direct,
                 target,
                 wire: super::v2_wallet_sim::Wire::Router02,
             };
-            if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, execution, head).await
+            if let Ok(option) = v2_execution::option(q, i, native, payer, execution, head).await
             {
                 options.push(option);
             }
@@ -174,6 +204,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         };
         let pips = if e.family.variant == Variant::KewlV2 {
             super::super::pools::kewl::PIPS
+        } else if e.family.variant==Variant::SafeSwapV2 {
+            let Ok((pips,_))=super::v2_pair_quote::fee(&q.ctx,e,e.coin) else {continue};
+            pips
         } else if let Some(pips) = e.pool.fee_pips {
             pips
         } else {

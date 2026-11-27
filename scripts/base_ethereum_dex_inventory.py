@@ -1794,7 +1794,7 @@ def tables(network, snapshots, profiles):
                    f"{roundtrip or 'сверка не подтверждена'} | {status} |")
     out.extend(["", "#### DefiLlama", "",
                 "Адреса извлечены из секции нужной сети в коде адаптера объёмов. Их роль, реализация и исполнение требуют проверки. "
-                "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту.",
+                "Для строк с несколькими версиями или общей базовой ликвидностью соответствие торговому профилю устанавливается по контракту. Статус «нет спота» относится к учтённой операции, в которой плательщик не получает второй взаимозаменяемый актив в обмен на первый. Для других продуктов того же имени проверяется их собственная строка.",
                 "", f"Приоритет — опубликованный оборот этой сети за предыдущие 24 часа в USD, "
                 f"срез {volume.get('at', 'не получен')}. Карты, агрегаторы и общую ликвидность разных "
                 "протоколов необходимо сопоставлять по контрактам. Оборот не является доходом бота.",
@@ -1817,7 +1817,7 @@ def tables(network, snapshots, profiles):
                   if s["network"] == network}
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
-        from base_ethereum_source_roles import card_reference
+        from base_ethereum_source_roles import card_reference, nonspot
         ref = card_reference(network,r) or r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
@@ -2294,8 +2294,6 @@ def tables(network, snapshots, profiles):
                 original=json.load(stream)
             candidates=[original["factory"]]
             task=f"Balancer V1 · {len(original['registered'])} оригинальных BPool. Обе формы обмена и ограничения по округлению сверены с исходным пулом"
-        if not base and str(row["id"])=="7520":
-            task="Карточные платежи; адаптер crypto-card.ts измеряет использование карты. Отдельные спотовые реестры Cypher указаны под 7037 и 7038"
         if not base and str(row["id"]) == "9435":
             directory = read(Path("tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"))
             candidates = [directory["venue"]]
@@ -2529,7 +2527,10 @@ def tables(network, snapshots, profiles):
             assert empire["factory"] in {a.lower() for a in candidates}
             task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
                     f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
-        if task == f"`T-SOURCE-{network}-{row['id']}`":
+        measured = nonspot(network, r)
+        if measured:
+            task = measured
+        elif task == f"`T-SOURCE-{network}-{row['id']}`":
             from base_ethereum_source_roles import describe
             measured = describe(network,str(row["id"]),r,configured,candidates)
             if measured:

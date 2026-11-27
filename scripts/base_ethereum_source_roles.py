@@ -27,21 +27,45 @@ MARKETS = {
         "2906": ("dex.factory", ["traderjoe-v2-1-ethereum"]),
     }
 }
-# These particular statistics count a payment to a receiver. No pair, exchange rate or second transfer
-# can be inferred from the statistic. A separate strategy or exchange from that provider is independently reviewed.
-MEASURE = {
-    "dexs/metamask-card.ts": "сумма токенов из аргументов withdraw в транзакциях по адресам расчёта карты",
-    "dexs/x402/index.ts": "сумма переводов токенов в платёжных транзакциях авторизованных фасилитаторов x402",
-    "dexs/predictex/index.ts": "оборот позиции по бессрочному контракту, рассчитанный по событиям Trade и Liquidate",
-    "dexs/sablier-lockup.ts": "получение получателем токенов из Lockup через Withdraw",
-    "dexs/spritz-card.ts": "сумма paymentTokenAmount события Payment в адрес платёжного обработчика Spritz",
-    "dexs/p2pme.ts": "выплата USDC покупателю после исполнения заявки на покупку за фиат",
-    "dexs/zkp2p.ts": "сумма USDC по исполненным платёжным намерениям в индексе Peer",
-    "dexs/sablier-flow.ts": "получение получателем токенов из Flow через Withdraw",
-    "dexs/sablier-legacy.ts": "вывод получателем токенов из ранее созданного потока",
-    "dexs/llamapay.ts": "выплата зарплаты получателю из потока LlamaPay",
-    "dexs/superfluid.ts": "получение токена через CFA и разовые распределения GDA",
-    "dexs/manifold.ts": "оплата NFT при покупке, принятии предложения или расчёте по аукциону",
+# Операция конкретного адаптера оборота. Статус относится к паре взаимозаменяемых
+# активов в этой записи, а не к другим продуктам того же бренда.
+NONSPOT_MEASURES = {
+    "dexs/metamask-card.ts": (79, "Сумма токенов из аргументов withdraw в транзакциях по адресам расчёта карты."),
+    "dexs/x402/index.ts": (36, "Сумма переводов токенов в платёжных транзакциях авторизованных фасилитаторов x402."),
+    "dexs/predictex/index.ts": (79, "Trade и Liquidate измеряют открытие, изменение и ликвидацию позиции на исход события в USDC."),
+    "dexs/sablier-lockup.ts": (116, "Получение получателем токенов из Lockup через Withdraw."),
+    "dexs/spritz-card.ts": (61, "Сумма paymentTokenAmount события Payment в адрес платёжного обработчика Spritz."),
+    "dexs/sablier-flow.ts": (111, "Получение получателем токенов из Flow через Withdraw."),
+    "dexs/sablier-legacy.ts": (96, "Вывод получателем токенов из ранее созданного потока."),
+    "dexs/llamapay.ts": (75, "Выплата зарплаты получателю из потока LlamaPay."),
+    "dexs/superfluid.ts": (250, "Получение токена через CFA и разовые распределения GDA."),
+    "dexs/manifold.ts": (51, "Оплата NFT при покупке, принятии предложения или расчёте по аукциону."),
+    "fees/collector-crypt/index.ts": (274, "Исходник считает покупки наборов физических коллекционных карт."),
+    "fees/central-city.ts": (65, "События FeeCharged за услуги агентов x402. В оборот входит gross по включённому типу платежа. Услуга не образует вторую валюту обмена."),
+    "dexs/topmarket/index.ts": (271, "Top.Market суммирует USDC за открытие наборов карт, в том числе позже возвращённые платежи. Сумма покупок пакетов не задаёт исполнимый курс токена."),
+    "dexs/thales/index.ts": (320, "Учитываются ставки на спортивные билеты, Speed Markets и цифровые опционы."),
+    "fees/dyli/index.ts": (401, "DYLI объединяет оплату физических коллекционных карт, наборов, услуг и операции маркетплейса, включая Stripe. Эта метрика не определяет котировку пары ERC20."),
+    "dexs/coinlotto/index.ts": (111, "CoinLotto считает цену лотерейного билета, умноженную на количество. Покупатель получает участие в розыгрыше."),
+    "fees/azuro/index.ts": (90, "Azuro суммирует поставленные средства по рассчитанным ставкам трёх версий. Требуемый спотовой паре встречный актив в этом измерении отсутствует."),
+    "dexs/sudoswap-v2/index.ts": (16, "Sudoswap V2 использует сделки NFT. Предмет определяется контрактом коллекции и tokenId; объём NFT не является глубиной взаимозаменяемого токена."),
+    "dexs/exa-card.ts": (9, "Оплата покупки со счёта карты или в рассрочку. [Условия оплаты Exa](https://help.exactly.app/en/articles/10022626-how-does-the-exa-card-work)."),
+    "dexs/b402/index.ts": (38, "Событие Shield учитывает внесённые активы в приватный пул."),
+    "dexs/axiumpass.ts": (179, "SubscriptionProcessed учитывает периодические платежи получателям подписки."),
+    "dexs/defa/index.ts": (46, "Safe кредитора перечисляет USDC или USDT заёмщику."),
+    "dexs/smardex-usdn/index.ts": (30, "Учитывается залог wstETH при открытии и закрытии длинной позиции. Для AMM выделена строка 2695."),
+    "dexs/fibo.ts": (26, "Ставки USDC на исход двухминутных раундов."),
+    "dexs/hot-take/index.ts": (60, "Контракт блокирует ставки обеих сторон в USDC до расчёта по исходу."),
+    "dexs/shiny/index.ts": (201, "Игрок платит USDC за наборы коллекционных карт и участие в игре."),
+    "fees/pumpbox/index.ts": (94, "Оплата открытия набора по фиксированной цене USDC."),
+    "dexs/grail/index.ts": (21, "Оплата наборов карт в USDC."),
+    "dexs/raflux/index.ts": (144, "Оплата наборов физических коллекционных карт в USDC."),
+    "dexs/lienfi/index.ts": (26, "Оплачиваются NFT на недвижимость."),
+    "fees/flooor-fun/index.ts": (61, "Оборот продаж NFT по выигравшей ставке."),
+    "dexs/pixiechess/index.ts": (7, "События Purchased и Mint учитывают покупки игровых наборов и выпуски конкретных фигур."),
+    "dexs/sweep-n-flip/index.ts": (145, "Учитываются сделки пулов NFT."),
+    "dexs/blur.ts": (5, "Цена исполненных поручений по предметам коллекций, включая Execution721Packed."),
+    "dexs/rarible/index.ts": (24, "Оплата заказов NFT. [Декодирование предмета ERC721/ERC1155](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/rarible/helper.ts#L37)."),
+    "dexs/clutch-anvil/index.ts": (128, "NFTBought и NFTSold связывают платёж с предметом коллекции."),
 }
 
 # The dimension adapters store these addresses outside their network stanzas.
@@ -71,6 +95,24 @@ def card_reference(network, adapter):
     return f"https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/helpers/{helper}.ts#L{line}"
 
 
+def nonspot(network, adapter):
+    """Возвращает операцию с первичным источником только для проверенной строки объёма."""
+    card = card_reference(network, adapter)
+    if card:
+        helper, _ = CARD_PROGRAMS[adapter["module"]]
+        method = ("Событие Liquidation учитывает расчёт с карточной программой Rain." if helper == "rainCard"
+                  else "Источник суммирует поступления на адреса карточной программы.")
+        if network == "ethereum" and adapter["module"] == "cypher-card":
+            method += " Спотовые реестры Cypher V2 и V4 учтены в строках 7037 и 7038."
+        return f"нет спота · {method} [Исходник учёта]({card})."
+    evidence = NONSPOT_MEASURES.get(adapter.get("path"))
+    if evidence:
+        line, reason = evidence
+        ref = f"{adapter['link']}#L{line}"
+        return f"нет спота · {reason} [Исходник учёта]({ref})."
+    return None
+
+
 def describe(network,source_id,adapter,configured,candidates):
     path = adapter.get("path")
     revision="be9967c3f0d3ccd06c871bab0d16beb3304de719"
@@ -78,18 +120,16 @@ def describe(network,source_id,adapter,configured,candidates):
     # Each entry explains what the cited adapter actually counts on this chain.
     # A terminal's or card programme's turnover is not a second claim on its suppliers' reserves.
     dimensions = {
-        "fees/collector-crypt/index.ts": (113, "Collector Crypt считает оплату наборов коллекционных карт в USDC и обратные выкупы. Оплата пакета не задаёт пару двух взаимозаменяемых токенов."),
-        "fees/central-city.ts": (65, "События FeeCharged за услуги агентов x402. В оборот входит gross по включённому типу платежа. Услуга не образует вторую валюту обмена."),
-        "dexs/topmarket/index.ts": (271, "Top.Market суммирует USDC за открытие наборов карт, в том числе позже возвращённые платежи. Сумма покупок пакетов не задаёт исполнимый курс токена."),
-        "dexs/thales/index.ts": (321, "Overtime учитывает билеты спортивных ставок, позиции Speed Markets и деятельность казино. Встречная выплата зависит от исхода события."),
-        "fees/dyli/index.ts": (401, "DYLI объединяет оплату физических коллекционных карт, наборов, услуг и операции маркетплейса, включая Stripe. Эта метрика не определяет котировку пары ERC20."),
-        "dexs/coinlotto/index.ts": (111, "CoinLotto считает цену лотерейного билета, умноженную на количество. Покупатель получает участие в розыгрыше."),
-        "fees/azuro/index.ts": (90, "Azuro суммирует поставленные средства по рассчитанным ставкам трёх версий. Требуемый спотовой паре встречный актив в этом измерении отсутствует."),
-        "dexs/sudoswap-v2/index.ts": (16, "Sudoswap V2 использует сделки NFT. Предмет определяется контрактом коллекции и tokenId; объём NFT не является глубиной взаимозаменяемого токена."),
+        "dexs/securedfinance/index.ts": (76, "Срочная книга сопоставляет заёмщика и кредитора. Позицию можно продать до погашения или токенизировать в ERC20. Адрес рынка для отдельного обмена ZC требуется подтвердить. [Правила книги](https://docs.secured.finance/fixed-rate-lending/overview)."),
+        "dexs/nftx-v3.ts": (114, "Спот vToken/WETH в AMM NFTX. Источник учитывает также операции с NFT, проведённые через эти пулы. [Роли AMM](https://docs.nftx.io/core-contracts/nftxfeedistributorv3)."),
+        "dexs/infinityPools/index.ts": (83, "Оборот спотового обмена берётся по событиям Spot Swap собственных пулов."),
+        "fees/lyra-market.ts": (103, "LyraSwapRouter проводит спотовые обмены через Uniswap V2/V3/V4. Одни и те же пулы обслуживают обе строки объёма."),
         "dexs/o1-exchange/index.ts": (150, "Оборот терминала o1 вычислен по комиссии, умноженной на 100. Запись не задаёт адрес пула, резерв или firm quote. Цену может подтвердить только фактический источник обмена."),
         "dexs/bloom.ts": (73, "Bloom сопоставляет сделки нижележащих DEX с адресами роутеров терминала. Один и тот же обмен нельзя прибавить как отдельный остаток Bloom."),
         "dexs/axiom.ts": (125, "Axiom считает сделки нижележащих площадок через контракты терминала. В этой строке нет отдельной кассы Axiom."),
         "dexs/aveai/index.ts": (162, "Ave.ai измеряет обмены через нижележащие DEX, включая исполненные лимитные заявки. Для глубины учитывается источник фактической оплаты каждой ноги."),
+        "dexs/p2pme.ts": (1, "выплата USDC покупателю после исполнения заявки на покупку за фиат. Для этой сделки требуется подтверждение фиатной ноги."),
+        "dexs/zkp2p.ts": (1, "сумма USDC по исполненным платёжным намерениям в индексе Peer. Для этой сделки требуется подтверждение фиатной ноги."),
     }
     if path in dimensions:
         line, reason=dimensions[path]
@@ -123,8 +163,6 @@ def describe(network,source_id,adapter,configured,candidates):
             "dexs/aveai/index.ts": "Маршрутизатор Ave.ai. В объём входят обмены через исходные DEX и исполненные лимитные заявки. Тот же обмен может учитываться в строке его пула.",
             "fees/fwa-v2/index.ts": "Покупка и расчёт по NFT-листингам FWA. Комиссии и выкуп FWA записаны отдельно. Для валютного маршрута нужен конкретный пул выкупа.",
             "dexs/barterswap/index.ts": "Superposition распределяет вход и собирает выход с кошельков поставщиков ликвидности. Для заявки своего плательщика нужен подписанный ответ сервера с выбранными кошельками и сроком. [Архитектура Barter](https://barterdefi.gitbook.io/barter-docs/superposition/architecture-v1).",
-            "dexs/smardex-usdn/index.ts": "Объём открытия и закрытия длинных позиций USDN в залоговом токене. Спотовый AMM SmarDex учитывается отдельно.",
-            "dexs/clutch-anvil/index.ts": "NFTSold и NFTBought оплачиваются в ERC20 конкретной коллекции. Для встречной ноги требуется соответствующий NFT с tokenId.",
             "dexs/dinari/index.ts": "OrderProcessor учитывает денежный объём заявок на цифровые ценные бумаги. Версия 1 читает OrderFill, версия 2 сопоставляет заявки и расчёты. Для новой сделки нужен доступный выпуск, принятая заявка и встречная выплата.",
             "dexs/pancakeswap-x/index.ts": "Аукцион PancakeSwap X. Профиль, собственный плательщик и проверенные выплаты обеих сетей приведены в разделе PancakeSwap X этого справочника.",
         }
@@ -157,12 +195,6 @@ def describe(network,source_id,adapter,configured,candidates):
                     "[Расчёт через две пары](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_paths.json.gz) · "
                     "[Квитанции FeeRouter](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz) · "
                     "[Выплаты, газ и откаты защищённых путей](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz).")
-    card = card_reference(network,adapter)
-    if card:
-        helper,_ = CARD_PROGRAMS[adapter["module"]]
-        if helper=="rainCard":
-            return "Расход по карте. Источник суммирует выплаченные токены из Liquidation связанного с картой залогового контракта Rain."
-        return "Расход по карте. Источник суммирует токены, поступившие на указанные получающие адреса карточной программы."
     if network=="base" and source_id=="3409" and path=="dexs/swapbased-v3.ts":
         factory=configured["swapbased-v3"]["settings"]["dex.factory"].lower()
         assert factory=="0xb5620f90e803c7f957a9ef351b8db3c746021bea"
@@ -235,8 +267,6 @@ def describe(network,source_id,adapter,configured,candidates):
         return "Терминал GMGN считает сделки на сторонних DEX с оплатой получателю GMGN. Доход пользователя зависит от пулов исполнения каждой операции."
     if path=="dexs/avici.ts":
         return "Источник получает долларовую сумму обменов через Relay из API Avici. Отдельный контракт ликвидности из агрегата не определяется."
-    if path in MEASURE:
-        return "Показатель источника — "+MEASURE[path]+". Эта запись не содержит обмена двух взаимозаменяемых токенов."
     market = MARKETS[network].get(source_id)
     if not market:
         return None

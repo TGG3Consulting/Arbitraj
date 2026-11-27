@@ -205,6 +205,7 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
         let volumes = snapshot[key]["volume"]["by_id"].as_object().unwrap();
         let mut ids = BTreeSet::new();
         let mut known = 0;
+        let mut nonspot = 0;
         for row in table
             .lines()
             .skip(2)
@@ -214,6 +215,19 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
             let id = cells.next().unwrap();
             assert!(id.parse::<u64>().is_ok() && ids.insert(id), "{key} {id}");
             let volume = cells.nth(1).unwrap();
+            let decision = row.rsplit('|').nth(1).unwrap().trim();
+            if decision.starts_with("нет спота") {
+                nonspot += 1;
+                assert!(decision.contains("https://") && decision.contains("#L"), "{key} {id}");
+            }
+            match (key, id) {
+                (_, "3308" | "7520") => assert!(decision.starts_with("нет спота"), "{key} {id}"),
+                ("base", "5662") => assert!(decision.contains("Spot Swap")),
+                ("ethereum", "483") => assert!(decision.contains("vToken/WETH")),
+                ("ethereum", "4197") => assert!(decision.contains("ERC20")),
+                ("ethereum", "8464") => assert!(decision.contains("Uniswap")),
+                _ => {}
+            }
             if let Some(number) = volumes.get(id).and_then(Value::as_f64) {
                 known += 1;
                 assert!(volume.parse::<f64>().is_ok(), "{key} {id}: {volume}");
@@ -225,5 +239,6 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
             }
         }
         assert_eq!((ids.len(), known), (catalog_rows, expected_known));
+        assert_eq!(nonspot, if key == "base" { 39 } else { 21 });
     }
 }

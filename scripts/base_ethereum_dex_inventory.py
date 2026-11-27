@@ -2075,13 +2075,34 @@ def tables(network, snapshots, profiles):
         if base and str(row["id"])=="2926":
             e3_wallet=base_launch_inventory.evidence("e3_base_wallets.json.gz")
             bins=base_launch_inventory.evidence("e3_base_bins.json.gz")
+            bounds=base_launch_inventory.evidence("e3_base_capacity.json.gz")["capacity"]
+            paid=sum(r.get("success",False) for r in bounds)
+            reverted=sum(r.get("success") is False for r in bounds)
             candidates=[e3_wallet["factory"],e3_wallet["router"]]
             live=sum(all(m["reserves"]) for m in e3_wallet["markets"])
             task=(f"E3 · профили e3-base. Из {len(e3_wallet['markets'])} зарегистрированных пулов {live} имеют ненулевые резервы на обеих сторонах. "
                   f"Подтверждено {len(e3_wallet['payments'])} выплат Router и V5 на WETH/axlUSDC и USDbC/USDC. "
                   "Два других пула имеют только протокольные сборы. Котировка getSwapOut сообщает неиспользованный вход; "
                   f"сняты {sum(len(m['quotes']) for m in bins['pools'])} значений на обеих сторонах, включая границы доступного объёма. "
-                  "Ставка и её распределение зависят от бина. Первичный интерфейс публикует адреса четырёх пулов и роутера.")
+                  f"В самостоятельной проверке границы {paid} выплат на cap−1/cap и {reverted} полных откатов с нулевыми дельтами на cap+1. "
+                  "Полный вход 5834,189301 USDbC на обратной стороне stable-пары подтверждён котировкой; независимое финансирование этого размера не подтверждено. "
+                  "Протокольная доля входит в комиссию бина. Первичный интерфейс публикует адреса четырёх пулов и роутера.")
+        if base and str(row["id"])=="7508":
+            archive=base_launch_inventory.evidence("kaliber_base_access.json.gz")
+            windows=base_launch_inventory.evidence("kaliber_base_vaults.json.gz")["windows"]
+            trades=sum(r["count"] for r in archive["history"]["rows"])
+            candidates=list(archive["roles"])
+            task=(f"Kaliber Base · 28 сентября — 8 октября 2026 года {trades} оплаченных Swap через одну кассу и одного непосредственного трейдера. "
+                  f"На 8 октября {len(windows[1]['events'])} выплат AAPLc/USDC на 2402,426695 USDC. Также подтверждена пара AAPLc/USDT. "
+                  f"За последние 24 часа до H62262756 обе кассы выпустили {len(windows[0]['events'])} Swap. "
+                  "В подтверждённом платеже 500,25 USDC за 1,48604777 AAPLc был задействован KyberSwap. "
+                  "В 24 контрольных покупках с реальным финансированием на исходном времени шести блоков дельты 0/0. "
+                  "Первая касса возвращает WhitelistOnlyPair(), вторая PairDoesNotExist() для этого pairId. "
+                  "Публичная процедура регистрации нового адреса в allowlist первичным источником не подтверждена. "
+                  "Публичный запрос Kyber для того же направления на следующей дате выбрал Aerodrome. "
+                  "У общего адаптера Kyber подпись привязана к BSC, доступность прямого обмена Base данным профилем не подтверждена. "
+                  "[Данные объёма](https://api.llama.fi/summary/dexs/kaliber) · [Спецификация маршрутов Kyber](https://api-docs.kyberswap.com/aggregator-api.html) · "
+                  "[Оплаченная операция](https://basescan.org/tx/0x3fa51d338eaef69d0f94593fc4b6cbec9553dd221d18993aeb18de02c5c33220).")
         if str(row["id"])=="6358":
             network="base" if base else "ethereum"
             directory=base_launch_inventory.evidence(f"eulerswap_{network}_directory.json.gz")

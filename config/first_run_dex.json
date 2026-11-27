@@ -6241,5 +6241,73 @@
       "dex.v2_fee_source": "fixed",
       "dex.v2_fee_pct": "0.01"
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "wagmi-base",
+    "source": "https://github.com/RealWagmi/v3-sdk/blob/055bffed07f05ab57be7bfab899f3c0df45f1c02/src/constants/addresses.ts · https://github.com/RealWagmi/smart-router/blob/8a3869f5bb5facaf154ad1677da0ad3a98cb7c4a/src/constants/exchange.ts · https://github.com/RealWagmi/smart-router/blob/8a3869f5bb5facaf154ad1677da0ad3a98cb7c4a/src/constants/v3.ts · tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz",
+    "settings": {
+      "dex.kind": "registered_uni_v3",
+      "dex.factory": "0x576a1301b42942537d38fb147895fe83fb418fd4",
+      "dex.quoter": "0x8b741b0d79be80e135c880f7583d427b4d41f015",
+      "dex.tick_lens": "0x0cdee061c75d43c82520ed998c23ac2991c9ac6d",
+      "dex.v3_fee_tiers": [
+        "0",
+        "500",
+        "1500",
+        "3000",
+        "10000"
+      ],
+      "dex.router": "0xb5fa77e3929fe198a86aa40fd6c77886785bcd0e",
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.quoter_virtual": false,
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.pool_code_hashes": [
+        "0x30146866f3a846fe3c636beb2756dbd24cf321bc52c9113c837c21f47470dfeb"
+      ],
+      "dex.v3_wallet_router_abi": "router02_fee",
+      "dex.router_exact_tokens": [
+        "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b 0x2a9e5cdaeba01009afa309c7e6236caad9fda314f1088da2c486d4a6df2ecec7",
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+      ],
+      "dex.factory_runtime_hash": "0xf536dfca86761db89c719ef145ba5faa7b4d55ae31a9191c2f49df384487f560",
+      "dex.quoter_runtime_hash": "0x69476d71d46045b0ac158b253dddba8eec4e595b25945a5f46b26f44ffbbc238",
+      "dex.router_runtime_hash": "0x50b69074c622ecc7d76da012088d5e6594ce45aa2c032be49e4c493a8d506f19"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "thick-base",
+    "source": "https://docs.equalizer.exchange/equal-fantom/contracts/ · tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz",
+    "settings": {
+      "dex.kind": "registered_uni_v3",
+      "dex.factory": "0xe6da85feb3b4e0d6aed95c41a125fba859bb9d24",
+      "dex.quoter": "0xf5b7181877feab982a4b49a99e84bb7cbebeff98",
+      "dex.tick_lens": "0xb80a72281c76464cc0e1fbf2431a897393e0d757",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "1337",
+        "3000",
+        "10000"
+      ],
+      "dex.router": "0x1f7a12b40bfc8e8561008bc2ca1fbdc71a36d0e8",
+      "dex.v3_swap_callback": "uniswapV3SwapCallback(int256,int256,bytes)",
+      "dex.quoter_virtual": false,
+      "dex.v3_quoter_method": "quoteExactInputSingle",
+      "dex.pool_code_hashes": [
+        "0x01795efa243dc58f09de9b7c1fa74e72352806f279d62f49ef19e11c42a98292"
+      ],
+      "dex.v3_wallet_router_abi": "router02_fee",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c",
+        "0x4ed4e862860bed51a9570b96d89af5e1b0efefed 0x0fc7067f83de437662a064d75d34700c97224082189a9ef1ccd5ed5a7dd601f6"
+      ],
+      "dex.factory_runtime_hash": "0xd714d5f21c25ef52204f6d06dbff265024dae9c11ce23b132f5d7933ef932360",
+      "dex.quoter_runtime_hash": "0x9e9855e8c45abaf885df13ed7299e43771f5561b9ec3f01174f5fcf244ed8422",
+      "dex.router_runtime_hash": "0xaf9bd3a2e0286a9471727d9477fa1f3a3ae94037d51a5576daa13b04e37a7ef9"
+    }
   }
 ]

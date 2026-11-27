@@ -1763,6 +1763,8 @@ def tables(network, snapshots, profiles):
     top_data = read(Path("tests/data/first_run_dex_2026-11-26/llama_top_bindings.json"))
     top = {item["id"]:item for item in top_data["networks"][network]["rows"]}
     data_dir = Path("tests/data/first_run_dex_2026-11-26")
+    base_cl_archive = data_dir / "wagmi_thick_base.json.gz"
+    base_cl = json.loads(gzip.decompress(base_cl_archive.read_bytes())) if base else {}
     registry_sources = read(data_dir / "llama_factory_scopes.json")
     registry_entries = registry_sources["networks"][network]
     archive_v2 = data_dir / ("llama_base_v2_wallets.json.gz" if base else "llama_eth_v2_wallets.json.gz")
@@ -1793,6 +1795,13 @@ def tables(network, snapshots, profiles):
                         assert book["factory"] == candidates[0] == sample["factory"]
                         task += (f" · {len(book['pools'])} зарегистрированных пар, покупка и обратная продажа "
                                  f"на {len(sample['cases'])} объёмах в [кассовом повторе](../{archive_v2.as_posix()})")
+                    if slug in base_cl:
+                        book = base_cl[slug]
+                        assert book["roles"]["factory"]["address"] == candidates[0]
+                        cases = book["cases"]
+                        task += (f" · {len(book['markets'])} пулов по CREATE2 и реестру в обе стороны; "
+                                 f"на {len({c['pool'] for c in cases})} пулах проверено {len(cases)} выплат "
+                                 f"через Router02 и V5. [Блок, линза, суммы и квитанции](../{base_cl_archive.as_posix()})")
                 else:
                     task += " · установлена фабрика этого протокола и сети; торговый профиль требует проверки"
                 if kind == "fee_factory":

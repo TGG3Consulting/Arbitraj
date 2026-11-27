@@ -52,11 +52,13 @@ impl Market {
         let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
         let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
-        let router02 = match ctx.dex_text("dex.v3_wallet_router_abi", e.family.id).ok().as_deref() {
-            Some("router02_fee") => Some(super::v3_router02::Key::Fee),
-            Some("router02_spacing") => Some(super::v3_router02::Key::Spacing(
+        use super::super::pools::family_variant::Variant;
+        let abi = ctx.dex_text("dex.v3_wallet_router_abi", e.family.id).ok();
+        let router02 = match (abi.as_deref(), e.family.variant) {
+            (Some("router02_fee"), Variant::RegisteredUniV3) => Some(super::v3_router02::Key::Fee),
+            (Some("router02_spacing"), Variant::RegisteredSpacingV3) => Some(super::v3_router02::Key::Spacing(
                 alloy_primitives::aliases::I24::try_from(e.pool.tick_spacing.filter(|s| *s>0)?).ok()?)),
-            Some("classic") | None => None,
+            (Some("classic") | None, variant) if variant != Variant::RegisteredSpacingV3 => None,
             _ => return None,
         };
         Some(Self {

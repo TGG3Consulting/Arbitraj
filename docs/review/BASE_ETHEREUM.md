@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `19e1d1e8` (27.11.2026).
+Последний просмотренный коммит: `36ff66ab` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2975,6 +2975,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-27 | 9bfe7077 | (1) R-42: в общем `pools/created_log.rs:73` прямое сравнение `f.variant==Variant::Llamma(Registry::Mint)`. Нужен предикат или выбор события внутри `llamma.rs`. (2) Новый `pools/llamma.rs` — 239 строк, ориентир 200: разделить. |
 | О-28 | fc0433a1 | `math/ammalgam.rs` — 414 строк, из них 249 строк кода до `#[cfg(test)]`, ориентир 200. Вынести глубину `band`/`marginal` в отдельный файл, а тесты — в `ammalgam_tests.rs`, как в `defiplaza_wallet_tests.rs`. |
 | О-29 | 19e1d1e8 | R-42: прямые `== Variant::TrebleSpot` в общих файлах `pools/families.rs:1037` и `pools/registered_router.rs:75`. Нужен предикат, например `treble_spot()`, или выбор внутри `treble_spot.rs`. |
+| О-30 | 36ff66ab | Регрессия BSC. `exec/executor/sim.rs` `llamma_debit` вызывается для каждой сделки и не ограничен семейством LLAMMA. Отбор идёт только по `kind == 9` (StableU256) и topic0 события `TokenExchange(address,uint256,uint256,uint256,uint256)`. На BSC шаг 9 у `pancake_stableswap`, `lista_stableswap` и `lista_stableswap_proxy` (`exec_kind.rs:269-270`). Их событие `abi_stable_u.rs:31` имеет ту же сигнатуру, значит тот же topic0. Ветка срабатывает на сделках BSC. Сейчас результат не меняется: нет возврата от исполнителя, функция возвращает `None`. Но правило проверки цены зависит от формы логов чужого семейства. Нужно ограничить семейством LLAMMA (признак в плане или шаге) и добавить тест на записанной сделке Pancake StableSwap. |
 
 ### 650ce364, e0d22d6e — проверено
 
@@ -3509,3 +3510,12 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Новая правка: О-29.
 
 Открыто: О-22, О-23, О-27, О-28, О-29.
+
+### 36ff66ab — LLAMMA: цена и восстановление сделок через кошелёк и V5
+
+- Новые `Venue::LlammaWallet`, `Wire::Llamma`/`LlammaV5`, `RouterFeeMode::Llamma` и `llamma_plan.rs`, `llamma_wallet.rs`, `llamma_pricing.rs`. Ветки в `market_plan`, `market_call`, `market_receipt`, `v2_wallet_sim`, `v2_execution` и `yield_basis_requote` защищены `llamma()` или новыми Wire и Venue.
+- `yield_basis_requote.rs`: флаг `bancor_legacy` заменён на `enum Market`. Для YieldBasis и BancorLegacy поведение то же. Проверка `wanted` перенесена раньше, условие для них не изменилось.
+- **Ошибка: О-30.** `sim.rs` `llamma_debit` срабатывает на сделках BSC Pancake и Lista StableSwap: тот же шаг 9 и та же сигнатура `TokenExchange`.
+- `llamma_wallet.rs` — 209 строк, близко к ориентиру, тесты вынесены отдельно. Принимается.
+
+Открыто: О-22, О-23, О-27, О-28, О-29, О-30.

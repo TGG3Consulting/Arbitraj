@@ -39,12 +39,24 @@ def capture():
     head=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())
     reader=Reader("base",head);cap=CanonicalCalls(reader)
     deployed={str(i):cap.one(REGISTRY,"ownerOf(uint256)",["uint256"],[i],["address"])[0] for i in (2,3,4)}
+    by_address={address:{"feature":int(key),"assigned":None} for key,address in deployed.items()}
+    birth_topic=[TRANSFER,None,None,["0x"+format(i,"064x") for i in (2,3,4)]]
+    history_start=head["block"]-2_000_000+1
+    for start in range(history_start,head["block"]+1,50_000):
+        logs=reader.one("eth_getLogs",[{"address":REGISTRY,"topics":birth_topic,"fromBlock":hex(start),
+                                      "toBlock":hex(min(start+49_999,head["block"]))}])
+        for log in logs:
+            address=receiver(log)
+            if int(address,16)==0:continue
+            previous=by_address.get(address)
+            if previous is None or previous["assigned"] is None:
+                by_address[address]={"feature":int(log["topics"][3],16),"assigned":log}
     checked=set()
     witnesses=[]
     # The target is a payment witness, so stop on the first unambiguous transaction.
     for offset in range(0,24000,1200):
         end=head["block"]-offset
-        logs=reader.one("eth_getLogs",[{"address":list(deployed.values()),"fromBlock":hex(end-1199),"toBlock":hex(end)}])
+        logs=reader.one("eth_getLogs",[{"address":list(by_address),"fromBlock":hex(end-1199),"toBlock":hex(end)}])
         for log in reversed(logs):
             h=log["transactionHash"]
             if log["topics"] or len(log["data"])!=98 or h in checked:continue
@@ -55,20 +67,25 @@ def capture():
             if proof:
                 block=reader.one("eth_getBlockByNumber",[receipt["blockNumber"],False])
                 if block["hash"]!=receipt["blockHash"]:raise ValueError("replaced fill")
-                tag={"blockHash":block["hash"],"requireCanonical":True}
-                original=cap.selector
-                try:
-                    cap.selector=tag
-                    feature=next(int(key) for key,value in deployed.items() if value==log["address"])
-                    registered=cap.one(REGISTRY,"ownerOf(uint256)",["uint256"],[feature],["address"])[0]
-                finally:cap.selector=original
-                if registered!=log["address"]:continue
-                proof["feature"]=feature
+                role=by_address[log["address"]];assigned=role["assigned"]
+                if assigned is not None:
+                    born=reader.one("eth_getBlockByNumber",[assigned["blockNumber"],False])
+                    if born["hash"]!=assigned["blockHash"]:raise ValueError("replaced registry transfer")
+                    if (int(assigned["blockNumber"],16),int(assigned["logIndex"],16))>=(proof["block"],int(log["logIndex"],16)):continue
+                    proof["registryTransfer"]=assigned
+                else:
+                    original=cap.selector
+                    try:
+                        cap.selector={"blockHash":block["hash"],"requireCanonical":True}
+                        registered=cap.one(REGISTRY,"ownerOf(uint256)",["uint256"],[role["feature"]],["address"])[0]
+                    finally:cap.selector=original
+                    if registered!=log["address"]:continue
+                proof["feature"]=role["feature"]
                 witnesses.append(proof);break
             if len(checked)>=100:break
         if witnesses or len(checked)>=100:break
     return {"chain":8453,"anchor":reader.tag,"registry":REGISTRY,"features":deployed,
-            "transactionsExamined":len(checked),"fromBlock":end-1199,"toBlock":head["block"],"witnesses":witnesses,
+            "registryHistoryStart":history_start,"registeredAddressesExamined":len(by_address),"transactionsExamined":len(checked),"fromBlock":end-1199,"toBlock":head["block"],"witnesses":witnesses,
             "source":"https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/0x-rfq.ts"}
 if __name__=="__main__":
     p=argparse.ArgumentParser();p.add_argument("output",type=Path);args=p.parse_args()

@@ -22,8 +22,6 @@ const STABLE_ASSETS: u8 = 4;
 // DeFiPlaza.sol:20, enum State {Unlisted, PreListing, Delisting, Listed}.
 // https://sourcify.dev/server/v2/contract/1/0xE68c1d72340aEeFe5Be76eDa63AE2f4bc7514110?fields=sources
 const LISTED: u8 = 3;
-// Число независимых регистрационных чтений в одном запросе, без ограничения размера каталога.
-const REGISTRY_BATCH: usize = 48;
 
 #[allow(clippy::too_many_arguments)]
 mod abi {
@@ -218,6 +216,21 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
 }
 
+/// Группы независимых listedTokens на одном заголовке, включая последнюю неполную пачку.
+fn registry_requests<'a>(
+    pool: Address,
+    at: &'a Value,
+    assets: &'a [Address],
+    size: usize,
+) -> impl Iterator<Item = (&'a [Address], Vec<batch::Request>)> {
+    assets.chunks(size).map(move |group| {
+        let calls = group.iter()
+            .map(|&token| batch::view(at, pool, IPlaza::listedTokensCall { token }))
+            .collect();
+        (group, calls)
+    })
+}
+
 pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[Address]) -> Extra {
     let mut out = Extra::default();
     let candidates: HashSet<_> = coins.keys().chain(quotes).copied().collect();
@@ -248,11 +261,8 @@ pub(super) async fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[
                     .copied()
                     .filter(|a| !a.is_zero() && *a != weth)
                     .collect();
-                for group in assets.chunks(REGISTRY_BATCH) {
-                    let calls: Vec<_> = group
-                        .iter()
-                        .map(|&a| batch::view(&at, pool, IPlaza::listedTokensCall { token: a }))
-                        .collect();
+                let size = super::load_batch::batch(ctx)?;
+                for (group, calls) in registry_requests(pool, &at, &assets, size) {
                     let results = rpc::batch(ctx, &calls).await?;
                     for (&a, value) in group.iter().zip(results) {
                         let data: alloy_primitives::Bytes =
@@ -345,4 +355,40 @@ pub(crate) async fn out_at(
         return Err(bad(ctx));
     }
     Ok(quote)
+}
+
+
+#[cfg(test)]
+mod registry_tests {
+    use super::*;
+    use alloy_primitives::Bytes;
+
+    #[test]
+    fn each_rpc_page_preserves_all_recorded_registrations_and_their_block() {
+        let bytes = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/defiplaza_multi_ethereum.json.gz");
+        let book: Value = serde_json::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).unwrap();
+        let pool = book["pool"].as_str().unwrap().parse().unwrap();
+        let at = &book["selector"];
+        let assets: Vec<Address> = book["inventory"]["registration"]["states"].as_object().unwrap()
+            .keys().map(|token| token.parse().unwrap()).collect();
+        assert_eq!(assets.len(), 15);
+        for (size, expected) in [(4, vec![4,4,4,3]), (15, vec![15]), (48, vec![15]), (1, vec![1;15])] {
+            let mut lengths = Vec::new();
+            let mut seen = Vec::new();
+            for (tokens, calls) in registry_requests(pool, at, &assets, size) {
+                lengths.push(calls.len());
+                assert_eq!(tokens.len(), calls.len());
+                for (&token, (method, params)) in tokens.iter().zip(calls) {
+                    assert_eq!(method, "eth_call");
+                    assert_eq!(params[0]["to"], book["pool"]);
+                    assert_eq!(&params[1], at);
+                    let data: Bytes = serde_json::from_value(params[0]["data"].clone()).unwrap();
+                    assert_eq!(IPlaza::listedTokensCall::abi_decode(&data).unwrap().token, token);
+                    seen.push(token);
+                }
+            }
+            assert_eq!(lengths, expected);
+            assert_eq!(seen, assets);
+        }
+    }
 }

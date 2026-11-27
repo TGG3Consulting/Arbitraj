@@ -143,7 +143,7 @@ impl Market {
             _ if e.family.variant.fluid_lite()=>Some(Self::FluidDexLite),
             _ if e.family.variant.ambient()=>Some(Self::Ambient),
             _ if e.family.variant.llamma()=>Some(Self::Llamma),
-            _ if e.family.variant==Variant::Motoswap=>Some(Self::Motoswap),
+            _ if e.family.variant.motoswap()=>Some(Self::Motoswap),
             _ if e.family.variant.mooniswap()=>Some(Self::Mooniswap),
             _ if e.family.variant.defiplaza()=>Some(Self::DefiPlaza),
             _ if e.family.variant==Variant::YieldBasis=>Some(Self::YieldBasis),
@@ -446,7 +446,7 @@ pub(super) fn router_shape(
     }
     let native_flat=leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::NativeFlat{..})));
     let needs_wallet=native_flat||leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && (e.family.variant==Variant::Motoswap || e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.fluid_lite() || matches!(e.family.variant,Variant::Brokerbot|Variant::BaseStonk|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (e.family.variant.motoswap() || e.family.variant.euler() || e.family.variant.llamma() || e.family.variant.aqua() || e.family.variant.ambient() || e.family.variant.fluid_lite() || matches!(e.family.variant,Variant::Brokerbot|Variant::BaseStonk|Variant::Angstrom|Variant::RubiconClassic|Variant::PropVenue|Variant::IntegralSize|Variant::Stabull|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));
@@ -472,7 +472,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
         (_,Variant::Brokerbot)=>Some(super::aktionariat_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::BancorLegacy)=>Some(super::bancor_legacy_plan::probe(ctx,e,order,wallet,now)),
-        (_,Variant::Motoswap)=>Some(super::motoswap_plan::probe(ctx,e,order,wallet,now)),
+        (_,v) if v.motoswap()=>Some(super::motoswap_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::Mooniswap)=>Some(super::mooniswap_plan::probe(ctx,e,order,wallet,now)),
         (_,v) if v.defiplaza()=>Some(super::defiplaza_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::YieldBasis)=>Some(super::yield_basis_plan::probe(ctx,e,order,wallet,now)),

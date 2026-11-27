@@ -241,6 +241,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn motoswap(self) -> bool { self == Self::Motoswap }
     pub(crate) fn e3_lb(self) -> bool { self == Self::E3Lb }
     pub fn fluid_lite(self)->bool{ self==Self::FluidDexLite }
     pub(crate) fn euler(self)->bool { self.euler_v1() || self.euler_v2() }
@@ -309,9 +310,9 @@ impl Variant {
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
-        matches!(
+        self.motoswap() || matches!(
             self,
-            Self::Motoswap | Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::EmpireRaw | Self::EmpireModule | Self::EmpireNominal | Self::DegenSwap | Self::SafeSwapTrade | Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }

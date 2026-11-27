@@ -26,6 +26,26 @@ fn ambient(reg: &Registry) -> (Entry, B256) {
 }
 
 #[test]
+fn recorded_motoswap_uses_its_own_plan_and_block_refresh_on_ethereum() {
+    use crate::venues::bsc_dex::{exec::motoswap_plan, pools::per_block, quote::v2_pair_quote};
+
+    let moto = fixtures::moto();
+    let pancake = fixtures::pancake();
+    assert!(moto.family.variant.motoswap());
+    assert!(per_block::needs(moto.family));
+    assert_eq!(motoswap_plan::shape(&moto), Some(moto.pool.reference.address()));
+    assert!(!v2_pair_quote::on(&moto));
+
+    assert!(!pancake.family.variant.motoswap());
+    assert!(!per_block::needs(pancake.family));
+    assert_eq!(motoswap_plan::shape(&pancake), None);
+
+    let mut mismatched = moto;
+    mismatched.family = pancake.family;
+    assert_eq!(motoswap_plan::shape(&mismatched), None);
+}
+
+#[test]
 fn path_and_head_indexes_follow_replacement_update_retain_and_snapshot() {
     let reg = Registry::default();
     let watch = reg.clone();

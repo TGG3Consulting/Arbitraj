@@ -11,7 +11,7 @@ use alloy_primitives::Address;
 
 pub(super) fn needs(e:&Entry)->bool{
     use crate::venues::bsc_dex::pools::family_variant::Variant;
-    e.family.variant.aqua() || e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || e.family.variant.ambient() || e.family.variant.fluid_lite() || matches!(e.family.variant,Variant::Motoswap|Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
+    e.family.variant.aqua() || e.family.variant.llamma() || e.family.variant.ammalgam() || vista_pricing::is_vista(e) || e.family.variant.ambient() || e.family.variant.fluid_lite() || e.family.variant.motoswap() || matches!(e.family.variant,Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::Mooniswap|Variant::YieldBasis)
 }
 pub(super) async fn check(
     ctx: &Ctx,
@@ -48,7 +48,7 @@ pub(super) async fn check(
             let v5=super::executor::address(ctx)?.ok_or_else(||crate::venues::bsc_dex::pools::aqua::bad(ctx))?;
             Box::pin(super::aqua_plan::cached(ctx,e,head,v5)).await?;continue;
         }
-        if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Motoswap {
+        if e.family.variant.motoswap() {
             let (_,target)=super::motoswap_plan::graph_target(ctx,e).ok_or_else(||super::motoswap_plan::bad(ctx))?;
             let at=head.selector();
             tokio::try_join!(super::motoswap_plan::terms(ctx,e,input,target,Some(&at)),

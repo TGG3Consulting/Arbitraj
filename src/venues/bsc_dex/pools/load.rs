@@ -559,7 +559,7 @@ pub fn state<'a>(
             })
         });
     }
-    if f.variant == Variant::Motoswap && let PoolRef::Contract(pool)=reference {
+    if f.variant.motoswap() && let PoolRef::Contract(pool)=reference {
         return Box::pin(async move {
             let at=super::nami::block(ctx,&block_tag(block)).await?;
             let state=Box::pin(super::motoswap::state(ctx,f,*pool,pair,&at)).await?;

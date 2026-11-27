@@ -104,6 +104,10 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             let i=usize::from(!zfo);
             pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)
         }
+        (PoolState::Ammalgam(s),PoolKind::V2) => {
+            let (x,y,input_slope,output_slope)=s.marginal(usize::from(!zfo)).ok_or("Ammalgam: нет доступного резерва")?;
+            pair(y,input_slope,x,output_slope)
+        }
         (PoolState::Empire(s), PoolKind::V2) => {let i=usize::from(!zfo);pair(s.reserves[1-i],U256::ONE,s.reserves[i],U256::ONE)}
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);

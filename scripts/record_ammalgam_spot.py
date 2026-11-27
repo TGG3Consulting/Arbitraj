@@ -158,6 +158,8 @@ def capture(url, compiled):
                 row.update(spent=str(spent), received=str(received), gas=int(call["gasUsed"],16),
                            minimum_refusal=checked[at+2]["error"], logs=call["logs"])
     if compiled:
+        from record_ammalgam_paths import paths
+        data["paths"] = paths(url,tag,env,prefix,module,end,stable,pools)
         for c in data["controls"]:
             other = next(o for o in data["controls"] if o["mode"]=="helper" and
                          (o["input"],o["output"],o["amount"])==(c["input"],c["output"],c["amount"]))

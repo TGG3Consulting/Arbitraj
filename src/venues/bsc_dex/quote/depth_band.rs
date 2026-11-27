@@ -157,6 +157,17 @@ pub fn band_from_rate(
 /// получено из пула, полоса прочитана целиком). Принимает: запись, полосу %. Ошибки (текст): полоса вне
 /// 0–100%, расчёт невозможен.
 pub fn band_units(e: &Entry, pct: Decimal) -> Result<(U256, U256, bool), String> {
+    if let PoolState::Ammalgam(s) = &e.pool.state {
+        if pct <= Decimal::ZERO || pct >= Decimal::ONE_HUNDRED {
+            return Err(format!("dex.depth_band_pct = {pct}: нужно больше 0 и меньше 100"));
+        }
+        let fraction = U256::from(pct.mantissa().unsigned_abs());
+        let unit = U256::from(100 * 10_u128.pow(pct.scale()));
+        let sell_side = usize::from(e.coin != e.pool.token0);
+        let (sell,sell_full) = s.band(sell_side,false,fraction,unit).ok_or("Ammalgam: граница продажи не определена")?;
+        let (buy,buy_full) = s.band(1-sell_side,true,fraction,unit).ok_or("Ammalgam: граница покупки не определена")?;
+        return Ok((buy,sell,buy_full && sell_full));
+    }
     let b = (pct / Decimal::ONE_HUNDRED)
         .to_f64()
         .filter(|b| *b > 0.0 && *b < 1.0);

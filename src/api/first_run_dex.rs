@@ -292,6 +292,13 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k=="dex.pool_code_hashes" && matches!(p.id.as_str(),"blueprint"|"vvs-v3-ethereum") {
+                        let raw:&[u8]=if p.id=="blueprint" { include_bytes!("../../tests/data/first_run_dex_2026-11-26/blueprint_ethereum_directory.json.gz") }
+                            else { include_bytes!("../../tests/data/first_run_dex_2026-11-26/vvs_ethereum_directory.json.gz") };
+                        let r:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw)).unwrap();
+                        assert_eq!(r["selector"],snapshot["selector"]);
+                        assert_eq!(r["init"].as_str(),Some(text.as_str()));
+                        assert_eq!(r["nonce"].as_u64().unwrap(),r["markets"].as_array().unwrap().len() as u64+1);
                     } else if k=="dex.pool_code_hashes" && p.id=="antfarm-ethereum" {
                         let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz");
                         let r:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&raw[..])).unwrap();

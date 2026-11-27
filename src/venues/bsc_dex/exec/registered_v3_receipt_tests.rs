@@ -25,9 +25,16 @@ fn wallet_limits_and_identity_survive_serialization() {
             "../../../../tests/data/first_run_dex_2026-11-26/lif3_ethereum_wallets.json.gz"
         )
         .as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/vvs_ethereum_wallets.json.gz").as_slice(),
     ] {
         let archive: Value = serde_json::from_reader(GzDecoder::new(raw)).unwrap();
         let parse = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+        let extended=archive["module_hash"].is_string();
+        let mut allowed=exact.clone();
+        if extended {
+            let directory:Value=serde_json::from_reader(GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/vvs_ethereum_directory.json.gz").as_slice())).unwrap();
+            allowed.push(parse(&directory["exact_token"]["address"]));
+        }
         let mut count = 0;
         for row in archive["cases"]
             .as_array()
@@ -37,7 +44,7 @@ fn wallet_limits_and_identity_survive_serialization() {
         {
             let input = parse(&row["source"]);
             let output = parse(&row["target"]);
-            if !exact.contains(&input) || !exact.contains(&output) {
+            if !allowed.contains(&input) || !allowed.contains(&output) {
                 continue;
             }
             let pool = parse(&row["pool"]);
@@ -55,6 +62,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 .unwrap();
             let market = Market {
                 pool,
+                fee_event:extended,
                 fee: U24::from(node["fee"].as_u64().unwrap() as u32),
             };
             let bound = Proof {
@@ -67,6 +75,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                 minimum: received,
                 deadline: U256::from(1000),
             };
+            assert_eq!(serde_json::to_value(market).unwrap().get("fee_event").is_some(),extended);
             let mut proof: Proof =
                 serde_json::from_value(serde_json::to_value(&bound).unwrap()).unwrap();
             assert_eq!(bound.data(), proof.data());
@@ -93,9 +102,7 @@ fn wallet_limits_and_identity_survive_serialization() {
                     .find(|l| {
                         l.address == pool
                             && l.topics.first()
-                                == Some(&keccak256(
-                                    "Swap(address,address,int256,int256,uint160,uint128,int24)",
-                                ))
+                                == Some(&keccak256(market.event().0))
                     })
                     .unwrap()
                     .clone(),

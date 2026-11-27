@@ -55,7 +55,7 @@ impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
             _ if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride|Variant::V2ExactRouter) => Some(Self::SolidlyRouter),
-            _ if e.family.variant==Variant::RegisteredUniV3 => Some(Self::RegisteredV3),
+            _ if matches!(e.family.variant, Variant::RegisteredUniV3 | Variant::VvsV3) => Some(Self::RegisteredV3),
             _ if super::o1_wallet::enabled(e) => Some(Self::O1),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),

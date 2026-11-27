@@ -171,6 +171,37 @@ def tables(network, snapshots, profiles):
             "все индивидуальные overrides нулевые на блоке 62262756. Предыдущее поколение Base читает только ставку типа кривой. "
             "[Публикация команды Unicly](https://medium.com/unicly/unicly-v2-launch-airdrop-announcement-fcfd1beed6dc) · "
             "[Архив индивидуальных ставок Base](../tests/data/first_run_dex_2026-11-26/archly_base_fee_overrides.json.gz)."])
+    for key,pid,name in (("blueprint","blueprint","Blueprint"),("vvs","vvs-v3-ethereum","VVS V3")):
+        if base or pid not in configured:
+            continue
+        directory=Path(f"tests/data/first_run_dex_2026-11-26/{key}_ethereum_directory.json.gz")
+        with gzip.open(directory,"rt",encoding="utf8") as stream: registry=json.load(stream)
+        rows=registry["markets"]
+        out.extend(["",f"#### {name} на Ethereum","",
+                    f"На блоке {registry['height']} по событиям фабрики, CREATE2 и nonce создателя подтверждены все {len(rows)} пулов и {len(registry['tiers'])} уровня комиссии. "
+                    f"Текущая ликвидность положительна у {sum(int(r['liquidity'])>0 for r in rows)} пулов. Достижимые позиции по обе стороны от текущего тика проверяются отдельно. "
+                    f"[Адреса контрактов, транзакции регистрации и состояние](../{directory.as_posix()})."])
+        if key=="blueprint":
+            out.append("Официальный SwapRouter с точной передачей обоих ERC20 и шаг V3 ArbExecutor сравниваются с учётом газа и необходимых разрешений.")
+        else:
+            out.append("VVS применяет отдельный callback. Прямой защищённый модуль с этой фабрикой и его вызов через шаг 17 V5 доступны при установленном dex.router. "
+                       "Для официального SwapRouter выставляется dex.v3_native_router. WETH и CosmosERC20 VVS поддерживают точные переводы. "
+                       "Два рынка работают с VVSV3LmPool. Бот сверяет привязку пула и реализацию MasterChef через EIP-1967.")
+        wallets=directory.with_name(f"{key}_ethereum_wallets.json.gz")
+        if wallets.exists():
+            with gzip.open(wallets,"rt",encoding="utf8") as stream: paid=json.load(stream)
+            measured=paid["cases"]
+            out.append(f"В архивной симуляции подтверждены {len(measured)} выплат на {len({r['pool'] for r in measured})} рынках. "
+                       f"Для каждой выплаты проверены полученная сумма, газ, отказ при минимуме на единицу выше и истёкший срок. "
+                       f"[Транзакции, события и балансы](../{wallets.as_posix()}).")
+            if key=="vvs":
+                ident={registry["exact_token"]["address"],"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"}
+                groups={}
+                for r in measured:
+                    if {r["source"],r["target"]}==ident:
+                        groups.setdefault((r["source"],r["spent"],r["received"]),{})[r["wire"]]=r["gas"]
+                delta=[r["module"]-r["router"] for r in groups.values() if {"module","router"}<=r.keys()]
+                if delta:out.append(f"При одинаковом полном расходе и поступлении WETH/VVS штатный Router экономил от {min(delta)} до {max(delta)} единиц газа относительно прямого модуля. Покупка и продажа проверены на двух объёмах. Стоимость нового approve относится к конкретному плательщику.")
     for key,name in (("wagmi","WAGMI"),("lif3","Lif3")):
         if base or key+"-ethereum" not in configured:
             continue

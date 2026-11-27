@@ -31,6 +31,7 @@ pub enum Variant {
     UmbraeDamm,
     UmbraeDlmm,
     HelloV3,
+    VvsV3,
     RegisteredV3,
     RegisteredUniV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
@@ -187,11 +188,12 @@ pub enum Variant {
 impl Variant {
     pub fn launch(self)->bool {matches!(self,Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
-    pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3) }
+    pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
+    pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
-    pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -249,6 +251,7 @@ pub fn of(kind: &str) -> Variant {
         "izi_static_modules" => Variant::IziModules,
         "umbrae_dlmm" | "umbrae_dlmm_module" => Variant::UmbraeDlmm,
         "umbrae_damm" | "umbrae_damm_module" => Variant::UmbraeDamm,
+        "vvs_v3" | "vvs_v3_module" => Variant::VvsV3,
         "hello_v3" => Variant::HelloV3,
         "registered_uni_v3" => Variant::RegisteredUniV3,
         "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,

@@ -145,8 +145,49 @@ def capture(name, endpoint):
         if any(addr(v)!=pool for v in [next(vals),next(vals)]):raise ValueError(("registry",pool))
         row.update(liquidity=str(int.from_bytes(vals0["liquidity"],"big")),slot0="0x"+vals0["slot0"].hex(),balances=[str(int.from_bytes(next(vals),"big")) for _ in range(2)])
         if name=="vvs":row["lm_pool"]=addr(vals0["lmPool"])
-    return dict(chain="ethereum",chain_id=1,selector=tag,state_root=ROOT_HASH,height=snapshot["block"],factory=factory,
+    extra={}
+    if name=="vvs":
+        extra["rewards"]=reward_roles(name,markets,tag,rpc)
+        exact="0x839e71613f9aa06e5701cf6de63e303616b0dde3"
+        url="https://sourcify.dev/server/v2/contract/1/"+exact
+        response=session.get(url,params={"fields":"compilation,runtimeBytecode.onchainBytecode"},timeout=20)
+        response.raise_for_status();source=response.json()
+        code=rpc("eth_getCode",[exact,tag])
+        if (source["compilation"]["name"]!="CosmosERC20" or code.lower()!=source["runtimeBytecode"]["onchainBytecode"].lower()
+            or "0x"+keccak(hexstr=code).hex()!="0x103268928496332938eeac5ecf9f2d1e1cbbc90af92ed12102a3b8a7fd1f6e40"):
+            raise ValueError("different exact transfer implementation")
+        extra["exact_token"]=dict(address=exact,runtime="0x"+keccak(hexstr=code).hex(),contract="CosmosERC20",source=url)
+    return dict(**extra,chain="ethereum",chain_id=1,selector=tag,state_root=ROOT_HASH,height=snapshot["block"],factory=factory,
                 deployer=deployer,roles=roles,nonce=nonce,init=init,tiers=tiers,markets=markets,events=logs)
+
+
+def reward_roles(name,markets,tag,rpc):
+    if name!="vvs":return []
+    roles=[]
+    for m in markets:
+        address=m["lm_pool"]
+        if int(address,16)==0:continue
+        def address_getter(to,sig):
+            raw=rpc("eth_call",[{"to":to,"data":calldata(sig,[],[])},tag])
+            return decode(["address"],bytes.fromhex(raw[2:]))[0]
+        def verified(to,expected_name):
+            url="https://sourcify.dev/server/v2/contract/1/"+to
+            reply=requests.get(url,params={"fields":"compilation,runtimeBytecode.onchainBytecode"},timeout=25)
+            reply.raise_for_status();source=reply.json()
+            code=rpc("eth_getCode",[to,tag])
+            if code=="0x" or source["compilation"]["name"]!=expected_name or code.lower()!=source["runtimeBytecode"]["onchainBytecode"].lower():
+                raise ValueError(("reward role source differs",to))
+            return "0x"+keccak(hexstr=code).hex()
+        pool=address_getter(address,"pool()")
+        chef=address_getter(address,"masterChef()")
+        if pool!=m["pool"] or int(chef,16)==0:raise ValueError("reward module bound to different pool")
+        slot="0x"+(int.from_bytes(keccak(text="eip1967.proxy.implementation"),"big")-1).to_bytes(32,"big").hex()
+        implementation=decode(["address"],bytes.fromhex(rpc("eth_getStorageAt",[chef,slot,tag])[2:]))[0]
+        if int(implementation,16)==0:raise ValueError("unknown rewards implementation")
+        roles.append(dict(pool=pool,hook=address,runtime=verified(address,"VVSV3LmPool"),chef=chef,
+                          chef_runtime=verified(chef,"ERC1967Proxy"),implementation=implementation,
+                          implementation_runtime=verified(implementation,"MasterChefV3")))
+    return roles
 
 
 if __name__=="__main__":

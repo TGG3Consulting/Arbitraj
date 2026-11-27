@@ -48,5 +48,18 @@
         "contracts/Dependencies/CheckContract.sol": "aa32079b9f38a1669beb9fefe2e0af95fc543e1b717617713f00a648f0dc4b66"
       }
     }
+  },
+  "archly_input": {
+    "address": "0x9482c407d32204462d8cbbc0755e96c39b79878e",
+    "keccak256": "0x4a51fc3dc25e28fd1c52a5ebebbd6ccc49d4e31f8b1bde68aba28cd1e46e5dd2",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x9482c407d32204462d8cbbc0755e96c39b79878e",
+    "contract": "Arc",
+    "sources": {
+      "contracts/Arc.sol": "8559d3fe4696f097d480ae772b699325b914a69eedb6b9e462a6a0b71be44f02",
+      "@openzeppelin/contracts/utils/Context.sol": "a92e4fa126feb6907daa0513ddd816b2eb91f30a808de54f63c17d0e162c3439",
+      "@openzeppelin/contracts/access/Ownable.sol": "ba43b97fba0d32eb4254f6a5a297b39a19a247082a02d6e69349e071e2946218",
+      "@openzeppelin/contracts/security/Pausable.sol": "0849d93b16c9940beb286a7864ed02724b248b93e0d80ef6355af5ef15c64773",
+      "@openzeppelin/contracts/access/Ownable2Step.sol": "de231558366826d7cb61725af8147965a61c53b77a352cc8c9af38fc5a92ac3c"
+    }
   }
 }

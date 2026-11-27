@@ -50,7 +50,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
             Ok(*contract)
         }
         (PoolRef::Contract(address), super::families::Proto::PancakeV3)
-            if entry.family.variant == super::family_variant::Variant::BaseNativeV3 =>
+            if matches!(entry.family.variant, super::family_variant::Variant::BaseNativeV3 | super::family_variant::Variant::VvsV3) =>
         {
             Ok(*address)
         }
@@ -124,6 +124,7 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
         super::family_variant::Variant::CandySwap => "candyswap_module",
         super::family_variant::Variant::Memebox => "memebox_v5",
         super::family_variant::Variant::RegisteredV3 => "registered_v3_module",
+        super::family_variant::Variant::VvsV3 => "vvs_v3_module",
         _ => return Err(ctx.err(ErrorCode::NotApplicable,"Для этого протокола нет модуля с привязкой к фабрике")),
     };
     if kind!=expected || !f.tradable {

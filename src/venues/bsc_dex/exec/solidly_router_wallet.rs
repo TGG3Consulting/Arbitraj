@@ -57,13 +57,31 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
-        let Some(stable)=self.stable else {
-            return Router::swapExactTokensForTokensCall {amountIn:amount,amountOutMin:minimum,path:vec![input,output],to:wallet,deadline}.abi_encode().into();
+        let Some(stable) = self.stable else {
+            return Router::swapExactTokensForTokensCall {
+                amountIn: amount,
+                amountOutMin: minimum,
+                path: vec![input, output],
+                to: wallet,
+                deadline,
+            }
+            .abi_encode()
+            .into();
         };
         if self.supporting_fee {
             return Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall {
-                amountIn:amount,amountOutMin:minimum,routes:vec![PoolRoute{from:input,to:output,stable}],to:wallet,deadline
-            }.abi_encode().into();
+                amountIn: amount,
+                amountOutMin: minimum,
+                routes: vec![PoolRoute {
+                    from: input,
+                    to: output,
+                    stable,
+                }],
+                to: wallet,
+                deadline,
+            }
+            .abi_encode()
+            .into();
         }
         Router::swapExactTokensForTokensSimpleCall {
             amountIn: amount,
@@ -97,19 +115,34 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
-    let plain=e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::V2ExactRouter;
-    let target=if plain {
-        crate::venues::bsc_dex::pools::registered_router::checked(ctx,e,o.token_in,o.token_out,&head.selector()).await?
-    } else {solidly_proxy::router(ctx, e, o.token_in, o.token_out, &head.selector()).await?};
+    let plain =
+        e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::V2ExactRouter;
+    let target = if plain {
+        crate::venues::bsc_dex::pools::registered_router::checked(
+            ctx,
+            e,
+            o.token_in,
+            o.token_out,
+            &head.selector(),
+        )
+        .await?
+    } else {
+        solidly_proxy::router(ctx, e, o.token_in, o.token_out, &head.selector()).await?
+    };
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let stable=match &e.pool.state {
-        crate::core::types::PoolState::Solidly{stable,..} if !plain => Some(*stable),
-        crate::core::types::PoolState::V2{..} if plain => None,
-        _=>return Err(fail()),
+    let stable = match &e.pool.state {
+        crate::core::types::PoolState::Solidly { stable, .. } if !plain => Some(*stable),
+        crate::core::types::PoolState::V2 { .. } if plain => None,
+        _ => return Err(fail()),
     };
-    let market=Market{pool:e.pool.reference.address(),stable,supporting_fee:e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyPairOverride};
+    let market = Market {
+        pool: e.pool.reference.address(),
+        stable,
+        supporting_fee: e.family.variant
+            == crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyPairOverride,
+    };
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,
@@ -147,6 +180,117 @@ mod tests {
     use serde_json::Value;
 
     #[test]
+    fn unicly_router01_recovers_both_measured_wallet_transfers() {
+        let d: Value = serde_json::from_reader(GzDecoder::new(
+            &include_bytes!(
+                "../../../../tests/data/first_run_dex_2026-11-26/unicly_ethereum_wallets.json.gz"
+            )[..],
+        ))
+        .unwrap();
+        let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+        let pool = addr(&d["roles"]["Pair"]["address"]);
+        let m = d["wallets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| addr(&m["pool"]) == pool)
+            .unwrap();
+        let mut verified = 0;
+        for round in m["rounds"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| m["mode"] == "router")
+        {
+            for side in ["buy", "sell"] {
+                let leg = &round[side];
+                let raw = &leg["exact"];
+                let data: Bytes = raw["calldata"].as_str().unwrap().parse().unwrap();
+                let call =
+                    Router::swapExactTokensForTokensCall::abi_decode_validate(&data).unwrap();
+                let p = Proof {
+                    market: Market {
+                        pool,
+                        stable: None,
+                        supporting_fee: false,
+                    },
+                    target: addr(&d["roles"]["Router02"]["address"]),
+                    payer: addr(&raw["payer"]),
+                    input: addr(&leg["input"]),
+                    output: addr(&leg["output"]),
+                    budget: call.amountIn,
+                    minimum: call.amountOutMin,
+                    deadline: call.deadline,
+                };
+                assert_eq!(p.data(), data);
+                let logs: Vec<SimLog> = serde_json::from_value(raw["logs"].clone()).unwrap();
+                let mut restored: Proof =
+                    serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+                assert_eq!(restored.measured(&logs), Some((p.budget, p.minimum)));
+                restored.market.pool = Address::ZERO;
+                assert!(restored.measured(&logs).is_none());
+                assert_eq!(leg["above"]["status"], "0x0");
+                assert_eq!(leg["expired"]["spent"], "0");
+                verified += 1;
+            }
+        }
+        assert_eq!(verified, 4);
+    }
+
+    #[test]
+    fn archly_registered_pair_floor_and_signed_payer_survive_recovery() {
+        use crate::venues::bsc_dex::check::simulate::SimLog;
+        let archive: Value = serde_json::from_reader(GzDecoder::new(
+            &include_bytes!(
+                "../../../../tests/data/first_run_dex_2026-11-26/archly_ethereum_wallets.json.gz"
+            )[..],
+        ))
+        .unwrap();
+        let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+        let mut checked = 0;
+        for row in archive["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["wire"] == "router")
+        {
+            let m = archive["markets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["pool"] == row["pool"])
+                .unwrap();
+            let proof = Proof {
+                market: Market {
+                    pool: addr(&m["pool"]),
+                    stable: m["stable"].as_bool(),
+                    supporting_fee: true,
+                },
+                target: addr(&archive["roles"]["router"]["address"]),
+                payer: addr(&archive["owner"]),
+                input: addr(&row["source"]),
+                output: addr(&row["target"]),
+                budget: row["spent"].as_str().unwrap().parse().unwrap(),
+                minimum: row["received"].as_str().unwrap().parse().unwrap(),
+                deadline: U256::from(100),
+            };
+            let bytes = proof.data();
+            let decoded=Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall::abi_decode_validate(&bytes).unwrap();
+            assert_eq!(decoded.routes.len(), 1);
+            assert_eq!(decoded.routes[0].from, proof.input);
+            assert_eq!(decoded.routes[0].to, proof.output);
+            let logs: Vec<SimLog> = serde_json::from_value(row["logs"].clone()).unwrap();
+            let mut saved: Proof =
+                serde_json::from_value(serde_json::to_value(&proof).unwrap()).unwrap();
+            assert_eq!(saved.measured(&logs), Some((proof.budget, proof.minimum)));
+            saved.minimum += U256::ONE;
+            assert!(saved.measured(&logs).is_none());
+            checked += 1;
+        }
+        assert_eq!(checked, 8);
+    }
+
+    #[test]
     fn saved_call_keeps_the_exact_pool_payer_volume_and_floor() {
         let bytes = include_bytes!(
             "../../../../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum_wallets.json.gz"
@@ -158,7 +302,7 @@ mod tests {
             let market = Market {
                 pool: addr(&m["pool"]),
                 stable: m["stable"].as_bool(),
-                supporting_fee:false,
+                supporting_fee: false,
             };
             for c in m["cases"].as_array().unwrap() {
                 let payer = addr(&c["owner"]);

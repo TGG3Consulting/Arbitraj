@@ -44,7 +44,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
             } else if e.family.variant == Variant::CandySwap {
                 super::super::pools::v2_live_fee::candy_fresh(ctx,&e,&h.selector()).await
-            } else if e.family.variant == Variant::RegisteredV3 {
+            } else if e.family.variant.registered_module() {
                 registered_v3::fresh(ctx, &e, &h.selector()).await
             } else {
                 memebox::refresh(ctx, &mut e, h).await
@@ -68,7 +68,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.push(option);
         }
         if graph && let Ok(Some(target)) = executor::address(ctx) {
-            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant == Variant::RegisteredV3 {
+            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant.registered_module() {
                 (
                     17,
                     Bytes::copy_from_slice(e.pool.reference.address().into_word().as_slice()),

@@ -16,7 +16,7 @@ DEPLOYMENTS = {
     "supernova-amm": ("0x5aef44edfc5a7edd30826c724ea12d7be15bdc30", "factory_pool", 10000),
     "baso-finance": ("0xcefbebf0b85b1638c19b01ce2a02c262f421b07d", "factory_stable", 10000),
     "infusion": ("0x2d9a3a2bd6400ee28d770c7254ca840c82faf23f", "factory_stable", 10000),
-    "archly-base": ("0x12508dd9108abab2c5fd8fc6e4984e46a3cf7824", "factory_stable", 10000),
+    "archly-base": ("0x12508dd9108abab2c5fd8fc6e4984e46a3cf7824", "factory_pair_override", 10000),
     "archly-v1-base": ("0xba06043a777652baf540ccc785edafd94ee05b37", "factory_stable", 10000),
     "hydrex-classic": ("0xc47f17c4fd96f50efd2a2448cede5c185c084bf0", "pool", 100000),
     "velocimeter-base": ("0xe21aac7f113bd5dc2389e4d8a8db854a87fd6951", "factory_address", 10000),
@@ -99,7 +99,7 @@ def capture(endpoint, key):
         if source_kind=="factory_pool":fee=(fac,"getFee(address,bool)",["address","bool"],[pool,stable])
         elif source_kind=="factory_stable": fee=(fac,"getFee(bool)",["bool"],[stable])
         elif source_kind=="pool": fee=(pool,"getFee()",[],[])
-        else: fee=(fac,"getRealFee(address)" if key=="equalizer-base" else "getFee(address)",["address"],[pool])
+        else: fee=(fac,"getRealFee(address)" if key in ("equalizer-base","archly-base") else "getFee(address)",["address"],[pool])
         fee_calls.append(fee)
         markets.append(dict(pool=pool,current_init=matched==init,init="0x"+matched.hex(),tokens=[a,b],scales=[str(d0),str(d1)],reserves=[str(r0),str(r1)],stable=stable))
     results=iter(optional(c,checks))
@@ -108,6 +108,10 @@ def capture(endpoint, key):
         if not listed or decode(["address"],listed)[0]!=m["pool"]: raise ValueError("registry round trip differs")
         m["balances"]=[None if v is None else str(int.from_bytes(v,"big")) for v in (left,right)]
         m["fee"]=None if fee is None else str(int.from_bytes(fee,"big"))
+    if key=="archly-base":
+        controls=iter(posts(c,[(fac,"feesOverrides(address)",["address"],[m["pool"]]) for m in markets]))
+        for m in markets:
+            m["override"]=str(decode(["uint256"],next(controls))[0])
     if key=="equalizer-base":
         controls=iter(posts(c,[(fac,fn,["address"],[m["pool"]]) for m in markets
                                for fn in ("feesOverrideStatic(address)","feesOverrideDynamic(address)")]))

@@ -470,6 +470,37 @@ mod tests {
     }
 
     #[test]
+    fn hopeswap_registered_fee_prices_the_actual_wallet_input() {
+        use alloy::sol_types::SolValue;
+        use serde_json::Value;
+        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/hopeswap_ethereum_wallets.json.gz")[..])).unwrap();
+        let settings:Value=serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        let cfg=&settings.as_array().unwrap().iter().find(|p|p["id"]=="hopeswap"&&p["chain_id"]==1).unwrap()["settings"];
+        let addr=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+        let number=|v:&Value|v.as_str().unwrap().parse::<U256>().unwrap();
+        let factory=addr(&cfg["dex.factory"]);let init=proof["pair_init"].as_str().unwrap().parse::<B256>().unwrap();
+        let getter=cfg["dex.v2_fee_method"].as_str().unwrap();let source=cfg["dex.v2_fee_source"].as_str().unwrap();
+        assert_eq!(rule_hash(1,factory,init,source,getter,10000),cfg["dex.v2_fee_rule_hash"].as_str().unwrap().parse().ok());
+        let rules=FeeRule{factory,factory_source:false,retained:source=="pool_retained",init,getter:getter.to_owned(),denominator:10_000};
+        let rows=proof["markets"].as_array().unwrap();
+        assert_eq!(rows.len(),4);
+        for row in rows {
+            let [a,b]=[addr(&row["tokens"][0]),addr(&row["tokens"][1])];
+            let rate=rules.at(Market {pool:addr(&row["pool"]),tokens:(a,b)}).unwrap();
+            let retained=row["retained"].as_u64().unwrap();
+            assert_eq!(rate.decode(&U256::from(retained).abi_encode()).unwrap(),row["fee_bps"].as_u64().unwrap() as u32*100);
+            for case in proof["cases"].as_array().unwrap().iter().filter(|c|c["pool"]==row["pool"]) {
+                let i=usize::from(addr(&case["source"])==b);
+                let x=number(&case["spent"])*U256::from(retained);
+                let q=x*number(&case["reserves"][1-i])/(U256::from(10000)*number(&case["reserves"][i])+x);
+                assert_eq!(q,number(&case["received"]));
+                assert_eq!(number(&case["before"][0])-number(&case["after"][0]),number(&case["spent"]));
+            }
+        }
+        assert_eq!(proof["cases"].as_array().unwrap().len(),16);
+    }
+
+    #[test]
     fn mars_terms_sum_only_the_variable_components() {
         use alloy::sol_types::SolValue;
         let t = |lp, fee, flat| (Address::repeat_byte(9), U256::from(lp), U256::from(fee), U256::from(flat)).abi_encode_params();

@@ -12,6 +12,10 @@ use alloy_primitives::{Address, B256};
 use serde_json::Value;
 
 pub(crate) use super::exact_wallet_tokens::eligible;
+pub(crate) fn target(ctx: &Ctx, e: &Entry) -> GatewayResult<Address> {
+    let key = if e.family.variant == super::family_variant::Variant::VvsV3 { "dex.v3_native_router" } else { "dex.router" };
+    ctx.dex_addr(key,e.family.id)
+}
 pub(crate) async fn checked(
     ctx: &Ctx,
     e: &Entry,
@@ -28,19 +32,22 @@ pub(crate) async fn checked(
         )
     };
     use super::family_variant::Variant;
-    if !matches!(e.family.variant, Variant::V2ExactRouter | Variant::RegisteredUniV3)
+    if !matches!(e.family.variant, Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::VvsV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
         return Err(bad());
     }
-    let router = ctx.dex_addr("dex.router", id)?;
+    let router = target(ctx,e)?;
     let hash = ctx
         .dex_text("dex.router_runtime_hash", id)?
         .parse::<B256>()
         .map_err(|_| bad())?;
     tokio::try_join!(
         async {
+            if e.family.variant == Variant::VvsV3 {
+                return registered_v3::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),e.pool.fee_pips,at).await;
+            }
             if e.family.variant == Variant::RegisteredUniV3 {
                 return registered_v3::fresh(ctx,e,at).await;
             }

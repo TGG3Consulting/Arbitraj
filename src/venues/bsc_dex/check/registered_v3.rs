@@ -12,13 +12,13 @@ use super::super::{
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy::sol_types::SolCall;
-use alloy_primitives::{Address, Bytes, U256, aliases::U24};
+use alloy_primitives::{Address, Bytes, U256};
 use serde_json::json;
 
 pub(super) fn configured(ctx: &Ctx, e: &Entry) -> bool {
     e.family.variant.exact_router()
-        && (e.family.variant==Variant::SolidlyPairOverride || registered_router::eligible(ctx, e.family.id, e.coin, e.usdt))
-        && ctx.dex_addr("dex.router", e.family.id).is_ok()
+        && registered_router::eligible(ctx,e.family.id,e.coin,e.usdt)
+        && registered_router::target(ctx,e).is_ok()
 }
 pub(super) async fn funded(
     ctx: &Ctx,
@@ -89,10 +89,7 @@ pub(super) fn leg(
             end,
         )
     } else {
-        Market {
-            pool,
-            fee: U24::from(e.pool.fee_pips.ok_or_else(fail)?),
-        }
+        Market::from_entry(e).ok_or_else(fail)?
         .order(
             order.token_in,
             order.token_out,

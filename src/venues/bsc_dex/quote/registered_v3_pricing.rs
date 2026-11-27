@@ -14,7 +14,7 @@ use crate::{
         wallet::signer,
     },
 };
-use alloy_primitives::{Bytes, aliases::U24};
+use alloy_primitives::Bytes;
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
     let ctx = &q.ctx;
@@ -38,7 +38,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     for e in entries {
         let pool = e.pool.reference.address();
         let classic = matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride);
-        let router = if e.family.variant==Variant::SolidlyPairOverride || registered_router::eligible(ctx, e.family.id, input, output) {
+        let router = if (e.family.variant==Variant::SolidlyPairOverride && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,input)) || registered_router::eligible(ctx, e.family.id, input, output) {
             match head {
                 Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
                     ctx,
@@ -52,7 +52,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 Some(h) => registered_router::checked(ctx, e, input, output, &h.selector())
                     .await
                     .ok(),
-                None => ctx.dex_addr("dex.router", e.family.id).ok(),
+                None => registered_router::target(ctx,e).ok(),
             }
         } else {
             None
@@ -72,12 +72,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 _ => None,
             }
         } else {
-            e.pool.fee_pips.map(|fee| {
-                Wire::RegisteredV3(Market {
-                    pool,
-                    fee: U24::from(fee),
-                })
-            })
+            Market::from_entry(e).map(Wire::RegisteredV3)
         };
         if let (Some(target), Some(wire)) = (router, wire) {
             let order = Execution {
@@ -89,7 +84,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 options.push(option);
             }
         }
-        if let Some(target) = executor {
+        if let Some(target) = executor && e.family.variant != Variant::VvsV3 {
             let (kind,data)=if plain {
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};

@@ -40,15 +40,19 @@ pub(super) async fn creator(
     )
     .await?;
     let deployer = batch::decode(&origin, declared)?;
+    let hook = batch::decode(&hook, lm)?;
+    if family.variant == super::family_variant::Variant::VvsV3 && !hook.is_zero() {
+        super::vvs_rewards::check(ctx,family.id,pool,hook,at).await?;
+    }
     if deployer.is_zero()
         || batch::decode(&source, bound)? != deployer
-        || !batch::decode(&hook, lm)?.is_zero()
-        || ctx.dex_text("dex.v3_swap_callback", family.id)?
-            != "pancakeV3SwapCallback(int256,int256,bytes)"
+        || (family.variant == super::family_variant::Variant::HelloV3 && !hook.is_zero())
+        || (family.variant == super::family_variant::Variant::HelloV3 && ctx.dex_text("dex.v3_swap_callback", family.id)?
+            != "pancakeV3SwapCallback(int256,int256,bytes)")
     {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
-            "HELLO V3: не подтверждён создатель пула, callback или модуль наград",
+            "V3: не подтверждён создатель пула, callback или модуль наград",
         ));
     }
     let fa = IHello::factoryAddressCall {};
@@ -56,7 +60,7 @@ pub(super) async fn creator(
     if batch::decode(&linked, fa)? != factory {
         return Err(ctx.err(
             ErrorCode::NotApplicable,
-            "HELLO V3: создатель связан с другой фабрикой",
+            "V3: создатель связан с другой фабрикой",
         ));
     }
     Ok(deployer)
@@ -78,7 +82,7 @@ pub(crate) async fn separate_fee(
             || Some(treasury) == crate::venues::bsc_dex::exec::executor::address(ctx)?
             || path.iter().any(|e| e.pool.reference.address() == treasury))
     {
-        return Err(ctx.err(ErrorCode::NoRoute,"HELLO V3: получатель сборов участвует в маршруте, чистая выплата отдельно не подтверждена"));
+        return Err(ctx.err(ErrorCode::NoRoute,"V3: получатель сборов участвует в маршруте, чистая выплата отдельно не подтверждена"));
     }
     Ok(())
 }

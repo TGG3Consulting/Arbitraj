@@ -167,6 +167,7 @@ pub mod bunnyswap;
 pub(crate) mod virtuals;
 mod virtuals_roles;
 mod virtuals_tax;
+mod vvs_rewards;
 pub(crate) mod hello_v3;
 pub mod registered_v3;
 pub(crate) mod registered_router;

@@ -92,7 +92,7 @@ pub(super) async fn option(
     }
     let fee_mode = match &execution.wire {
         super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
-        super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae()=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae() || c.entry.family.variant==super::super::pools::family_variant::Variant::VvsV3=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),

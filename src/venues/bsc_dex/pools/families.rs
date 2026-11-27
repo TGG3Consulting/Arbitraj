@@ -471,7 +471,8 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "v3_fork" | "v3_fork_ramses" | "v3_fork_uniswap_lm" => {
             (PoolKind::V3, Proto::UniswapV3, true, false, true)
         }
-        "hello_v3" => (PoolKind::V3,Proto::PancakeV3,true,false,true),
+        "hello_v3" | "vvs_v3" => (PoolKind::V3,Proto::PancakeV3,true,false,true),
+        "vvs_v3_module" => (PoolKind::V3,Proto::PancakeV3,true,true,true),
         "registered_uni_v3" | "registered_v3" => (PoolKind::V3,Proto::UniswapV3,true,false,true),
         "umbrae_dlmm" => (PoolKind::OraclePmm,Proto::V2,true,false,true),
         "umbrae_dlmm_module" => (PoolKind::OraclePmm,Proto::V2,true,true,true),

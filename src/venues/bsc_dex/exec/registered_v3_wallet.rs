@@ -27,6 +27,17 @@ sol! {interface IV3Router {
 pub struct Market {
     pub pool: Address,
     pub fee: U24,
+    #[serde(default, skip_serializing_if = "standard_event")]
+    pub fee_event: bool,
+}
+fn standard_event(extended: &bool) -> bool { !extended }
+impl Market {
+    pub(in crate::venues::bsc_dex) fn from_entry(e: &super::super::pools::registry::Entry) -> Option<Self> {
+        Some(Self {
+            pool: e.pool.reference.address(), fee: U24::from(e.pool.fee_pips?),
+            fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
+        })
+    }
 }
 pub trait RouterMarket: Copy {
     fn pool(self) -> Address;
@@ -47,6 +58,9 @@ impl RouterMarket for Market {
         self.pool
     }
     fn event(self) -> (&'static str, usize) {
+        if self.fee_event {
+            return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)",224);
+        }
         (
             "Swap(address,address,int256,int256,uint160,uint128,int24)",
             160,
@@ -187,15 +201,19 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
+    if e.family.variant == super::super::pools::family_variant::Variant::VvsV3
+        && e.family.tradable && selected.is_some() && ctx.dex_addr("dex.router",e.family.id).ok()==selected {
+        super::super::pools::registered_v3::fresh(ctx,e,&head.selector()).await?;
+        let plan=Box::pin(super::solidly_direct::plan(ctx,std::slice::from_ref(s),wallet,head.timestamp.to::<u64>(),false)).await?;
+        if Some(plan.router)!=selected || ctx.settings.generation()!=generation {return Err(fail());}
+        return Ok(plan);
+    }
     let target =
         registered_router::checked(ctx, e, o.token_in, o.token_out, &head.selector()).await?;
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let market = Market {
-        pool: e.pool.reference.address(),
-        fee: U24::from(e.pool.fee_pips.ok_or_else(fail)?),
-    };
+    let market = Market::from_entry(e).ok_or_else(fail)?;
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,

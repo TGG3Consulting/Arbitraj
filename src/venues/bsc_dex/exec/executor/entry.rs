@@ -203,7 +203,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         if k!=ExecKind::Balancer || !matches!(&e.pool.state,PoolState::UmbraeDamm(_) | PoolState::OraclePmm(_)) || (token_in!=e.pool.token0 && token_in!=e.pool.token1) {return Err(ctx.err(ErrorCode::NoRoute,"Umbrae: неподтверждённый рынок или вход"));}
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
     }
-    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::RegisteredV3 {
+    if e.family.variant.registered_module() {
         // Wire 17 takes a bytes32 poolId. Its destination is the factory-bound module and
         // its right-aligned id is the exact V3 pool. Balancer pool state is decoded below.
         if k!=ExecKind::Balancer || !matches!(&e.pool.state,PoolState::V3{..})

@@ -37,7 +37,7 @@ thread_local! {
     static PROFILES:std::cell::RefCell<Option<Profiles>>=const {std::cell::RefCell::new(None)};
 }
 fn pair(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> Option<(B256, B256)> {
-    if input == output || ctx.chain_id().is_none() {
+    if ctx.chain_id().is_none() {
         return None;
     }
     PROFILES.with_borrow_mut(|slot| {
@@ -62,7 +62,24 @@ fn pair(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> Option<
     })
 }
 pub(crate) fn eligible(ctx: &Ctx, id: &'static str, input: Address, output: Address) -> bool {
-    pair(ctx, id, input, output).is_some()
+    input != output && pair(ctx, id, input, output).is_some()
+}
+pub(crate) fn eligible_input(ctx: &Ctx, id: &'static str, input: Address) -> bool {
+    pair(ctx, id, input, input).is_some()
+}
+pub(crate) async fn check_input(
+    ctx: &Ctx,
+    id: &'static str,
+    input: Address,
+    at: &Value,
+) -> GatewayResult<()> {
+    let (hash, _) = pair(ctx, id, input, input).ok_or_else(|| {
+        ctx.not_set(
+            KEY,
+            format!("{KEY}: требуется подтверждённый расход входного ERC20"),
+        )
+    })?;
+    plain(ctx, input, hash, at).await
 }
 pub(crate) async fn check(
     ctx: &Ctx,
@@ -72,7 +89,7 @@ pub(crate) async fn check(
     at: &Value,
 ) -> GatewayResult<()> {
     let generation = ctx.settings.generation();
-    let (source,target)=pair(ctx,id,input,output).ok_or_else(||ctx.not_set(KEY,format!("{KEY} [dex:{id}]: нужны однозначные адреса и проверенные хеши обеих точных реализаций ERC20")))?;
+    let (source,target)=pair(ctx,id,input,output).filter(|_|input!=output).ok_or_else(||ctx.not_set(KEY,format!("{KEY} [dex:{id}]: нужны однозначные адреса и проверенные хеши обеих точных реализаций ERC20")))?;
     tokio::try_join!(
         plain(ctx, input, source, at),
         plain(ctx, output, target, at)
@@ -97,6 +114,33 @@ mod tests {
         .unwrap();
         let config: Value =
             serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        for (id, first, second) in [
+            (
+                "archly-ethereum",
+                &evidence["archly_input"],
+                &evidence["tokens"]["WETH"],
+            ),
+            (
+                "unicly",
+                &evidence["tokens"]["DAI"],
+                &evidence["tokens"]["WETH"],
+            ),
+        ] {
+            let p = config
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["id"] == id && p["chain_id"] == 1)
+                .unwrap();
+            let rows: Vec<String> = serde_json::from_value(p["settings"][KEY].clone()).unwrap();
+            let parsed = bindings(&rows).unwrap();
+            assert_eq!(parsed.len(), 2);
+            for entry in [first, second] {
+                let token: Address = entry["address"].as_str().unwrap().parse().unwrap();
+                let hash: B256 = entry["keccak256"].as_str().unwrap().parse().unwrap();
+                assert_eq!(parsed.get(&token), Some(&hash));
+            }
+        }
         for id in ["wagmi-ethereum", "lif3-ethereum", "solidlydex"] {
             let p = config
                 .as_array()

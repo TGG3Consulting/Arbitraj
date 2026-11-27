@@ -5,7 +5,9 @@ import json
 from pathlib import Path
 
 from eth_abi import decode
+from record_aero_basic_base import RUNTIME, round_trip
 from record_base_classic_wallets import capture
+from record_solidly_v3 import ETH_WETH
 from record_base_slipstream_executor import rpc
 from record_ethereum_x7 import ENDPOINTS
 from record_lista_ethereum import calldata
@@ -50,9 +52,18 @@ def record(endpoint,directory):
     if {m["stable"] for m in result["markets"]}!={True,False}:
         raise ValueError(("missing executable curve",result["rejected"][:4]))
     block=rpc(endpoint,"eth_getBlockByHash",[directory["selector"]["blockHash"],False])
+    deadline = int(block["timestamp"],16)+120
+    runtime = RUNTIME.read_text().strip().removeprefix("0x")
     for m in result["markets"]:
+        market = next(o for o in directory["markets"] if o["pool"]==m["pool"])
+        i = market["tokens"].index(m["token_in"])
+        scale, reserve = int(market["scales"][i]), int(market["reserves"][i])
+        for qty in sorted({min(scale*10,reserve//100), min(scale*100,reserve//10)}):
+            if qty and all(int(o["amount"]) != qty for o in m["cases"]):
+                m["cases"].append(round_trip(dict(endpoint=endpoint,selector=directory["selector"]),m["pool"],
+                    m["token_in"],m["token_out"],qty,deadline,runtime,kind=3,owner=m["cases"][0]["owner"],wrapped=ETH_WETH))
         for case in m["cases"]:
-            case["router"]=direct(endpoint,directory,m,case,int(block["timestamp"],16)+120)
+            case["router"]=direct(endpoint,directory,m,case,deadline)
     return result
 
 

@@ -61,6 +61,7 @@ impl Market {
             | Market::Umbrae
             | Market::O1
             | Market::Antfarm
+            | Market::Angstrom
             | Market::Stabull
             | Market::Integral
             | Market::Dagrow

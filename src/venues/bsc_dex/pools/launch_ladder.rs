@@ -22,6 +22,7 @@ async fn pass(
     token: Address,
     sizes: &[U256],
     at: &Value,
+    witness: Option<&(crate::venues::bsc_dex::quote::white_state::Head, Bytes)>,
 ) -> GatewayResult<Vec<LadderPoint>> {
     let PoolKey::Uniswap(k) = key else {
         return Err(invalid(ctx));
@@ -41,13 +42,16 @@ async fn pass(
                 poolKey: pool.clone(),
                 zeroForOne: token == k.currency0,
                 exactAmount: exact,
-                hookData: Bytes::new(),
+                hookData: witness.map(|(_, b)| b.clone()).unwrap_or_default(),
             };
             Some((*size, IV4Quoter::quoteExactInputSingleCall { params }))
         })
         .collect();
     if quotes.is_empty() {
         return Ok(Vec::new());
+    }
+    if let Some((head, _)) = witness {
+        return super::angstrom_ladder::quotes(ctx, viewer, *head, &quotes).await;
     }
     let calls: Vec<_> = quotes
         .iter()
@@ -104,13 +108,18 @@ pub(super) async fn load(
         ladder_counter::amounts(ctx, tokens, reg, f.id, counter),
         ladder_counter::amounts(ctx, tokens, reg, f.id, asset)
     )?;
+    let witness = if f.variant == super::family_variant::Variant::Angstrom {
+        super::angstrom_ladder::witness(ctx, f.id, &at).await?
+    } else {
+        None
+    };
     let bought = if buys {
         let input = if f.variant == super::family_variant::Variant::LaunchO1Wrapped {
             Address::ZERO
         } else {
             cash
         };
-        pass(ctx, quoter, &key, input, &sizes, &at).await?
+        pass(ctx, quoter, &key, input, &sizes, &at, witness.as_ref()).await?
     } else {
         Vec::new()
     };
@@ -118,7 +127,7 @@ pub(super) async fn load(
     sellsizes.sort_unstable();
     sellsizes.dedup();
     let sold = if sells {
-        pass(ctx, quoter, &key, asset, &sellsizes, &at).await?
+        pass(ctx, quoter, &key, asset, &sellsizes, &at, witness.as_ref()).await?
     } else {
         Vec::new()
     };

@@ -28,6 +28,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::Rubicon(t))=>c.rubicon=Some(Box::new((*t).clone())),
         Some(DirectCall::NativeFlat(t))=>c.native_flat=Some(Box::new((*t).clone())),
         Some(DirectCall::Prop(t))=>c.prop=Some(Box::new((*t).clone())),
+        Some(DirectCall::Angstrom(t))=>c.angstrom=Some(Box::new((*t).clone())),
         Some(DirectCall::Stabull(t))=>c.stabull=Some(Box::new((*t).clone())),
         Some(DirectCall::Integral(t))=>c.integral=Some(Box::new((*t).clone())),
         Some(DirectCall::Dagrow(t)) => c.dagrow=Some(Box::new((*t).clone())),
@@ -71,6 +72,7 @@ pub(super) enum Saved<'a> {
     Rubicon(&'a super::rubicon_wallet::Proof),
     NativeFlat(&'a super::mars_wallet::Proof),
     Prop(&'a super::prop_wallet::Proof),
+    Angstrom(&'a super::angstrom_wallet::Proof),
     Stabull(&'a super::stabull_wallet::Proof),
     Integral(&'a super::integral_wallet::Proof),
     Dagrow(&'a super::dagrow_wallet::Proof),
@@ -103,6 +105,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.rubicon.as_deref().map(Saved::Rubicon),
         c.native_flat.as_deref().map(Saved::NativeFlat),
         c.prop.as_deref().map(Saved::Prop),
+        c.angstrom.as_deref().map(Saved::Angstrom),
         c.stabull.as_deref().map(Saved::Stabull),
         c.integral.as_deref().map(Saved::Integral),
         c.dagrow.as_deref().map(Saved::Dagrow),
@@ -127,6 +130,12 @@ pub(in crate::venues::bsc_dex) async fn included(
     nonce: Option<u64>,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(p)=c.angstrom.as_deref() {
+        let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Angstrom: исходная транзакция или блок выплаты не подтверждены");
+        let nonce=nonce.or_else(||c.chain.as_ref().map(|prior|prior.nonce)).ok_or_else(bad)?;
+        if c.chain.as_ref().is_some_and(|prior| (prior.hash,prior.nonce)!=(hash,nonce)) || (receipt.status.to::<u64>()==1 && receipt.block_number.to::<u64>()!=p.terms.height){return Err(bad());}
+        return p.signed().included(ctx,hash,nonce,receipt).await;
+    }
     if let Some(p) = c.registered_v3.as_deref().filter(|p| p.market.maverick) {
         let fail = || ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Maverick V2: нет подтверждения исходной сети, хеша или nonce");
         let (signed, nonce)=super::maverick_two_wire::origin(p,c.chain.as_ref().map(|v|(v.hash,v.nonce)),hash,nonce).ok_or_else(fail)?;
@@ -176,6 +185,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::Rubicon(p)=>p.included(ctx,hash,receipt).await?,
             Saved::NativeFlat(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Prop(p)=>p.included(ctx,hash,receipt).await?,
+            Saved::Angstrom(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Angstrom: нет исходного хеша для сверки подписанта")),
             Saved::Stabull(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Integral(p)=>p.included(ctx,hash,receipt).await?,
             Saved::Dagrow(p)=>p.included(ctx,hash,receipt).await?,
@@ -222,6 +232,7 @@ impl Saved<'_> {
             Self::Rubicon(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Rubicon Classic: заявки или выплата кошельку не совпали"),
             Self::NativeFlat(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("MarSwap: подписанная пара или движение средств не совпали"),
             Self::Prop(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("LambdaClass: фактический источник и движение средств не подтвердили условия"),
+            Self::Angstrom(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Angstrom: фактическая оплата или PoolId расходятся с подписанным поручением"),
             Self::Stabull(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Stabull: поручение, Curve Trade и дельты кошелька не совпадают"),
             Self::Integral(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Integral SIZE: поручение, событие или дельты кошелька не совпадают"),
             Self::Dagrow(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("DAGrow: исходные границы, получатель или движения кошелька не подтверждены"),

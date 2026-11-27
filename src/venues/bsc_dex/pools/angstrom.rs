@@ -20,6 +20,33 @@ alloy::sol! {
     }
 }
 
+pub(in crate::venues::bsc_dex) fn identity(
+    ctx: &Ctx,
+    f: &Family,
+    id: alloy_primitives::B256,
+) -> GatewayResult<(PoolKey, Address)> {
+    let key = super::launch_keys::configured(ctx, f, id)?;
+    let adapter = unique(ctx, &super::launch_keys::roles(ctx, f)?, "adapter")?;
+    Ok((key, adapter))
+}
+
+pub(in crate::venues::bsc_dex) async fn market(
+    ctx: &Ctx,
+    f: &Family,
+    manager: Address,
+    id: alloy_primitives::B256,
+    pair: (Address, Address),
+    at: &Value,
+) -> GatewayResult<(PoolKey, Address)> {
+    let g = ctx.settings.generation();
+    let market = super::launch_market::market(ctx, f, manager, id, pair, at).await?;
+    let role = unique(ctx, &super::launch_keys::roles(ctx, f)?, "adapter")?;
+    if g != ctx.settings.generation() {
+        return Err(invalid(ctx));
+    }
+    Ok((market.key, role))
+}
+
 fn unique(ctx: &Ctx, roles: &[Role], kind: &str) -> GatewayResult<Address> {
     let mut selected = roles.iter().filter(|r| r.kind == kind);
     let address = selected.next().ok_or_else(|| invalid(ctx))?.address;

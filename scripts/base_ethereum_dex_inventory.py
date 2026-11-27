@@ -1797,7 +1797,7 @@ def tables(network, snapshots, profiles):
                     f"В часовом срезе {len(hashflow['events'])} локальных Trade. "
                     "В суточном агрегате также учитываются исходящие межсетевые операции. См. раздел Hashflow четырёх сетей.")
         if not base and str(row["id"]) == "6483":
-            task = "Angstrom L1 · 2 физических ключа Uniswap V4, 12 архивных оплат на открытом блоке. Профиль наблюдения; автоматический платёж требует актуальной аттестации"
+            task = "Angstrom L1 · 2 физических ключа Uniswap V4, 12 архивных оплат на открытом блоке. Модуль кошелька · 12 подтверждений полного расхода и чистого выхода; требуются размещение и аттестация целевой высоты"
         if str(row["id"]) == "4752":
             import maverick_two_inventory
             ref, candidates, task = maverick_two_inventory.inventory(network)

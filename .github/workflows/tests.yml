@@ -921,6 +921,7 @@ jobs:
             ${{ runner.temp }}/balancer-v1-create.json
             ${{ runner.temp }}/yield-basis-create.json
             ${{ runner.temp }}/yield-basis-usdt.json
+            ${{ runner.temp }}/angstrom/AngstromWallet.json
             ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json

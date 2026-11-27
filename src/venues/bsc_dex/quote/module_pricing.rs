@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::BancorLegacy|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Angstrom|Variant::BancorLegacy|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) fn native_module(v:Variant)->bool {
@@ -46,6 +46,12 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         }
         if matches!(e.pool.state,crate::core::types::PoolState::BancorV3(_)){
             quotes.extend(Box::pin(super::bancor_v3_pricing::options(q,i,e,payer,native,graph,head)).await);
+            continue;
+        }
+        if e.family.variant==Variant::Angstrom {
+            if let Some(h)=head && let Ok(target)=ctx.dex_addr("dex.router",e.family.id)
+                && let Ok(t)=Box::pin(super::super::exec::angstrom_plan::checked(ctx,e,h,target)).await
+                && let Ok(row)=Box::pin(v2_execution::option(q,i,e.clone(),payer,Execution{mode:RouteMode::Direct,target,wire:Wire::Angstrom(std::sync::Arc::new(t))},Some(h))).await {quotes.push(row);}
             continue;
         }
         if e.family.variant==Variant::Stabull {

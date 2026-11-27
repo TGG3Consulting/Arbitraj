@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `4b657829` (27.11.2026).
+Последний просмотренный коммит: `b9ccc89c` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1984,3 +1984,15 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
   - Все проверки — `native output`, `allowance`, `wrapped residue`, `wallet bounds` — сохранены.
 
   Эквивалентно. ✅
+
+### b9ccc89c — проверено
+
+- CI 45960006244 (3c64e136): сторож настроек теперь зелёный. Единственное падение — `uniswap-v1-ethereum`, сборка UniswapV1Adapter (`stack too deep`), это исправлено в 4b657829. Жду зелёный прогон.
+- 💡 из e869b234 закрыт: `GladiusInventory.sol` закреплён на `0.8.37`. ✅
+- **Gladius** (подписанные заявки Rubicon, Base/Ethereum) подключён в общий путь RFQ рядом с Hashflow и Native.
+  - **Hashflow (работает на BSC) проверен:** в `hashflow/execute.rs` выбор теперь `(old, native, gladius)`, ветка Hashflow `(Some, None, None)` прежняя. Допуск `Gate::Hashflow` не тронут. Учёт факта Hashflow — тот же `proof.amount` / `proceeds`.
+  - `venue.rs`: `gladius::routing::available` / `consider` сразу возвращают прежний результат при `gladius.trading = false`. `book::run` при выключенном Gladius ничего не шлёт.
+  - Сверка включения исходной транзакции (`eth_getTransactionByHash`: блок, индекс, сеть, плательщик, модуль, nonce, нулевое value, хэш calldata) вынесена из Native в общий `signed_call::Erc20Call::included` без изменения условий и теперь используется и Native, и Gladius.
+
+  Регрессии BSC нет. ✅
+- Адресов в `gladius/*` нет. Новые настройки `gladius.*` — с записями в SETTINGS_CASES и советами в `first_run.toml`.

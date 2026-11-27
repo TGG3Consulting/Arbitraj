@@ -76,6 +76,9 @@ pub fn parse_opt(ctx: &Ctx, f: &'static Family, log: &Log) -> GatewayResult<Opti
         if f.proto == Proto::UniswapV4
             && let Some(key) = &found.key
         {
+            if f.variant.launch() {
+                return Ok(super::launch_keys::observed(ctx,f,log.inner.address,key)?.then_some(found));
+            }
             if f.variant.deli() {
                 return Ok(
                     super::deli_keys::observed(ctx, f, log.inner.address, key)?.then_some(found)

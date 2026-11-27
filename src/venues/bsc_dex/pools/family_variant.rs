@@ -68,6 +68,9 @@ pub enum Variant {
     OmniV2,
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
+    LaunchDoppler,
+    LaunchIndex,
+    LaunchO1,
     /// Размещение LB с обычным роутером и зарегистрированным клоном пула.
     SectorLb,
     /// Концентрированная ликвидность Deli с комиссией в wBLT.
@@ -87,6 +90,8 @@ pub enum Variant {
     SolidlyClassic,
     /// Создание пар Solidly V1 вынесено в штатный PairGenerator.
     SolidlyGenerator,
+    /// Solidly Ethereum V2 delegates factory and pair calls to independently upgradable logic.
+    SolidlyProxy,
     BasePluginV1,
     AlgebraSingleV19,
     TrebleIntegral,
@@ -175,12 +180,13 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn launch(self)->bool {matches!(self,Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1)}
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
+    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
@@ -253,6 +259,9 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
         "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
+        "launch_doppler" => Variant::LaunchDoppler,
+        "launch_index" => Variant::LaunchIndex,
+        "launch_o1" => Variant::LaunchO1,
         "deli_v4_cl" => Variant::DeliCl,
         "deli_v4_constant" => Variant::DeliConstant,
         "v2_omni_universal" => Variant::OmniV2,
@@ -271,6 +280,7 @@ pub fn of(kind: &str) -> Variant {
         "balancer_v2_wallet" => Variant::BalancerVaultWallet,
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
+        "solidly_v2_proxy" => Variant::SolidlyProxy,
         "leetswap_v2" => Variant::LeetSwap,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,

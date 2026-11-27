@@ -488,7 +488,7 @@ pub fn swap(
         // PMM от оракула (WooFi, решение 122 F, 3): своей математики нет (развёрнутый код закрыт) — выход по лесенке
         // ответов квотера контракта на блоке (quote/pmm_ladder.rs): точно в точках, между ними — средняя цена линейно,
         // выше последней точки — неисполнимо. Только точный вход.
-        (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
+        (PoolState::OraclePmm(d), kind) if kind==PoolKind::OraclePmm || (kind==PoolKind::Cl && e.family.variant.launch()) => {
             if !exact_in {
                 return Err(why(
                     "PMM от оракула (WooFi / Metric): точный выход по лесенке не поддерживается",

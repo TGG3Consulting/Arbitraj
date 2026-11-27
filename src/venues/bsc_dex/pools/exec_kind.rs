@@ -229,7 +229,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "algebra_dir_fee" => ExecKind::Algebra,
         // Решение 483: пара Ramses Legacy — getReserves (uint112, Pair.sol L125), getAmountOut(uint256, address) L452 (уже
         // с −1) и swap(uint256, uint256, address, bytes) L308; вход = баланс − резерв (L339-L340) — шаг SOLIDLY.
-        "solidly_v2" | "solidly_v1" | "solidly_v1_generator" | "solidly_v1_ramses" | "leetswap_v2" => ExecKind::Solidly,
+        "solidly_v2" | "solidly_v1" | "solidly_v1_generator" | "solidly_v2_proxy" | "solidly_v1_ramses" | "leetswap_v2" => ExecKind::Solidly,
         // Решение 443: пара Camelot V2 — тот же шаг SOLIDLY: getReserves (первые два слова — резервы), getAmountOut(uint256,
         // address) и swap(uint256, uint256, address, bytes) есть у CamelotPair (Pair.sol L46, L372, L228 — verified-исходник
         // фабрики Arbitrum 0x6EcC…A652, math/camelot_v2.rs); вход = баланс − резерв — так и считает swap пары (L276-L277).
@@ -303,7 +303,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // src/Vault.sol L74-L86, L143-L175, src/pool-cl/CLPoolManager.sol L162-L212, src/pool-bin/BinPoolManager.sol
         // L133-L177). Infinity Stable — пул в крючке пула CL, обмен — тот же CL_SWAP с ключом пула (как у Universal
         // Router, решение «122 (Infinity Stable)»). EVM-тест с официальным кодом менеджеров — contracts/evmtest/singleton.mjs.
-        "uniswap_v4" | "deli_v4_constant" | "deli_v4_cl" => ExecKind::UniV4,
+        "launch_doppler" | "launch_index" | "launch_o1" | "uniswap_v4" | "deli_v4_constant" | "deli_v4_cl" => ExecKind::UniV4,
         "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
         "pancakeswap_infinity_bin" => ExecKind::InfBin,
         // Решение 440: swapIn пула без белого списка вызывающих (poolT1 main.sol L51-L58, L689-L700: пауза и

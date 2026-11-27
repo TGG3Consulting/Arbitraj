@@ -130,6 +130,9 @@ pub(crate) async fn state(
     tag: &Value,
 ) -> GatewayResult<PoolState> {
     let generation = ctx.settings.generation();
+    if f.variant == super::family_variant::Variant::SolidlyProxy {
+        return Box::pin(super::solidly_proxy::state(ctx, f, pool, tag)).await;
+    }
     let factory = solidly_classic_factory::at(ctx, f, tag).await?;
     let accepted = super::verify_algebra_dir::hashes_for(ctx, f.id)
         .map_err(|e| ctx.err(ErrorCode::NotApplicable, e))?;

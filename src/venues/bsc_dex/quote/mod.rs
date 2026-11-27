@@ -151,6 +151,7 @@ pub mod tick_bin_spot;
 pub mod usable_reuse;
 pub(super) mod v2_execution;
 mod v2_fallback;
+mod registered_v3_pricing;
 mod market_selection;
 mod market_fees;
 pub(super) mod vault_pricing;

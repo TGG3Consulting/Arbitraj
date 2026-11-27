@@ -66,6 +66,9 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant.launch() && let PoolRef::Singleton{manager,id}=reference {
+        return Box::pin(super::launch_ladder::load(ctx,tokens,reg,f,*manager,*id,pair,&tag)).await;
+    }
     if f.variant==Variant::DeliCl && let PoolRef::Singleton{manager,id}=reference {
         return Box::pin(super::deli_cl::load(ctx,f,*manager,*id,pair,&tag)).await;
     }

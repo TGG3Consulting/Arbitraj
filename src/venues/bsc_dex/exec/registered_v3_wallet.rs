@@ -1,0 +1,201 @@
+//! Поручение штатного V3 SwapRouter, подписанный расход, минимум, срок и проверка после включения.
+use super::{
+    chain::Step,
+    fill,
+    plan::{DirectCall, Plan},
+    signed_call, white_direct,
+};
+use crate::{
+    gateway::errors::{ErrorCode, GatewayResult},
+    venues::bsc_dex::{
+        ctx::Ctx,
+        pools::registered_router,
+        quote::{v2_wallet_sim, white_state},
+        send::track::Receipt,
+    },
+};
+use alloy::{rpc::types::Log, sol, sol_types::SolCall};
+use alloy_primitives::{Address, B256, Bytes, U256, aliases::U24, keccak256};
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+sol! {interface IV3Router {
+    struct ExactIn { address tokenIn;address tokenOut;uint24 fee;address recipient;uint256 deadline;uint256 amountIn;uint256 amountOutMinimum;uint160 sqrtPriceLimitX96; }
+    function exactInputSingle(ExactIn params) external payable returns(uint256 amountOut);
+}}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct Market {
+    pub pool: Address,
+    pub fee: U24,
+}
+impl Market {
+    pub(in crate::venues::bsc_dex) fn order(
+        self,
+        input: Address,
+        output: Address,
+        amount: U256,
+        minimum: U256,
+        wallet: Address,
+        deadline: U256,
+    ) -> Bytes {
+        IV3Router::exactInputSingleCall {
+            params: IV3Router::ExactIn {
+                tokenIn: input,
+                tokenOut: output,
+                fee: self.fee,
+                recipient: wallet,
+                deadline,
+                amountIn: amount,
+                amountOutMinimum: minimum,
+                sqrtPriceLimitX96: Default::default(),
+            },
+        }
+        .abi_encode()
+        .into()
+    }
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Proof {
+    pub market: Market,
+    pub target: Address,
+    pub payer: Address,
+    pub input: Address,
+    pub output: Address,
+    pub budget: U256,
+    pub minimum: U256,
+    pub deadline: U256,
+}
+impl Proof {
+    pub(super) fn data(&self) -> Bytes {
+        self.market.order(
+            self.input,
+            self.output,
+            self.budget,
+            self.minimum,
+            self.payer,
+            self.deadline,
+        )
+    }
+    pub(super) async fn included(&self, ctx: &Ctx, hash: B256, r: &Receipt) -> GatewayResult<()> {
+        signed_call::included(
+            ctx,
+            hash,
+            r,
+            self.payer,
+            self.target,
+            U256::ZERO,
+            self.data(),
+        )
+        .await
+    }
+    pub(in crate::venues::bsc_dex) fn measured(
+        &self,
+        logs: &[crate::venues::bsc_dex::check::simulate::SimLog],
+    ) -> Option<(U256, U256)> {
+        self.amounts(
+            &signed_call::logs(logs)?,
+            self.payer,
+            self.input,
+            self.output,
+        )
+    }
+    pub(super) fn amounts(
+        &self,
+        logs: &[Log],
+        wallet: Address,
+        input: Address,
+        output: Address,
+    ) -> Option<(U256, U256)> {
+        if (wallet, input, output) != (self.payer, self.input, self.output)
+            || wallet.is_zero()
+            || input == output
+            || self.minimum.is_zero()
+        {
+            return None;
+        }
+        let swap = keccak256("Swap(address,address,int256,int256,uint160,uint128,int24)");
+        let mut hits = logs
+            .iter()
+            .filter(|l| l.address() == self.market.pool && l.topics().first() == Some(&swap));
+        let event = hits.next()?;
+        if hits.next().is_some()
+            || event.topics() != [swap, self.target.into_word(), wallet.into_word()]
+            || event.data().data.len() != 160
+        {
+            return None;
+        }
+        let word = |i: usize| U256::from_be_slice(&event.data().data[32 * i..32 * (i + 1)]);
+        let i = usize::from(input > output);
+        let spent = fill::moved_logs(logs, input, Some(wallet), None)
+            .checked_sub(fill::moved_logs(logs, input, None, Some(wallet)))?;
+        let received = fill::moved_logs(logs, output, None, Some(wallet))
+            .checked_sub(fill::moved_logs(logs, output, Some(wallet), None))?;
+        (spent > U256::ZERO
+            && spent <= self.budget
+            && received >= self.minimum
+            && word(i) == spent
+            && word(1 - i) == U256::ZERO.wrapping_sub(received)
+            && !spent.bit(255)
+            && !received.bit(255))
+        .then_some((spent, received))
+    }
+}
+
+pub(super) async fn plan(
+    ctx: &Ctx,
+    s: &Step,
+    wallet: Address,
+    height: u64,
+    selected: Option<Address>,
+) -> GatewayResult<Plan> {
+    let fail = || {
+        ctx.err(
+            ErrorCode::NoRoute,
+            "V3 Router: адрес оплаты, токены или границы поручения не подтверждены",
+        )
+    };
+    let generation = ctx.settings.generation();
+    let e = &s.entry;
+    let o = &s.order;
+    let head = white_state::head(ctx, &format!("{height:#x}")).await?;
+    let target =
+        registered_router::checked(ctx, e, o.token_in, o.token_out, &head.selector()).await?;
+    if selected != Some(target) || !s.from_wallet || !s.to_wallet {
+        return Err(fail());
+    }
+    let market = Market {
+        pool: e.pool.reference.address(),
+        fee: U24::from(e.pool.fee_pips.ok_or_else(fail)?),
+    };
+    let now = head.timestamp.to::<u64>();
+    let proof = Proof {
+        market,
+        target,
+        payer: wallet,
+        input: o.token_in,
+        output: o.token_out,
+        budget: o.amount_in,
+        minimum: o.min_out,
+        deadline: U256::from(
+            now.checked_add(ctx.int("dex.deadline_s")?)
+                .ok_or_else(fail)?,
+        ),
+    };
+    let order = v2_wallet_sim::Order {
+        payer: wallet,
+        target,
+        input: o.token_in,
+        output: o.token_out,
+        amount: o.amount_in,
+        minimum: o.min_out,
+        wire: v2_wallet_sim::Wire::RegisteredV3(market),
+    };
+    v2_wallet_sim::measure(ctx, head, order, true).await?;
+    let mut p = white_direct::build(ctx, s, wallet, target, now, false, generation).await?;
+    p.set_direct_market(DirectCall::RegisteredV3(Arc::new(proof)));
+    Ok(p)
+}
+
+#[cfg(test)]
+#[path = "registered_v3_receipt_tests.rs"]
+mod tests;

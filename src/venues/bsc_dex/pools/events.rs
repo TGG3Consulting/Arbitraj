@@ -169,6 +169,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
     use alloy::sol_types::SolEvent;
     let r = match e.family.proto {
         _ if e.family.variant.umbrae() => {e.valid=false;Applied::Refresh("Обновлено состояние рынка Umbrae".into())}
+        _ if e.family.variant.launch() => {e.valid=false;Applied::Refresh("Изменились условия обмена launchpad или состояние внешних контрактов".into())}
         _ if e.family.variant.deli() => {e.valid=false;Applied::Refresh("Изменили состояние Deli и внешних контрактов".into())}
         _ if e.family.variant==super::family_variant::Variant::Antfarm => {e.valid=false;Applied::Refresh("Изменилось состояние пары Antfarm".into())}
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}

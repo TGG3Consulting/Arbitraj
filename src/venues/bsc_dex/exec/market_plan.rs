@@ -16,6 +16,7 @@ use alloy_primitives::{Address, B256, Bytes};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) enum Market {
+    RegisteredV3,
     Umbrae,
     Antfarm,
     Temple,
@@ -51,6 +52,7 @@ impl Selection {
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
+            _ if e.family.variant==Variant::RegisteredUniV3 => Some(Self::RegisteredV3),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
             PoolState::Antfarm(_) => Some(Self::Antfarm),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
@@ -70,6 +72,7 @@ impl Market {
     }
     pub(super) fn missing_selection(self) -> &'static str {
         match self {
+            Self::RegisteredV3 => "V3 Router: требуется исходный адрес исполнения",
             Self::Umbrae => "Umbrae: требуется выбранный адрес исполнения",
             Self::Antfarm => "Antfarm: требуется подтверждённый бюджет комиссии",
             Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
@@ -81,6 +84,7 @@ impl Market {
     }
     pub(super) fn name(self) -> &'static str {
         match self {
+            Self::RegisteredV3 => "V3 Router",
             Self::Umbrae => "Umbrae",
             Self::Antfarm => "Antfarm",
             Self::Temple => "TempleDAO",
@@ -98,6 +102,7 @@ impl Market {
         selected: Selection,
     ) -> GatewayResult<Plan> {
         match self {
+            Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(
                     ctx,

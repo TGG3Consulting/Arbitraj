@@ -216,3 +216,115 @@ fn equalizer_preserves_sub_basis_point_precision() {
         U256::from(166666666666667u64)
     );
 }
+
+#[test]
+fn ethereum_solidly_uses_the_active_logic_and_the_actual_wallet_floor() {
+    let read = |bytes: &[u8]| serde_json::from_reader::<_, Value>(GzDecoder::new(bytes)).unwrap();
+    let directory = read(include_bytes!(
+        "data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz"
+    ));
+    let wallets = read(include_bytes!(
+        "data/first_run_dex_2026-11-26/solidly_v2_ethereum_wallets.json.gz"
+    ));
+    assert_eq!(directory["selector"], wallets["selector"]);
+    assert_eq!(directory["state_root"], wallets["state_root"]);
+    let cfg: Vec<Value> =
+        serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let settings = &cfg.iter().find(|c| c["id"] == "solidlydex").unwrap()["settings"];
+    assert_eq!(settings["dex.kind"], "solidly_v2_proxy");
+    assert_eq!(settings["dex.factory"], directory["factory"]);
+    assert_eq!(
+        settings["dex.factory_runtime_hash"],
+        directory["roles"]["factory"]["keccak256"]
+    );
+    assert_eq!(
+        settings["dex.pair_runtime_hash"],
+        directory["roles"]["pair_proxy"]["keccak256"]
+    );
+    for (i, role) in ["factory_logic", "pair_logic"].iter().enumerate() {
+        let checked = &directory["roles"][*role];
+        assert_eq!(settings["dex.proxy_implementations"][i], checked["address"]);
+        assert_eq!(
+            settings["dex.proxy_runtime_hashes"][i],
+            checked["keccak256"]
+        );
+        assert_ne!(
+            checked["address"],
+            directory[if i == 0 {
+                "factory_interface"
+            } else {
+                "pair_interface"
+            }]
+        );
+    }
+    let pools = directory["markets"].as_array().unwrap();
+    assert_eq!(pools.len(), 68);
+    let factory = directory["factory"]
+        .as_str()
+        .unwrap()
+        .parse::<Address>()
+        .unwrap();
+    let init = directory["init"].as_str().unwrap().parse::<B256>().unwrap();
+    let mut curves = std::collections::BTreeSet::new();
+    for p in pools {
+        let mut salt = Vec::with_capacity(41);
+        for token in p["tokens"].as_array().unwrap() {
+            salt.extend_from_slice(
+                token
+                    .as_str()
+                    .unwrap()
+                    .parse::<Address>()
+                    .unwrap()
+                    .as_slice(),
+            );
+        }
+        salt.push(u8::from(p["stable"].as_bool().unwrap()));
+        assert_eq!(
+            factory.create2(keccak256(salt), init),
+            p["pool"].as_str().unwrap().parse::<Address>().unwrap()
+        );
+        assert_eq!(p["runtime"], settings["dex.pair_runtime_hash"]);
+    }
+    for market in wallets["markets"].as_array().unwrap() {
+        let m = pools.iter().find(|p| p["pool"] == market["pool"]).unwrap();
+        assert!(curves.insert(m["stable"].as_bool().unwrap()));
+        let i = usize::from(m["tokens"][0] != market["token_in"]);
+        let fee = SolidlyFee {
+            value: m["fee"].as_str().unwrap().parse().unwrap(),
+            rule: FeeRule::Numerator {
+                denominator: 1_000_000,
+            },
+        };
+        let cases = market["cases"].as_array().unwrap();
+        assert!(cases.len() >= 2);
+        for c in cases {
+            let input = uint(&c["amount"]);
+            let bought = payout(
+                m,
+                [uint(&m["reserves"][0]), uint(&m["reserves"][1])],
+                i,
+                input,
+                &fee,
+            );
+            assert_eq!(bought, uint(&c["bought"]));
+            let post = reserves(&c["results"]["after_reserves"]);
+            let sold = payout(m, post, 1 - i, bought, &fee);
+            assert_eq!(sold, uint(&c["sold"]));
+            let r = &c["router"]["results"];
+            let value = |k: &str| uint(&r[k]["returnData"]);
+            assert_eq!(value("start_a") - value("after_buy_a"), input);
+            assert_eq!(value("after_buy_b") - value("start_b"), bought);
+            assert_eq!(value("after_buy_b") - value("end_b"), bought);
+            assert_eq!(value("end_a") - value("after_buy_a"), sold);
+            for set in [r, &c["results"]] {
+                for k in ["buy", "sell"] {
+                    assert_eq!(set[k]["status"], "0x1");
+                    let fail = &set[format!("above_{k}")];
+                    assert_eq!(fail["status"], "0x0");
+                    assert!(fail["logs"].as_array().unwrap().is_empty());
+                }
+            }
+        }
+    }
+    assert_eq!(curves.len(), 2);
+}

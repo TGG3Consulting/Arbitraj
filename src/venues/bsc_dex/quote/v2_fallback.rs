@@ -19,7 +19,7 @@ pub(super) async fn candidates(
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 13];
+    let mut kinds = [false; 14];
     for e in &i.entries {
         kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
         kinds[10] |= super::super::exec::carbon_direct::enabled(e);
@@ -28,6 +28,7 @@ pub(super) async fn candidates(
         if native {
             continue;
         }
+        kinds[13] |= e.family.variant == super::super::pools::family_variant::Variant::RegisteredUniV3;
         kinds[12] |= e.family.variant.umbrae();
         kinds[11] |= super::super::pools::sectorone::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
@@ -49,7 +50,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo, mint_club, sector, umbrae, carbon) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo, mint_club, sector, umbrae, registered_v3, carbon) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -102,6 +103,7 @@ pub(super) async fn candidates(
         async { if !native && kinds[9] { Box::pin(super::mint_club_pricing::candidates(q,i,head)).await } else { Vec::new() } },
         async { if kinds[11] {Box::pin(super::sectorone::candidates(q,i,head)).await} else {Vec::new()} },
         async { if kinds[12] {Box::pin(super::umbrae::candidates(q,i,head)).await} else {Vec::new()} },
+        async { if kinds[13] {Box::pin(super::registered_v3_pricing::candidates(q,i,head)).await} else {Vec::new()} },
         async { if kinds[10] { Box::pin(super::carbon_pricing::candidates(q,i,head)).await }else{Vec::new()} }
     );
     let mut all = white;
@@ -111,6 +113,7 @@ pub(super) async fn candidates(
     all.extend(carbon);
     all.extend(sector);
     all.extend(umbrae);
+    all.extend(registered_v3);
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
@@ -131,7 +134,7 @@ fn individual(e: &Entry, native: bool) -> bool {
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
         || super::router_pricing::is_native(e)
-        || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(e)
+        || e.family.variant==super::super::pools::family_variant::Variant::RegisteredUniV3 || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(e)
         || super::delta_pricing::is_delta(e)
 }
 

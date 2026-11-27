@@ -106,15 +106,25 @@ def tables(network, snapshots, profiles):
                     out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
         out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
 
-    if not base and "wagmi-ethereum" in configured:
-        registry=read(Path("tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"))
-        out.extend(["", "#### WAGMI V3 на Ethereum", "",
-                    f"Официальная фабрика зарегистрировала {len(registry['markets'])} пулов на блоке {registry['height']}. "
-                    "Для каждого проверяются PoolCreated, CREATE2 исходной фабрики, неизменяемая комиссия, оба порядка getPool и шаг тика. "
-                    "QuoterV2 связан с той же фабрикой. Для платежа через развёрнутый исполнитель кошелька применяется шаг V5 с обратным вызовом Uniswap V3. "
-                    "При исчерпании диапазона вход может остаться неиспользованным. Публичные Router и Router02 проверяют номинальный минимум выхода.",
-                    f"[Исходные адреса]({registry['source']}) · [Реестр и хеш создания](../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json) · "
-                    "[Сообщение о слиянии с Anon](https://docs.wagmi.com/wagmi/wagmi-has-merged-with-anon.md)."])
+    for key,name in (("wagmi","WAGMI"),("lif3","Lif3")):
+        if base or key+"-ethereum" not in configured:
+            continue
+        prefix=Path(f"tests/data/first_run_dex_2026-11-26/{key}_ethereum")
+        registry_path=Path(str(prefix)+"_registry.json")
+        wallet_path=Path(str(prefix)+"_wallets.json.gz")
+        reg=read(registry_path)
+        with gzip.open(wallet_path,"rt",encoding="utf8") as stream:
+            rows=json.load(stream)["cases"]
+        groups={}
+        for r in rows:
+            groups.setdefault((r["pool"],r["source"],r["spent"],r["received"]),{})[r["wire"]]=int(r["gas"])
+        deltas=[g["v5"]-g["router"] for g in groups.values() if "v5" in g and "router" in g]
+        directions=len({(r["pool"],r["source"]) for r in rows})
+        out.extend(["",f"#### {name} V3 на Ethereum","",
+                    f"Блок {reg['height']}. У фабрики {len(reg['markets'])} пулов. У собственного плательщика подтверждены {len(rows)} выплат "
+                    f"в {directions} из {2*len(reg['markets'])} направлений. При одинаковых расходе и выплате V5 потребовал на {min(deltas):,}–{max(deltas):,} единиц газа больше штатного Router. Стоимость разрешения зависит от кошелька и адреса получателя allowance.",
+                    "Перед обменом проверяются CREATE2, комиссия, оба порядка getPool и канонический блок. Прямая нога Router требует точной передачи обоих ERC20 и проверенного кода роутера. В этой выборке условия выполняет WBTC/WETH. Для других пар и составных маршрутов применяется доступный V5. При восстановлении прямой ноги сверяются подписанный вызов, единственный Swap этого пула и фактические чистые Transfer кошелька.",
+                    f"[Адреса площадки]({reg['source']}) · [Регистрации](../{registry_path.as_posix()}) · [Квитанции и дельты](../{wallet_path.as_posix()})."])
     if not base and "concave" in configured:
         cv_path=Path("tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz")
         with gzip.open(cv_path,"rt",encoding="utf8") as stream:
@@ -1082,6 +1092,13 @@ def tables(network, snapshots, profiles):
                    "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
                    "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
                    "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
+        solidly_directory=json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz").read_bytes()))
+        out.append(f"**Solidly V2 Ethereum.** На блоке {solidly_directory['height']} фабрика подтвердила {len(solidly_directory['markets'])} пар через CREATE2 и оба направления getPair. "
+                   "У 66 пар ненулевые резервы совпали с обоими балансами. У одной пары резервы нулевые, у USDC/DEI фактический баланс DEI обнулился. "
+                   "Шаг Solidly в ArbExecutor V5 использует getAmountOut самой пары и проверяет минимум выплаты. У обеих кривых комиссия — feeRatio пары в миллионных. "
+                   "Для фабрики проверяется logicAddress, для каждой пары — её фабрика и childSubImplementationAddress; implementationAddress служит обозначением интерфейса. "
+                   "Результаты кошелька на двух контрольных парах приведены для V5 и официального Router01. Router01 проверяет номинальный выход, его отдельный маршрут требует гарантии зачисления получателю. "
+                   "[Реестр фабрики](../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz) · [Обмены и откаты](../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum_wallets.json.gz).")
         integral_path=Path("tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz")
         integral=json.loads(gzip.decompress(integral_path.read_bytes()))
         ih=integral["historical"]
@@ -1230,6 +1247,8 @@ def tables(network, snapshots, profiles):
                 roundtrip="getPair(address,address)"
             elif id=="supernova-cl" and any(m["pool"]==pool.lower() and m["registered"] for m in sn["markets"]):
                 roundtrip="customPoolByPair(customDeployer,token0,token1)"
+            elif id=="solidlydex" and any(m["pool"]==pool.lower() for m in solidly_directory["markets"]):
+                factory,roundtrip=solidly_directory["factory"],"getPair(a,b,stable) × 2 и CREATE2"
             elif id=="supernova-amm":roundtrip="getPair(token0,token1,stable)"
         if base and id == "quickswap-v2-base" and quickswap_v2.exists() and pool and any(m["pool"] == pool.lower() for m in q2["directory"]):
             factory, roundtrip = q2["factory"], "getPair(address,address)"

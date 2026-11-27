@@ -91,6 +91,7 @@ pub(super) async fn option(
         }
     }
     let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::RegisteredV3(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae()=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
@@ -211,7 +212,7 @@ pub(super) async fn option(
             head,
             o,
             super::oasis_pricing::is_oasis(&c.entry) || super::vista_pricing::is_vista(&c.entry)
-                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
+                || super::super::exec::vault_direct::enabled(&c.entry) || super::module_pricing::enabled(&c.entry) || vista_value.is_some() || c.entry.family.variant==super::super::pools::family_variant::Variant::RegisteredUniV3 || super::ekubo_v2_pricing::enabled(&c.entry) || super::super::exec::mint_club_direct::enabled(&c.entry),
         )
         .await?;
         if let Some(value) = vista_value {

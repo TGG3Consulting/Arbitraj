@@ -18,6 +18,7 @@ struct Binding {
     address: Address,
     runtime: B256,
     proxy: Option<(Address, B256)>,
+    check_slot: bool,
 }
 type Cell = Arc<OnceCell<()>>;
 static CACHE: LazyLock<Mutex<VecDeque<(Binding, Cell)>>> = LazyLock::new(Mutex::default);
@@ -49,6 +50,14 @@ async fn verify(ctx: &Ctx, role: Binding, at: &Value) -> GatewayResult<()> {
             "Solidly Classic: фактический код или реализация фабрики изменились",
         )
     };
+    if !role.check_slot {
+        let code: Bytes = rpc::call(ctx, "eth_getCode", json!([role.address, at])).await?;
+        return if !code.is_empty() && keccak256(&code) == role.runtime {
+            Ok(())
+        } else {
+            Err(bad())
+        };
+    }
     let [code, slot] = batch::read(
         ctx,
         [
@@ -122,6 +131,27 @@ pub(in crate::venues::bsc_dex) async fn bind(
     proxy: Option<(Address, B256)>,
     tag: &Value,
 ) -> GatewayResult<()> {
+    checked(ctx, address, runtime, proxy, true, tag).await
+}
+
+/// A verified shell whose executable delegation is separately bound through its own ABI.
+pub(super) async fn runtime(
+    ctx: &Ctx,
+    address: Address,
+    runtime: B256,
+    tag: &Value,
+) -> GatewayResult<()> {
+    checked(ctx, address, runtime, None, false, tag).await
+}
+
+async fn checked(
+    ctx: &Ctx,
+    address: Address,
+    runtime: B256,
+    proxy: Option<(Address, B256)>,
+    check_slot: bool,
+    tag: &Value,
+) -> GatewayResult<()> {
     let bad = || {
         ctx.err(
             ErrorCode::NotConfigured,
@@ -144,6 +174,7 @@ pub(in crate::venues::bsc_dex) async fn bind(
         address,
         runtime,
         proxy,
+        check_slot,
     };
     cached(key)
         .get_or_try_init(|| verify(ctx, key, tag))

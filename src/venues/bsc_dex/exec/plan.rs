@@ -31,6 +31,7 @@ use super::ur;
 
 #[derive(Debug, Clone)]
 pub(super) enum DirectCall {
+    RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
     Antfarm(std::sync::Arc<super::antfarm_wallet::Proof>),
@@ -135,6 +136,9 @@ impl Plan {
                 "минимум выхода 0 — обмен без минимума не отправляется",
             ));
         }
+        if let Some(DirectCall::RegisteredV3(proof)) = self.direct_market.as_deref_mut() {
+            std::sync::Arc::make_mut(proof).minimum = m;
+        }
         self.min_total = m;
         Ok(self)
     }
@@ -210,6 +214,7 @@ impl Plan {
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
+                DirectCall::RegisteredV3(proof) => proof.data(),
                 DirectCall::Umbrae{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(

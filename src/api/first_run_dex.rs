@@ -288,6 +288,11 @@ mod tests {
                             p.network,
                             p.id
                         );
+                    } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"), Some(Parameter::Text(kind)) if kind=="solidly_v2_proxy") {
+                        let bytes = include_bytes!("../../tests/data/first_run_dex_2026-11-26/solidly_v2_ethereum.json.gz");
+                        let data: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();
+                        assert_eq!(data["selector"], snapshot["selector"]);
+                        assert_eq!(data["init"].as_str(), Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && matches!(p.settings.get("dex.kind"),Some(Parameter::Text(kind)) if kind=="algebra_integral_supernova") {
                         let data:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/supernova_ethereum_directory.json")).unwrap();
                         assert_eq!(data["selector"],snapshot["selector"]);
@@ -324,8 +329,10 @@ mod tests {
                         let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json")).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);
                         assert_eq!(evidence["markets"][p.id.as_str()]["init"].as_str(),Some(text.as_str()));
-                    } else if k == "dex.pool_code_hashes" && p.id == "wagmi-ethereum" {
-                        let evidence: Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json")).unwrap();
+                    } else if k == "dex.pool_code_hashes" && matches!(p.id.as_str(), "wagmi-ethereum" | "lif3-ethereum") {
+                        let registry=if p.id=="lif3-ethereum" {include_str!("../../tests/data/first_run_dex_2026-11-26/lif3_ethereum_registry.json")}
+                            else {include_str!("../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json")};
+                        let evidence: Value=serde_json::from_str(registry).unwrap();
                         assert_eq!(evidence["selector"],snapshot["selector"]);
                         assert_eq!(evidence["init"].as_str(),Some(text.as_str()));
                     } else if k=="dex.pool_code_hashes" && p.id=="synthswap-v3" {

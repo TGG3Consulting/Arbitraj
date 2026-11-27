@@ -254,20 +254,23 @@ mod tests {
     }
     #[test]
     fn built_in_callback_accepts_the_checked_factory_and_original_fee() {
-        let registry: Value=serde_json::from_str(include_str!(
-            "../../../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"
-        )).unwrap();
-        let parse=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
-        let factory=parse(&registry["roles"]["factory"]["address"]);
-        let init=registry["init"].as_str().unwrap().parse().unwrap();
-        let markets=registry["markets"].as_array().unwrap();
-        assert_eq!(markets.len(),13);
-        for market in markets {
-            let pair=(parse(&market["tokens"][0]), parse(&market["tokens"][1]));
-            let fee=U24::from(market["fee"].as_u64().unwrap() as u32);
-            let pool=parse(&market["pool"]);
-            assert_eq!(address(factory,pair,fee,init),pool);
-            assert_ne!(address(factory,pair,fee+U24::ONE,init),pool);
+        for (raw,count) in [
+            (include_str!("../../../../tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"),13),
+            (include_str!("../../../../tests/data/first_run_dex_2026-11-26/lif3_ethereum_registry.json"),6),
+        ] {
+            let registry: Value=serde_json::from_str(raw).unwrap();
+            let parse=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
+            let factory=parse(&registry["roles"]["factory"]["address"]);
+            let init=registry["init"].as_str().unwrap().parse().unwrap();
+            let markets=registry["markets"].as_array().unwrap();
+            assert_eq!(markets.len(),count);
+            for market in markets {
+                let pair=(parse(&market["tokens"][0]), parse(&market["tokens"][1]));
+                let fee=U24::from(market["fee"].as_u64().unwrap() as u32);
+                let pool=parse(&market["pool"]);
+                assert_eq!(address(factory,pair,fee,init),pool);
+                assert_ne!(address(factory,pair,fee+U24::ONE,init),pool);
+            }
         }
         let f=families::make("test-registered-standard","registered_uni_v3").unwrap();
         assert!(f.variant.factory_quoter() && !f.variant.wallet_module());
@@ -275,3 +278,7 @@ mod tests {
         assert!(!f.tradable && f.fork && f.graphable);
     }
 }
+
+#[cfg(test)]
+#[path = "registered_v3_wallet_tests.rs"]
+mod wallet_tests;

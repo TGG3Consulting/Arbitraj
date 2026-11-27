@@ -44,6 +44,13 @@ use super::verify_woo;
 pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> {
     let mut out = Vec::new();
     for c in cands {
+        if c.family.variant.launch(){
+            out.push(match Box::pin(super::launch_market::verify(ctx,c)).await{
+                Ok(f)=>Verdict::Taken(Box::new(f)),
+                Err(e) if e.code==crate::gateway::errors::ErrorCode::QuoteMismatch=>Verdict::Rejected(e.message),
+                Err(e)=>Verdict::Failed(e.message),
+            });continue;
+        }
         if c.family.variant==super::family_variant::Variant::DeliConstant {
             out.push(match Box::pin(super::deli::verify(ctx,c)).await {
                 Ok(found)=>Verdict::Taken(Box::new(found)),

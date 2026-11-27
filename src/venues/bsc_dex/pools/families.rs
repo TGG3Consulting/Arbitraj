@@ -444,7 +444,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
-        "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
@@ -526,7 +526,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
         // stable; pools/ramses.rs).
-        "solidly_v1" | "solidly_v1_generator" | "solidly_v1_ramses" | "leetswap_v2" => {
+        "solidly_v1" | "solidly_v1_generator" | "solidly_v2_proxy" | "solidly_v1_ramses" | "leetswap_v2" => {
             (PoolKind::Solidly, Proto::SolidlyV1, true, false, false)
         }
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
@@ -926,6 +926,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::InfinityCl | Proto::InfinityBin => {
             list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"])
         }
+        Proto::UniswapV4 if f.variant.launch() => list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]),
         Proto::UniswapV4 if f.variant == Variant::DeliCl => list.extend([
             "dex.pool_manager","dex.state_view","dex.position_manager","dex.quoter","dex.deli_role_bindings","dex.deli_fee_currency",
         ]),
@@ -996,8 +997,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::SolidlyV1 if f.variant == Variant::LeetSwap => list.push("dex.factory"),
         Proto::Solidly | Proto::SolidlyV1 => {
             list.push("dex.factory");
+            if f.variant == Variant::SolidlyProxy {list.extend(["dex.pair_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);}
             if f.variant == Variant::SolidlyGenerator {list.extend(["dex.solidly_generator_runtime_hash","dex.solidly_pause_method"]);}
-            if f.variant.solidly_classic() {
+            if f.variant == Variant::SolidlyProxy {list.extend(["dex.factory_runtime_hash", "dex.pool_code_hashes"]);}
+            else if f.variant.solidly_classic() {
                 list.extend(["dex.factory_runtime_hash","dex.pool_code_hashes","dex.solidly_fee_source"]);
             }
             if let Ok(src) = ctx.dex_text("dex.solidly_fee_source", f.id) {

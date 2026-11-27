@@ -103,8 +103,11 @@ pub(super) fn claimed(ctx: &Ctx, hook: Address) -> bool {
         }
         let hooks: Vec<_> = super::families::all(ctx)
             .into_iter()
-            .filter(|f| f.variant.deli())
-            .filter_map(|f| bindings(ctx, f).ok().map(|roles| roles[0].0))
+            .filter(|f| f.variant.deli() || f.variant.launch())
+            .flat_map(|f| if f.variant.launch() {
+                super::launch_keys::roles(ctx,f).unwrap_or_default().into_iter()
+                    .filter(|r|r.kind=="hook").map(|r|r.address).collect::<Vec<_>>()
+            } else {bindings(ctx,f).ok().map(|r|r[0].0).into_iter().collect()})
             .collect();
         let contains = hooks.contains(&hook);
         *slot = Some(Claimed {
@@ -141,12 +144,13 @@ pub(super) fn observed(
     ) else {
         return Ok(false);
     };
-    OBSERVED
-        .write()
-        .map_err(|_| invalid(ctx))?
-        .entry(valid.id())
-        .or_insert(valid);
+    remember(ctx,valid)?;
     Ok(true)
+}
+
+pub(super) fn remember(ctx:&Ctx,valid:PoolKey)->GatewayResult<()> {
+    OBSERVED.write().map_err(|_|invalid(ctx))?.entry(valid.id()).or_insert(valid);
+    Ok(())
 }
 
 fn observed_key(

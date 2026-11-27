@@ -1,0 +1,52 @@
+{
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "state_root": "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7",
+  "tokens": {
+    "WETH": {
+      "address": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "keccak256": "0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+      "source": "https://sourcify.dev/server/v2/contract/1/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "contract": "WETH9",
+      "sources": {
+        "WETH9.sol": "4a4205fff097f9364ebba3c8a32670a63fccffb39baddc0046a6da1ba398c767"
+      }
+    },
+    "WBTC": {
+      "address": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "keccak256": "0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df",
+      "source": "https://sourcify.dev/server/v2/contract/1/0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "contract": "WBTC",
+      "sources": {
+        "WBTC.sol": "3a7881e198c8ea01899e60baf497b25b8bccecd1ac41f2e0ba2f988dbe623293"
+      }
+    },
+    "DAI": {
+      "address": "0x6b175474e89094c44da98b954eedeac495271d0f",
+      "keccak256": "0x4e36f96ee1667a663dfaac57c4d185a0e369a3a217e0079d49620f34f85d1ac7",
+      "source": "https://sourcify.dev/server/v2/contract/1/0x6b175474e89094c44da98b954eedeac495271d0f",
+      "contract": "Dai",
+      "sources": {
+        "/nix/store/w5qm70gq7qwa3087hknnddpy3acn8fnp-dss/dapp/dss/src/dai.sol": "abd0be4568fef540f914bb91f679f614652eb733c01e399ebbc4755428c3eb4d",
+        "/nix/store/w5qm70gq7qwa3087hknnddpy3acn8fnp-dss/dapp/dss/src/lib.sol": "b61d213bdfa2bc483d2d12937ea2c1272c40b3086774e82429916bcaf3b45909"
+      }
+    },
+    "LUSD": {
+      "address": "0x5f98805a4e8be255a32880fdec7f6728c6568ba0",
+      "keccak256": "0xa607f4c8379ffb91323184b39d374287ea702b699648610ba87b29fd4f9b00a1",
+      "source": "https://sourcify.dev/server/v2/contract/1/0x5f98805a4e8be255a32880fdec7f6728c6568ba0",
+      "contract": "LUSDToken",
+      "sources": {
+        "contracts/LUSDToken.sol": "d51c34e6b5b779da4ec2016fac2261d93432b8ea67cf76d31fbf677acb659969",
+        "contracts/Dependencies/IERC20.sol": "64f3e9f771f7ba660ba11cf966318da692834288126f5b58601d8ba3ffc1a3fa",
+        "contracts/Dependencies/console.sol": "fe7de02fbe78bf1af499331c9a5a404299a7141f0800e942e29b55c8c64029dc",
+        "contracts/Dependencies/IERC2612.sol": "83a6ac8c0f185342c500ada926f0dbe734a959382bbcbe8e1c69bcf7faa2454b",
+        "contracts/Dependencies/SafeMath.sol": "caa5397440fd9a0988eb40c136bd7a58baad05012edcf244f6b586e167e531f6",
+        "contracts/Interfaces/ILUSDToken.sol": "30ce23ad28599dbf8c1273ff7d622a804297194fb0c3be89da25548f0b7c67a1",
+        "contracts/Dependencies/CheckContract.sol": "aa32079b9f38a1669beb9fefe2e0af95fc543e1b717617713f00a648f0dc4b66"
+      }
+    }
+  }
+}

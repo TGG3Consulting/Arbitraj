@@ -31,6 +31,10 @@ interface IDxWrapped is IDxAsset {
 }
 
 contract DexalotWallet {
+    // MainnetRFQ._verifyOrder извлекает адрес получателя из старших 160 битов подписанного nonceAndMeta.
+    // https://github.com/Dexalot/contracts/blob/993df50c014f3c8a1a33e45b4364ab9e709662fb/contracts/MainnetRFQ.sol#L680-L701
+    uint256 private constant DEST_TRADER_SHIFT = 96;
+
     address public owner;
     IDxSettlement public immutable router;
     IDxWrapped public immutable wrapped;
@@ -56,12 +60,15 @@ contract DexalotWallet {
 
     function execute(IDxSettlement.Order calldata order,bytes calldata signature,uint256 maximum,uint256 minimum,
                      bool partialFill,uint256 deadline) external returns(uint256 spent,uint256 received) {
-        address payee=address(uint160(order.nonceAndMeta>>96));
+        address payee=address(uint160(order.nonceAndMeta >> DEST_TRADER_SHIFT));
         bool nativeIn=order.takerAsset==address(0);
         bool nativeOut=order.makerAsset==address(0);
         address input=nativeIn?address(wrapped):order.takerAsset;
         address output=nativeOut?address(wrapped):order.makerAsset;
         // The bot accounts in ERC20. A native payout must arrive here so it can be wrapped in the same transaction.
+        // Подпись покрывает весь uint128 expiry. Для допуска MainnetRFQ сравнивает время с младшими
+        // 32 битами включительно: https://github.com/Dexalot/contracts/blob/993df50c014f3c8a1a33e45b4364ab9e709662fb/contracts/MainnetRFQ.sol#L696-L704
+        // https://github.com/Dexalot/contracts/blob/993df50c014f3c8a1a33e45b4364ab9e709662fb/contracts/MainnetRFQ.sol#L752-L762
         if(msg.sender!=owner || activeMaker!=address(0) || order.maker==address(0) ||
            address(router).codehash!=routerHash || input==output || signature.length==0 ||
            (order.taker!=owner && order.taker!=address(this)) || (payee!=owner && payee!=address(this)) ||

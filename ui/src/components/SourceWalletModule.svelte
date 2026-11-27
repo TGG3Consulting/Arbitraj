@@ -5,7 +5,7 @@
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
 
-  let {venue,wallet,chain,version,kind,source,label,setting,load,addModule,registeredOwnerModule}=$props();
+  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule}=$props();
   const scope={kind:'Venue',get id(){return venue;}};
   const rows=$derived(store.values[setting+'|Venue|'+venue] ?? []);
   const storageKey=$derived([source+'-create',venue,chain,version,wallet.toLowerCase()].join(':'));
@@ -58,7 +58,9 @@
     });
   }
   async function verify(){
-    const input=hash.trim(),{a,p}=await context(),original=a.read();
+    const input=hash.trim(),{a,p:currentPlan}=await context(),original=a.read();
+    const p=recoverPlan ? await recoverPlan(provider(),a.settings,currentPlan,original,input) : currentPlan;
+    a.check();
     const fact=await deployed(provider(),p,input,original);
     const install=async()=>{
       a.check();

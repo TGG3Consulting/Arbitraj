@@ -109,7 +109,7 @@ export async function checkMarket(provider, p, at) {
     'Код рынка или активная реализация изменились.');
 }
 
-async function sameRuntime(code, p) {
+export async function sameRuntime(code, p) {
   return await hashCode(code) === p.runtimeSha256 && (!bindsWallet(p.kind) || runtimeKeccak(code) === p.runtimeKeccak);
 }
 

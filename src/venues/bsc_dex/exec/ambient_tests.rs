@@ -117,6 +117,7 @@ fn official_both_signed_flows_match_measured_orders_and_direction() {
         .collect();
     assert_eq!(keys.len(), 127);
     let mut modes = [0; 4];
+    let mut partial=Vec::new();
     let mut legs = HashSet::new();
     for p in data["ladder"].as_array().unwrap() {
         let buy = p["buy"].as_bool().unwrap();
@@ -128,14 +129,10 @@ fn official_both_signed_flows_match_measured_orders_and_direction() {
         let measured = ambient::decode(&raw, buy).unwrap();
         assert!(ambient::decode(&raw, !buy).is_none());
         let exact_in = buy == fixed;
-        assert_eq!(
-            if exact_in {
-                measured.amount_in
-            } else {
-                measured.amount_out
-            },
-            amount(&p["requested"])
-        );
+        let fixed_amount=if exact_in{measured.amount_in}else{measured.amount_out};
+        let requested=amount(&p["requested"]);
+        assert!(fixed_amount<=requested);
+        if fixed_amount<requested{partial.push((buy,exact_in,requested,fixed_amount));}
         modes[2 * usize::from(buy) + usize::from(fixed)] += 1;
         let (base, quote) = (asset(&p["base"]), asset(&p["quote"]));
         legs.insert((
@@ -146,6 +143,8 @@ fn official_both_signed_flows_match_measured_orders_and_direction() {
             measured.amount_out,
         ));
     }
+    // Native ETH → USDT reached the curve limit before the requested 1000 USDT.
+    assert_eq!(partial,vec![(true,false,U256::from(1_000_000_000),U256::from(224_141_839))]);
     assert!(modes.iter().all(|c| *c >= 2));
     let mut matched = 0;
     for payment in data["payments"].as_array().unwrap() {

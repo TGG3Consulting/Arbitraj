@@ -812,7 +812,7 @@ def tables(network, snapshots, profiles):
                     "Параметры площадки `fermi.books_interval_ms`, `fermi.quote_budget_ms`, `fermi.quote_sizes` и `fermi.gas_budget_native` задают интервал, предельное время сравнения, размеры в валюте расчёта и резерв ETH. "
                     "Включение `fermi.trading` применимо только к FermiSwap. Обмен требует средств и allowance выбранного кошелька, актуального кадра и минимальной чистой выплаты. "
                     "На продаже 0,01 WETH за USDC в одном кадре Titan Kaliber выплатил 16,697557 USDC за 298 636 gas, Taurus выплатил 16,687650 USDC за 246 814 gas. "
-                    "Отдельная котировка WETH/USDT доступна у Taurus. Расход газа пересчитывается в физическую валюту выбранной кассы. "
+                    "Отдельная котировка WETH/USDT доступна у Taurus. В смешанном расчёте USDC или USDT определяется адресом контракта кассы. Подписанный слот сохраняется под исходным ключом денежного шага, полная выплата покупки поступает в позицию. Газ учитывается через рынок ETH к выбранной валюте. "
                     "[Архив обоих рынков](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46041077020)."])
         slot_receipts = fermi.with_name("fermi_slot_receipts.json")
         if slot_receipts.exists():
@@ -2094,6 +2094,20 @@ def tables(network, snapshots, profiles):
                   f"В самостоятельной проверке границы {paid} выплат на cap−1/cap и {reverted} полных откатов с нулевыми дельтами на cap+1. "
                   "Полный вход 5834,189301 USDbC на обратной стороне stable-пары подтверждён котировкой; независимое финансирование этого размера не подтверждено. "
                   "Протокольная доля входит в комиссию бина. Первичный интерфейс публикует адреса четырёх пулов и роутера.")
+        if base and str(row["id"])=="8621":
+            directory=base_launch_inventory.evidence("basestonk_base_directory.json.gz")
+            paid=(base_launch_inventory.evidence("basestonk_base_wallets.json.gz")["results"]
+                  +base_launch_inventory.evidence("basestonk_base_secondary.json.gz")["results"])
+            task=(f"BaseStonk · basestonk-base. На блоке {directory['height']} проверены {len(directory['markets'])} ключей "
+                  f"PoolManager, у {sum(int(m['liquidity'])>0 for m in directory['markets'])} положительна активная ликвидность. "
+                  "Профиль ищет по отслеживаемому токену, встречной валюте и проверенным хукам. Цена учитывает комиссию LP и налог хука на выход. "
+                  f"В архиве {len(paid)} оплаченных обменов через официальный SimpleSwapRouter и имеющийся V5, "
+                  f"{len({r['hook'] for r in paid})} хуков, два размера в обоих направлениях. "
+                  f"В {sum(r['pool_swaps']==2 for r in paid)} оплатах хук совершил второй обмен в том же пуле для распределения налога. "
+                  "Размер дохода определяется конечным поступлением кошельку. На активных исходных путях проверен отказ при повышении минимума на одну единицу. "
+                  "V5 проверяет общий минимум и срок. У исходного SimpleSwapRouter отсутствует ограничение срока; отдельный защищённый прямой маршрут требует денежной проверки. "
+                  "Реестр пополняется публичными запусками. Объём пересекается с Uniswap V4. "
+                  "Первоисточник: https://docs.basestonk.io/integration/contracts.md.")
         if base and str(row["id"])=="7508":
             archive=base_launch_inventory.evidence("kaliber_base_access.json.gz")
             windows=base_launch_inventory.evidence("kaliber_base_vaults.json.gz")["windows"]

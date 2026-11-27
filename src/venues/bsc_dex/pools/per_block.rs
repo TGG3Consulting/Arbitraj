@@ -92,7 +92,7 @@ pub fn needs(f: &Family) -> bool {
     if f.variant.empire() || matches!(
         f.variant,
         super::family_variant::Variant::SlipstreamDynamicFee | Variant::SlipstreamUniversal | Variant::TopazCl
-            | Variant::Angstrom | Variant::LaunchUmia | Variant::LaunchBaseline | Variant::LaunchDoppler | Variant::LaunchIndex | Variant::LaunchO1 | Variant::LaunchO1Wrapped
+            | Variant::BaseStonk | Variant::Angstrom | Variant::LaunchUmia | Variant::LaunchBaseline | Variant::LaunchDoppler | Variant::LaunchIndex | Variant::LaunchO1 | Variant::LaunchO1Wrapped
             | Variant::DeliCl
             | Variant::DeliConstant
             | Variant::UmbraeDamm | Variant::UmbraeDlmm

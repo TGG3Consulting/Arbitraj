@@ -574,7 +574,7 @@ fn side(
             let (i,o,full)=super::pmm_ladder::depth(points,U256::from((factor*1e18) as u128)).ok_or("YieldBasis: недоступны измеренные ступени")?;
             Ok((pick(i,o),full))
         }
-        (PoolState::OraclePmm(d), PoolKind::OraclePmm) => {
+        (PoolState::OraclePmm(d), kind) if kind==PoolKind::OraclePmm || e.family.variant==super::super::pools::family_variant::Variant::BaseStonk => {
             let (points, factor) = if buy {
                 (&d.ladder_quote_in, 1.0 / (1.0 + b))
             } else {

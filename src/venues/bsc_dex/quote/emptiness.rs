@@ -102,7 +102,7 @@ pub fn empty(e: &Entry) -> bool {
             .iter()
             .any(|i| d.balances.get(*i as usize).is_none_or(|b| b.is_zero())),
         // PMM от оракула (WooFi, решение 122 F, 3): пуст, когда контракт на паузе или оракул не признаёт цену.
-        PoolState::OraclePmm(d) if e.family.variant.aqua() || super::uses_wallet_quoter(e.family.variant) || e.family.proto == super::super::pools::families::Proto::Elfomo => {
+        PoolState::OraclePmm(d) if e.family.variant==super::super::pools::family_variant::Variant::BaseStonk || e.family.variant.aqua() || super::uses_wallet_quoter(e.family.variant) || e.family.proto == super::super::pools::families::Proto::Elfomo => {
             d.paused || !d.feasible || (d.ladder_quote_in.is_empty() && d.ladder_base_in.is_empty())
         }
         PoolState::OraclePmm(d) => d.paused || !d.feasible || d.price.is_zero(),

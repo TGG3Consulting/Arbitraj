@@ -285,6 +285,10 @@ pub(super) mod angstrom;
 pub(super) mod angstrom_feed;
 mod angstrom_ladder;
 mod launch_terms;
+pub(super) mod basestonk;
+mod basestonk_directory;
+#[cfg(test)]
+mod basestonk_tests;
 mod umia;
 mod launch_ladder;
 pub(super) mod deli_cl;

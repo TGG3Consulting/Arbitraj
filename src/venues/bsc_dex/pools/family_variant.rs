@@ -80,6 +80,7 @@ pub enum Variant {
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
     LaunchUmia,
+    BaseStonk,
     LaunchBaseline,
     Aqua,
     Angstrom,
@@ -248,7 +249,7 @@ impl Variant {
     pub(crate) fn algebra_router(self) -> bool { self.caller_algebra() || self==Self::TrebleSpot }
     pub(crate) fn caller_algebra(self) -> bool { matches!(self,Self::CypherIntegral | Self::TheoremIntegral) }
     pub(crate) fn protected_router_wallet(self)->bool{matches!(self,Self::SafeSwapTrade|Self::DegenSwap)}
-    pub fn launch(self)->bool {matches!(self,Self::Angstrom|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
+    pub fn launch(self)->bool {matches!(self,Self::Angstrom|Self::BaseStonk|Self::LaunchUmia|Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
@@ -373,6 +374,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_whiteswap" => Variant::WhiteSwap,
         "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
         "launch_umia" => Variant::LaunchUmia,
+        "launch_basestonk" => Variant::BaseStonk,
         "launch_baseline" => Variant::LaunchBaseline,
         "aqua_swapvm" => Variant::Aqua,
         "angstrom_l1" => Variant::Angstrom,

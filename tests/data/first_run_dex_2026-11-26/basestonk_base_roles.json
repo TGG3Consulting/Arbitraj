@@ -1,0 +1,191 @@
+{
+  "tag": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "hook_roles": [
+    {
+      "hook": "0x03d2434d5a9ab7fb46bd3c7956a7c62e0cd46044",
+      "hook_runtime": "0x3d6660ba48010b485c89777efe38292be875fb433e3dfec3b2dcdffd8d1cd2ff",
+      "launcher": "0x74655f443d25c5d401a582c68dea02acd170e12f",
+      "launcher_runtime": "0x1ff127f6914cb667678b76b28e5d1a17322019e66ff9e91f2a1f776c81017399"
+    },
+    {
+      "hook": "0x1d118173e0d717d70746adfe730bd4b89d2de044",
+      "hook_runtime": "0x6f1881837156087466083bc33dfd1a1706251dc39a1b22c7c9802d450cb2405d",
+      "launcher": "0x1b6cec29f67f17e484363bb9343d3f38c6a1003e",
+      "launcher_runtime": "0x2a03e49dbbdb03c26b7496f66dde30c5f59c72f48f92075dd3b0479a940f9116"
+    },
+    {
+      "hook": "0x201c4916c085032fb49f0b778efa98df23672044",
+      "hook_runtime": "0xe2327b9bca0ff01ceedc8632d9a3089bb4304cf7b1e259eae84975229c38ff60",
+      "launcher": "0xae31b51460da9c7cbf906cbaf39ba55e47c3de42",
+      "launcher_runtime": "0xef7db63f803435dcd21631020a9b4b0fc5e422f3a1f2d512dd52f9706599ff66"
+    },
+    {
+      "hook": "0x3e6b46810b1fd5085086fd1417e8adb02f34a044",
+      "hook_runtime": "0xfdad8bab3f752b032893c82a32d5c2a8b1088f59d0d4efa8d4cc9575f2ed49b9",
+      "launcher": "0xeb743e4d89fbe31f5145ebc189a19e1b71de4e3b",
+      "launcher_runtime": "0xa56b54e6a767e8f81d5f27fd8da817e2c7118346426bfcaf1ef7471c19251ec3"
+    },
+    {
+      "hook": "0x5c999109609f9f857f4d58240ccb12bf219ee044",
+      "hook_runtime": "0x2042201eabd8bddf99087a8b9063764b72be24bce68c7e478f2d4327294ed88e",
+      "launcher": "0x4bc0e8c2caab145612956652a5668864ffcc7af7",
+      "launcher_runtime": "0xca99dc6f58262e04e78ec5fa8d39c350fce7542ee0415dbeede4c3bcbed9f6ec"
+    },
+    {
+      "hook": "0x7c672f3850afadcb8f83478e0a2a90d109fa6044",
+      "hook_runtime": "0x4c7c544448f32d87fe41caf4e9d8420d705c5504cd82b551d4648f41a7ad0479",
+      "launcher": "0x80459e17ec8269f058152169e58022a70ed9f1fa",
+      "launcher_runtime": "0xa5d25a50be6b37778c153394307e8207d3707a0948e0be7eb8e5efea8e166c4b"
+    },
+    {
+      "hook": "0x805975d27518e3e23c4838802d9dda7302dca044",
+      "hook_runtime": "0x4adf749bac21ca340f1789ae6635df6d512776d956a8a77b448f7831387bbefc",
+      "launcher": "0x7dea3db7988f0c70e6d51920bae8cafbe943e6d5",
+      "launcher_runtime": "0xf4fd7fd49b4766739e94909c324992ab8051536c2de10895140d73f1d026591c"
+    },
+    {
+      "hook": "0xaa4025e5667719db2ceaa0c1ed8801ce7bdfa044",
+      "hook_runtime": "0x18afe93a000a16d7392289d9e5e39b4ccff07d1e93fab32540114ab867333c62",
+      "launcher": "0x445f7d3533f956fe25eaf55ebadf3d2ade153151",
+      "launcher_runtime": "0x7b05a243ef6897961db443b600971a78124fc6f2c69a23d140cde1bce1f9a09f"
+    },
+    {
+      "hook": "0xba83ee6969d09ceb8a4827c3ed77413c75392044",
+      "hook_runtime": "0x72ac320093804f67fde5085de5e2e703438b7f2992e1950e6402032825f37701",
+      "launcher": "0xf505085d8db742fc0053897ac7b9b1fa6b64d3eb",
+      "launcher_runtime": "0x868987fbb90e723915c04642861652589aa2a9970db1352845abb661cf0bfada"
+    },
+    {
+      "hook": "0xbeff407b7062e2fe15928960a58aec93b0c76044",
+      "hook_runtime": "0x4672952258623022b679b00849b35c6632fe8ba73d2785523108f438a2e737d6",
+      "launcher": "0x5263e7264c817909893aa9a00dc2f4b433040fc1",
+      "launcher_runtime": "0xc6fa31254a631a0fae5a4f86b8e81e7b32a30209d9faf3e79d49201d9f151b20"
+    },
+    {
+      "hook": "0xe6b2b3e59d5df7827eb0a7915675db66ab12a044",
+      "hook_runtime": "0x8655e6cc8220bd27dc483d45c3268018aea7215e25e606b117f3ec711a0ab111",
+      "launcher": "0xde15bf7592970e2458239a308cdf727e8780c62a",
+      "launcher_runtime": "0x313cdbe8d4adde9a406f6dfe9ed10ef0f918921db07ed2210362f2826d607cf9"
+    }
+  ],
+  "variant_equivalence": {
+    "reference": "0x7c672f3850afadcb8f83478e0a2a90d109fa6044",
+    "candidate": "0x5c999109609f9f857f4d58240ccb12bf219ee044",
+    "length": 16640,
+    "nonimmutable_differences": 0,
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x7c672f3850afadcb8f83478e0a2a90d109fa6044?fields=runtimeBytecode",
+    "immutable_references": {
+      "3784": [
+        {
+          "start": 1368,
+          "length": 32
+        },
+        {
+          "start": 5879,
+          "length": 32
+        },
+        {
+          "start": 7060,
+          "length": 32
+        },
+        {
+          "start": 8457,
+          "length": 32
+        },
+        {
+          "start": 8551,
+          "length": 32
+        },
+        {
+          "start": 10123,
+          "length": 32
+        },
+        {
+          "start": 10378,
+          "length": 32
+        },
+        {
+          "start": 10910,
+          "length": 32
+        },
+        {
+          "start": 12269,
+          "length": 32
+        }
+      ],
+      "3786": [
+        {
+          "start": 1426,
+          "length": 32
+        },
+        {
+          "start": 6590,
+          "length": 32
+        },
+        {
+          "start": 9152,
+          "length": 32
+        },
+        {
+          "start": 9577,
+          "length": 32
+        },
+        {
+          "start": 12911,
+          "length": 32
+        }
+      ],
+      "3788": [
+        {
+          "start": 519,
+          "length": 32
+        },
+        {
+          "start": 2742,
+          "length": 32
+        },
+        {
+          "start": 2791,
+          "length": 32
+        },
+        {
+          "start": 4018,
+          "length": 32
+        },
+        {
+          "start": 4813,
+          "length": 32
+        },
+        {
+          "start": 5060,
+          "length": 32
+        },
+        {
+          "start": 5943,
+          "length": 32
+        },
+        {
+          "start": 7124,
+          "length": 32
+        }
+      ],
+      "3790": [
+        {
+          "start": 1294,
+          "length": 32
+        },
+        {
+          "start": 2229,
+          "length": 32
+        },
+        {
+          "start": 4865,
+          "length": 32
+        }
+      ]
+    }
+  }
+}

@@ -449,7 +449,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "aqua_swapvm" => (PoolKind::OraclePmm, Proto::V2, true, false, true),
         "angstrom_l1" => (PoolKind::Cl, Proto::UniswapV4, true, false, false),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
-        "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "launch_basestonk" | "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "mooniswap_v1" | "mooniswap_v2" | "aktionariat" | "fluid_dex_lite" | "ambient_ethereum" | "llamma_lending" | "llamma_mint" | "llamma_v2" | "rubicon_classic" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "eulerswap_v1" | "eulerswap_v2" => (PoolKind::V2,Proto::V2,true,true,true),
@@ -1004,7 +1004,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.variant.flux_native() { list.extend(["dex.universal_router","dex.permit2","dex.router_runtime_hash","dex.permit2_runtime_hash","dex.infinity_runtime_hashes"]); }
         }
         Proto::UniswapV4 if f.variant.launch() => {
-            list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);
+            list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles"]);
+            if f.variant != Variant::BaseStonk { list.push("dex.launch_pool_keys"); }
             if matches!(f.variant, Variant::LaunchBaseline | Variant::LaunchUmia) { list.push("dex.factory"); }
             if f.variant == Variant::LaunchO1Wrapped { list.extend(["dex.router", "dex.module_runtime_hashes"]); }
         }

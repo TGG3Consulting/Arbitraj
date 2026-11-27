@@ -205,4 +205,3 @@ if __name__ == "__main__":
     parser.add_argument("output", type=Path)
     options = parser.parse_args()
     options.output.write_text(json.dumps(capture(options.generation), separators=(",", ":")), encoding="utf8")
-

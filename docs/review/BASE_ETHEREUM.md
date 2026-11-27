@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `d02470ca` (27.11.2026).
+Последний просмотренный коммит: `e0603c28` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2993,6 +2993,7 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-45 | c8772fa3 | Fluid DEX Lite. (1) R-42: прямые `== Variant::FluidDexLite` в общих файлах: `exec/executor/entry.rs:192,242`, `exec/market_plan.rs:137`, `exec/vista_gate.rs:31`, `quote/module_pricing.rs:39`, `quote/v2_execution.rs:80`. Завести предикат, как `euler()`, `aqua()` и `llamma()`. (2) Размер: `pools/fluid_dex_lite.rs` — 348 строк, `exec/fluid_lite_wallet.rs` — 224, ориентир 200. | **e6656a64: размеры выросли — `pools/fluid_dex_lite.rs` 443 строки, `quote/fluid_hop_pricing.rs` 276, `exec/fluid_lite_plan.rs` 267, `exec/fluid_lite_wallet.rs` 236.** |
 | О-47 | 55b8ecde | R-42: прямые `== Variant::E3Lb` в общих файлах `pools/factory_calls.rs:112` и `pools/families.rs:1155`. В профильных `sectorone*.rs` и `e3.rs` они допустимы. Завести предикат или выбор внутри `e3.rs`. |
 | О-49 | 88523b53 | **Регрессия BSC (горячий путь сделки).** `venue.rs:919` и `exec/trade.rs` вызывают `pancakex::recovery::prior` для **каждой** сделки на всех сетях, включая BSC. Внутри нет проверки ни сети, ни `pancakex.trading`: `ledger::identity` возвращает ключ для любой сделки с `deal_id`, затем `intent::load(journal.db(), key).await` читает SQLite. Итог на BSC: (а) лишнее чтение журнала до каждой сделки («каждая миллисекунда важна»); (б) при ошибке чтения журнала `?` превращает сделку BSC в `OutcomeUnknown`. Соседние `ryze::recovery::prior` и `hanji::execute::prior` сначала отсекают по `chain_id` и пустому `deal_id` и на BSC не читают журнал. Нужно: сначала проверять, что PancakeSwap X включён для этой площадки (`pancakex.trading` и канал из `pancakex.contracts`), и только потом читать журнал. Добавить тест: при выключенном PancakeSwap X `prior` не обращается к журналу. |
+| О-50 | e0603c28 | Хардкод списка и сети, CLAUDE.md: «никаких хардкодов: ни одного зашитого списка». (1) `src/api/wallets_view.rs:202` и `src/venues/bsc_dex/source_quote.rs:20` зашиты id DEX `"kaliber-lambda-ethereum"` и `"taurus-lambda-ethereum"`. Это ключи, которые владелец создаёт сам («Добавить DEX»): при другом имени функция молча не работает. Отбирать по признаку семейства (`dex.kind = lambda_propamm` и непустой `dex.propamm_price_slots`), а не по строке id. (2) `wallets_view.rs`: `dex.evm_chain_id … != Some(1)` — номер сети зашит в API. Привязку к Ethereum брать из настройки или из самого семейства. (3) `fermi/prop_market.rs` — 354 строки, ориентир 200. |
 | ~~О-48~~ ✅ 69ce45e1 | 0f05ba21 | Карточка `ui/src/assets/prop-venue-ethereum.json`: 5 рынков, у каждого свой runtimeKeccak. По фактам репозитория: `0x110f7849…` и `0xbe045709…` есть в записанных `propamm_ethereum_wallets` и в `first_run_dex.json`; `0x5fc58ecc…` (рынок `0x71e790dd…`) есть только в `first_run_dex.json`, в записанных данных его нет; `0xe92426f0…` (`0xb8d4e06e…`) и `0x0a117e1a…` (`0x20861433…`) нет ни в записанных данных, ни в `dex.module_runtime_hashes`. Нужно либо приложить записанные данные сборки CI для этих трёх рынков и добавить хеши в рекомендации, либо убрать их из карточки, пока они не проверены. Иначе кнопка разместит модуль, который бот при проверке отклонит. |
 | ~~О-46~~ ✅ 60430edb | 8de98ae9 | Та же ошибка, что О-26 и О-31. `contracts/FluidDexLiteWallet.sol` изменён (добавлен `executeHop`), а карточка `ui/src/assets/fluid-dex-lite-ethereum.json` (`0xd69663d1…`) и хеш в `first_run_dex.json` остались от сборки c2a328f9, то есть от байткода b5584d2e. Кнопка в UI разместит старый контракт без `executeHop`. Нужно пересобрать в CI, обновить карточку и `dex.module_runtime_hashes` и сверить с записанными данными новой сборки. |
 
@@ -4346,3 +4347,11 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - О-49 не исправлен: `prior` по-прежнему читает журнал для каждой сделки на BSC.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44, О-45, О-47, О-49.
+
+### e0603c28 — Kaliber/Taurus: выплаты по слоту конкретного строителя
+
+- Новый `fermi/prop_market.rs`: цена и выплата LambdaClass в следующем слоте строителя. Настройка `dex.propamm_price_slots` записана в SETTINGS_CASES. Добавлен UI источника цены.
+- **Ошибка: О-50** — id DEX и номер сети зашиты в коде.
+- BSC не затронут: ветка в `source_quote.rs` срабатывает только для этих двух id, в `wallets_view.rs` — только при сети 1.
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44, О-45, О-47, О-49, О-50.

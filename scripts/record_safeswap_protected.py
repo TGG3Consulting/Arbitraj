@@ -25,7 +25,7 @@ FILLED="0x"+keccak(text="Filled(address,address,address,address,uint256,uint256,
 
 
 def runtime(c, artifact, roles):
-    constructor=artifact["creation"]+encode(["address"]*6,roles).hex()
+    constructor=artifact["creation"]+encode(["address"]*len(roles),roles).hex()
     reply=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_call",
                          "params":[{"from":OWNER,"data":"0x"+constructor},c.selector]},timeout=35)
     reply.raise_for_status()

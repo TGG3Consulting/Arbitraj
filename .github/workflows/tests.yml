@@ -606,6 +606,13 @@ jobs:
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropVenueAdapter
           python scripts/record_prop_creates.py "$RUNNER_TEMP/prop/PropVenueAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'builder-bound-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropSlotVenueAdapter
+          python scripts/record_prop_builder_wallet.py "$RUNNER_TEMP/prop/PropSlotVenueAdapter.json" "$RUNNER_TEMP/market.json" "${MARKET#builder-bound-}" --slot-guard
       - if: startsWith(matrix.market, 'builder-cash-')
         env:
           MARKET: ${{ matrix.market }}
@@ -1079,6 +1086,8 @@ jobs:
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
+      - if: matrix.market == 'kaliber-base-kyber'
+        run: python scripts/record_kaliber_kyber.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'kaliber-base-canonical'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund

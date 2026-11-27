@@ -24,6 +24,11 @@ interface ICallbackShare {
 
 /// Pays a signed broker only with the caller's assets. Issued shares are integral units.
 contract AktionariatWallet {
+    // Brokerbot.sol: direction bits at lines 35–36 and the trade callback on the 0x01 reference.
+    // https://github.com/aktionariat/contracts/blob/c2d3dd438aff52185ea7c1ec6ae821061075a41b/contracts/brokerbot/Brokerbot.sol
+    uint256 private constant BUYING_ENABLED = 1;
+    uint256 private constant SELLING_ENABLED = 2;
+    bytes private constant TRADE_REFERENCE = hex"01";
     IBrokerRegistry public immutable registry;
     address public immutable issuerHub;
     mapping(address broker => bool) public issuerMarkets;
@@ -86,7 +91,7 @@ contract AktionariatWallet {
         // Both the issuer's broker and the original published hub must be bound by the constructor.
         require(registry.getBrokerbot(cash,share) == o.broker ||
                 (hub == issuerHub && issuerMarkets[o.broker]), "issuer");
-        require((broker.settings() & (buying ? 1 : 2)) != 0, "direction");
+        require((broker.settings() & (buying ? BUYING_ENABLED : SELLING_ENABLED)) != 0, "direction");
         IERC20 source=IERC20(o.source);
         IERC20 target=IERC20(o.target);
         uint256 priorSource=source.balanceOf(address(this));
@@ -107,13 +112,13 @@ contract AktionariatWallet {
         require(funded >= spent && funded <= o.budget, "funding");
         if (buying) {
             tokenCall(o.source,abi.encodeCall(IERC20.approve,(hub,spent)));
-            ISharePayment(hub).payAndNotify(o.broker,spent,hex"01");
+            ISharePayment(hub).payAndNotify(o.broker,spent,TRADE_REFERENCE);
             if (source.allowance(address(this),hub) != 0) {
                 tokenCall(o.source,abi.encodeCall(IERC20.approve,(hub,0)));
                 require(source.allowance(address(this),hub) == 0, "allowance");
             }
         } else {
-            tokenCall(o.source,abi.encodeCall(ICallbackShare.transferAndCall,(o.broker,spent,hex"01")));
+            tokenCall(o.source,abi.encodeCall(ICallbackShare.transferAndCall,(o.broker,spent,TRADE_REFERENCE)));
         }
         uint256 proceeds=target.balanceOf(address(this)) - priorTarget;
         require(proceeds >= o.minimum, "broker output");

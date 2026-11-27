@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import requests
 from eth_abi import encode
 from eth_utils import keccak
-from record_base_slipstream_executor import ROOT, OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc
+from record_base_slipstream_executor import ROOT, OWNER, EXEC, RUNTIME, STEP, call, calldata, rpc, simulate_block
 from record_omni_v2_base import ENDPOINTS
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26"
@@ -48,16 +48,18 @@ def capture(url, artifact, network):
     identity=None
     if artifact:
         creation={"from":OWNER,"data":"0x"+artifact["creation"]+encode(["address"],[factory["address"]]).hex()}
-        # Конструктор выполняет только чтения. Газ его выполнения вычисляется с публичного пополненного EOA отдельно.
-        creator=dict(creation,**{"from":"0x682718efd1bd558afa17d02b1cd328bc705b5cef"})
-        deployed=request(url,"eth_call",[creator,tag]);raw=bytes.fromhex(deployed[2:]);masked=bytearray(raw);blank=bytes.fromhex(artifact["runtime"])
+        # Та же неподписанная транзакция своего тестового плательщика: runtime и газ CREATE.
+        constructor=dict(creation,gas=hex(6_000_000),value="0x0")
+        [created]=simulate_block(url,tag,overrides,[constructor])
+        if not OK(created):raise ValueError(("constructor",created.get("error")))
+        deployed=request(url,"eth_call",[creation,tag]);raw=bytes.fromhex(deployed[2:]);masked=bytearray(raw);blank=bytes.fromhex(artifact["runtime"])
         [refs]=artifact["immutableReferences"].values()
         for field in refs:
             start,size=field["start"],field["length"]
             if size!=32 or raw[start:start+size]!=encode(["address"],[factory["address"]]):raise ValueError("factory immutable")
             masked[start:start+size]=blank[start:start+size]
         if masked!=blank:raise ValueError("artifact body")
-        gas=int(request(url,"eth_estimateGas",[creator,tag]),16)
+        gas=int(created["gasUsed"],16)
         identity={"runtime":"0x"+keccak(raw).hex(),"factory":factory["address"],"deployment_gas":gas,"solc":artifact["solc"]}
         overrides[MODULE]={"code":deployed}
         overrides[EXEC]={"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{WORD(0):WORD(int(OWNER,16)),WORD(1):WORD(int(wrapped,16))}}

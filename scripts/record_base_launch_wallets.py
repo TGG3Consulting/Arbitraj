@@ -89,7 +89,11 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
         r=simulate(owner,calls,mode);paid=int(r[-8]["returnData"],16)-int(r[-2]["returnData"],16);received=int(r[-1]["returnData"],16)-int(r[-7]["returnData"],16)
         good=[v["status"] for v in r[-5:-2]]==["0x0","0x0","0x1"] and paid==qty and received==gross
         if r[-5]["status"]=="0x1" or r[-4]["status"]=="0x1":raise ValueError("строгий минимум либо срок не сработал")
-        return (prefix+approvals+[call] if good else None),dict(input=str(qty),quoted=str(gross),paid=str(paid),net=str(received),gas=int(r[-3]["gasUsed"],16),stage="accepted" if good else "settlement",calls=calls,results=r)
+        measured=dict(input=str(qty),quoted=str(gross),paid=str(paid),net=str(received),gas=int(r[-3]["gasUsed"],16),stage="accepted" if good else "settlement",calls=calls,results=r)
+        if bin_pool and good:
+            from record_omni_flux_bin_math import before
+            measured["bin_before"]=before(k,"0x"+keccak(encode([key_type],[k])).hex(),prefix,mode,owner,forward,r[-3],tx,simulate)
+        return (prefix+approvals+[call] if good else None),measured
     markets=[]
     for row in [r for r in d["rows"] if r["group"]==group and "key" in r]:
         key=row["key"]
@@ -106,7 +110,7 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
         if cash=="0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf":
             sizes=[10**13,10**15]
         wire_key=(*key[:-1],bytes.fromhex(key[-1][2:])) if flux else key
-        for qty in sizes:
+        for qty in row.get("sizes",sizes):
             modes=["wrapped","wrapped_v5"] if wrapped_module else (["router"] if ZERO in key[:2] else ["router","v5"])
             for mode in modes:
                 prefix,buy=leg(wire_key,owner,[],mode,cash,asset,qty)

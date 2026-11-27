@@ -90,7 +90,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, h: Option<Head>) -> Vec<O
         let graph = Execution {
             mode: RouteMode::Graph,
             target,
-            wire: Wire::V5(step),
+            wire: Wire::V5Funded(step,vec![vault]),
         };
         if let Ok(opt) = Box::pin(v2_execution::option(q, i, e.clone(), payer, graph, h)).await {
             result.push(opt);

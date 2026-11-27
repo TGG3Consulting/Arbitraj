@@ -7,7 +7,7 @@ from record_base_launch_hooks import DATA, ENDPOINTS
 from record_base_launch_wallets import replay, WETH, USDC, ZERO
 
 def record(ep,bin_pool=False):
-    source="omni_flux_bin_directory.json.gz" if bin_pool else "omni_flux_base_directory.json.gz"
+    source="omni_flux_registry.json.gz" if bin_pool else "omni_flux_base_directory.json.gz"
     with gzip.open(DATA/source) as f:directory=json.load(f)
     snapshot=json.loads((DATA/"base_recovered_markets.json").read_bytes())
     bindings=json.loads((DATA/"omni_flux_roles.json").read_bytes())
@@ -18,8 +18,15 @@ def record(ep,bin_pool=False):
     rows=[]
     for m in directory["markets"]:
         key=m["key"]
-        cash=next((t for t in (WETH,USDC,ZERO) if t in key[:2]),key[0])
-        rows.append(dict(id=m["id"],group=group,key=key,terms=dict(quote=cash)))
+        if bin_pool:
+            if m["kind"]!="bin":continue
+            for i,cash in enumerate(key[:2]):
+                quotes=[int(q["amount"]) for q in m["quotes"] if q["forward"]==(i==0) and q["out"] and int(q["out"])]
+                sizes=sorted(set(quotes[-2:])) if quotes else ([1,10**6] if cash==USDC else [1,10**12])
+                rows.append(dict(id=m["id"],group=group,key=key,terms=dict(quote=cash),sizes=sizes))
+        else:
+            cash=next((t for t in (WETH,USDC,ZERO) if t in key[:2]),key[0])
+            rows.append(dict(id=m["id"],group=group,key=key,terms=dict(quote=cash)))
     framed=dict(selector=directory["selector"],state_root=snapshot["state_root"],height=snapshot["height"],
                 manager=cfg["dex.pool_manager"],flux=cfg,rows=rows)
     return replay(group,ep,framed)

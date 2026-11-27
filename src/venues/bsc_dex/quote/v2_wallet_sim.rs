@@ -22,6 +22,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use serde_json::json;
 
 sol! {interface IMoney {
+    function totalSupply() external view returns(uint256);
     function getEthBalance(address owner) external view returns(uint256);
     function balanceOf(address owner) external view returns(uint256);
     function allowance(address owner,address spender) external view returns(uint256);
@@ -33,6 +34,10 @@ pub(in crate::venues::bsc_dex) struct V5Step {
     pub pool: Address,
     pub data: Bytes,
 }
+#[path="v2_funding.rs"]
+mod funding;
+pub(in crate::venues::bsc_dex) use funding::BurnFunding;
+
 #[derive(Clone)]
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
@@ -52,6 +57,18 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
+    /// Терминальные держатели входного ERC20, подтверждённые протоколом выбранного шага.
+    V5Funded(V5Step, Vec<Address>),
+    V5Burn(V5Step, Box<BurnFunding>),
+}
+
+impl Wire {
+    pub(in crate::venues::bsc_dex) fn funded(step:V5Step,holders:Vec<Address>,burn:Option<BurnFunding>)->Self {
+        match burn {
+            Some(b)=>Self::V5Burn(step,Box::new(b)),
+            None=>Self::V5Funded(step,holders),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -95,7 +112,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             },
             v.value(o.amount),
         ),
-        Wire::V5(v) => (
+        Wire::V5(v) | Wire::V5Funded(v,_) | Wire::V5Burn(v,_) => (
             v.native.map(|(w, _)| w),
             if matches!(v.native, Some((_, true))) {
                 o.amount
@@ -147,23 +164,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     );
     let data = calldata(&o, deadline, o.minimum);
     calls.extend([tx(o.target, data), balance(o.input), balance(o.output)]);
-    // Vault settles nominal ERC-20 inputs. Confirm that its inventory actually received the charged amount.
-    let vault = match &o.wire {
-        Wire::Vault(_) => Some(o.target),
-        Wire::V5(step) if step.kind == 17 => Some(step.pool),
-        _ => None,
-    };
-    if let Some(holder) = vault {
-        let read = || {
-            tx(
-                o.input,
-                Bytes::from(IMoney::balanceOfCall { owner: holder }.abi_encode()),
-            )
-        };
-        calls.insert(0, read());
-        calls.push(read());
-    }
-    let offset = usize::from(vault.is_some());
+    let funding=funding::Inventory::for_order(&o).ok_or_else(fail)?;
+    let offset=funding.len();
+    calls.splice(0..0,funding.calls(o.payer,o.input));
+    calls.extend(funding.calls(o.payer,o.input));
     let values = (!value.is_zero()).then_some((offset + approvals.len() + 2, value));
     let result = frame(ctx, h, &calls, values.as_slice()).await?;
     if result.iter().any(|x| !x.ok()) {
@@ -173,15 +177,8 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     let word =
         |v: &CallResult| (v.return_data.len() == 32).then(|| U256::from_be_slice(&v.return_data));
     let r = &result[offset..result.len() - offset];
-    if vault.is_some()
-        && result
-            .last()
-            .and_then(word)
-            .and_then(|after| after.checked_sub(word(&result[0])?))
-            != Some(o.amount)
-    {
-        return Err(fail());
-    }
+    let (before,after)=funding.balances(&result).ok_or_else(fail)?;
+    if !funding.confirm(&o,&before,&after,&r[n+2].logs){return Err(fail());}
     let spent = word(&r[0]).and_then(|old| old.checked_sub(word(&r[n + 3])?));
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
@@ -234,9 +231,8 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let stricter=(!strict_value.is_zero()).then_some((offset+n+2,strict_value));
         let strict_result = frame(ctx, h, &calls, stricter.as_slice()).await?;
         let alt = &strict_result[offset..strict_result.len() - offset];
-        if (vault.is_some()
-            && (word(&strict_result[0]) != word(&result[0])
-                || strict_result.last().and_then(word) != word(&result[0])))
+        let (strict_before,strict_after)=funding.balances(&strict_result).ok_or_else(fail)?;
+        if strict_before!=before || strict_after!=before
             || alt[n + 2].ok()
             || alt[n + 2].error.is_none()
             || alt.iter().enumerate().any(|(j, v)| j != n + 2 && !v.ok())
@@ -269,7 +265,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
         ),
         Wire::Vista(v) => v.data(o.input, o.output, o.amount, minimum, o.payer, deadline),
-        Wire::V5(v5) => {
+        Wire::V5(v5) | Wire::V5Funded(v5,_) | Wire::V5Burn(v5,_) => {
             let step = ArbExecutor::Step {
                 kind: v5.kind,
                 pool: v5.pool,

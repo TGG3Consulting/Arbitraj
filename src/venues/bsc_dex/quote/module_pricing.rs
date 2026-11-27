@@ -85,7 +85,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             let via = Execution {
                 mode: RouteMode::Graph,
                 target,
-                wire: Wire::V5(step),
+                wire: if e.family.variant.registered_module(){
+                    Wire::funded(step,vec![e.pool.reference.address()],None)
+                }else{Wire::V5(step)},
             };
             if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, via, head).await {
                 quotes.push(option);

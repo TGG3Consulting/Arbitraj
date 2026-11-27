@@ -12,7 +12,7 @@ jobs:
           node-version: 22
       - run: npm ci --prefix contracts --no-audit --no-fund
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/dexalot" DexalotWallet
-      - run: python -m pip install requests eth-abi eth-utils
+      - run: python -m pip install requests eth-abi eth-utils pycryptodome
       - run: python scripts/verify_dexalot_creation.py "$RUNNER_TEMP/dexalot/DexalotWallet.json" artifacts
       - uses: actions/upload-artifact@v4
         with:

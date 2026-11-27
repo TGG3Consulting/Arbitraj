@@ -225,7 +225,9 @@ pub const UR_FORMATS: &[&str] = &[
 /// Настройки DEX. Порядок — как в docs/SETTINGS.md.
 #[rustfmt::skip]
 pub static DEX: &[SettingDef] = &[
+    d("Kipseli", "kipseli.firm_target", K::Text, L::None, "адрес и хеш", V, "Адрес и keccak256 кода конечного контракта индивидуальной заявки. Обе величины проверяются перед симуляцией.").optional().dex_venue(),
     d("Kipseli", "kipseli.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API Kipseli для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
+    d("0x", "zeroex.firm_target", K::Text, L::None, "адрес и хеш", V, "Адрес и keccak256 кода конечного контракта индивидуальной заявки. Обе величины проверяются перед симуляцией.").optional().dex_venue(),
     d("0x", "zeroex.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API 0x для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
     d("Fynd", "fynd.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес Fynd Hosted с версией API. Ключ Hosted передаётся только официальному серверу.").optional().dex_venue(),
     d("Fynd", "fynd.network", K::Text, L::None, "имя", V, "Имя сети в пути API. Бот сверяет chain_id этого сервера с настройкой площадки.").optional().dex_venue(),

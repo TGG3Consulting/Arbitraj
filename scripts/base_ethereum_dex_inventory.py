@@ -1039,13 +1039,13 @@ def tables(network, snapshots, profiles):
                        if existing else "")
                     + f"[Исходные запросы по размерам, котировки и балансы](../{derp_path.as_posix()})."])
     if base:
-        evidence=Path("tests/data/first_run_dex_2026-11-26/rubicon_aquila_base.json.gz")
-        with gzip.open(evidence,"rt",encoding="utf8") as stream:
+        aquila_path=Path("tests/data/first_run_dex_2026-11-26/rubicon_aquila_base.json.gz")
+        with gzip.open(aquila_path,"rt",encoding="utf8") as stream:
             aquila=json.load(stream)
         out.extend(["",f"Rubicon Aquila V2 · в пуле {aquila['pool']} сверены {len(aquila['cases'])} выплат "
             "штатного Router и те же две покупки и продажи через V5. Для каждого вызова измерены изменения "
             "балансов владельца. Завышенный минимум и истёкший срок вызвали откат. "
-            f"[Котировки и расчёты на одном блоке](../{evidence.as_posix()})."])
+            f"[Котировки и расчёты на одном блоке](../{aquila_path.as_posix()})."])
         cycle=Path("tests/data/first_run_dex_2026-11-26/base_usdt_cycle.json.gz")
         with gzip.open(cycle,"rt",encoding="utf8") as stream:
             trials=json.load(stream)

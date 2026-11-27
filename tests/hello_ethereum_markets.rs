@@ -130,3 +130,63 @@ fn all_registered_markets_derive_from_deployer_and_threshold_payments_are_distin
     }
     assert_eq!(observed["swap_count"], 10);
 }
+
+#[test]
+fn both_cash_assets_fill_across_two_sizes_and_all_three_exchanges_with_atomic_limits() {
+    let archive: &[u8] =
+        include_bytes!("data/first_run_dex_2026-11-26/hello_ethereum_wallets.json.gz");
+    let d: Value = serde_json::from_reader(flate2::read::GzDecoder::new(archive)).unwrap();
+    let dirs: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/hello_ethereum_directory.json"
+    ))
+    .unwrap();
+    assert_eq!(dirs["selector"], d["selector"]);
+    assert_eq!(dirs["state_root"], d["state_root"]);
+    let mut all = 0;
+    let mut cash = BTreeSet::new();
+    let number = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+    for market in d["settlements"].as_array().unwrap() {
+        assert!(cash.insert(addr(&market["cash"])));
+        let payer = addr(&market["payer"]);
+        assert_ne!(payer, addr(&d["treasury"]));
+        let mut modes = BTreeMap::new();
+        for case in market["cases"].as_array().unwrap() {
+            for leg in ["buy", "sell"] {
+                let row = &case[leg];
+                let rs = row["results"].as_array().unwrap();
+                let calls = row["calls"].as_array().unwrap();
+                let n = rs.len();
+                assert_eq!(calls.len(), n);
+                assert_eq!(rs[n - 7]["status"], "0x0");
+                assert_eq!(rs[n - 6]["status"], "0x0");
+                assert_eq!(rs[n - 5]["status"], "0x1");
+                assert_eq!(addr(&calls[n - 5]["from"]), payer);
+                let cash_in = number(&rs[n - 13]["returnData"]) - number(&rs[n - 4]["returnData"]);
+                let cash_out = number(&rs[n - 3]["returnData"]) - number(&rs[n - 12]["returnData"]);
+                assert_eq!(cash_in, number(&row["paid"]));
+                assert_eq!(cash_in, number(&row["input"]));
+                assert_eq!(cash_out, number(&row["net"]));
+                assert!(row["full"].as_bool().unwrap());
+                assert_eq!(rs[n - 11]["returnData"], rs[n - 2]["returnData"]);
+                assert_eq!(rs[n - 10]["returnData"], rs[n - 1]["returnData"]);
+                all += 1;
+            }
+            let k = number(&case["buy"]["input"]);
+            let shape = (number(&case["buy"]["net"]), number(&case["sell"]["net"]));
+            let table: &mut BTreeMap<_, _> = modes.entry(k).or_default();
+            assert!(
+                table
+                    .insert(case["mode"].as_str().unwrap(), shape)
+                    .is_none()
+            );
+        }
+        assert_eq!(modes.len(), 2);
+        for variants in modes.values() {
+            assert_eq!(variants.len(), 3);
+            assert_eq!(variants["v5"], variants["router"]);
+            assert_eq!(variants["v5"], variants["router02"]);
+        }
+    }
+    assert_eq!(cash.len(), 2);
+    assert_eq!(all, 24);
+}

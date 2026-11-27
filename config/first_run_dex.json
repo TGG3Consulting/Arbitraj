@@ -3814,7 +3814,8 @@
       "dex.lb_implementations": [
         "0x37d11ffc23f4b87ae65a7ffd4951b331bded1dd9"
       ],
-      "dex.quoter": "0xd4f937581650a2d6e416dd9ef5372c1672422843"
+      "dex.quoter": "0xd4f937581650a2d6e416dd9ef5372c1672422843",
+      "dex.indexer_id": "sectorone-v2.0-base"
     }
   },
   {
@@ -3829,7 +3830,8 @@
       "dex.router_runtime_hash": "0xf52a38031f9741ec7d0368878f442cd13f42ea0991249b4487652aba01c101e1",
       "dex.lb_implementations": [
         "0xf879e534a9c7a099dcb532fd931eb93e653649db"
-      ]
+      ],
+      "dex.indexer_id": "sectorone-base"
     }
   },
   {
@@ -3845,7 +3847,8 @@
       "dex.lb_implementations": [
         "0x585e52b2b4fb0ccbd433751791eb60d8e3a50a43"
       ],
-      "dex.quoter": "0x9adb4beaeecf04313619dbec923f71323d96c26a"
+      "dex.quoter": "0x9adb4beaeecf04313619dbec923f71323d96c26a",
+      "dex.indexer_id": "sectorone-v2.0-ethereum"
     }
   },
   {
@@ -3860,7 +3863,8 @@
       "dex.router_runtime_hash": "0x25a21ed1b6107719ff7ea4531c07b7ac406034b793da880c640c2fccaa71dce9",
       "dex.lb_implementations": [
         "0xca3fe461f0041662826697916c33c8af5cbdb7f1"
-      ]
+      ],
+      "dex.indexer_id": "sectorone-v2.2-ethereum"
     }
   },
   {
@@ -3950,6 +3954,39 @@
         "0xc299b2720f76863662b74be14b4c308f9990ac87f819c0d986758b65eb60e794"
       ],
       "dex.v3_swap_callback": "pancakeV3SwapCallback(int256,int256,bytes)"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "antfarm-ethereum",
+    "source": "https://docs.antfarm.finance/contracts/antfarm-contracts/ethereum · tests/data/first_run_dex_2026-11-26/antfarm_ethereum_registry.json.gz",
+    "settings": {
+      "dex.kind": "antfarm",
+      "dex.factory": "0xe48aee124f9933661d4dd3eb265fa9e153e32cbe",
+      "dex.quoter": "0x6d9f0eb21d77c6d24be49a579508471e937d5418",
+      "dex.module_runtime_hashes": [
+        "0xc0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "concave",
+    "source": "https://github.com/ConcaveFi/concave-frontend/blob/267bfde0775e9daef88564bfdc0aa58c3e4da244/libs/core/src/constants/addresses.ts \u00b7 tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "gemswap_v2",
+      "dex.factory": "0x066a5cb7ddc6d55384e2f6ca13d5dd2cd2685cbd",
+      "dex.factory_runtime_hash": "0xb8bbb35b9d6b98551279242e2faa151b9312a1116b42a834703aff345c864c6a",
+      "dex.proxy_implementations": [
+        "0xe8e429cb147ca1b984eb4e43b8813e6ddc36db6c"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x50dbd82bb11f975de80daae8ce38325a829fa49c8fd35f6744eacbe868a81043"
+      ],
+      "dex.router": "0x0a3e1c20b5384eb97d2ccff9a96bc91f0c77e7db",
+      "dex.router_runtime_hash": "0x7cdc96c6035f5789974d9189d0bb14804b0bb40e75ac8a4dd2d2450e52fe8708"
     }
   }
 ]

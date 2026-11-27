@@ -86,6 +86,13 @@ async fn one(ctx: &Ctx, c: &Candidate, size: usize) -> Result<Result<Found, Stri
             Err(e)=>Err(e.message),
         };
     }
+    if c.family.variant == super::family_variant::Variant::Gemswap {
+        return match Box::pin(super::concave::verify(ctx,c,pool)).await {
+            Ok(found) => Ok(Ok(found)),
+            Err(e) if e.code==crate::gateway::errors::ErrorCode::NotApplicable => Ok(Err(e.message)),
+            Err(e) => Err(e.message),
+        };
+    }
     if c.family.variant == super::family_variant::Variant::BunnySwap {
         return Ok(super::bunnyswap::verify(ctx,c,pool).await.map_err(|e|e.message));
     }

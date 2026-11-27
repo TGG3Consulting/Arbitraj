@@ -54,8 +54,9 @@ def tables(network, snapshots, profiles):
            "#### Значения для экрана «Первый запуск»", "",
            "| ID DEX | Настройки области DEX | Основание |", "|---|---|---|"]
     configured = {r["id"]: r for r in profiles if r["network"] == network}
-    aliases = read(Path("config/dex_indexer_aliases.json"))
-    matched = {id for id in gt["rows"] if aliases.get(id,id) in configured}
+    aliases = {p["settings"].get("dex.indexer_id",id):id for id,p in configured.items()}
+    if len(aliases)!=len(configured):raise ValueError("Две области настроек присвоили один ID индексатора "+network)
+    matched = set(gt["rows"]).intersection(aliases)
     out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
                f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
                "внутренних ключей обозначают отдельные фабрики и семейства.")
@@ -71,6 +72,44 @@ def tables(network, snapshots, profiles):
         params = "<br>".join(fields)
         out.append(f"| `{id}` | {params} | {row['source']} |")
     out.extend(omni_mars_deli(network))
+    if base and "hello-dex-base" in configured:
+        file="tests/data/first_run_dex_2026-11-26/hello_base_wallets.json.gz"
+        with gzip.open(file,"rt",encoding="utf8") as stream: hello=json.load(stream)
+        directory=read(Path("tests/data/first_run_dex_2026-11-26/hello_base_directory.json"))
+        markets=directory["markets"]
+        out.extend(["","#### HELLO V3 на Base","",
+                    f"В реестре {len(markets)} рынков, активная ликвидность ненулевая у {sum(int(m['liquidity'])>0 for m in markets)}. "
+                    f"Код создания пулов извлечён из HelloV3PoolDeployer `{directory['deployer']}`. В точке снимка lmPool() равен нулю во всех рынках. "
+                    "Финансовый путь проверяет создателя, реестр в обе стороны, codehash фабрики и квотера, callback и отсутствие нового модуля наград. "
+                    "Штатные Router и Router02 проверяют минимальный номинальный выход. В торговом профиле используется V5 с контролем реального прироста у получателя.",
+                    "", "| Пул и входной актив | Вход → выплата → возврат в минимальных единицах | Газ покупки и продажи V5 |",
+                    "|---|---:|---:|"])
+        for deal in hello["settlements"]:
+            for case in deal["cases"]:
+                if case["mode"]=="v5":
+                    a,b=case["buy"],case["sell"]
+                    out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
+        out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
+
+    if not base and "concave" in configured:
+        cv_path=Path("tests/data/first_run_dex_2026-11-26/concave_ethereum_wallets.json.gz")
+        with gzip.open(cv_path,"rt",encoding="utf8") as stream:
+            cv=json.load(stream)
+        fills=cv["cases"]
+        directed={(r["pool"],r["source"]) for r in fills}
+        modes={}
+        for r in fills:
+            modes.setdefault((r["pool"],r["source"],r["spent"]),{})[r["wire"]]=r
+        both=[v["v5"]["gas"]-v["router"]["gas"] for v in modes.values() if "v5" in v and "router" in v]
+        out.extend(["", f"Concave Ethereum · Официальный GemswapFactory зарегистрировал {len(cv['markets'])} клонов EIP-1167 "
+                    f"типа 1. У каждого сверены исходная реализация, солёный CREATE2, регистрация в обоих порядках и "
+                    f"комиссия 25 базисных пунктов. Получено {len(fills)} выплат через GemswapRouter и V5 в {len(directed)} из "
+                    f"{2*len(cv['markets'])} направлений. При одинаковой фактической выплате разница газа V5 минус Router "
+                    f"составила от {min(both):,} до {max(both):,}, стоимость разрешения и текущий газ учитываются при выборе. "
+                    f"У DAI/USDC резерв USDC всего одна минимальная единица. DegenSwap в каталоге Ethereum представлен "
+                    f"отдельной страницей с пустым списком пулов, адрес фабрики и связь с Gemswap остаются неподтверждёнными. "
+                    f"[Кошелёк, исходный блок и квитанции](../{cv_path.as_posix()}) · "
+                    f"[Официальные адреса]({cv['sources'][0]})."])
     if not base and "bitswap" in configured:
         bs=read(Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json"))
         directory_path=Path("tests/data/first_run_dex_2026-11-26/bitswap_ethereum_directory_wallets.json.gz")
@@ -1027,6 +1066,16 @@ def tables(network, snapshots, profiles):
                    f"За последние 24 часа {hello_logs['swap_count']} событий Swap пришли из {len(hello_logs['markets'])} пулов. Оборот по двум сторонам пар с USDT составил {cash//10**6}.{cash%10**6:06d} USDT. "
                    f"Отдельно в этих транзакциях зафиксировано {len(hello_logs['protocol_transfers'])} переводов накопленной комиссии получателю протокола. "
                    f"[Реестр и CREATE2](../{hello_dir_path.as_posix()}) · [События, получатель комиссии и квотеры](../{hello_logs_path.as_posix()}).")
+        hello_wallet_path=hello_dir_path.with_name("hello_ethereum_wallets.json.gz")
+        with gzip.open(hello_wallet_path,"rt",encoding="utf8") as stream:
+            hello_wallet=json.load(stream)
+        legs=sum(2*len(m["cases"]) for m in hello_wallet["settlements"])
+        cash_case=next(m for m in hello_wallet["settlements"] if m["cash"]==usdt)
+        costs={c["mode"]:[c[k]["gas"] for k in ("buy","sell")] for c in cash_case["cases"] if int(c["buy"]["input"])==10000}
+        out.append(f"На двух рынках HELLO кошельки прошли {legs} обмена через Router, Router02 и V5 с одинаковыми выплатами. Каждый повышенный на одну единицу минимум и каждый истекший срок вызвали откат. "
+                   f"При входе 0.01 USDT покупка и обратная продажа вернули 0.009940 USDT до газа. На эти две операции ушло {costs['router'][0]}/{costs['router'][1]} единиц газа у Router, "
+                   f"{costs['router02'][0]}/{costs['router02'][1]} у Router02 и {costs['v5'][0]}/{costs['v5'][1]} у V5. Расходы на необходимое разрешение ERC20 учитываются отдельно. "
+                   f"V5 проверяет изменение конечного баланса. Официальный Router сравнивает минимум с номинальным выходом пула. [Вызовы и остатки кошельков](../{hello_wallet_path.as_posix()}).")
         temple_registry_path=Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json")
         tr=read(temple_registry_path)
         temple_wallet_path=temple_registry_path.with_name("temple_ethereum_wallets.json.gz")
@@ -1142,6 +1191,8 @@ def tables(network, snapshots, profiles):
                 roundtrip="CREATE2 и getPair(token0,token1,fee) в обоих порядках"
         if not base and id=="hello-dex-ethereum" and pool and any(m["pool"]==pool.lower() for m in hello["markets"]):
             factory,roundtrip=hello["factory"],"getPool(token0,token1,fee) в обе стороны и CREATE2 от отдельного deployer"
+        if not base and id=="concave" and id in configured and pool and any(m["pool"]==pool.lower() for m in cv["markets"]):
+            factory,roundtrip=configured[id]["settings"]["dex.factory"],"клон типа 1 → CREATE2 → getPair в обоих порядках"
         if not base and id=="bitswap" and id in configured and pool and any(m["pool"]==pool.lower() for m in bs["markets"]):
             factory,roundtrip=bs["factory"],"NewPool, CREATE2 и pool(x,y,fee) в обоих порядках"
         if not base and id=="templedao" and pool:
@@ -1159,7 +1210,7 @@ def tables(network, snapshots, profiles):
             hx = read(Path(hydrex))
             if any(r["pool"] == pool.lower() and r["listed"] for r in hx["directory"]):
                 factory, roundtrip = hx["addresses"]["Factory"], "poolByPair(address,address)"
-        if aliases.get(id,id) in configured:
+        if id in matched:
             status = "профиль, см. параметры выше"
         else:
             task = f"T-DEX-{network}-{id}"

@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    super::super::exec::temple_wallet::enabled(e) || e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -32,7 +32,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         };
         let mut e = e.clone();
         if let Some(h) = head {
-            let check = if e.family.variant==Variant::Temple {
+            let check = if super::super::exec::antfarm_wallet::enabled(&e) {
+                Box::pin(super::super::exec::antfarm_wallet::fresh(ctx,&mut e,h)).await
+            }else if e.family.variant==Variant::Temple {
                 super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
             } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
@@ -57,7 +59,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, direct, head).await {
             quotes.push(option);
         }
-        if graph && let Ok(Some(target)) = executor::address(ctx) {
+        if graph && !super::super::exec::antfarm_wallet::enabled(&e) && let Ok(Some(target)) = executor::address(ctx) {
             let (kind, data) = if e.family.variant == Variant::RegisteredV3 {
                 (
                     17,

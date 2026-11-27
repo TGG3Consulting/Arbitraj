@@ -69,26 +69,37 @@ impl Directory {
             // Решение 295: развёрнутые пары многомонетных пулов; ключ строки — с парой у DEX в режиме dex.multi_pair
             // (multi_pair::dir_key), у прочих — строка пула, как до решения.
             let from_multi = s.multi.get(addr).map(|v| v.as_slice()).unwrap_or_default();
-            let key = |p: &IndexedPool| dir_key(&s.multi_dex, &p.dex_id, &p.pool, p.base, p.quote);
             let mut seen = std::collections::HashSet::new();
+            let internal = from_events.iter().chain(from_factory).chain(from_multi);
             let all = t
                 .pools
                 .iter()
-                .chain(from_events)
-                .chain(from_factory)
-                .chain(from_multi);
-            for p in all.filter(shown).filter(|p| seen.insert(key(p))) {
-                let status = if is_native(*addr, p) {
+                .map(|p| (p, true))
+                .chain(internal.map(|p| (p, false)));
+            for (p, external) in all.filter(|(p, _)| shown(p)) {
+                let bound = if external {
+                    s.indexer_ids.scope(&p.dex_id)
+                } else {
+                    Ok(p.dex_id.as_str())
+                };
+                let id = bound.as_ref().copied().unwrap_or(&p.dex_id);
+                let key = dir_key(&s.multi_dex, id, &p.pool, p.base, p.quote);
+                if !seen.insert((key.clone(), bound.is_err().then_some(id))) {
+                    continue;
+                }
+                let status = if let Err(why) = bound {
+                    DirectoryStatus::NotConnected(why)
+                } else if is_native(*addr, p) {
                     DirectoryStatus::Unsupported(why.clone())
                 } else {
                     s.status
-                        .get(&key(p))
+                        .get(&key)
                         .cloned()
                         .unwrap_or(DirectoryStatus::Unchecked)
                 };
                 pools.push(DirectoryPool {
                     token: *addr,
-                    dex_id: p.dex_id.clone(),
+                    dex_id: id.to_string(),
                     pool: p.pool.clone(),
                     base: p.base,
                     quote: p.quote,

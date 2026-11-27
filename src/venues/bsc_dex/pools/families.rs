@@ -451,7 +451,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_create2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
+        "v2_fork" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_create2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
@@ -835,6 +835,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::V2 if f.variant == Variant::Virtuals => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes","dex.quoter","dex.bonding_roles"]);
             if f.tradable { list.extend(["dex.router","dex.module_runtime_hashes","dex.pmm_module_bindings"]); }
+        }
+        Proto::V2 if f.variant == Variant::Gemswap => {
+            list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
         }
         Proto::V2 if f.variant == Variant::BunnySwap => {
             list.extend(["dex.bunny_pair","dex.bunny_token","dex.quoter","dex.quoter_runtime_hash","dex.pair_runtime_hash"]);

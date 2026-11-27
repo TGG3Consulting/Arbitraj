@@ -61,7 +61,7 @@ pub(super) async fn option(
     i: &super::routing::Input,
     e: super::super::pools::registry::Entry,
     payer: alloy_primitives::Address,
-    execution: Execution,
+    mut execution: Execution,
     h: Option<super::white_state::Head>,
 ) -> crate::gateway::errors::GatewayResult<OptionQuote> {
     use super::super::{exec::executor, gas_ticker, num};
@@ -74,7 +74,17 @@ pub(super) async fn option(
     use crate::core::types::RouterFeeMode;
     use crate::{core::types::RouteMode, gateway::errors::ErrorCode};
     use alloy_primitives::U256;
+    let ctx = &q.ctx;
+    let decimals = (i.coin_dec, i.usdt_dec);
+    let (mut c, _) = direct::best(q, &i.asset, i.side, i.qty, vec![e], decimals.0, decimals.1)?;
+    if let crate::core::types::PoolState::Antfarm(book)=&c.entry.pool.state{
+        let (input,output)=if i.side==Side::Buy{(i.usdt,i.coin)}else{(i.coin,i.usdt)};
+        let terms=super::super::exec::antfarm_wallet::Terms::from_budget(book,execution.target,input,output,c.swapped.amount_in)
+            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Antfarm: объём и комиссия не помещаются в указанный бюджет"))?;
+        execution.wire=super::v2_wallet_sim::Wire::Antfarm(std::sync::Arc::new(terms));
+    }
     let fee_mode = match &execution.wire {
+        super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Temple(k)=>Some(RouterFeeMode::ProtectedWallet{target:k.module}),
         super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,allocation:Some(c.allocation()),native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),
         super::v2_wallet_sim::Wire::MintClub(c) if c.protection.is_some()=>c.protection.map(|p|RouterFeeMode::ProtectedWallet{target:p.module}),
@@ -97,9 +107,6 @@ pub(super) async fn option(
     };
     let mode = execution.mode;
     let target = execution.target;
-    let ctx = &q.ctx;
-    let decimals = (i.coin_dec, i.usdt_dec);
-    let (mut c, _) = direct::best(q, &i.asset, i.side, i.qty, vec![e], decimals.0, decimals.1)?;
     let bad = || {
         ctx.err(
             ErrorCode::NoRoute,

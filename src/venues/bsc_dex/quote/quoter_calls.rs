@@ -546,7 +546,7 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
         let r=IElasticQuoterV2::quoteExactInputSingleCall::abi_decode_returns(out).ok()?;
         return (r.usedAmount==amount).then_some(r.returnedAmount);
     }
-    if e.family.variant == super::super::pools::family_variant::Variant::KewlV2 {
+    if matches!(e.family.variant, super::super::pools::family_variant::Variant::KewlV2 | super::super::pools::family_variant::Variant::Gemswap) {
         let values=IV2Router::getAmountsOutCall::abi_decode_returns(out).ok()?;
         return match values.as_slice() {
             [input,output] if *input==amount=>Some(*output),

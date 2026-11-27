@@ -126,7 +126,10 @@ def capture(url):
             reserves=run(pre+[tx(pair,"getReserves()")])
             if any(v["status"]!="0x1" for v in reserves):raise ValueError("funded state unavailable")
             rs=decode(["uint112","uint112","uint32"],bytes.fromhex(reserves[-1]["returnData"][2:]))
-            for n in sorted({max(1,min(quantity//2,rs[k]//p)) for p in (100,10)}):
+            capacity=min(quantity,rs[k])
+            smaller=max(1,capacity//100)
+            larger=min(quantity,max(smaller+1,capacity//10))
+            for n in sorted({smaller,larger} - {0}):
                 for name,spender in [("router",ROUTER),("v5",EXEC)]:
                     base=pre+[approval(a,spender,n)]
                     stage=lambda minimum,expiry:router(a,b,n,minimum,expiry) if name=="router" else swap(pair,a,b,n,minimum,expiry,m["fee_bps"]*100)

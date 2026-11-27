@@ -91,8 +91,6 @@ pub fn group(ctx: &Ctx, id: &str) -> Vec<String> {
 /// Ревью 450 (п. 3): dex.pool_enabled = нет у ключа строки — дочерние виды не проверяются (строка выключена целиком,
 /// причина — та же, что без dex.sub_dex).
 pub fn kinds(ctx: &Ctx, id: &str) -> (Vec<&'static Family>, Vec<String>) {
-    let scoped = super::super::ctx_place::index_scope(id);
-    let id = scoped.as_ref();
     let mut fams = Vec::new();
     let mut why = Vec::new();
     let subs = match ctx.dex_flag("dex.pool_enabled", id) {

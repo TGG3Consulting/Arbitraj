@@ -106,6 +106,7 @@ pub enum Variant {
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
     KewlV2,
+    Gemswap,
     /// Fraxswap V2 исполняет долгосрочные ордера к timestamp блока перед обменом.
     FraxTwamm,
     /// Одиночное исполнение официальным роутером с проверкой выхода получателя.
@@ -187,7 +188,7 @@ impl Variant {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn dual_v2_execution(self) -> bool {
-        matches!(self,Self::V2DualCreate2 | Self::V2DualCreate2LiveFee) || self.diamond_router()
+        matches!(self,Self::Gemswap | Self::V2DualCreate2 | Self::V2DualCreate2LiveFee) || self.diamond_router()
     }
     pub fn registered_v2_router(self) -> bool {
         matches!(self, Self::V2RouterCreate2 | Self::V2DualCreate2 | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
@@ -197,7 +198,7 @@ impl Variant {
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::Gemswap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -250,6 +251,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
         "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,

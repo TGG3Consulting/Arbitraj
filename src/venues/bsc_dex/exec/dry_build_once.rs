@@ -118,6 +118,14 @@ pub(super) async fn once(
     let is_native = native::is_native(ctx, &req.asset);
     // Решение 122 (часть X): через исполнитель — режим «через исполнитель» (любой маршрут, код подставлен) или
     // графовый «бандл» при заданном exec.executor_address (как пойдёт сделка, exec/trade.rs).
+    if mode==DryMode::AsTrade && route.mode==RouteMode::Direct && legs.iter().flatten().any(|s|super::antfarm_wallet::enabled(&s.entry)){
+        let ([steps],[leg])=(legs.as_slice(),route.legs.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется одна доля"));};
+        let [s]=steps.as_slice()else{return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: требуется один рынок"));};
+        if is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt){return Err(ctx.err(ErrorCode::NoRoute,"Antfarm: прямая сделка требует ERC20")); }
+        let (height,time)=q.heads.at(ctx).await?;
+        let p=Box::pin(super::antfarm_wallet::plan(ctx,s,wallet,height,super::mint_club_direct::selected(leg))).await?;
+        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
+    }
     if mode==DryMode::AsTrade && route.mode==RouteMode::Direct && legs.iter().flatten().any(|s|super::temple_wallet::enabled(&s.entry)){
         let ([steps],[leg])=(legs.as_slice(),route.legs.as_slice())else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется одна доля"));};
         let [s]=steps.as_slice()else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется один рынок"));};

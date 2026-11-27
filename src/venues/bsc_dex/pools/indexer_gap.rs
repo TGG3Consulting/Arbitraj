@@ -20,12 +20,14 @@ pub fn indexer_id(key: &str) -> &str {
 /// нет (пулы — только своими источниками); Some(false) — DEX в списке (пулы даёт индексатор); None — список DEX сети
 /// ещё не получен (источник не включается: не знаем — не меняем поведение). Ошибок нет.
 pub fn outside(ctx: &Ctx, key: &str) -> Option<bool> {
-    let id = indexer_id(key);
+    let bindings = crate::settings::indexer_id::Bindings::read(&ctx.settings);
+    let external = bindings.source(key);
     ctx.index.with(|s| {
         s.dexes_at.map(|_| {
-            !s.dexes
-                .iter()
-                .any(|d| d.id == id || super::super::ctx_place::index_scope(&d.id) == key)
+            !s.dexes.iter().any(|d| {
+                Some(d.id.as_str()) == external
+                    || (external == Some(key) && d.id == indexer_id(key))
+            })
         })
     })
 }

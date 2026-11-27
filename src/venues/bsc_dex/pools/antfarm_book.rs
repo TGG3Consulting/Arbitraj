@@ -128,7 +128,7 @@ async fn sources(
     Ok(result)
 }
 
-pub(super) async fn read(
+pub(in crate::venues::bsc_dex) async fn read(
     ctx: &Ctx,
     f: &Family,
     pool: Address,
@@ -153,4 +153,22 @@ pub(super) async fn read(
         }
     }
     Ok(AntfarmBook { market, funding })
+}
+
+pub(in crate::venues::bsc_dex) async fn module(
+    ctx: &Ctx,
+    f: &Family,
+    at: &Value,
+) -> GatewayResult<Address> {
+    let m = ctx.dex_addr("dex.router", f.id)?;
+    let verified =
+        alloy_primitives::b256!("c0e793045e689ae29e80413c4f63de9ddcec8f8691c47a37c90c8709b287e33f");
+    if !super::direct_module::configured(ctx, f.id)?.contains(&verified) {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            "Antfarm: отсутствует подтверждённый runtime модуля кошелька",
+        ));
+    }
+    super::solidly_classic_factory::bind(ctx, m, verified, None, at).await?;
+    Ok(m)
 }

@@ -342,6 +342,7 @@ async fn part(
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
+    if super::super::exec::antfarm_wallet::enabled(e){return super::super::exec::antfarm_wallet::probe(ctx,e,&order,now);}
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {
         return super::super::exec::temple_wallet::probe(ctx,e,&order,wallet,now);
     }

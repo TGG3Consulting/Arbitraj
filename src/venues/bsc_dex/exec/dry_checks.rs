@@ -39,7 +39,8 @@ pub async fn direct(
     let at = quoter_refetch::block(q);
     let mut all = Vec::new();
     for (p, _) in paths.iter_mut() {
-        let pick = |h: &Hop| !super::carbon_direct::enabled(&h.entry);
+        // These single-market wallet plans repeat the signed call at the chosen block and test a stricter minimum.
+        let pick = |h: &Hop| !super::carbon_direct::enabled(&h.entry) && !super::antfarm_wallet::enabled(&h.entry);
         let got = match at {
             Some(b) => quoter_refetch_check::check_on(ctx, p, (exit, pick), b).await?,
             None => exit_quote::check(ctx, p, exit, pick).await?,

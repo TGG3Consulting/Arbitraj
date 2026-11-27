@@ -41,6 +41,7 @@ pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
 pub(super) mod temple_wallet;
+pub(super) mod antfarm_wallet;
 #[cfg(test)]
 mod temple_wallet_tests;
 pub(super) mod mint_club_wire;

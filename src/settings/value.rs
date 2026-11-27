@@ -39,6 +39,11 @@ pub fn validate(def: &SettingDef, scope: &Scope, value: &Value) -> Result<Value,
         ));
     }
     match def.name {
+        "dex.indexer_id" => {
+            let raw=value.as_str().filter(|s|!s.is_empty() && s.bytes().all(|b|b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b,b'.'|b'-'|b'_')))
+                .ok_or("Укажите исходный ID индексатора без суффикса сети: строчные буквы, цифры, точка, дефис или подчёркивание")?;
+            return Ok(Value::String(raw.to_string()));
+        }
         "telegram.daily_time_utc" => {
             let text = value.as_str().unwrap_or_default().trim();
             super::outbound::utc_time(text).ok_or("Введите время UTC в формате ЧЧ:ММ (00:00–23:59)")?;

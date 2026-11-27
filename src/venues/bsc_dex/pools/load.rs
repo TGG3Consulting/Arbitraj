@@ -104,6 +104,11 @@ pub async fn state(
         let at=super::nami::block(ctx,&tag).await?;
         Box::pin(super::registered_v3::market(ctx,f,*pool,pair,None,&at)).await?;
     }
+    if f.variant==Variant::Gemswap && let PoolRef::Contract(pool)=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        let m=Box::pin(super::concave::market(ctx,f,*pool,pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::V2{reserve0:m.reserves.0,reserve1:m.reserves.1},ticks:None,bins:None,fee_pips:Some(m.fee)});
+    }
     if f.variant == Variant::BunnySwap && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         let fee=Box::pin(super::bunnyswap::market(ctx,f,*pool,pair,&at)).await?;

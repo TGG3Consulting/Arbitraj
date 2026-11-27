@@ -54,7 +54,11 @@ pub async fn take_with(
     check: Verifier,
 ) -> GatewayResult<Took> {
     let multi = multi_pair::multi_dex(ctx);
-    ctx.index.with(|s| multi_pair::retune(s, &multi));
+    let bindings = crate::settings::indexer_id::Bindings::read(&ctx.settings);
+    ctx.index.with(|s| {
+        s.indexer_ids = bindings;
+        multi_pair::retune(s, &multi);
+    });
     let (mut failed, unconnected) = pass(ctx, only, None, check).await?;
     if only.is_none() {
         summary(ctx, unconnected).await;
@@ -112,9 +116,16 @@ async fn pass(
     let mut unconnected = BTreeSet::new();
     let mut seen = HashSet::new();
     let mut status = Vec::new();
-    for (token, p) in ctx.index.relevant() {
+    for (token, p, binding_error) in ctx.index.bound_rows() {
         let quote = if p.base == token { p.quote } else { p.base };
         let key = multi_pair::dir_key(&multi, &p.dex_id, &p.pool, token, quote);
+        if let Some(why) = binding_error {
+            if !seen.contains(&key) {
+                status.push((key, DirectoryStatus::NotConnected(why)));
+                unconnected.insert(p.dex_id);
+            }
+            continue;
+        }
         if only.is_some_and(|o| !o.contains(&token))
             || keys.is_some_and(|k| !k.contains(&key))
             || !seen.insert(key.clone())

@@ -151,6 +151,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             if f.tradable { super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at).await?; }
             continue;
         }
+        if f.variant == Variant::Gemswap {
+            let at=match &role_block{Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::concave::checked(ctx,e,false,at)).await?;
+            continue;
+        }
         if f.variant == Variant::V2DualCreate2LiveFee {
             let at = match &role_block {
                 Some(at) => at,

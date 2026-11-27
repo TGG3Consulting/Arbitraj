@@ -71,7 +71,7 @@ def record(url,data,runtime):
                     raise ValueError("settlement event differs from wallet")
                 cases.append(dict(pool=row["pool"],mode="buy_fee" if tier else "held_fee",primary_input=str(q),
                                   funding_cost=str(cost),net=list(map(str,delta)),transaction=good,gas=int(actual["gasUsed"],16),
-                                  controls=list(map(evidence,res[n+m:n+m+k])),event=ev))
+                                  controls=list(map(evidence,res[n+m:n+m+k])),event=ev,logs=actual["logs"]))
     if len({c["pool"] for c in cases})<2 or {c["mode"] for c in cases}!={"held_fee","buy_fee"}:
         raise ValueError("insufficient protected fee coverage")
     return dict(selector=tag,state_root=d["state_root"],module=MODULE,runtime_hash="0x"+keccak(hexstr=runtime).hex(),cases=cases)

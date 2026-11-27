@@ -50,6 +50,7 @@ pub struct TokenEntry {
 /// Состояние справочника (под замком).
 #[derive(Debug, Default)]
 pub struct Snap {
+    pub(crate) indexer_ids: crate::settings::indexer_id::Bindings,
     pub dexes: Vec<IndexerDex>,
     pub dexes_at: Option<DateTime<Utc>>,
     /// Когда список DEX спрашивали последний раз (и при ошибке).
@@ -157,6 +158,13 @@ impl Directory {
     /// поиска по фабрикам (решение 121, C3) и развёртки многомонетных пулов (решение 295).
     /// Возвращает: (монета, по которой спрашивали, пул). Ошибок нет.
     pub fn relevant(&self) -> Vec<(Address, IndexedPool)> {
+        self.bound_rows()
+            .into_iter()
+            .map(|(a, p, _)| (a, p))
+            .collect()
+    }
+
+    pub(crate) fn bound_rows(&self) -> Vec<(Address, IndexedPool, Option<String>)> {
         let s = self.snap.read().unwrap_or_else(|p| p.into_inner());
         let mut out = Vec::new();
         let events = s.events.iter().map(|(a, l)| (a, l.as_slice()));
@@ -164,10 +172,25 @@ impl Directory {
         // Решение 295: развёрнутые пары многомонетных пулов (multi_pair::expand) — после прочих источников.
         let multi = s.multi.iter().map(|(a, l)| (a, l.as_slice()));
         let lists = s.tokens.iter().map(|(a, t)| (a, t.pools.as_slice()));
-        for (token, list) in lists.chain(events).chain(factory).chain(multi) {
+        for ((token, list), external) in lists
+            .map(|l| (l, true))
+            .chain(events.chain(factory).chain(multi).map(|l| (l, false)))
+        {
             for p in list {
                 if is_relevant(*token, p, &s.quotes) {
-                    out.push((*token, p.clone()));
+                    let mut row = p.clone();
+                    let why = if external {
+                        match s.indexer_ids.scope(&p.dex_id) {
+                            Ok(key) => {
+                                row.dex_id = key.to_string();
+                                None
+                            }
+                            Err(why) => Some(why),
+                        }
+                    } else {
+                        None
+                    };
+                    out.push((*token, row, why));
                 }
             }
         }

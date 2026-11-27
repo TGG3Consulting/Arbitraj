@@ -66,6 +66,13 @@ impl Values {
             .flat_map(|(n, m)| m.iter().map(move |(s, v)| (n.as_str(), s, v)))
     }
 
+    pub(super) fn named(&self, name: &str) -> impl Iterator<Item = (&Scope, &Value)> {
+        self.0
+            .get(name)
+            .into_iter()
+            .flat_map(|values| values.iter())
+    }
+
     /// Что делает: есть ли хоть одно значение в этой области. Ошибок нет.
     pub fn has_scope(&self, scope: &Scope) -> bool {
         self.0.values().any(|m| m.contains_key(scope))

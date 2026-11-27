@@ -18,7 +18,8 @@ def sectorone(network):
             "[Адреса проекта](https://docs.sectorone.xyz/info/smart-contracts.md).", "",
             "| Версия | Зарегистрировано / с двумя резервами | Проверенный пул | Вход → выплата → возврат, в атомах | Газ Router / V5, покупка и продажа |",
             "|---|---:|---|---|---|"]
-    aliases=json.loads(Path("config/dex_indexer_aliases.json").read_bytes())
+    profiles=json.loads(Path("config/first_run_dex.json").read_bytes())
+    aliases={p["settings"]["dex.indexer_id"]:p["id"] for p in profiles if p["network"]==network and "dex.indexer_id" in p["settings"]}
     for v in ("2.0","2.2"):
         file=f"sectorone-{v.replace('.','')}-{network}.json.gz"
         archive=snapshot(file)

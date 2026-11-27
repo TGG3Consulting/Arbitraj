@@ -41,6 +41,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
+    Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
     Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
@@ -200,6 +201,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::Antfarm(t)=&o.wire {
+        let proof=super::super::exec::antfarm_wallet::Proof{terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::Temple(key)=&o.wire {
         let proof=super::super::exec::temple_wallet::Proof{key:**key,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -247,6 +252,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
         Wire::Carbon(c)=>c.data(),
         Wire::MintClub(c) => c.data(o.payer),
+        Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(

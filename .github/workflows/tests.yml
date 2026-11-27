@@ -746,6 +746,7 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/stabull" StabullAdapter
           python scripts/record_stabull_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/stabull/StabullAdapter.json"
+          python scripts/export_stabull_create.py "$RUNNER_TEMP/stabull/StabullAdapter.json" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/stabull-create.json"
       - if: matrix.market == 'prop-venue-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropVenueAdapter
@@ -835,6 +836,7 @@ jobs:
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/uniswap-v1-create.json
             ${{ runner.temp }}/bancor-v3-create.json
+            ${{ runner.temp }}/stabull-create.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json
             ${{ runner.temp }}/antfarm-protected.json

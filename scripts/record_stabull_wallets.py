@@ -34,11 +34,13 @@ def request(url, method, params):
     return reply["result"]
 
 
-def capture(url, artifact):
-    d=json.loads(gzip.decompress((DATA / "stabull_base_directory.json.gz").read_bytes()))
+def capture(url, artifact, network):
+    chain,wrapped,cash,funding_profile=(8453,WETH,USDC,"uniswap-v2-base") if network=="base" else (
+        1,"0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2","0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48","uniswap_v2")
+    d=json.loads(gzip.decompress((DATA / f"stabull_{network}_directory.json.gz").read_bytes()))
     tag=d["anchor"]; factory=d["factory"]; router=factory["router"]
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]); stamp=int(head["timestamp"],16)+2; expiry=stamp+240
-    if head["hash"]!=tag["blockHash"] or int(rpc(url,"eth_chainId",[]),16)!=8453:
+    if head["hash"]!=tag["blockHash"] or int(rpc(url,"eth_chainId",[]),16)!=chain or d["chain"]!=chain:
         raise ValueError("canonical chain")
     if any(rpc(url,"eth_getCode",[a,tag])!="0x" for a in (OWNER,EXEC,MODULE)):
         raise ValueError("occupied isolated address")
@@ -58,7 +60,7 @@ def capture(url, artifact):
         gas=int(request(url,"eth_estimateGas",[creator,tag]),16)
         identity={"runtime":"0x"+keccak(raw).hex(),"factory":factory["address"],"deployment_gas":gas,"solc":artifact["solc"]}
         overrides[MODULE]={"code":deployed}
-        overrides[EXEC]={"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{WORD(0):WORD(int(OWNER,16)),WORD(1):WORD(int(WETH,16))}}
+        overrides[EXEC]={"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),"stateDiff":{WORD(0):WORD(int(OWNER,16)),WORD(1):WORD(int(wrapped,16))}}
     def run(calls):
         block={"blockOverrides":{"time":hex(stamp)},"stateOverrides":overrides,"calls":calls}
         [child]=rpc(url,"eth_simulateV1",[{"blockStateCalls":[block]},tag])
@@ -71,8 +73,8 @@ def capture(url, artifact):
     def balances(a,b,where):
         return [tx(t,"balanceOf(address)",["address"],[owner]) for t,owner in [(a,OWNER),(b,OWNER),(a,MODULE),(b,MODULE),(a,EXEC),(b,EXEC)]]+[
                 tx(a,"allowance(address,address)",["address","address"],[MODULE,where])]
-    funding=next(p["settings"]["dex.router"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["id"]=="uniswap-v2-base")
-    preparation=[call(funding,calldata("swapExactETHForTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[12_000_000,[WETH,USDC],OWNER,expiry]),10**17)]
+    funding=next(p["settings"]["dex.router"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["id"]==funding_profile and p["network"]==network)
+    preparation=[call(funding,calldata("swapExactETHForTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[12_000_000,[wrapped,cash],OWNER,expiry]),10**17)]
     if not all(map(OK,run(preparation))):raise ValueError("own independent USDC funding")
     def probe(pool,mode,ip,op,amount,prefix,want):
         qsig="viewTargetSwap" if want else "viewOriginSwap"
@@ -85,7 +87,7 @@ def capture(url, artifact):
         auth=approve(ip,payee,cap)
         def order(limit,deadline):
             if mode=="pool":return tx(pool,("targetSwap" if want else "originSwap")+SIG,ASSETS,[ip,op,limit if want else amount,amount if want else limit,deadline])
-            if mode=="router":return tx(router,"originSwap"+SWAP,ORDER,[USDC,ip,op,amount,limit,deadline])
+            if mode=="router":return tx(router,"originSwap"+SWAP,ORDER,[cash,ip,op,amount,limit,deadline])
             if mode=="module":return tx(MODULE,("executeTarget" if want else "execute")+SWAP,ORDER,[pool,ip,op,limit if want else amount,amount if want else limit,deadline])
             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],
                       [ip,amount,op,limit,deadline,[(17,MODULE,ip,op,10000,encode(["address"],[pool]))]])
@@ -120,31 +122,33 @@ def capture(url, artifact):
     modes=["module","v5"] if artifact else ["pool","router"]
     def cycle(row):
         pool=row["address"];token=row["token0"]
-        if row["token1"]!=USDC:raise ValueError(("unknown cash currency",pool))
+        if row["token1"]!=cash:raise ValueError(("unknown cash currency",pool))
         cases=[]
         for size in [1000,1_000_000]:
             for mode in modes:
-                prefix,buy=probe(pool,mode,USDC,token,size,preparation,False)
+                prefix,buy=probe(pool,mode,cash,token,size,preparation,False)
                 c={"size_usdc":size,"mode":mode,"buy":buy};cases.append(c)
                 if prefix:
-                    amount=int(buy["net"]);_,sell=probe(pool,mode,token,USDC,amount,prefix,False);c["sell"]=sell
+                    amount=int(buy["net"]);_,sell=probe(pool,mode,token,cash,amount,prefix,False);c["sell"]=sell
                     if mode in ("pool","module"):
-                        _,target=probe(pool,mode,USDC,token,amount,preparation,True);c["buy_target"]=target
+                        _,target=probe(pool,mode,cash,token,amount,preparation,True);c["buy_target"]=target
                         if sell.get("stage")=="paid":
-                            _,target=probe(pool,mode,token,USDC,max(1,int(sell["net"])//2),prefix,True);c["sell_target"]=target
+                            _,target=probe(pool,mode,token,cash,max(1,int(sell["net"])//2),prefix,True);c["sell_target"]=target
         return {"pool":pool,"token":token,"cases":cases}
     with ThreadPoolExecutor(max_workers=2) as ex:records=list(ex.map(cycle,d["pools"]))
-    return {"chain":8453,"selector":tag,"state_root":head["stateRoot"],"simulated_at":stamp,"payer":OWNER,"module":identity,
+    return {"chain":chain,"selector":tag,"state_root":head["stateRoot"],"simulated_at":stamp,"payer":OWNER,"module":identity,
             "funding":preparation,"records":records}
 
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("output",type=Path);parser.add_argument("--module",type=Path)
+    parser.add_argument("--network",choices=["base","ethereum"],default="base")
     opt=parser.parse_args()
     errors=[]
-    for endpoint in ENDPOINTS:
+    endpoints=ENDPOINTS if opt.network=="base" else ["https://mainnet.gateway.tenderly.co"]
+    for endpoint in endpoints:
         try:
-            result=capture(endpoint,json.loads(opt.module.read_bytes()) if opt.module else None)
+            result=capture(endpoint,json.loads(opt.module.read_bytes()) if opt.module else None,opt.network)
             opt.output.write_text(json.dumps(result,separators=(",",":")),encoding="utf8")
             break
         except (requests.RequestException,ValueError,KeyError,RuntimeError) as e:

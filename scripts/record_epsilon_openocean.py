@@ -18,9 +18,15 @@ DESC = "(address,address,address,address,uint256,uint256,uint256,uint256,address
 CALLS = "(uint256,uint256,uint256,bytes)[]"
 
 
-def firm(src, dst, n, caller):
-    args = dict(inTokenAddress=src, outTokenAddress=dst, amountDecimals=str(n), gasPriceDecimals="10000000",
+def firm(src, dst, n, caller, gas_price):
+    args = dict(inTokenAddress=src, outTokenAddress=dst, amountDecimals=str(n), gasPriceDecimals=str(gas_price),
                 slippage="0.5", sender=caller, account=caller)
+    indicative={k:v for k,v in args.items() if k not in ("sender","account")}
+    price=requests.get(API.removesuffix("/swap")+"/quote",params=indicative,timeout=15)
+    price.raise_for_status()
+    body=price.json()
+    if body["code"]!=200 or int(body["data"]["inAmount"])!=n:
+        raise ValueError("public indicative price unavailable")
     response = requests.get(API, params=args, timeout=15)
     response.raise_for_status()
     doc = response.json()
@@ -41,7 +47,7 @@ def firm(src, dst, n, caller):
         transfer=decode(["address","address","uint256","address","bytes"],calls[0][3][4:])
         if (transfer[0],transfer[1],transfer[3])!=(src,dst,EXEC):
             raise ValueError("unaccepted source-to-provider payment")
-    return dict(funding=t[2],data=d["data"], block=int(d["blockNumber"]), minimum=str(t[5]), expected=str(d["outAmount"]))
+    return dict(quote_url=price.request.url,swap_url=response.request.url,quote_out=body["data"]["outAmount"],gas_price=str(gas_price),slippage=args["slippage"],funding=t[2],data=d["data"], block=int(d["blockNumber"]), minimum=str(t[5]), expected=str(d["outAmount"]))
 
 
 def latest_header(endpoint):
@@ -55,6 +61,7 @@ def latest_header(endpoint):
 
 def capture(url, artifact):
     live = latest_header(url)
+    gas_price=int(rpc(url,"eth_gasPrice",[]),16)
     if int(rpc(url, "eth_chainId", []), 16) != 8453:
         raise ValueError("chain")
     tag = {"blockHash": live["hash"], "requireCanonical": True}
@@ -66,7 +73,7 @@ def capture(url, artifact):
                 caller = ROUTER if nested else WALLET
                 net = n - n*fee//10000 if nested else n
                 try:
-                    plan = firm(src, dst, net, caller)
+                    plan = firm(src, dst, net, caller,gas_price)
                 except (requests.RequestException, ValueError, KeyError) as exc:
                     plan = {"refused": str(exc)[:220]}
                 offers.append(dict(src=src, dst=dst, n=str(n), nested=nested, firm=plan))

@@ -9,6 +9,7 @@ pub(super) struct Client<'a> {
     base: Url,
     gas: U256,
     chain: u64,
+    slippage: rust_decimal::Decimal,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -47,6 +48,7 @@ impl<'a> Client<'a> {
             base,
             gas,
             chain: ctx.chain_id()?,
+            slippage: ctx.dec("exec.dex_slippage_pct").ok()?.normalize(),
         })
     }
     pub async fn request(
@@ -61,43 +63,22 @@ impl<'a> Client<'a> {
             code: u16,
             data: Answer,
         }
-        let mut url = self.base.clone();
-        url.path_segments_mut()
-            .ok()?
-            .pop_if_empty()
-            .push(if account.is_some() { "swap" } else { "quote" });
-        {
-            let mut args = url.query_pairs_mut();
-            args.append_pair("inTokenAddress", &format!("{input:#x}"))
-                .append_pair("outTokenAddress", &format!("{output:#x}"))
-                .append_pair("amountDecimals", &n.to_string())
-                .append_pair("gasPriceDecimals", &self.gas.to_string());
-            if let Some(payer) = account {
-                let a = format!("{payer:#x}");
-                args.append_pair("account", &a).append_pair("sender", &a);
-            }
-        }
-        let res = self
-            .ctx
-            .http
-            .get(url)
-            .send()
-            .await
-            .ok()?
-            .error_for_status()
-            .ok()?;
-        if res.content_length().is_some_and(|n| n > 1048576) {
+        let url = query(
+            &self.base,
+            (input, output),
+            n,
+            self.gas,
+            self.slippage,
+            account,
+        )?;
+        let (status, body) =
+            crate::gateway::http::exchange(self.ctx.http.get(url), self.ctx.limits().ok()?)
+                .await
+                .ok()?;
+        if !status.is_success() {
             return None;
         }
-        let mut res = res;
-        let mut buf = Vec::new();
-        while let Some(part) = res.chunk().await.ok()? {
-            if buf.len() + part.len() > 1048576 {
-                return None;
-            }
-            buf.extend(part)
-        }
-        let r: Reply = serde_json::from_slice(&buf).ok()?;
+        let r: Reply = serde_json::from_str(&body).ok()?;
         let d = r.data;
         if r.code != 200
             || d.in_token.address != input
@@ -109,4 +90,33 @@ impl<'a> Client<'a> {
         }
         Some(d)
     }
+}
+
+/// В V4 суммы и цена газа выражены в сырых единицах, а slippage задаётся процентом.
+pub(super) fn query(
+    base: &Url,
+    (input, output): (Address, Address),
+    n: U256,
+    gas: U256,
+    slippage: rust_decimal::Decimal,
+    account: Option<Address>,
+) -> Option<Url> {
+    let mut url = base.clone();
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .push(if account.is_some() { "swap" } else { "quote" });
+    {
+        let mut args = url.query_pairs_mut();
+        args.append_pair("inTokenAddress", &format!("{input:#x}"))
+            .append_pair("outTokenAddress", &format!("{output:#x}"))
+            .append_pair("amountDecimals", &n.to_string())
+            .append_pair("gasPriceDecimals", &gas.to_string())
+            .append_pair("slippage", &slippage.normalize().to_string());
+        if let Some(payer) = account {
+            let a = format!("{payer:#x}");
+            args.append_pair("account", &a).append_pair("sender", &a);
+        }
+    }
+    Some(url)
 }

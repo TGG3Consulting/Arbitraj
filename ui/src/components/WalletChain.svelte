@@ -80,8 +80,8 @@
   {#if w.address && c.venue && c.clipper}<ClipperQuote venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue && c.bopamm}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
   {#if w.address && c.venue}
-    {#each (c.prop_sources ?? []) as source}
-      <SourcePrice venue={c.venue} trader={w.address} wallet={w.id} {source} label={source.startsWith('kaliber') ? 'Kaliber' : 'TaurusFi'} />
+    {#each (c.prop_sources ?? []) as source (source)}
+      <SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source={'lambda:' + source} label={source} slotBuilders={c.prop_builders?.[source] ?? []} />
     {/each}
   {/if}
   <p>Исполнитель: {#if c.executor}<code>{c.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут в этой сети{/if}</p>

@@ -42,6 +42,7 @@ pub fn topics(f: &Family) -> Vec<B256> {
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
         _ if f.variant==super::family_variant::Variant::BalancerV1=>super::balancer_v1::topics(),
+        _ if f.variant==super::family_variant::Variant::BancorLegacy=>vec![super::bancor_legacy::ILegacy::Conversion::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::super::exec::bancor_v3_wallet::IBancorTrade::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
@@ -118,6 +119,7 @@ pub fn liquidity_topics(f: &Family) -> Vec<B256> {
     match f.proto {
         _ if f.variant.umbrae()=>super::umbrae::topics(f.variant),
         _ if f.variant==super::family_variant::Variant::BalancerV1=>super::balancer_v1::topics(),
+        _ if f.variant==super::family_variant::Variant::BancorLegacy=>vec![super::bancor_legacy::ILegacy::Conversion::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::BancorV3=>vec![super::super::exec::bancor_v3_wallet::IBancorTrade::TokensTraded::SIGNATURE_HASH],
         _ if f.variant==super::family_variant::Variant::UniswapV1=>super::uniswap_v1::topics(),
         _ if f.variant==super::family_variant::Variant::RubiconClassic=>super::rubicon::topics(),
@@ -191,6 +193,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
         _ if e.family.variant==super::family_variant::Variant::BalancerV1=>{e.valid=false;Applied::Refresh("Balancer V1: изменились условия обмена или токены пула".into())}
+        _ if e.family.variant==super::family_variant::Variant::BancorLegacy=>{e.valid=false;Applied::Refresh("Bancor 2.1: состояние конвертера изменилось".into())}
         _ if e.family.variant==super::family_variant::Variant::BancorV3=>{
             let crate::core::types::PoolState::BancorV3(s)=&e.pool.state else{e.valid=false;return Applied::Refresh("Bancor V3: нужно полное состояние".into());};
             let relevant=log.topics().get(1..4).is_none_or(|t|s.markets.iter().flatten().any(|m|t[1..].contains(&m.token.into_word())));

@@ -71,6 +71,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             Proto::V2 if f.variant==super::family_variant::Variant::Carbon => ("dex.factory",super::carbon::ICarbon::PairCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::YieldBasis => ("dex.factory",super::yield_basis::IYieldBasis::MarketParameters::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BalancerV1 => ("dex.factory",super::balancer_v1::IBPool::LOG_NEW_POOL::SIGNATURE_HASH,false),
+            Proto::V2 if f.variant==super::family_variant::Variant::BancorLegacy => ("dex.factory",super::bancor_legacy::ILegacy::LiquidityPoolAdded::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::BancorV3 => ("dex.factory",super::bancor_v3::IBancor::PoolAdded::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::UniswapV1 => ("dex.factory",super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH,false),
             Proto::V2 if f.variant == super::family_variant::Variant::MintClub => ("dex.factory",super::mint_club::IBond::TokenCreated::SIGNATURE_HASH,false),
@@ -315,6 +316,15 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
     if f.variant == super::family_variant::Variant::BalancerV1 {
         let made=super::balancer_v1::IBPool::LOG_NEW_POOL::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
         return Box::pin(balancer_created(p,w,f,made.pool)).await;
+    }
+    if f.variant == super::family_variant::Variant::BancorLegacy {
+        let e=super::bancor_legacy::ILegacy::LiquidityPoolAdded::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;
+        let at=super::nami::block(&p.ctx,"latest").await.map_err(|e|e.message)?;
+        let (pool,tokens)=Box::pin(super::bancor_legacy_directory::created(&p.ctx,f,e.liquidityPool,&at)).await.map_err(|e|e.message)?;
+        for r in super::stable_list::candidates(f.id,pool,&tokens,&w.coins,&[w.usdt]){
+            take(p,w,f,Candidate{family:f,pool:r.pool,coin:r.base,quote:r.quote}).await?;
+        }
+        return Ok(());
     }
     if f.variant == super::family_variant::Variant::BancorV3 {
         let registered=super::bancor_v3::IBancor::PoolAdded::decode_log_data(&log.inner.data).map_err(|e|e.to_string())?;

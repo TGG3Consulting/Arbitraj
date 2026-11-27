@@ -136,6 +136,7 @@ fn relevant_for_quote(raw:&str,mine:&HashSet<B256>,quote:B256)->bool {
     match serde_json::from_str::<alloy::rpc::types::Log>(raw) {
         Ok(log) => log.topics().iter().skip(1).any(|t| mine.contains(t))
             || log.topics().first().is_some_and(|t|super::balancer_v1::membership_topics().contains(t) || *t==super::balancer_v1::IBPool::LOG_NEW_POOL::SIGNATURE_HASH)
+            || log.topics().first()==Some(&super::bancor_legacy::ILegacy::LiquidityPoolAdded::SIGNATURE_HASH)
             || log.topics().first()==Some(&super::bancor_v3::IBancor::PoolAdded::SIGNATURE_HASH)
             || (log.topics().first()==Some(&super::uniswap_v1::IFactory::NewExchange::SIGNATURE_HASH)
             && !quote.is_zero() && log.topics().get(1)==Some(&quote)),
@@ -163,7 +164,7 @@ async fn filters(p: &Pools, usdt: Address) -> Vec<Value> {
             if !out.contains(&filter){out.push(filter);}
             continue;
         }
-        if matches!(family.variant,super::family_variant::Variant::YieldBasis | super::family_variant::Variant::UniswapV1 | super::family_variant::Variant::BancorV3) {
+        if matches!(family.variant,super::family_variant::Variant::YieldBasis | super::family_variant::Variant::UniswapV1 | super::family_variant::Variant::BancorLegacy | super::family_variant::Variant::BancorV3) {
             out.push(json!({"address":addr,"topics":[t0]}));
             continue;
         }

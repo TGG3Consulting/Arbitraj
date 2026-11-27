@@ -514,6 +514,7 @@ pub enum PoolState {
     YieldBasisLev(Box<super::yield_basis::LevState>),
     YieldBasisPool(Box<super::yield_basis::Preview>),
     BalancerV1(Box<super::balancer_v1::State>),
+    BancorLegacy(Box<super::bancor_legacy::BancorLegacyState>),
     BancorV3(Box<super::bancor_v3::BancorState>),
     UniswapV1(Box<super::uniswap_v1::UniswapV1State>),
     Temple(Box<TempleState>),

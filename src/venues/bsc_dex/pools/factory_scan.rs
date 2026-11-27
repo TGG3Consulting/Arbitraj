@@ -130,6 +130,9 @@ async fn pass(
     let bv1=Box::pin(super::balancer_v1_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in bv1.found {found.entry(coin).or_default().extend(rows);}
     notes.extend(bv1.notes);no_answer+=bv1.no_answer;
+    let legacy=Box::pin(super::bancor_legacy_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in legacy.found {found.entry(coin).or_default().extend(rows);}
+    notes.extend(legacy.notes); no_answer+=legacy.no_answer;
     let bancor=Box::pin(super::bancor_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in bancor.found {found.entry(coin).or_default().extend(rows);}
     notes.extend(bancor.notes);no_answer+=bancor.no_answer;

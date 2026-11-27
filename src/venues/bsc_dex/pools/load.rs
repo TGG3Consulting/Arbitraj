@@ -291,6 +291,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant == Variant::BancorLegacy {
+        return Box::pin(async move {
+            let tag=block_tag(block);let at=super::nami::block(ctx,&tag).await?;
+            let state=Box::pin(super::bancor_legacy_quotes::load(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
+            Ok(Loaded{state,ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::BancorV3 {
         return Box::pin(async move {
             let tag = block_tag(block);

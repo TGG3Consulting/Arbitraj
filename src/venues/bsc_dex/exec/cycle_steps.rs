@@ -16,7 +16,7 @@
 //! От чего зависит: quote/{cycle, cycle_cost, route_calc}.rs, exec/{chain, plan}.rs, send/mod.rs, num.rs, core/types.
 //! Настройки: dex_dex.min_profit_usd [bsc_dex] (обязательна для исполнения); через send — channel.* (чаевые).
 
-use alloy_primitives::U256;
+use alloy_primitives::{Address,U256};
 use rust_decimal::Decimal;
 
 use crate::core::types::{

@@ -14,7 +14,10 @@ alloy::sol! {interface IBridgedCash {
     function decimals() external view returns(uint8);
     function symbol() external view returns(string);
 }}
-pub(in crate::venues::bsc_dex) async fn verify(ctx: &Ctx, p: Profile) -> GatewayResult<()> {
+// Standard bridged Ethereum USDT carries the same symbol and precision as its backing asset.
+const USDT_SYMBOL: &str = "USDT";
+const USDT_DECIMALS: u8 = 6;
+pub(in crate::venues::bsc_dex) async fn verify(ctx: &Ctx, p: Profile) -> GatewayResult<u8> {
     let fail = || {
         ctx.err(
             ErrorCode::NoRoute,
@@ -36,14 +39,15 @@ pub(in crate::venues::bsc_dex) async fn verify(ctx: &Ctx, p: Profile) -> Gateway
         ],
     )
     .await?;
+    let decimals = batch::decode(&d, IBridgedCash::decimalsCall {})?;
     if code.is_empty()
         || keccak256(&code) != p.runtime
         || batch::decode(&r, IBridgedCash::l1TokenCall {})? != p.remote
         || batch::decode(&b, IBridgedCash::l2BridgeCall {})? != p.bridge
-        || batch::decode(&d, IBridgedCash::decimalsCall {})? != 6
-        || batch::decode(&s, IBridgedCash::symbolCall {})? != "USDT"
+        || decimals != USDT_DECIMALS
+        || batch::decode(&s, IBridgedCash::symbolCall {})? != USDT_SYMBOL
     {
         return Err(fail());
     }
-    Ok(())
+    Ok(decimals)
 }

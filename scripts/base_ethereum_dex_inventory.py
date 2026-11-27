@@ -80,6 +80,10 @@ def tables(network, snapshots, profiles):
         out.extend(base_launch_inventory.umia())
         out.extend(base_launch_inventory.vecta())
     out.extend(base_launch_inventory.fynd(network))
+    out.extend(["", "#### Ручные цены источников", "", "На этой площадке `zeroex.base_url = https://api.0x.org` включает ручную оценку маршрута. Ключ `zeroex.api_key` выдаётся в [кабинете 0x](https://dashboard.0x.org/). Доли RFQ и остальных поставщиков отображаются по шагам цены. Для согласованного обмена требуется отдельная действующая фирменная котировка для своего плательщика."])
+    if network=="base":
+        out.extend(["", "Для книги Kipseli задайте `kipseli.base_url = https://propamm.kipseli.win` и ключ владельца `kipseli.api_key`. Для индивидуальной on-chain цены нужен зарегистрированный signer. Коммерческий доступ к подписи обмена предоставляет Kipseli. [Условия доступа](https://docs.kipseli.capital/) · [Касса и использованная подпись](../tests/data/first_run_dex_2026-11-26/kipseli_base_settled.json.gz)."])
+    out.extend(["", "Пустой URL скрывает цену в кошельке выбранной площадки. Официальный секрет зашифрован, запрос собственного HTTPS-сервера отправляется без него."])
     out.extend(base_launch_inventory.spoke(network))
     if base and "umbrae-dlmm" in configured:
         ud=read(Path("tests/data/first_run_dex_2026-11-26/umbrae_base_directory.json"))
@@ -1742,6 +1746,7 @@ def tables(network, snapshots, profiles):
         "роутер указал Kipseli 732 раза по четырём парам USDC с WETH, WBTC, cbBTC и USDT. Фактический путь входа: "
         "кошелёк → venue → pool → logic → Safe, выход идёт из того же Safe получателю. Обычная заявка разрешает "
         "резервный Uniswap; в квитанции учитывается фактическая площадка. Котировка зависит от цены в блоке. "
+        "В архивном прогоне 45954708341 на двух блоках 8 из 8 обычных и 8 из 8 защищённых заявок с разрешённой заменой заплатил Uniswap. Все восемь заявок с обязательным Kipseli откатились. Владелец может отдельно разместить PropVenueAdapter с принятым runtime `0x5fc58eccc0b51ee3dfac7730ce3e28257f990cbdee18db91846c90e4791a9d67`. [Архив платежей](../tests/data/first_run_dex_2026-11-26/kipseli_ethereum_wallets.json.gz). "
         "В Base действуют отдельные ключ API и разрешение на подпись. У 0x публичный GET цены и перечня источников без ключа "
         "вернул 401 27.11.2026, как и Base Kipseli GET глубины. [Три оплаченных поручения, роли и ответы API](../tests/data/first_run_dex_2026-11-26/kipseli_ethereum.json.gz). "
         "У Ondo подтверждены события выпуска и погашения, "

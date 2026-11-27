@@ -176,9 +176,68 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
 }
 
-pub(super) fn topics()->Vec<alloy_primitives::B256>{
-    ["emitOffer(bytes32,bytes32,address,address,address,uint128,uint128)",
-     "emitCancel(bytes32,bytes32,address,address,address,uint128,uint128)",
-     "emitDelete(bytes32,bytes32,address)",
-     "emitTake(bytes32,bytes32,address,address,address,address,uint128,uint128)"].map(alloy_primitives::keccak256).to_vec()
+pub(super) fn topics() -> Vec<alloy_primitives::B256> {
+    [
+        "emitOffer(bytes32,bytes32,address,address,address,uint128,uint128)",
+        "emitCancel(bytes32,bytes32,address,address,address,uint128,uint128)",
+        "emitDelete(bytes32,bytes32,address)",
+        "emitTake(bytes32,bytes32,address,address,address,address,uint128,uint128)",
+    ]
+    .map(alloy_primitives::keccak256)
+    .to_vec()
+}
+
+pub(in crate::venues::bsc_dex) fn request(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    token_in: Address,
+    amount: U256,
+) -> GatewayResult<(Address, alloy_primitives::Bytes)> {
+    use crate::core::types::PoolState;
+    use alloy::sol_types::SolCall;
+    if let PoolState::Rubicon(book) = &e.pool.state {
+        use crate::venues::bsc_dex::exec::rubicon_wallet::IBookWallet;
+        let quote = book
+            .plan(token_in, true, amount)
+            .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Rubicon Classic: нет исполнимых заявок"))?;
+        let target = if token_in == book.tokens[0] {
+            book.tokens[1]
+        } else {
+            book.tokens[0]
+        };
+        let actions = quote
+            .actions
+            .into_iter()
+            .map(|(id, quantity)| IBookWallet::Take { id, quantity })
+            .collect();
+        return Ok((
+            ctx.dex_addr("dex.router", e.family.id)?,
+            IBookWallet::quoteCall {
+                source: token_in,
+                target,
+                actions,
+                maximum: amount,
+            }
+            .abi_encode()
+            .into(),
+        ));
+    }
+    Err(bad(ctx))
+}
+pub(in crate::venues::bsc_dex) fn payout(
+    e: &super::registry::Entry,
+    token_in: Address,
+    amount: U256,
+    out: &[u8],
+) -> Option<U256> {
+    use crate::core::types::PoolState;
+    use alloy::sol_types::SolCall;
+    if let PoolState::Rubicon(book) = &e.pool.state {
+        use crate::venues::bsc_dex::exec::rubicon_wallet::IBookWallet;
+        let local = book.plan(token_in, true, amount)?;
+        let official = IBookWallet::quoteCall::abi_decode_returns_validate(out).ok()?;
+        return (local.spent == official.spent && official.nominal == local.received)
+            .then_some(official.nominal);
+    }
+    None
 }

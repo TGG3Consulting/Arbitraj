@@ -127,7 +127,15 @@ def capture(url, artifact):
         row["actions"]=[[i,str(q)] for i,q in row["actions"]]
         for key in ("spent","received","nominal","budget"):
             if key in row:row[key]=str(row[key])
-    return dict(selector=at,state_root=head["stateRoot"],market=market,router=router,read_offers=total,active=offers,fees=fees,
+    from hashlib import sha256
+    creation="0x"+artifact["creation"]+encode(["address"],[MARKET]).hex()
+    sha=lambda data:sha256(bytes.fromhex(data[2:])).hexdigest()
+    deployment=dict(chainId=8453,market=MARKET,implementation=market["implementation"],
+        proxySha256=sha(rpc("eth_getCode",[MARKET,at])),
+        implementationSha256=sha(rpc("eth_getCode",[market["implementation"],at])),
+        runtimeKeccak="0x"+keccak(hexstr=runtime).hex(), runtimeSha256=sha(runtime),
+        creationSha256=sha(creation),data=creation,solc=artifact["solc"],sourceBlock=at["blockHash"])
+    return dict(deployment=deployment,selector=at,state_root=head["stateRoot"],market=market,router=router,read_offers=total,active=offers,fees=fees,
                 module=MODULE,module_hash="0x"+keccak(hexstr=runtime).hex(),controls=controls)
 
 

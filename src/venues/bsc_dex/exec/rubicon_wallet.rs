@@ -8,21 +8,26 @@ use crate::{
 };
 use alloy::{
     rpc::types::Log,
-    sol,
     sol_types::{SolCall, SolEvent, SolValue},
 };
 use alloy_primitives::{Address, B256, Bytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 
-sol! { interface IBookWallet {
-    struct Take {uint256 id; uint128 quantity;}
-    function market() external view returns(address);
-    function marketCodeHash() external view returns(bytes32);
-    function quote(address source,address target,Take[] actions,uint256 maximum) external view returns(uint256 spent,uint256 nominal);
-    function execute(address source,address target,Take[] actions,uint256 maximum,uint256 minimum,uint256 deadline) external returns(uint256 spent,uint256 received);
-    event Settled(address indexed payer,address indexed source,address indexed target,bytes32 actionsHash,uint256 spent,uint256 received);
-    event emitTake(bytes32 indexed id,bytes32 indexed pair,address indexed maker,address taker,address pay_gem,address buy_gem,uint128 take_amt,uint128 give_amt);
-}}
+mod official_abi {
+    // emitTake has eight fields in the verified market ABI.
+    #![allow(clippy::too_many_arguments)]
+    use alloy::sol;
+    sol! { interface IBookWallet {
+        struct Take {uint256 id; uint128 quantity;}
+        function market() external view returns(address);
+        function marketCodeHash() external view returns(bytes32);
+        function quote(address source,address target,Take[] actions,uint256 maximum) external view returns(uint256 spent,uint256 nominal);
+        function execute(address source,address target,Take[] actions,uint256 maximum,uint256 minimum,uint256 deadline) external returns(uint256 spent,uint256 received);
+        event Settled(address indexed payer,address indexed source,address indexed target,bytes32 actionsHash,uint256 spent,uint256 received);
+        event emitTake(bytes32 indexed id,bytes32 indexed pair,address indexed maker,address taker,address pay_gem,address buy_gem,uint128 take_amt,uint128 give_amt);
+    }}
+}
+pub(crate) use official_abi::IBookWallet;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Terms {
@@ -44,7 +49,12 @@ pub struct Proof {
     pub deadline: U256,
 }
 impl Terms {
-    pub(crate) fn proof(&self, o: &Order, minimum: U256, deadline: U256) -> Proof {
+    pub(in crate::venues::bsc_dex) fn proof(
+        &self,
+        o: &Order,
+        minimum: U256,
+        deadline: U256,
+    ) -> Proof {
         Proof {
             terms: self.clone(),
             payer: o.payer,

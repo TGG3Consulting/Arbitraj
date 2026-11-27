@@ -16,17 +16,21 @@ pub(super) async fn checked(q: &Quoting, base: Address) -> GatewayResult<Option<
     };
     let mut entry = q.tokens.cycle_cash.lock().await;
     let revision = ctx.settings.generation();
-    if *entry == Some((revision, p)) {
+    if let Some((verified, profile, decimals)) = *entry
+        && (verified, profile) == (revision, p)
+    {
+        q.tokens.remember_decimals(base, decimals);
         return Ok(Some(p.token));
     }
-    super::super::pools::cycle_cash::verify(ctx, p).await?;
+    let decimals = super::super::pools::cycle_cash::verify(ctx, p).await?;
     if revision != ctx.settings.generation() {
         return Err(ctx.err(
             ErrorCode::StaleData,
             "Настройки расчётной валюты изменились во время проверки",
         ));
     }
-    *entry = Some((revision, p));
+    q.tokens.remember_decimals(base, decimals);
+    *entry = Some((revision, p, decimals));
     Ok(Some(p.token))
 }
 
@@ -46,12 +50,22 @@ pub(super) fn replacement(
         return Ok(Decimal::ZERO);
     }
     let ctx = &q.ctx;
+    let decimals = |token| {
+        q.tokens.decimals_known(token).ok_or_else(|| {
+            ctx.err(
+                ErrorCode::StaleData,
+                "Точность расчётной валюты ещё не подтверждена",
+            )
+        })
+    };
+    let physical_decimals = decimals(physical)?;
+    let cash_decimals = decimals(cash)?;
     let wrapped = ctx.addr("dex.native_wrapped")?;
     let ask = |e: &Entry, input: Address, want: U256| -> Option<U256> {
         if !e.valid {
             return None;
         }
-        let usable = select::usable(q, e, hop_side(e, input)?, 6).ok()?;
+        let usable = select::usable(q, e, hop_side(e, input)?, cash_decimals).ok()?;
         if !usable.hook_pct.is_zero() || !usable.tax_pct.is_zero() {
             return None;
         }
@@ -86,7 +100,7 @@ pub(super) fn replacement(
         .into_iter()
         .chain(via)
         .min()
-        .and_then(|n| num::to_decimal(n, 6))
+        .and_then(|n| num::to_decimal(n, physical_decimals))
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::NoRoute,
@@ -95,17 +109,24 @@ pub(super) fn replacement(
         })
 }
 
-/// Начальный ориентир для ранжирования: исполнимая покупка 0,001 ETH, приведённая к одному ETH.
+/// Начальный ориентир для ранжирования: исполнимая покупка настроенного количества ETH, приведённая к одному ETH.
 pub(super) fn native_usdt(
     q: &Quoting,
     physical: Address,
     cash: Address,
 ) -> GatewayResult<rust_decimal::Decimal> {
-    let cost = replacement(
-        q,
-        physical,
-        cash,
-        alloy_primitives::U256::from(1_000_000_000_000_000u64),
-    )?;
-    Ok(cost * rust_decimal::Decimal::from(1000))
+    let bad = || {
+        q.ctx.err(
+            ErrorCode::NotConfigured,
+            "Положительный размер пробы газа должен точно выражаться в wei",
+        )
+    };
+    let probe = q.ctx.dec("dex_dex.cash_probe_native")?;
+    let decimals = super::super::num::BNB_DECIMALS;
+    let wei = super::super::num::to_units(probe, decimals)
+        .filter(|n| !n.is_zero() && super::super::num::to_decimal(*n, decimals) == Some(probe))
+        .ok_or_else(bad)?;
+    replacement(q, physical, cash, wei)?
+        .checked_div(probe)
+        .ok_or_else(bad)
 }

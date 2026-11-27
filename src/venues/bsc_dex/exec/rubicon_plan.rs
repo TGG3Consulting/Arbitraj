@@ -18,12 +18,43 @@ use crate::{
 use alloy_primitives::{Address, U256};
 use serde_json::Value;
 
+enum Size {
+    ExactInput(U256),
+    ExactOutput(U256),
+    Budget { limit: U256, minimum: U256 },
+}
+
+impl Size {
+    fn actions(&self, book: &Book, input: Address) -> Option<Vec<(U256, u128)>> {
+        let fill = match *self {
+            Self::ExactInput(amount) => book.plan(input, true, amount).filter(|p| p.complete)?,
+            Self::ExactOutput(amount) => book.plan(input, false, amount).filter(|p| p.complete)?,
+            Self::Budget { limit, minimum } => book
+                .plan(input, true, limit)
+                .filter(|p| !p.spent.is_zero() && p.spent <= limit && p.received >= minimum)?,
+        };
+        Some(fill.actions)
+    }
+}
+
 pub(crate) fn terms(
     ctx: &Ctx,
     e: &Entry,
     book: &Book,
     input: Address,
     amount: U256,
+    desired: Option<U256>,
+) -> GatewayResult<Terms> {
+    let size = desired.map_or(Size::ExactInput(amount), Size::ExactOutput);
+    selected(ctx, e, book, input, size, desired)
+}
+
+fn selected(
+    ctx: &Ctx,
+    e: &Entry,
+    book: &Book,
+    input: Address,
+    size: Size,
     desired: Option<U256>,
 ) -> GatewayResult<Terms> {
     let id = e.family.id;
@@ -41,16 +72,13 @@ pub(crate) fn terms(
     if target == book.market || target.is_zero() {
         return Err(fail());
     }
-    let fill = book
-        .plan(input, desired.is_none(), desired.unwrap_or(amount))
-        .filter(|p| p.complete)
-        .ok_or_else(fail)?;
+    let actions = size.actions(book, input).ok_or_else(fail)?;
     Ok(Terms {
         market: book.market,
         target,
         code: Code::profile(ctx, id)?,
         wallet_hash: *wallet_hash,
-        actions: fill.actions,
+        actions,
         desired,
     })
 }
@@ -156,7 +184,17 @@ pub(crate) fn probe(
     payer: Address,
     now: u64,
 ) -> GatewayResult<(Vec<approve::Approval>, Address, alloy_primitives::Bytes)> {
-    let t = terms(ctx, e, book, o.token_in, o.amount_in, None)?;
+    let t = selected(
+        ctx,
+        e,
+        book,
+        o.token_in,
+        Size::Budget {
+            limit: o.amount_in,
+            minimum: o.min_out,
+        },
+        None,
+    )?;
     let target = t.target;
     let p = Proof {
         terms: t,
@@ -177,4 +215,83 @@ pub(crate) fn probe(
         target,
         p.data(),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::types::rubicon::Offer;
+
+    #[test]
+    fn full_archive_book_refunds_one_raw_unit_under_budget_only() {
+        let snapshot: serde_json::Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            &include_bytes!(
+                "../../../../tests/data/first_run_dex_2026-11-26/rubicon_classic_base.json.gz"
+            )[..],
+        ))
+        .unwrap();
+        let rows = snapshot["controls"].as_array().unwrap();
+        for row in rows {
+            let address = |key: &str| row[key].as_str().unwrap().parse::<Address>().unwrap();
+            let units = |key: &str| row[key].as_str().unwrap().parse::<U256>().unwrap();
+            let source = address("source");
+            let target = address("target");
+            let offers = snapshot["active"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|o| o["source"] == row["source"] && o["target"] == row["target"])
+                .map(|o| Offer {
+                    id: U256::from(o["id"].as_u64().unwrap()),
+                    available: o["quantity"].as_str().unwrap().parse().unwrap(),
+                    requested: o["price"].as_str().unwrap().parse().unwrap(),
+                })
+                .collect::<Vec<_>>();
+            let mut offers = offers;
+            offers.sort_by(|a, b| {
+                (U256::from(a.requested) * U256::from(b.available))
+                    .cmp(&(U256::from(b.requested) * U256::from(a.available)))
+            });
+            let total: U256 = offers.iter().map(|o| U256::from(o.available)).sum();
+            let book = Book {
+                tokens: [source, target],
+                market: Address::ZERO,
+                dust: [U256::ZERO; 2],
+                offers: [offers, vec![]],
+                fees: snapshot["fees"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_u64().unwrap() as u32)
+                    .collect::<Vec<_>>()
+                    .try_into()
+                    .unwrap(),
+            };
+            let limit = units("budget");
+            let minimum = units("received");
+            assert_eq!(limit - units("spent"), U256::ONE);
+            assert!(
+                Size::Budget { limit, minimum }
+                    .actions(&book, source)
+                    .is_some()
+            );
+            assert!(
+                Size::Budget {
+                    limit,
+                    minimum: total + U256::ONE
+                }
+                .actions(&book, source)
+                .is_none()
+            );
+            if total == minimum {
+                assert!(Size::ExactInput(limit).actions(&book, source).is_none());
+                assert!(
+                    Size::ExactInput(units("spent"))
+                        .actions(&book, source)
+                        .is_some()
+                );
+                assert!(Size::ExactOutput(minimum).actions(&book, source).is_some());
+            }
+        }
+    }
 }

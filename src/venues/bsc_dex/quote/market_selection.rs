@@ -45,6 +45,20 @@ pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
     }
 }
 
+/// These order books validate the returned quote against the selected maker allocations.
+pub(super) struct BookQuoter {
+    pub request: QuoteRequest,
+    pub payout: fn(&Entry, Address, U256, &[u8]) -> Option<U256>,
+}
+pub(super) fn order_book_quoter(variant:Variant)->Option<BookQuoter>{
+    use super::super::pools::{carbon_quote,rubicon};
+    match variant {
+        Variant::RubiconClassic=>Some(BookQuoter{request:rubicon::request,payout:rubicon::payout}),
+        Variant::Carbon=>Some(BookQuoter{request:carbon_quote::request,payout:carbon_quote::payout}),
+        _=>None,
+    }
+}
+
 impl Quoting {
     pub(super) async fn market_routes(
         &self,

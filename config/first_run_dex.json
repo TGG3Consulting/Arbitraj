@@ -36,6 +36,7 @@
     "id": "uniswap-v4-base",
     "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
     "venue_settings": {
+      "dex_dex.cash_probe_native": "0.001",
       "dex_dex.bridged_usdt": "8453 0xfde4c96c8593536e31f229ea8f37b2ada2699bb2 0xdac17f958d2ee523a2206206994597c13d831ec7 0x4200000000000000000000000000000000000010 0x478746a8e4b17181c4efbeb2069d86f22ec395788099ed65c9442ca44df265bc"
     },
     "settings": {
@@ -5757,6 +5758,9 @@
       "dex.pmm_ladder_usd": [
         "1",
         "10"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x5fc58eccc0b51ee3dfac7730ce3e28257f990cbdee18db91846c90e4791a9d67"
       ]
     }
   },

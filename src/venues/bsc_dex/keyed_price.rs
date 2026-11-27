@@ -16,29 +16,50 @@ use alloy_primitives::{Address, U256};
 use reqwest::{Client, header::HeaderValue};
 use serde_json::{Value, json};
 
+fn endpoint(base: &str, official: &str, path: &str) -> Option<(reqwest::Url, bool)> {
+    let mut url = reqwest::Url::parse(base).ok()?;
+    if url.scheme() != "https"
+        || url.host().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return None;
+    }
+    let send_key = url.origin().ascii_serialization() == official;
+    url.path_segments_mut()
+        .ok()?
+        .pop_if_empty()
+        .extend(path.split('/'));
+    Some((url, send_key))
+}
+
 pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayResult<Preview> {
     let invalid = |m: &str| ctx.err(ErrorCode::BadResponse, m);
     let chain = ctx
         .chain_id()
         .ok_or_else(|| invalid("Не задан chainId площадки"))?;
-    let (key, header, url) = match (source, chain) {
-        ("kipseli", 8453) => (
+    let (setting, key, header, origin, path) = match source {
+        "kipseli" => (
+            "kipseli.base_url",
             "kipseli.api_key",
             "x-api-key",
-            "https://propamm.kipseli.win/v2/price",
+            "https://propamm.kipseli.win",
+            "v2/price",
         ),
-        ("zeroex", 1 | 8453) => (
+        "zeroex" => (
+            "zeroex.base_url",
             "zeroex.api_key",
             "0x-api-key",
-            "https://api.0x.org/swap/allowance-holder/price",
+            "https://api.0x.org",
+            "swap/allowance-holder/price",
         ),
-        _ => {
-            return Err(ctx.err(
-                ErrorCode::NotApplicable,
-                "Этот источник не подключён в выбранной сети",
-            ));
-        }
+        _ => return Err(ctx.err(ErrorCode::NotApplicable, "Неизвестный источник")),
     };
+    let base = ctx.text(setting)?;
+    let (mut url, official) = endpoint(&base, origin, path)
+        .ok_or_else(|| invalid("Для источника нужен корректный адрес HTTPS"))?;
     if req.input == req.output
         || req.input.is_zero()
         || req.output.is_zero()
@@ -49,18 +70,23 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
             "Укажите два разных контракта ERC20 и сумму продажи",
         ));
     }
-    let credential = ctx.vault.get(key).map_err(|_| {
-        ctx.err(
-            ErrorCode::NotConfigured,
-            format!("Откройте хранилище и задайте {key}"),
-        )
-    })?;
-    if credential.trim().is_empty() {
-        return Err(ctx.err(ErrorCode::NotConfigured, format!("Заполните {key}")));
-    }
-    let mut auth = HeaderValue::from_str(credential.as_str())
-        .map_err(|_| invalid("Некорректный заголовок учётных данных"))?;
-    auth.set_sensitive(true);
+    let auth = if official {
+        let credential = ctx.vault.get(key).map_err(|_| {
+            ctx.err(
+                ErrorCode::NotConfigured,
+                format!("Откройте хранилище и задайте {key}"),
+            )
+        })?;
+        if credential.trim().is_empty() {
+            return Err(ctx.err(ErrorCode::NotConfigured, format!("Заполните {key}")));
+        }
+        let mut auth = HeaderValue::from_str(credential.as_str())
+            .map_err(|_| invalid("Некорректный заголовок учётных данных"))?;
+        auth.set_sensitive(true);
+        Some(auth)
+    } else {
+        None
+    };
     let client = Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .retry(reqwest::retry::never())
@@ -78,21 +104,26 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         dec_in,
     )
     .ok_or_else(|| invalid("Укажите положительную сумму с точностью токена"))?;
-    let mut wire = client
-        .get(url)
-        .header(header, auth)
-        .query(&[("chainId", chain.to_string())]);
+    url.query_pairs_mut()
+        .append_pair("chainId", &chain.to_string());
     if source == "zeroex" {
         let trader = req
             .trader
             .filter(|a| !a.is_zero())
             .ok_or_else(|| invalid("Укажите публичный адрес плательщика 0x"))?;
-        wire = wire.header("0x-version", "v2").query(&[
+        url.query_pairs_mut().extend_pairs([
             ("sellToken", req.input.to_string()),
             ("buyToken", req.output.to_string()),
             ("sellAmount", amount.to_string()),
             ("taker", trader.to_string()),
         ]);
+    }
+    let mut wire = client.get(url);
+    if let Some(auth) = auth {
+        wire = wire.header(header, auth);
+    }
+    if source == "zeroex" {
+        wire = wire.header("0x-version", "v2");
     }
     let (status, body) = http::exchange(wire, ctx.limits()?)
         .await
@@ -194,6 +225,33 @@ fn zeroex(book: &Value, input: Address, output: Address, amount: U256) -> Option
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn configured_origin_and_credential_scope_are_distinct() {
+        let origin = "https://api.0x.org";
+        let (u, auth) =
+            endpoint("https://api.0x.org/", origin, "swap/allowance-holder/price").unwrap();
+        assert!(auth);
+        assert_eq!(u.as_str(), "https://api.0x.org/swap/allowance-holder/price");
+        let (u, auth) = endpoint(
+            "https://other.invalid/staging",
+            origin,
+            "swap/allowance-holder/price",
+        )
+        .unwrap();
+        assert!(!auth);
+        assert_eq!(u.path(), "/staging/swap/allowance-holder/price");
+        for other in ["https://api.0x.org.evil.invalid", "https://api.0x.org:444"] {
+            assert!(!endpoint(other, origin, "price").unwrap().1);
+        }
+        for invalid in [
+            "http://api.0x.org",
+            "https://forged@api.0x.org",
+            "https://api.0x.org?key=secret",
+            "https://api.0x.org/#fragment",
+        ] {
+            assert!(endpoint(invalid, origin, "price").is_none());
+        }
+    }
     #[test]
     fn mixed_aggregator_shows_maker_per_leg() {
         let a = Address::with_last_byte(1);

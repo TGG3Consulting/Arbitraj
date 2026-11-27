@@ -51,6 +51,7 @@ pub async fn rates(q: &Quoting, base: Address) -> GatewayResult<Rates> {
     if let Some(physical) = super::cycle_cash::checked(q, base).await?
         && physical != cash
     {
+        q.tokens.decimals(ctx,cash).await?;
         let price = super::cycle_cash::native_usdt(q, physical, cash)?;
         return Ok(Rates {
             base_usdt: Decimal::ONE,

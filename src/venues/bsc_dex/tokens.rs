@@ -36,7 +36,7 @@ struct Subscription {
     quote: Option<(&'static str, u64, Address)>,
 }
 
-type VerifiedCash = Arc<tokio::sync::Mutex<Option<(u64,crate::settings::cycle_cash::Profile)>>>;
+type VerifiedCash = Arc<tokio::sync::Mutex<Option<(u64,crate::settings::cycle_cash::Profile,u8)>>>;
 /// Список токенов и кэш decimals. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct Tokens {

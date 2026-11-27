@@ -65,9 +65,7 @@ pub async fn view(st: &AppState) -> Value {
     };
     // Решение 432: площадки DEX сетей (две и больше; одна — пусто, экран прежний) — исполнитель кошелька по сети.
     let nets = super::wallets_chain::chains(st).await;
-    let single_fynd = dex.as_deref().is_some_and(|v| {
-        st.settings.text("fynd.network",crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty())
-    });
+    let single_source=|key:&str|dex.as_deref().is_some_and(|v| st.settings.text(key,crate::settings::read::At {venue:Some(v),coin:None}).is_ok_and(|s|!s.is_empty()));
     let mut wallets = Vec::new();
     for w in a.wallets() {
         let (address, why) = if !unlocked {
@@ -93,8 +91,9 @@ pub async fn view(st: &AppState) -> Value {
         };
         wallets.push(json!({
             "id": w.id,
-            "fynd": single_fynd,
-            "chain": nets.iter().find(|(id,_)| Some(id.0.as_str()) == dex.as_deref()).and_then(|(_, chain)|chain.as_deref()),
+            "fynd": single_source("fynd.network"),
+            "kipseli": single_source("kipseli.base_url"),
+            "zeroex": single_source("zeroex.base_url"),
             "name": w.name,
             "secret": w.secret,
             "executor": w.executor,
@@ -158,6 +157,8 @@ async fn by_chain(
             "venue": v.0,
             "chain": chain,
             "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
+            "kipseli": st.settings.text("kipseli.base_url",at).is_ok_and(|s|!s.is_empty()),
+            "zeroex": st.settings.text("zeroex.base_url",at).is_ok_and(|s|!s.is_empty()),
             "home": w.home() == v.0,
             "executor": x.executor,
             "executor_version": x.executor_version,

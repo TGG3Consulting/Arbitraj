@@ -144,8 +144,8 @@ pub fn encode_q(q: Q, coin: Address, quote: Address) -> Bytes {
     match q {
         Q::MintClub{token,..} => super::mint_club::IBond::tokenBondCall{token}.abi_encode().into(),
         Q::Rubicon(_,reverse) => {
-            let (sellToken,buyToken)=if reverse{(quote,coin)}else{(coin,quote)};
-            super::rubicon::IRubiconMarket::getBestOfferCall{sellToken,buyToken}.abi_encode().into()
+            let (sell_token,buy_token)=if reverse{(quote,coin)}else{(coin,quote)};
+            super::rubicon::IRubiconMarket::getBestOfferCall{sellToken:sell_token,buyToken:buy_token}.abi_encode().into()
         },
         Q::V2 => encode(coin, quote, None),
         Q::UmbraeBins => super::umbrae::IMarket::getAllPairsCall{a:coin,b:quote}.abi_encode().into(),

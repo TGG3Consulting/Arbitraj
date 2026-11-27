@@ -1,0 +1,55 @@
+{
+  "official_guide": "https://docs.rubicon.finance/guides/integration/filler",
+  "api_docs": "https://docs.rubicon.finance/developers/gladius-api",
+  "market_docs": "https://docs.rubicon.finance/developers/markets-api",
+  "observations": [
+    {
+      "chain": 1,
+      "method": "GET",
+      "source": "open",
+      "url": "https://gladius.rubicon.finance/dutch-auction/orders?chainId=1&orderStatus=open",
+      "started": "2026-11-27T06:57:24+00:00",
+      "http": 502
+    },
+    {
+      "chain": 1,
+      "method": "GET",
+      "source": "pair",
+      "url": "https://gladius.rubicon.finance/dutch-auction/orders?chainId=1&orderStatus=open&buyToken=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&sellToken=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "started": "2026-11-27T06:57:24+00:00",
+      "http": 502
+    },
+    {
+      "chain": 1,
+      "method": "GET",
+      "source": "market",
+      "url": "https://coingecko.rubicon.finance/1/orderbook?ticker_id=0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2_0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48&depth=2",
+      "started": "2026-11-27T06:57:24+00:00",
+      "timeout_seconds": 20
+    },
+    {
+      "chain": 8453,
+      "method": "GET",
+      "source": "open",
+      "url": "https://gladius.rubicon.finance/dutch-auction/orders?chainId=8453&orderStatus=open",
+      "started": "2026-11-27T06:57:40+00:00",
+      "http": 502
+    },
+    {
+      "chain": 8453,
+      "method": "GET",
+      "source": "pair",
+      "url": "https://gladius.rubicon.finance/dutch-auction/orders?chainId=8453&orderStatus=open&buyToken=0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&sellToken=0x4200000000000000000000000000000000000006",
+      "started": "2026-11-27T06:57:40+00:00",
+      "http": 502
+    },
+    {
+      "chain": 8453,
+      "method": "GET",
+      "source": "market",
+      "url": "https://coingecko.rubicon.finance/8453/orderbook?ticker_id=0x4200000000000000000000000000000000000006_0x833589fcd6edb6e08f4c7c32d4f71b54bda02913&depth=2",
+      "started": "2026-11-27T06:57:44+00:00",
+      "timeout_seconds": 20
+    }
+  ]
+}

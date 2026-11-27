@@ -9,6 +9,8 @@ import requests
 from eth_abi import decode, encode
 from eth_utils import keccak
 
+import gladius_trace
+
 ROOT = Path(__file__).resolve().parents[1]
 REACTOR = "0x3c53c04d633bec3fb0de3492607c239bf92d07f9"
 QUOTER = "0x56e43695d183dcfa9d8fe95e796227a491627fd9"
@@ -118,15 +120,18 @@ def nonce_used(r, maker, nonce, at):
     return bool(word & (1 << (nonce & 255)))
 
 
-def extract(r, block, event, tip):
+def extract(r, block, event, tip, archive=None):
     tx_hash=event["transactionHash"]
     tx=r.rpc("eth_getTransactionByHash",[tx_hash])
     receipt=r.rpc("eth_getTransactionReceipt",[tx_hash])
     ix=int(receipt["transactionIndex"],16)
     assert block["transactions"][ix]==tx_hash and tx["blockHash"]==receipt["blockHash"]==event["blockHash"]==block["hash"]
     assert receipt["status"]=="0x1" and any(l==event or (l["logIndex"],l["data"],l["topics"],l["address"])==(event["logIndex"],event["data"],event["topics"],event["address"]) for l in receipt["logs"])
-    trace=r.rpc("trace_transaction",[tx_hash])
-    calls=[v["action"] for v in trace if v["type"]=="call" and v["action"]["callType"]=="call" and not v.get("error")]
+    if archive is None:
+        trace=r.rpc("trace_transaction",[tx_hash])
+        calls=[v["action"] for v in trace if v["type"]=="call" and v["action"]["callType"]=="call" and not v.get("error")]
+    else:
+        calls=gladius_trace.archived_calls(tx,archive[tx_hash])
     order_hash,filler,maker=event["topics"][1],addr(event["topics"][2]),addr(event["topics"][3])
     nonce=int(event["data"],16)
     ex="0x"+sig("executeWithCallback((bytes,bytes),bytes)").hex()
@@ -146,6 +151,7 @@ def extract(r, block, event, tip):
     assert token==source[0] and sum(q for t,s,d,q in transfers if (t,s,d)==(token,maker,filler))==amount
     payouts=[]
     for t,q,d in resolved[2]:
+        assert archive is None or t!=ZERO  # Урезанная трасса не доказывает нативные платежи.
         payer=REACTOR if t==ZERO else filler
         assert sum(n for a,s,to,n in transfers if (a,s,to)==(t,payer,d))==q
         payouts.append(dict(token=t,raw=str(q),payer=payer,recipient=d))
@@ -168,6 +174,7 @@ def extract(r, block, event, tip):
         quote["revert"]=str(err)[:200]
     return dict(height=int(block["number"],16),block=block["hash"],timestamp=stamp,index=ix,hash=tx_hash,
                 transaction_sender=tx["from"],filler=filler,outer_selector=tx["input"][:10],reactor_selector=ex,
+                trace_source="canonical Base archive" if archive is not None else "trace_transaction RPC",
                 order_hash=order_hash,witness_digest=hashed(witness),order_digest=hashed(order),maker=maker,
                 nonce=str(nonce),used_parent_inclusion_anchor=nonces,deadline=info[3],validation=info[4],
                 exclusive=exclusive,override_bps=bps,decay=[start,end],threshold=str(threshold),input_token=token,
@@ -179,11 +186,12 @@ def record(network,url=None):
     assert int(r.rpc("eth_chainId",[]),16)==chain
     head=r.rpc("eth_getBlockByNumber",[hex(h),False]);tip=canonical(head)
     out=dict(chain=chain,height=h,selector=tip,state_root=head["stateRoot"],roles=roles(r,head,fee),samples=[])
+    archive=json.loads(gzip.decompress(gladius_trace.DATA.read_bytes()))["transactions"] if network=="base" else None
     for height in heights:
         block=r.rpc("eth_getBlockByNumber",[hex(height),False])
         logs=r.rpc("eth_getLogs",[{"blockHash":block["hash"],"address":REACTOR,"topics":[FILL]}])
         assert logs
-        out["samples"].extend(extract(r,block,l,tip) for l in logs)
+        out["samples"].extend(extract(r,block,l,tip,archive) for l in logs)
     assert r.rpc("eth_getBlockByNumber",[hex(h),False])["hash"]==head["hash"]
     return out
 

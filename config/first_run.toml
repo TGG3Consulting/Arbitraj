@@ -3792,3 +3792,42 @@ value = "0x22c2b655277ac0d151ab5844d49f3ddf6118e555e35be89d3cf3f476647af38b=0xa0
 source = "tests/data/first_run_dex_2026-11-26/fynd_ethereum_markets.json.gz"
 rationale = "Список PoolId=token0=token1 данной сети для атрибуции собственных пулов Fynd AMM."
 prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Ручная цена Kipseli · base_dex"
+intro = "Источник просмотра цены в выбранной сети."
+
+[[section.rec]]
+name = "kipseli.base_url"
+area = "площадка base_dex"
+unit = "URL"
+value = "https://propamm.kipseli.win"
+source = "https://docs.kipseli.capital/openapi.yaml"
+rationale = "Корневой HTTPS адрес API Kipseli для ручной цены данной площадки. Секрет получает только официальный сервер."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Ручная цена 0x · base_dex"
+intro = "Источник просмотра цены в выбранной сети."
+
+[[section.rec]]
+name = "zeroex.base_url"
+area = "площадка base_dex"
+unit = "URL"
+value = "https://api.0x.org"
+source = "https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api"
+rationale = "Корневой HTTPS адрес API 0x для ручной цены данной площадки. Секрет получает только официальный сервер."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section]]
+title = "Ручная цена 0x · eth_dex"
+intro = "Источник просмотра цены в выбранной сети."
+
+[[section.rec]]
+name = "zeroex.base_url"
+area = "площадка eth_dex"
+unit = "URL"
+value = "https://api.0x.org"
+source = "https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api"
+rationale = "Корневой HTTPS адрес API 0x для ручной цены данной площадки. Секрет получает только официальный сервер."
+prefill = { kind = "Venue", id = "eth_dex" }

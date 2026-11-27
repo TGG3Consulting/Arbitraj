@@ -151,7 +151,7 @@ mod historical {
                 let pair = r["balances"][name].as_array().unwrap();
                 let get = |n: usize| {
                     let data = pair[n]["input"].as_str().unwrap().parse().unwrap();
-                    balance(&pair[n], a("payer"), token, data).unwrap()
+                    balance(&pair[n], crate::settings::evm_profiles::ETHEREUM_MAINNET, a("payer"), token, data).unwrap()
                 };
                 if name == "source" {
                     assert_eq!(

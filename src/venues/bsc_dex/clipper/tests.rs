@@ -100,13 +100,23 @@ fn published_sushi_offer_recovers_the_canonical_designated_signer() {
 
 #[test]
 fn blade_key_is_scoped_to_its_issuer_even_when_the_api_path_is_configurable() {
-    assert!(super::api::endpoint("https://blade-api.sushi.com/partner/rfq/v2").is_some());
+    assert!(super::api::scoped_key("https://blade-api.sushi.com/partner/rfq/v2", "legacy").is_some());
     for url in [
         "http://blade-api.sushi.com/rfq", "https://blade-api.sushi.com:8443/rfq",
         "https://blade-api.sushi.com.example.org/rfq", "https://example.org/",
         "https://user@blade-api.sushi.com/rfq", "https://blade-api.sushi.com/rfq?token=x",
         "https://blade-api.sushi.com/rfq#fragment",
     ] {
-        assert!(super::api::endpoint(url).is_none());
+        assert!(super::api::scoped_key(url, "legacy").is_none());
     }
+}
+
+#[test]
+fn rotating_issuer_changes_the_destination_only_with_its_credential() {
+    let stored = r#"{"origin":"https://partner.example.org:9443","key":"assigned"}"#;
+    let permitted = "https://partner.example.org:9443/quotes";
+    assert_eq!(super::api::scoped_key(permitted, stored).unwrap().1, "assigned");
+    assert!(super::api::scoped_key("https://partner.example.org/quotes", stored).is_none());
+    assert!(super::api::scoped_key("https://blade-api.sushi.com/rfq/v2", stored).is_none());
+    assert!(super::api::scoped_key(permitted, r#"{"origin":"https://partner.example.org:9443"}"#).is_none());
 }

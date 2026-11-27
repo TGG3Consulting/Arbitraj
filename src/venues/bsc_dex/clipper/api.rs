@@ -11,31 +11,41 @@ pub(super) struct Api {
     auth: HeaderValue,
     chain: u64,
 }
-// Общий секрет Blade выдан этому origin. Перенаправления при запросе отключены.
-pub(super) fn endpoint(raw: &str) -> Option<Url> {
+// Один зашифрованный секрет связывает получателя и ключ даже при смене настроек площадки.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Credential<'a> {
+    origin: &'a str,
+    key: &'a str,
+}
+fn https(raw: &str) -> Option<Url> {
     let url = Url::parse(raw).ok()?;
-    (url.scheme() == "https" && url.host_str() == Some("blade-api.sushi.com")
-        && url.port_or_known_default() == Some(443) && url.username().is_empty()
-        && url.password().is_none() && url.query().is_none() && url.fragment().is_none())
-        .then_some(url)
+    (url.scheme() == "https" && url.host().is_some() && url.username().is_empty()
+        && url.password().is_none() && url.query().is_none() && url.fragment().is_none()).then_some(url)
+}
+pub(super) fn scoped_key<'a>(raw_url: &str, raw_credential: &'a str) -> Option<(Url, &'a str)> {
+    let credential = if raw_credential.trim_start().starts_with('{') {
+        serde_json::from_str::<Credential<'a>>(raw_credential).ok()?
+    } else {
+        // Существующие ключи без origin изначально предназначались только этому поставщику.
+        Credential { origin: "https://blade-api.sushi.com", key: raw_credential }
+    };
+    let base = https(raw_url)?;
+    let issuer = https(credential.origin)?;
+    (issuer.path() == "/" && issuer.origin() == base.origin() && !credential.key.trim().is_empty())
+        .then_some((base, credential.key))
 }
 impl Api {
     pub fn new(ctx: &Ctx, chain: u64) -> GatewayResult<Self> {
-        let base = endpoint(&ctx.text("clipper.base_url")?).ok_or_else(||
-            ctx.err(ErrorCode::NotConfigured, "Укажите HTTPS URL официального Blade API в clipper.base_url"))?;
         let key = ctx.vault.get("clipper.api_key").map_err(|_| {
             ctx.err(
                 ErrorCode::NotConfigured,
                 "Откройте хранилище и укажите выданный Blade API ключ clipper.api_key",
             )
         })?;
-        if key.trim().is_empty() {
-            return Err(ctx.err(
-                ErrorCode::NotConfigured,
-                "Укажите ключ разрешённого доступа clipper.api_key",
-            ));
-        }
-        let mut auth = HeaderValue::from_str(key.as_str()).map_err(|_| {
+        let (base, token) = scoped_key(&ctx.text("clipper.base_url")?, &key).ok_or_else(||
+            ctx.err(ErrorCode::NotConfigured, "HTTPS origin clipper.base_url и получатель ключа в clipper.api_key должны совпадать"))?;
+        let mut auth = HeaderValue::from_str(token).map_err(|_| {
             ctx.err(
                 ErrorCode::NotConfigured,
                 "Некорректное значение clipper.api_key",

@@ -130,7 +130,7 @@ async fn fill(q: &Quoting, r: &mut DexDrySwap, mode: DryMode) -> GatewayResult<(
     }
     // Решение 146: пополнение входа продажи — с НАИБОЛЬШИМ налогом покупки среди пулов монеты (пул-источник любой, налог
     // зависит от пула; в CoinCheck — наименьший), quote/pool_tax.rs max_buy.
-    let taxes = direct::taxes_at(q, &r.asset, Some(r.qty)).ok().map(|mut t| {
+    let taxes = direct::taxes_at(q, &r.asset, r.qty).ok().map(|mut t| {
         t.buy_pct = t.buy_pct.max(pool_tax::max_buy(q, &coin));
         t
     });

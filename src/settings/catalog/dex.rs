@@ -36,7 +36,7 @@ pub const DEX_KINDS: &[&str] = &[
     "uniswap_v3",
     "uniswap_v4",
     "launch_doppler",
-    "launch_index",
+    "launch_index", "angstrom_l1",
     "launch_umia", "launch_baseline", "launch_o1", "launch_o1_wrapped", "omni_flux_native_cl", "omni_flux_native_bin",
     "deli_v4_constant",
     "deli_v4_cl",

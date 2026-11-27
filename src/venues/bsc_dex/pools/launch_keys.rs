@@ -42,7 +42,7 @@ pub(super) fn roles(ctx: &Ctx, f: &Family) -> GatewayResult<Vec<Role>> {
             .ok_or_else(|| invalid(ctx))?;
         if !matches!(
             kind,
-            "component" | "hook" | "after_hook" | "factory" | "escrow" | "registry" | "airlock"
+            "inspector" | "adapter" | "component" | "hook" | "after_hook" | "factory" | "escrow" | "registry" | "airlock"
         ) || parts.next().is_some()
             || addr.is_zero()
             || hash.is_zero()
@@ -72,6 +72,7 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
             // https://sourcify.dev/server/v2/contract/8453/0x128bedebaa9304db74726efba848a98e7fb53a80?fields=sources
             Variant::LaunchUmia => !k.currency0.is_zero() && (1..1_000_000).contains(&k.fee)
                 && k.tick_spacing.as_i32() > 0 && (u16::from_be_bytes([k.hooks[18],k.hooks[19]]) & 0x3fff) == 0x3a80,
+            Variant::Angstrom => !k.currency0.is_zero() && k.fee == 0x800000 && k.tick_spacing.as_i32() > 0,
             Variant::LaunchDoppler => k.fee == 0x800000 && k.tick_spacing.as_i32() == 200,
             Variant::LaunchIndex | Variant::LaunchBaseline => k.fee == 0 && k.tick_spacing.as_i32() == 1,
             Variant::LaunchO1Wrapped => k.currency0.is_zero() && k.fee == 0 && k.tick_spacing.as_i32() == 200,

@@ -76,7 +76,7 @@ pub(super) async fn market(
     let view = ctx.dex_addr("dex.state_view", f.id)?;
     let quoter = ctx.dex_addr("dex.quoter", f.id)?;
     let hook_manager = async {
-        if f.variant != super::family_variant::Variant::LaunchBaseline {
+        if !matches!(f.variant, super::family_variant::Variant::LaunchBaseline | super::family_variant::Variant::Angstrom) {
             let [raw] = batch::read(ctx, [batch::view(at, hook, mgr.clone())]).await?;
             if batch::decode(&raw, mgr.clone())? != manager {
                 return Err(invalid(ctx));

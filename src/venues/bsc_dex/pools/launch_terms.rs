@@ -61,6 +61,7 @@ pub(super) async fn read(
             (asset, true, true)
         }
         Variant::LaunchUmia => return super::umia::read(ctx, f, key, roles, at).await,
+        Variant::Angstrom => return super::angstrom::terms(ctx, f, key, roles, at).await,
         Variant::LaunchBaseline => return super::baseline::read(ctx,f,key,roles,at).await,
         Variant::LaunchIndex => {
             let vault = ILaunch::vaultOfCall { id };

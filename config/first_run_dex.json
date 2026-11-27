@@ -6023,5 +6023,54 @@
         "0x7ac796ebbec76a038c49d94d93345e82325f07798b524e0164dd2a37aa1e027f"
       ]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "bancor-v21-ethereum",
+    "source": "https://github.com/bancorprotocol/contracts-solidity/tree/78c5736da250f396616e31e96087cb28e2a5dbbe · tests/data/first_run_dex_2026-11-26/bancor_v21_ethereum.json.gz · tests/data/first_run_dex_2026-11-26/bancor_v21_wallet.json.gz",
+    "settings": {
+      "dex.kind": "bancor_legacy",
+      "dex.factory": "0xc0205e203f423bcd8b2a4d6f8c8a154b0aa60f19",
+      "dex.factory_runtime_hash": "0x2e6479b8f6edd43d1486b984062a6c1df32884a027fb6fe58ddc861b64e90365",
+      "dex.quoter": "0x2f9ec37d6ccfff1cab21733bdadede11c823ccb0",
+      "dex.quoter_runtime_hash": "0x577f090b414d0069b084a86535a46c4937cab4143c64ab9efd6c7fed8c1e7954",
+      "dex.bancor_native_token": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "1",
+        "5",
+        "10",
+        "50",
+        "100",
+        "500",
+        "1000",
+        "5000"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x206eb8321817f9f92bcdc8f308e271db02a72e52b9e2f943c570ea04016e9fa8"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "angstrom-ethereum",
+    "source": "https://docs.angstrom.xyz/contracts/deployments · tests/data/first_run_dex_2026-11-26/angstrom_ethereum_directory.json.gz",
+    "settings": {
+      "dex.pool_manager": "0x000000000004444c5dc75cB358380D2e3dE08A90",
+      "dex.state_view": "0x7fFE42C4a5DEeA5b0feC41C94C136Cf115597227",
+      "dex.quoter": "0x99bd42B2B22e531f283b7F8a86dFf631EB16A9D1",
+      "dex.kind": "angstrom_l1",
+      "dex.launch_pool_keys": [
+        "0x000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc20000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000aa232009084bd71a5797d089aa4edfad4",
+        "0x000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000dac17f958d2ee523a2206206994597c13d831ec70000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000aa232009084bd71a5797d089aa4edfad4"
+      ],
+      "dex.launch_roles": [
+        "hook@0x0000000aa232009084bd71a5797d089aa4edfad4@0x528182e66a441545ea3ba1dede4e6063f23acd4ada4036c24b9fa2f254bc4ed1",
+        "inspector@0xd262c224402e9a7f5e8ad1621be1bb1f3203b6c3@0xe0d918ea705afea7bbc6de7da330ceebe838585e32dd165173a6af812335e71a",
+        "adapter@0xb535aeb27335b91e1b5bccbd64888ba7574efbf8@0x6280f4c65e60bb69e42628c819347aea85d7982710f7eb67b64eaf2cb1a6a6b2"
+      ]
+    }
   }
 ]

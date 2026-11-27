@@ -1038,6 +1038,17 @@ def tables(network, snapshots, profiles):
                    + ". ".join(summaries) + ". Для каждой ставки сохранены ответы до и после её активации. "
                    "У Kyber исходная квитанция содержит SwapFeeEnabled. У iZiSwap и BitSwap регистрация проходит без события. "
                    f"[Доказательства обеих фабрик](../{fork_file.as_posix()}).")
+    if not base and "bancor-v21-ethereum" in configured:
+        file = Path("tests/data/first_run_dex_2026-11-26/bancor_v21_wallet.json.gz")
+        wallet = json.loads(gzip.decompress(file.read_bytes()))
+        cases = wallet["controls"]
+        out.append(f"**Bancor V2.1.** Для прямого пути используются физические резервы и якорь конвертера. "
+                   "Ставку рассчитывает оригинальный BancorNetwork по явному пути. "
+                   f"На архивном блоке прошли {sum(r['mode']=='wallet' for r in cases)} выплат по ERC20/WETH, "
+                   f"{sum(r['mode']=='native_wallet' for r in cases)} по нативной валюте и "
+                   f"{sum(r['mode']=='v5' for r in cases)} через V5. В проверку вошли пути через один и два пула. "
+                   "После размещения модуля из карточки DEX сохраните его адрес в `dex.router`. "
+                   f"[Исходные суммы, квитанции, газ и отклонённые поручения](../{file.as_posix()}).")
     if base and "alien-carbon-base" in configured:
         file = Path("tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz")
         archived = json.loads(gzip.decompress(file.read_bytes()))
@@ -1748,6 +1759,8 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if not base and str(row["id"]) == "6483":
+            task = "Angstrom L1 · 2 физических ключа Uniswap V4, 12 архивных оплат на открытом блоке. Профиль наблюдения; автоматический платёж требует актуальной аттестации"
         if str(row["id"]) == "4752":
             import maverick_two_inventory
             ref, candidates, task = maverick_two_inventory.inventory(network)
@@ -2089,6 +2102,8 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    from base_angstrom_markets import angstrom_markets
+    lines.extend(angstrom_markets())
     from base_epsilon_markets import epsilon_markets
     lines.extend(epsilon_markets())
     from base_raindex_markets import raindex_markets

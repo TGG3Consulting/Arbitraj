@@ -262,6 +262,7 @@ mod baseline;
 mod baseline_components;
 mod launch_keys;
 mod launch_abi;
+pub(super) mod angstrom;
 mod launch_terms;
 mod umia;
 mod launch_ladder;

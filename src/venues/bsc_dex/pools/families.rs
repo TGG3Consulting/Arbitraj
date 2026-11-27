@@ -446,6 +446,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "omni_flux_native_cl" => (PoolKind::Cl, Proto::InfinityCl, true, false, true),
         "omni_flux_native_bin" => (PoolKind::Bin, Proto::InfinityBin, true, false, true),
+        "angstrom_l1" => (PoolKind::Cl, Proto::UniswapV4, true, false, false),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
         "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).

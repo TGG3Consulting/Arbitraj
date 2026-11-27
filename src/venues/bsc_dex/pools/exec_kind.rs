@@ -434,6 +434,7 @@ mod tests {
             "bundles_swap",
             "antfarm", // Signed router and separate ATF budget.
             "surge_native",
+            "angstrom_l1",
             "stabull",
             "maverick_v1",
             "lambda_propamm",

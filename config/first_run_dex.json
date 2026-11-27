@@ -6150,6 +6150,7 @@
       "dex.factory_runtime_hash": "0xa182c8336f0245c5f222874466cec8ddbf1624ff8a6954f5105a3b7a08c9db83",
       "dex.quoter": "0xe7a504316bebbe540496e29798187c9ecad6ef4f",
       "dex.module_runtime_hashes": [
+        "0x0e3508908834509b8681999943680ec42d9310f5298db6c6ec308b594930c345",
         "0x00dd0f17aff3fdbf7322bfb3e10f35acf665091cdfe3111beefa7577e2d7f16a"
       ],
       "dex.router_exact_tokens": [

@@ -93,3 +93,57 @@ fn compiled_wallet_fee_matches_the_accounting_units() {
         assert!(contract.contains(&format!("uint256 private constant {name}={value};")));
     }
 }
+
+#[test]
+fn measured_boundary_keeps_swept_input_distinct_from_actual_deposit() {
+    let raw_fixture = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/empire_ethereum_wallets.json.gz"
+    );
+    let module_fixture = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz"
+    );
+    let mut checked = 0;
+    for bytes in [&raw_fixture[..], &module_fixture[..]] {
+        let archive: Value = serde_json::from_reader(GzDecoder::new(bytes)).unwrap();
+        for pool in archive["pools"].as_array().unwrap() {
+            let initial = &pool["initial"];
+            let zero = pool["tokens"][0] == "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2";
+            let i = usize::from(!zero);
+            for sample in pool["debt_boundary"].as_array().unwrap() {
+                let mut debt = [U256::ZERO; 2];
+                debt[i] = raw(&initial["debt"]);
+                let amount = raw(&sample["input"]);
+                let res = &sample["result"];
+                let aware = matches!(
+                    sample["mode"].as_str(),
+                    Some("module" | "v5module" | "nominal")
+                );
+                let state = EmpireState {
+                    debt,
+                    debt_aware: aware,
+                    exact_tokens: false,
+                    balances: [raw(&initial["physical"][0]), raw(&initial["physical"][1])],
+                    reserves: [raw(&initial["reserves"][0]), raw(&initial["reserves"][1])],
+                };
+                if !aware && amount < debt[i] {
+                    assert!(state.paid(zero, amount).is_none());
+                    assert_eq!(res["loose"]["status"], "0x0");
+                } else {
+                    let (fill, _) = state.paid(zero, amount).unwrap();
+                    let swap = keccak256("Swap(address,uint256,uint256,uint256,uint256,address)");
+                    let mut physical =
+                        logs(&res["exact"], swap).filter(|l| l["address"] == pool["pool"]);
+                    assert_eq!(words(physical.next().unwrap())[3 - i], fill.amount_out);
+                    assert!(physical.next().is_none());
+                    assert_eq!(raw(&res["exact"]["paid"]), amount);
+                    assert_eq!(
+                        state.credit(zero, amount),
+                        Some(if aware { amount } else { amount - debt[i] })
+                    );
+                }
+                checked += 1;
+            }
+        }
+    }
+    assert_eq!(checked, 20);
+}

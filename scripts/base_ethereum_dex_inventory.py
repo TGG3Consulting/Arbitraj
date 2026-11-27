@@ -2208,6 +2208,8 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    from base_empire_markets import empire_markets
+    lines.extend(empire_markets())
     from base_angstrom_markets import angstrom_markets
     lines.extend(angstrom_markets())
     from base_epsilon_markets import epsilon_markets

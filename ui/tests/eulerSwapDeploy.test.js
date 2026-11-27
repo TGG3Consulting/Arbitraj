@@ -5,6 +5,10 @@ import {gunzipSync} from 'node:zlib';
 import {loadPlan,unsigned} from '../src/lib/walletDeployment.js';
 
 const read=p=>readFileSync(new URL(p,import.meta.url));
+test('DEX settings expose the deployment form for both EulerSwap generations',()=>{
+  const page=read('../src/components/DexFamilies.svelte').toString();
+  assert.match(page,/\{#if eulerSwap\(store\.values\['dex\.kind\|Dex\|'\+r\.id\]\) \|\|/);
+});
 const profiles=JSON.parse(read('../../config/first_run_dex.json'));
 for (const network of ['base','ethereum']){
   test('EulerSwap validates both factory arguments and the selected profile on '+network, async()=>{

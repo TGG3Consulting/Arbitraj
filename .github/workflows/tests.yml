@@ -1043,7 +1043,9 @@ jobs:
           MARKET: ${{ matrix.market }}
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/euler" EulerSwapWallet
-          python scripts/record_eulerswap_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/euler/EulerSwapWallet.json" "$RUNNER_TEMP/market.json"
+          flags=()
+          if [[ "$MARKET" == eulerswap-wallet-v4-* ]]; then flags=(--manager); fi
+          python scripts/record_eulerswap_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/euler/EulerSwapWallet.json" "$RUNNER_TEMP/market.json" "${flags[@]}"
       - if: startsWith(matrix.market, 'eulerswap-origins-')
         env:
           MARKET: ${{ matrix.market }}

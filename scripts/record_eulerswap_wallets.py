@@ -29,7 +29,7 @@ def tx(address,name,types,args):
     return call(address,calldata(name+"("+",".join(types)+")",types,args),gas=4_000_000)
 
 
-def capture(network, artifact, unlisted=False):
+def capture(network, artifact, unlisted=False, manager_path=False):
     registry = json.loads(gzip.decompress((DATA/f"eulerswap_{network}_{'directory' if unlisted else 'registry'}.json.gz").read_bytes()))
     url = json.loads((DATA/f"{network}.json").read_bytes())["endpoint"]
     tag = registry["selector"]
@@ -99,10 +99,14 @@ def capture(network, artifact, unlisted=False):
         other=next(t for t in p["tokens"] if t!=start)
         fund=funding(start)
         sizes=[10**14,10**15] if start==weth else [10**6,10**7]
-        for mode in ["official","module","v5"]:
-            spender={"official":router,"module":MODULE,"v5":EXEC}[mode]
+        if manager_path:
+            key,manager=Reader(network).many([(pool,"poolKey()",(),"address,address,uint24,int24,address"),(pool,"poolManager()",(),"address")])
+            assert key[:2]==p["tokens"] and key[4]==pool and manager and int(manager,16)>0
+            key_bytes=encode(["address","address","uint24","int24","address"],key)
+        for mode in (["v4"] if manager_path else ["official","module","v5"]):
+            spender={"official":router,"module":MODULE,"v5":EXEC,"v4":EXEC}[mode]
             for quantity in sizes:
-                for wanted in ([False] if mode=="v5" else [False,True]):
+                for wanted in ([False] if mode in ("v5","v4") else [False,True]):
                     prefix=[fund]
                     amount=quantity
                     for a,b in [(start,other),(other,start)]:
@@ -126,8 +130,9 @@ def capture(network, artifact, unlisted=False):
                             if mode=="module":
                                 return tx(MODULE,"executeTarget" if wanted else "execute",ORDER,
                                           [pool,a,b,limit if wanted else cost,target if wanted else limit,deadline])
+                            step=(19,manager,a,b,10000,key_bytes) if mode=="v4" else (17,MODULE,a,b,10000,encode(["address"],[pool]))
                             return tx(EXEC,"execute",["address","uint256","address","uint256","uint256",STEP+"[]"],
-                                      [a,cost,b,limit,deadline,[(17,MODULE,a,b,10000,encode(["address"],[pool]))]])
+                                      [a,cost,b,limit,deadline,[step]])
                         bound=cost if wanted else target
                         strict=order(bound-1 if wanted else bound+1,expiry)
                         normal=order(bound,expiry)
@@ -169,6 +174,7 @@ if __name__=="__main__":
     ap.add_argument("artifact",type=Path)
     ap.add_argument("output",type=Path)
     ap.add_argument("--unlisted",action="store_true")
+    ap.add_argument("--manager",action="store_true")
     args=ap.parse_args()
-    args.output.write_text(json.dumps(capture(args.network,json.loads(args.artifact.read_bytes()),args.unlisted),separators=(",",":")))
+    args.output.write_text(json.dumps(capture(args.network,json.loads(args.artifact.read_bytes()),args.unlisted,args.manager),separators=(",",":")))
 

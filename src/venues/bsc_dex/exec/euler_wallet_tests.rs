@@ -9,11 +9,13 @@ fn raw(v:&Value)->U256 {U256::from(v.as_u64().unwrap())}
 
 #[test]
 fn original_and_protected_orders_recover_the_real_cash() {
-    let samples:[(&[u8],&[u8],usize);2]=[
+    let samples:[(&[u8],&[u8],usize);3]=[
         (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_wallets.json.gz"),
          include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_registry.json.gz"),24),
         (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_base_wallets.json.gz"),
-         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_base_registry.json.gz"),16)];
+         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_base_registry.json.gz"),16),
+        (include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_unlisted_wallets.json.gz"),
+         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_directory.json.gz"),16)];
     for (wallet,directory,total) in samples{
         let w:Value=serde_json::from_reader(GzDecoder::new(wallet)).unwrap();
         let d:Value=serde_json::from_reader(GzDecoder::new(directory)).unwrap();

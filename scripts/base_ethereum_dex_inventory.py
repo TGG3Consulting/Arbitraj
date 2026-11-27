@@ -1347,7 +1347,7 @@ def tables(network, snapshots, profiles):
                     "6,180002642489249644 BUSD, 4,508036 USDC и 4,333058 USDT. "
                     f"[Реестр, исходники и обмены](../{saddle})."])
     wombat = f"tests/data/first_run_dex_2026-11-26/wombat_{network}.json"
-    if Path(wombat).exists():
+    if "wombat-exchange" in configured and Path(wombat).exists():
         out.extend(["", "Wombat · " + ("из двух опубликованных пулов Base в профиль включён USDS/USDbC. "
                     "Две симуляции USDS → USDbC прошли. В обратную сторону обе суммы отклонил контракт "
                     "по WOMBAT_COV_RATIO_LIMIT_EXCEEDED. " if base else

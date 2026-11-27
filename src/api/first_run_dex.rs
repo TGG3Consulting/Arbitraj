@@ -137,6 +137,20 @@ mod tests {
     /// Каждое предложенное значение принимает обычный редактор. Каждому адресу соответствует
     /// непустой runtime на том же chainId и контрольном блоке.
     #[test]
+    fn deferred_markets_are_absent_from_the_first_run_network() {
+        let rows = profiles().unwrap();
+        for (chain, id) in [
+            (1, "basin-wells-ethereum"),
+            (8453, "pinto-exchange-base"),
+            (1, "wombat-exchange"),
+            (1, "wombat-volatile-ethereum"),
+        ] {
+            assert!(!rows.iter().any(|p| p.chain_id == chain && p.id == id), "{chain}/{id}");
+        }
+        assert!(rows.iter().any(|p| p.chain_id == 8453 && p.id == "wombat-exchange"));
+    }
+
+    #[test]
     fn deployments_match_settings_schema_and_recorded_code() {
         let base: Value = serde_json::from_str(include_str!(
             "../../tests/data/first_run_dex_2026-11-26/base.json"

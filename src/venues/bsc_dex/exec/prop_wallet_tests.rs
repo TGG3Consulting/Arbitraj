@@ -8,7 +8,7 @@ fn read(bytes: &[u8]) -> Value {
 fn address(v: &Value) -> Address {
     v.as_str().unwrap().parse().unwrap()
 }
-fn make(args: &IProp::swapViaVenueV1Call, owner: Address, fixture: &Value) -> Proof {
+pub(super) fn make(args: &IProp::swapViaVenueV1Call, owner: Address, fixture: &Value) -> Proof {
     let d = &fixture["canonical"];
     let roles = &fixture["roles"]["roles"];
     let venue = args.venue;
@@ -37,6 +37,7 @@ fn make(args: &IProp::swapViaVenueV1Call, owner: Address, fixture: &Value) -> Pr
             },
             venue_code: None,
             vault_code: None,
+            via: None,
         },
         payer: owner,
         input: args.tokenIn,

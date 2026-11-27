@@ -47,7 +47,7 @@ def rows(net):
         add(9435,"router","goliath-lambda-ethereum","5-14","Swapped выделенной кассы Goliath. Метка swap через агрегатор не заменяет выплату этой кассы.","goliath_ethereum.json")
         add(6650,"issuance","","5-13,23-34,76-79","TradeExecuted с attestationId и userId оценивает погашение и выпуск токенизированных бумаг. Обычный открытый спотовый пул этими данными не установлен.")
         add(2197,"factory","uniswap_v2","20-25,193-203,231-240","Фабрика V2 задаёт пары, учёт ведётся по их Swap при фильтрах методики.")
-        add(7984,"conditional","","6-15,48-60","Исторический эмитент Kipseli на Ethereum подтверждён отдельными событиями. Право кошелька на свежую подписанную цену требует индивидуального допуска.","llama_top_contracts.json.gz")
+        add(7984,"partial","kipseli-lambda-ethereum","6-15,48-60","Эмитент 0x054f… связан с кассой и публичным входом LambdaClass. Сверены три прямые выплаты Kipseli одному EOA. Резервное исполнение Uniswap и окно доступности котировки учитываются отдельно.","kipseli_ethereum.json.gz")
         add(4222,"factory","ring-exchange-ethereum","13-19,40-52,78-86","Ring allPairs/i перечисляет пары. Swap учитывается с переводом единиц Few wrapped assets, роли обёрток проверены в торговом профиле.")
         add(8531,"router","tempest-lambda-ethereum","5-15","Swapped выделенной кассы Tempest. Чистая выплата именно Tempest отделена от резервной маршрутизации Uniswap.","propamm_router_ethereum.json.gz")
         add(9157,"factory","communityv3","745-750,955-960","Фабрика CommunityV3 совпадает с реестром. Выплата и пределы пула подтверждены кошельковым архивом.","community_v3_ethereum_wallets.json.gz")

@@ -5722,3 +5722,39 @@
     }
   }
 ]
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "kipseli-lambda-ethereum",
+    "source": "https://github.com/lambdaclass/propamm-router-contracts/tree/d6e41d3d6f3bf9f8ec78dfea5957f81b7bed467b · https://eth.blockscout.com/address/0x71e790dd841c8a9061487cb3e78c288e75ce0b3d · tests/data/first_run_dex_2026-11-26/kipseli_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "lambda_propamm",
+      "dex.factory": "0x71e790dd841c8a9061487cb3e78c288e75ce0b3d",
+      "dex.quoter": "0x4ddf368080cd7946db5b459ad591c350158175e1",
+      "dex.propamm_roles": [
+        "router 0x4ddf368080cd7946db5b459ad591c350158175e1 0x14d841456cb8f422abd2cda024e6cc2c50e08831e4a28564966ed5fabdbc1b9c 0x9b59064685ecfe130ac5d02b401e973c9a065858 0x63e571f4ab251fe9ee0a4d344a7f7f2ec9e9aeafd652e39f09dd23cdb20cbdaa",
+        "fallback 0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45 0x6ec798e80f3a19de650826338677604e54d6664f44a33b53a20b22b1939f402e",
+        "venue 0x71e790dd841c8a9061487cb3e78c288e75ce0b3d 0x0e49b5535b70ad8efcd7c0f074e9c3bb32807d1e3b0356989153610f2442edbd",
+        "vault 0xbeeb9eee061925cc6d2122f05a4e6536f0feb000 0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c",
+        "pool 0x5cdbe59400cc2efdcc2b54acca4a99fe00dd588c 0xb3d3479518d17295da6eaec6a2f9c7adb6d4b68282068d5eeb797aa2b641ce4e",
+        "logic 0x054f0377e07d2f460151f935dffc4d880017e63a 0xee18e79b7313a76c796a74495a408eaef83d69a120dbb055901bde71b99151dd",
+        "singleton 0xff51a5898e281db6dfc7855790607438df2ca44b 0xdda019cbd7c867a533a2a86e5c53434fdc50b13122b5a5ddb4a8df61b31c20f2"
+      ],
+      "dex.propamm_pairs": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+      ],
+      "dex.multi_pair": true,
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "1",
+        "10"
+      ]
+    }

@@ -10,6 +10,9 @@ alloy::sol! {
         function fallbackSwapRouter() external view returns(address);
         event Swapped(address indexed sender,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut,address recipient,address marketMaker);
     }
+    interface IWrappedProp {
+        event Swapped(address indexed sender,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut,address recipient);
+    }
     interface IStrict {
         function market() external view returns(address);
         function vault() external view returns(address);

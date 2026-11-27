@@ -2,7 +2,7 @@
 use super::{
     carbon_binding::Code,
     fill,
-    prop_abi::{IProp, IStrict},
+    prop_abi::{IProp, IStrict, IWrappedProp},
     signed_call,
 };
 use crate::{
@@ -29,6 +29,8 @@ pub struct Terms {
     pub code: Code,
     pub venue_code: Option<Code>,
     pub vault_code: Option<Code>,
+    #[serde(default)]
+    pub via: Option<[Address; 2]>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Proof {
@@ -222,9 +224,32 @@ impl Proof {
             return None;
         }
         if s.marketMaker == t.venue {
-            if moved(self.input, Some(sender), Some(t.venue)) != s.amountIn
-                || (t.venue != t.vault
-                    && moved(self.input, Some(t.venue), Some(t.vault)) != s.amountIn)
+            let forwarded = |a, b| moved(self.input, Some(a), Some(b)) == s.amountIn;
+            let path_matches = match t.via {
+                Some([pool, logic]) => {
+                    let mut emitted = logs.iter().filter(|l| {
+                        l.address() == t.venue
+                            && l.topic0() == Some(&IWrappedProp::Swapped::SIGNATURE_HASH)
+                    });
+                    let fill =
+                        IWrappedProp::Swapped::decode_log_data(&emitted.next()?.inner.data).ok()?;
+                    emitted.next().is_none()
+                        && (
+                            fill.sender,
+                            fill.tokenIn,
+                            fill.tokenOut,
+                            fill.amountIn,
+                            fill.amountOut,
+                            fill.recipient,
+                        ) == (t.router, self.input, self.output, s.amountIn, credit, owner)
+                        && forwarded(t.venue, pool)
+                        && forwarded(pool, logic)
+                        && forwarded(logic, t.vault)
+                }
+                None => t.venue == t.vault || forwarded(t.venue, t.vault),
+            };
+            if !forwarded(sender, t.venue)
+                || !path_matches
                 || moved(self.output, Some(t.vault), Some(owner)) != credit
             {
                 return None;
@@ -252,6 +277,10 @@ impl Proof {
         Some((s.marketMaker, debit, credit))
     }
 }
+
+#[cfg(test)]
+#[path = "prop_kipseli_tests.rs"]
+mod kipseli_tests;
 
 #[cfg(test)]
 #[path = "prop_wallet_tests.rs"]

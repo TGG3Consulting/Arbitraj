@@ -7035,7 +7035,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `dex.propamm_roles`
 
 - **Кейс:** Публичный роутер LambdaClass может заплатить через кассу выбранной площадки или перейти на Uniswap V3. У Tempest касса и рынок имеют отдельные реализации.
-- **Что ставить:** Четыре строки `роль адрес хеш_кода` для router, venue, vault и fallback. Для каждого EIP-1967 добавьте адрес реализации и хеш её runtime. Сверьте все роли на одном каноническом блоке нужной сети. [Контракты LambdaClass](https://github.com/lambdaclass/propamm-router-contracts)
+- **Что ставить:** Четыре строки `роль адрес хеш_кода` для router, venue, vault и fallback. Для каждого EIP-1967 добавьте адрес реализации и хеш её runtime. Для Kipseli Ethereum добавьте строки `pool`, `logic`, `singleton`. Публичные getters связывают адреса обёртки, входного пула, реализации котировок и обмена, Safe и реализации Safe. Сверьте все роли на одном каноническом блоке нужной сети. [Контракты LambdaClass](https://github.com/lambdaclass/propamm-router-contracts)
 - **Если не задана:** Запись этой площадки не проходит проверку источника.
 
 ### `dex.propamm_pairs`

@@ -828,14 +828,23 @@
           "path": "dexs/kipseli/index.ts",
           "source_sha256": "d1953e9e4a1d37429164b5c01f1a795dd6d8ebba03609bed57899b20b001dae2",
           "line_ranges": "6-15,48-60",
-          "kind": "conditional",
-          "profiles": [],
-          "domains": [],
+          "kind": "partial",
+          "profiles": [
+            "kipseli-lambda-ethereum"
+          ],
+          "domains": [
+            {
+              "profile": "kipseli-lambda-ethereum",
+              "setting": "dex.factory",
+              "address": "0x71e790dd841c8a9061487cb3e78c288e75ce0b3d",
+              "literal_in_adapter": false
+            }
+          ],
           "other_source_addresses": [
             "0x054f0377e07d2f460151f935dffc4d880017e63a"
           ],
-          "description": "Исторический эмитент Kipseli на Ethereum подтверждён отдельными событиями. Право кошелька на свежую подписанную цену требует индивидуального допуска.",
-          "evidence": "llama_top_contracts.json.gz"
+          "description": "Эмитент 0x054f… связан с кассой и публичным входом LambdaClass. Сверены три прямые выплаты Kipseli одному EOA. Резервное исполнение Uniswap и окно доступности котировки учитываются отдельно.",
+          "evidence": "kipseli_ethereum.json.gz"
         },
         {
           "rank": 16,

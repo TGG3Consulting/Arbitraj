@@ -1,5 +1,6 @@
 //! Канонический реестр LambdaClass V1. Конкретный рынок и касса подписаны в профиле DEX.
 //! https://github.com/lambdaclass/propamm-router-contracts
+mod kipseli;
 use super::{
     families::{self, Family},
     family_variant::Variant,
@@ -52,6 +53,7 @@ pub(crate) struct Roles {
     venue: Role,
     vault: Role,
     fallback: Role,
+    intermediaries: Option<[Role; 3]>,
 }
 impl Roles {
     pub(crate) fn read(ctx: &Ctx, id: &str) -> GatewayResult<Self> {
@@ -92,9 +94,13 @@ impl Roles {
             venue: read("venue")?,
             vault: read("vault")?,
             fallback: read("fallback")?,
+            intermediaries: match rows.len() {
+                4 => None,
+                7 => Some([read("pool")?, read("logic")?, read("singleton")?]),
+                _ => return Err(bad(ctx)),
+            },
         };
-        if rows.len() != 4
-            || s.router.proof().is_none()
+        if s.router.proof().is_none()
             || s.router.address != ctx.dex_addr("dex.quoter", id)?
             || s.venue.address != ctx.dex_addr("dex.factory", id)?
             || s.venue.address == s.fallback.address
@@ -128,6 +134,9 @@ impl Roles {
             code: self.router.proof().ok_or_else(|| bad(ctx))?,
             venue_code: self.venue.proof(),
             vault_code: self.vault.proof(),
+            via: self
+                .intermediaries
+                .map(|[pool, logic, _]| [pool.address, logic.address]),
         })
     }
 }
@@ -169,12 +178,13 @@ pub(crate) async fn state(
         ),
         batch::view(at, r.router.address, IProp::fallbackSwapRouterCall {}),
     ];
-    let (v, (), (), (), ()) = tokio::try_join!(
+    let (v, (), (), (), (), ()) = tokio::try_join!(
         batch::read(ctx, calls),
         r.router.check(ctx, at),
         r.venue.check(ctx, at),
         r.vault.check(ctx, at),
-        r.fallback.check(ctx, at)
+        r.fallback.check(ctx, at),
+        kipseli::state(ctx, &r, at)
     )?;
     if batch::decode(&v[2], IProp::fallbackSwapRouterCall {})? != r.fallback.address
         || generation != ctx.settings.generation()

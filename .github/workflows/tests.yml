@@ -572,6 +572,10 @@ jobs:
         env:
           MATRIX_MARKET: ${{ matrix.market }}
         run: python scripts/record_aqua_strategies.py "${MATRIX_MARKET#aqua-strategies-}" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'aqua-directory-')
+        env:
+          MATRIX_MARKET: ${{ matrix.market }}
+        run: python scripts/record_aqua_directory.py "${MATRIX_MARKET#aqua-directory-}" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'aqua-wallet-')
         env:
           MATRIX_MARKET: ${{ matrix.market }}

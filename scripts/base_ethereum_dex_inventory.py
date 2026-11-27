@@ -1818,6 +1818,22 @@ def tables(network, snapshots, profiles):
                          "3,694553383839100359 и 7,384439905817121312 MYRC, при обратной продаже получено "
                          "0,899100 и 1,798202 USDC до газа. Порядок «сначала вход» отклонил обе покупки. "
                          "[Переводы и предельные суммы](../tests/data/first_run_dex_2026-11-26/aqua_base_wallets.json.gz).")
+            protected = Path(f"tests/data/first_run_dex_2026-11-26/aqua_{'base' if base else 'ethereum'}_protected.json.gz")
+            if protected.is_file():
+                cases = json.loads(gzip.decompress(protected.read_bytes()))["strategies"]
+                layers = []
+                for mode in ("wallet","v5"):
+                    tested = [r for c in cases if c.get("mode")==mode for r in c["rows"] if r.get("paid")]
+                    layers.append(f"{len(tested)} выплат через {'AquaStrategyWallet' if mode=='wallet' else 'V5 kind 17'}, "
+                                  f"{min(r['gas'] for r in tested)}–{max(r['gas'] for r in tested)} gas")
+                manifests = [v["protected"] for v in cases if v.get("protected")]
+                costs = [m["cache_gas"] for m in manifests]
+                task += (f" Воспроизведены {' и '.join(layers)}. Создание модуля владельцем требует {manifests[0]['creation_gas']} gas "
+                         f"на архивном блоке. V5 дополнительно кэширует каждую программу за {min(costs)}–{max(costs)} gas. "
+                         "Прямая форма принимает программу в calldata. Срок, весь вход и чистый выход сверены по исходной программе. "
+                         f"[События, расходы и выплаты](../{protected.as_posix()}). "
+                         "Открытый реестр доступен через RPC. Каталог всех стратегий 1inch с пагинацией требует Bearer с планом Aqua. "
+                         "[Условия доступа к каталогу](https://business.1inch.com/portal/documentation/aqua/api/quick-start).")
         if source_scope := registry_entries.get(str(row["id"])):
             assert source_scope["module"] == row["module"] and source_scope["path"] == r["path"]
             start, end = source_scope["lines"]

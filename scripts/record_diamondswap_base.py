@@ -41,7 +41,7 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False,keep_partial=False,build_action=None,quote_call=None):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router"),cash=None,funding=None,audit=False,keep_partial=False,build_action=None,quote_call=None,guaranteed_floor=None):
     cash = cash or wrapped
     if cash != wrapped and funding is None:raise ValueError("independent funding required")
     token=next(t for t in market["tokens"] if t!=cash)
@@ -78,17 +78,19 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
         loose,_=trial(1)
         if loose["status"]!="0x1":raise ValueError(f"could not settle {mode}: {loose['error']}")
         net=int(loose["received"])
-        exact,action=trial(net)
-        above,_=trial(net+1)
+        floor=guaranteed_floor(input_token,output_token,net) if guaranteed_floor else net
+        exact,action=trial(floor)
+        above,_=trial(floor+1)
         if (exact["status"],exact["spent"],exact["received"],above["status"],above["spent"],above["received"])!=("0x1",str(size),str(net),"0x0","0","0"):
             raise ValueError("recipient floor or wallet debit differs")
         expired={}
         if audit or router_method=="swapExactTokensForTokens":
-            expired,_=trial(net,1)
+            expired,_=trial(floor,1)
             if (expired["status"],expired["spent"],expired["received"])!=("0x0","0","0"):
                 raise ValueError("expired transaction changed wallet balances")
         leg=dict(input=input_token,output=output_token,exact=exact,above=above,expired=expired)
         if quote is not None:leg["official_quote"]=quote
+        if guaranteed_floor is not None:leg["guaranteed_minimum"]=str(floor)
         return leg,[*prefix,approve,action]
     trials=[]
     for size in sizes:

@@ -99,12 +99,23 @@ def capture(endpoint, key, wallets):
             return tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                       ["uint256","address[]","address","uint256"],[size,[WETH,cash],OWNER,end],10**17)
         for size in sorted({max(1,min(standard,depth//1000)),max(2,min(10*standard,depth//100))}):
-            for mode in (("router","v5") if key=="cypher-v2" else ("router",)):
+            for mode in (("router","v5") if key=="cypher-v2" else ("router","bounded-router")):
                 # DEGENSwap has its own six-argument pair.swap; only the published router is eligible.
                 try:
+                    def bounded(a,b,n,floor,deadline,_mode):
+                        # The deployed setter caps adminFee at 100/10000; input-asset selection may change.
+                        signed=floor+(floor-1)//99
+                        return tx(r,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+                                  ["uint256","uint256","address[]","address","uint256"],[n,signed,[a,b],OWNER,deadline])
+                    def guaranteed(_a,b,net):
+                        current=int(terms["raw"]) if b==m["router_fee_token"] else 0
+                        highest_gross=net*10000//(10000-current)
+                        return highest_gross-highest_gross//100
                     rounds=direct_wallet(c,m,[size],int(head["timestamp"],16),m.get("fee_numerator",0)*10,
                                          r,wrapped=WETH,modes=(mode,),audit=True,keep_partial=True,cash=cash,
-                                         funding=None if cash==WETH else fund)
+                                         funding=None if cash==WETH else fund,
+                                         build_action=bounded if mode=="bounded-router" else None,
+                                         guaranteed_floor=guaranteed if mode=="bounded-router" else None)
                     outcomes.append(dict(pool=m["pool"],size=str(size),mode=mode,rounds=rounds))
                 except ValueError as exc:
                     outcomes.append(dict(pool=m["pool"],size=str(size),mode=mode,refused=str(exc)[:300]))

@@ -25,7 +25,7 @@ def result(row):
     assert ok(row),row.get("error")
     return bytes.fromhex(row["returnData"][2:])
 
-def archive():
+def archive(capacity=False):
     r=Reader("base")
     selector=r.tag
     parent=rpc(r.url,"eth_getBlockByHash",[selector["blockHash"],False])
@@ -51,7 +51,7 @@ def archive():
             swap=tx(UNI,"exactInputSingle("+params+")",[params],[(WETH,token,fee,OWNER,10**17,1,0)],10**17)
             if ok(run([swap])[0]):return swap
         raise ValueError("Нет самостоятельного финансирования токена "+token)
-    markets=[];payments=[];stopped=[]
+    markets=[];payments=[];stopped=[];caps=[]
     for pool in addresses:
         x,y,step,orig,active,reserves,fees=r.many([(pool,s,(),t) for s,t in [
             ("getTokenX()","address"),("getTokenY()","address"),("getBinStep()","uint16"),("getFactory()","address"),("getActiveId()","uint24"),
@@ -73,6 +73,10 @@ def archive():
                             physical=[physical_x,physical_y],runtime="0x"+code.hex(),probes=probes))
         if not all(reserves):
             if not any(reserves):assert all(not p["result"] or p["result"][1]==0 for p in probes)
+            continue
+        if capacity:
+            from record_e3_capacity import examine
+            caps.extend(examine(r,pool,(x,y),step,ROUTER,stamp,run))
             continue
         first=WETH if WETH in (x,y) else USDC
         assert first in (x,y)
@@ -114,13 +118,15 @@ def archive():
                         before=prior,after=post,approval_gas=int(rows[i]["gasUsed"],16),gas=int(swap["gasUsed"],16),logs=swap["logs"],
                         order=normal,strict=strict.get("error"),expired=expired.get("error")))
                     prefix.extend([approve,normal]);amount=net
-    assert payments and len(markets)==count
+    assert (caps if capacity else payments) and len(markets)==count
     return dict(selector=selector,stamp=stamp,factory=FACTORY,factory_hash=r.code_hash(FACTORY),implementation=impl,
                 impl_hash=r.code_hash(impl),router=ROUTER,router_hash=r.code_hash(ROUTER),payer=OWNER,executor=EXEC,
-                markets=markets,payments=payments,refusals=stopped)
+                markets=markets,payments=payments,refusals=stopped,capacity=caps)
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("output",type=Path)
-    ap.parse_args().output.write_text(json.dumps(archive(),separators=(",",":")),encoding="utf8")
+    ap.add_argument("--capacity",action="store_true")
+    args=ap.parse_args()
+    args.output.write_text(json.dumps(archive(args.capacity),separators=(",",":")),encoding="utf8")
 

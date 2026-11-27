@@ -1054,6 +1054,8 @@ jobs:
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
       - if: matrix.market == 'kaliber-base-vaults'
         run: python scripts/record_kaliber_base.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'e3-base-capacity'
+        run: python scripts/record_e3_base.py "$RUNNER_TEMP/market.json" --capacity
       - if: matrix.market == 'e3-base-bins'
         run: python scripts/record_e3_bins.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'e3-base'

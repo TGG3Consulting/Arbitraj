@@ -149,20 +149,30 @@ pub(super) fn find(
             k: ri.checked_mul(ro)?.checked_mul(U256::from(1_000_000))?,
         })
     };
-    let mut ranges = vec![(lo.max(U256::ONE), hi)];
-    while let Some((l, h)) = ranges.pop() {
-        if l > h {
-            continue;
-        }
-        let x = if last { h } else { l };
+    let lo = lo.max(U256::ONE);
+    if lo > hi {
+        return None;
+    }
+    let accepts = |x| {
         let (branch, a, iv) = amounts(s, buy, x)?;
-        if branch == defense
-            && if defense {
-                !iv.is_zero() && iv <= s.defense_balance
-            } else {
-                !a.is_zero() && amm_after(s, i, x, a).is_some()
-            }
-        {
+        Some(
+            branch == defense
+                && if defense {
+                    !iv.is_zero() && iv <= s.defense_balance
+                } else {
+                    !a.is_zero() && amm_after(s, i, x, a).is_some()
+                },
+        )
+    };
+    // Ordinary balanced books answer at the requested endpoint and allocate no search stack.
+    let endpoint = if last { hi } else { lo };
+    if accepts(endpoint)? {
+        return Some(endpoint);
+    }
+    let mut ranges = vec![(lo, hi)];
+    while let Some((l, h)) = ranges.pop() {
+        let x = if last { h } else { l };
+        if x != endpoint && accepts(x)? {
             return Some(x);
         }
         if l == h {

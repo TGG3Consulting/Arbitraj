@@ -492,11 +492,11 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_mint_club.py "${MARKET#mint-club-}" "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum'
+      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum' || matrix.market == 'antfarm-ethereum'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum'
+      - if: startsWith(matrix.market, 'mint-club-') || matrix.market == 'carbon-ethereum' || matrix.market == 'templedao-ethereum' || matrix.market == 'antfarm-ethereum'
         working-directory: contracts
         run: npm ci --no-audit --no-fund
       - if: startsWith(matrix.market, 'mint-club-')
@@ -514,6 +514,8 @@ jobs:
         run: |
           python scripts/record_antfarm_ethereum.py "$RUNNER_TEMP/directory.json"
           python scripts/record_antfarm_wallets.py "$RUNNER_TEMP/directory.json" "$RUNNER_TEMP/market.json"
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/antfarm" AntfarmWallet
+          python scripts/record_antfarm_module.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/antfarm/AntfarmWallet.json" "$RUNNER_TEMP/antfarm-protected.json"
       - if: matrix.market == 'bitswap-ethereum'
         run: python scripts/record_bitswap_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'templedao-ethereum'
@@ -536,6 +538,7 @@ jobs:
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/mint-club-protected.json
             ${{ runner.temp }}/carbon-protected.json
+            ${{ runner.temp }}/antfarm-protected.json
   ethereum-v2-registry:
     if: inputs.community_archive_replay
     runs-on: ubuntu-latest

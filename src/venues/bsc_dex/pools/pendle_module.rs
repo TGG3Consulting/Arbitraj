@@ -83,6 +83,7 @@ pub(crate) async fn checked(
         )
     )?;
     let [code, selected, binding, f0, f3, f4, f5, f6] = r;
+    let factory = |name: &str| roles.get(name).map_or(Address::ZERO, |r| r.address);
     if direct_module::matching_hash(&accepted, &code).is_none()
         || selected.as_ref() != facet.address.into_word().as_slice()
         || batch::decode(&binding, IMarket::routerCall {})? != router.address
@@ -93,11 +94,11 @@ pub(crate) async fn checked(
             batch::decode(&f5, IMarket::factoryV5Call {})?,
             batch::decode(&f6, IMarket::factoryV6Call {})?,
         ] != [
-            role("marketFactory")?.address,
-            role("marketFactoryV3")?.address,
-            role("marketFactoryV4")?.address,
-            role("marketFactoryV5")?.address,
-            role("marketFactoryV6")?.address,
+            factory("marketFactory"),
+            factory("marketFactoryV3"),
+            factory("marketFactoryV4"),
+            factory("marketFactoryV5"),
+            factory("marketFactoryV6"),
         ]
         || generation != ctx.settings.generation()
     {

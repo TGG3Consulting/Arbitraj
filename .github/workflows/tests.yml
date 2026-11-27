@@ -657,21 +657,21 @@ jobs:
         run: python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'goliath-ethereum'
         run: python scripts/record_goliath_ethereum.py "$RUNNER_TEMP/market.json"
-      - if: matrix.market == 'pendle-protected-ethereum' || matrix.market == 'native-rfq-protected-ethereum'
+      - if: startsWith(matrix.market, 'pendle-protected-') || matrix.market == 'native-rfq-protected-ethereum'
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - if: matrix.market == 'pendle-protected-ethereum' || matrix.market == 'native-rfq-protected-ethereum'
+      - if: startsWith(matrix.market, 'pendle-protected-') || matrix.market == 'native-rfq-protected-ethereum'
         working-directory: contracts
         run: npm ci --no-audit --no-fund
       - if: matrix.market == 'native-rfq-protected-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter
           python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/native/NativeRfqAdapter.json"
-      - if: matrix.market == 'pendle-protected-ethereum'
+      - if: startsWith(matrix.market, 'pendle-protected-')
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/pendle" PendleMarketAdapter
-          python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/pendle/PendleMarketAdapter.json"
+          python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json" --module "$RUNNER_TEMP/pendle/PendleMarketAdapter.json" ${{ matrix.market == 'pendle-protected-base' && '--base' || '' }}
       - if: matrix.market == 'treble-wallets-base'
         run: python scripts/record_base_recovered_wallets.py treble-limit "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'treble-limit-base'

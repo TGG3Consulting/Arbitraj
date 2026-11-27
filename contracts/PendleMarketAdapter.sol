@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Владелец размещает модуль с проверенными роутером и фабриками Ethereum. Модуль обменивает средства
+// Владелец размещает модуль с проверенными роутером и фабриками выбранной сети. Модуль обменивает средства
 // плательщика между PT и разрешённым ERC-20 данной серии. Подписанный срок и минимум действуют до чистой выплаты.
 pragma solidity 0.8.37;
 import {IBalancerVault} from "./IPools.sol";
@@ -49,13 +49,17 @@ contract PendleMarketAdapter {
     error InvalidOrder();
     error Payment();
     event Settled(address indexed payer,address indexed recipient,address indexed market,address input,address output,uint256 spent,uint256 received);
-    constructor(address router_,address[5] memory registered) {
-        if (block.chainid!=1 || router_.code.length==0) revert InvalidMarket();
+    constructor(uint256 expectedChain,address router_,address[5] memory registered) {
+        if (block.chainid!=expectedChain || router_.code.length==0) revert InvalidMarket();
         router=IPendleWalletRouter(router_);
+        bool hasFactory;
         for(uint256 i;i<registered.length;++i) {
+            if(registered[i]==address(0))continue;
+            hasFactory=true;
             if(registered[i].code.length==0)revert InvalidMarket();
             for(uint256 j;j<i;++j)if(registered[i]==registered[j])revert InvalidMarket();
         }
+        if(!hasFactory)revert InvalidMarket();
         originalFactory=registered[0];factoryV3=registered[1];factoryV4=registered[2];factoryV5=registered[3];factoryV6=registered[4];
     }
     function execute(address market,address input,address output,uint256 amount,uint256 minimum,uint256 deadline) external returns(uint256) {
@@ -74,7 +78,7 @@ contract PendleMarketAdapter {
             || recipient==address(0) || recipient==address(this) || recipient==market || recipient==address(router)) revert InvalidOrder();
         busy=true;
         IPendleMarketInfo venue=IPendleMarketInfo(market);address registrar=venue.factory();
-        if(!(registrar==originalFactory || registrar==factoryV3 || registrar==factoryV4 || registrar==factoryV5 || registrar==factoryV6)
+        if(registrar==address(0) || !(registrar==originalFactory || registrar==factoryV3 || registrar==factoryV4 || registrar==factoryV5 || registrar==factoryV6)
             || !IPendleRegistrar(registrar).isValidMarket(market) || venue.expiry()<=block.timestamp) revert InvalidMarket();
         (address sy,address pt,address yt)=venue.readTokens();bool buy=output==pt;
         if(IPendleSeries(pt).SY()!=sy || IPendleSeries(pt).YT()!=yt || IPendleSeries(yt).SY()!=sy || IPendleSeries(yt).PT()!=pt

@@ -58,7 +58,7 @@ fn check_row(
     }
     if advice.starts_with("Не используется") {
         return if def.description.contains("Не используется с решения 92")
-            && area == "Venue kyberswap"
+            && matches!(area, "Global" | "Venue kyberswap")
             && source.contains("src/settings/catalog/kyber.rs")
             && (source.contains("121") || advice.contains("121"))
             && (source.contains("92") || advice.contains("92"))
@@ -179,4 +179,16 @@ fn wrong_scope_and_a_different_amount_cannot_satisfy_the_same_setting() {
     assert!(check_row(name, "Global", "`99`", "Ryze Router", &values).is_err());
     assert!(check_row(name, "Venue base_dex", "`100`", "Ryze Router", &values).is_err());
     assert!(check_row("zeroex.api_key", "Vault", "`ключ`", "0x API", &values).is_err());
+}
+
+#[test]
+fn legacy_market_parameters_follow_their_catalog_scope() {
+    let presets = Presets::new();
+    let why = "Не используется после решений 92 и 121.";
+    let source = "src/settings/catalog/kyber.rs";
+    assert!(check_row("kyber.quote_poll_ms", "Global", why, source, &presets).is_ok());
+    assert!(check_row("kyber.quote_poll_ms", "Venue kyberswap", why, source, &presets).is_err());
+    assert!(check_row("kyber.assume_zero_transfer_tax", "Venue kyberswap", why, source, &presets).is_ok());
+    assert!(check_row("kyber.assume_zero_transfer_tax", "Global", why, source, &presets).is_err());
+    assert!(check_row("kyber.http_timeout_ms", "Global", why, source, &presets).is_err());
 }

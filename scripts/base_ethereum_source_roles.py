@@ -30,6 +30,9 @@ MARKETS = {
 # These particular statistics count a payment to a receiver. No pair, exchange rate or second transfer
 # can be inferred from the statistic. A separate strategy or exchange from that provider is independently reviewed.
 MEASURE = {
+    "dexs/metamask-card.ts": "сумма токенов из аргументов withdraw в транзакциях по адресам расчёта карты",
+    "dexs/x402/index.ts": "сумма переводов токенов в платёжных транзакциях авторизованных фасилитаторов x402",
+    "dexs/predictex/index.ts": "оборот позиции по бессрочному контракту, рассчитанный по событиям Trade и Liquidate",
     "dexs/sablier-lockup.ts": "получение получателем токенов из Lockup через Withdraw",
     "dexs/spritz-card.ts": "сумма paymentTokenAmount события Payment в адрес платёжного обработчика Spritz",
     "dexs/p2pme.ts": "выплата USDC покупателю после исполнения заявки на покупку за фиат",
@@ -52,11 +55,42 @@ SOURCE_ROLES = {
              {"ethereum":"bancor-v3-ethereum"}),
 }
 
+# These exported modules share a helper; their individual catalog entries contain no path.
+CARD_PROGRAMS = {
+    "cypher-card": ("crypto-card",127), "bleap-card": ("crypto-card",153),
+    "nexo-card": ("crypto-card",177), "holyheld": ("crypto-card",207),
+    "redotpay": ("crypto-card",245), "karta-card": ("rainCard",117),
+    "tuyo-card": ("rainCard",130), "kolo-card": ("rainCard",143),
+}
+
+def card_reference(network, adapter):
+    name=adapter.get("module")
+    if name not in CARD_PROGRAMS or (network != "base" and name in {"karta-card","tuyo-card"}):
+        return None
+    helper,line=CARD_PROGRAMS[name]
+    return f"https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/helpers/{helper}.ts#L{line}"
+
+
 def describe(network,source_id,adapter,configured,candidates):
     path = adapter.get("path")
     revision="be9967c3f0d3ccd06c871bab0d16beb3304de719"
     repository=f"https://github.com/DefiLlama/dimension-adapters/blob/{revision}/"
+    card = card_reference(network,adapter)
+    if card:
+        helper,_ = CARD_PROGRAMS[adapter["module"]]
+        if helper=="rainCard":
+            return "Расход по карте. Источник суммирует выплаченные токены из Liquidation связанного с картой залогового контракта Rain."
+        return "Расход по карте. Источник суммирует токены, поступившие на указанные получающие адреса карточной программы."
+    if network=="ethereum" and source_id=="2121" and path=="dexs/frax-swap/index.ts":
+        factory=configured["fraxswap_ethereum"]["settings"]["dex.factory"]
+        return (f"Fraxswap. Профиль `fraxswap_ethereum`, реестр `{factory}`, проверено 30 пар. "
+                "Источник оборота возвращает общую сумму сети за дату без идентификаторов пулов.")
+    if network=="ethereum" and source_id=="4944" and path=="dexs/bob-gateway/index.ts":
+        return ("Межсетевой обмен BTC ↔ USDT. Одна нога требует перевода Bitcoin и его подтверждения. "
+                "На Ethereum учитывается выпуск USDT или завершённая заявка после доказательства оплаты BTC.")
     role=SOURCE_ROLES.get(source_id)
+    if network=="ethereum" and source_id=="7381" and path=="dexs/supernova.ts":
+        role=("dex.factory","0x5aef44edfc5a7edd30826c724ea12d7be15bdc30",path,8,{"ethereum":"supernova-amm"})
     if source_id=="2695" and path=="dexs/smardex/index.ts":
         factory,line={"base":("0xdd4536dd9636564d891c919416880a3e250f975a",6),
                       "ethereum":("0xb878dc600550367e14220d4916ff678fb284214f",8)}[network]

@@ -1792,7 +1792,8 @@ def tables(network, snapshots, profiles):
                   if s["network"] == network}
     for row in sorted(llama["rows"], key=lambda row: -volumes.get(row["id"], -1)):
         r = adapters[row["id"]]
-        ref = r.get("link") or r.get("source")
+        from base_ethereum_source_roles import card_reference
+        ref = card_reference(network,r) or r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
         if str(row["id"]) == "8209":
@@ -2678,7 +2679,7 @@ def main():
     lines.extend(["### Ambient на Ethereum", "",
         "Профиль `ambient-ethereum` работает с физическими адресами токенов и полным индексом uint256. "
         "В паре с нативным ETH исходный контракт принимает или отдаёт ETH. Защищённый модуль преобразует его в WETH для кошелька. "
-        "Пул с нативным ETH и пул с токеном WETH имеют разные ключи. На блоке 26 492 699 кошелёк получил 813 541 атом USDC за 0,0005 ETH. Контракт обмена не испустил события. Для 1 ETH котировка снизилась с 1 613 303 444 до 1 613 289 705 атомов USDC, а для соседнего пула USDC/USDT сохранилась. При смене номера или хеша блока граф ждёт отдельного обновления каждого пула. [Транзакция, квитанция и котировки двух блоков](../tests/data/first_run_dex_2026-11-26/ambient_ethereum_silent_swap.json.gz). На блоке 26 492 699 кошелёк получил 813 541 атом USDC за 0,0005 ETH. Контракт обмена не испустил события. Для 1 ETH котировка снизилась с 1 613 303 444 до 1 613 289 705 атомов USDC, а для соседнего пула USDC/USDT сохранилась. При смене номера или хеша блока граф ждёт отдельного обновления каждого пула. [Транзакция, квитанция и котировки двух блоков](../tests/data/first_run_dex_2026-11-26/ambient_ethereum_silent_swap.json.gz).", "",
+        "Пул с нативным ETH и пул с токеном WETH имеют разные ключи. На блоке 26 492 699 кошелёк получил 813 541 атом USDC за 0,0005 ETH. Контракт обмена не испустил события. Для 1 ETH котировка снизилась с 1 613 303 444 до 1 613 289 705 атомов USDC, а для соседнего пула USDC/USDT сохранилась. При смене номера или хеша блока граф ждёт отдельного обновления каждого пула. [Транзакция, квитанция и котировки двух блоков](../tests/data/first_run_dex_2026-11-26/ambient_ethereum_silent_swap.json.gz).", "",
         "| Настройка | Значение |", "|---|---|"])
     for field, value in preset.items():
         display = "<br>".join(f"`{v}`" for v in value) if isinstance(value,list) else f"`{str(value).lower()}`"

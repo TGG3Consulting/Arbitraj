@@ -164,6 +164,10 @@ impl Market {
         now: u64,
         prefix: &[Call],
     ) -> GatewayResult<Leg> {
+        if matches!(self.venue, Venue::FundedExecutor) {
+            let call = Box::pin(super::probe_exec::part(ctx, e, order, wallet, now)).await?;
+            return Ok(Leg { entry: None, call });
+        }
         if let Venue::WalletRouter(router) = self.venue {
             let call = super::registered_v3::leg(ctx, e, router, wallet, order, now)?;
             return Ok(Leg { entry: None, call });

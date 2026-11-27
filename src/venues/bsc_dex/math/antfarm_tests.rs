@@ -327,3 +327,56 @@ fn paying_fees_from_proceeds_matches_eight_atomic_wallet_fills() {
     }
     assert_eq!(count, 8);
 }
+#[test]
+fn inverse_net_payout_finds_the_first_integer_trade_above_both_physical_fee_floors() {
+    use crate::core::types::{AntfarmBook, AntfarmFunds};
+    let token = |n: u8| Address::repeat_byte(n);
+    let (a, b, atf) = (token(1), token(2), token(3));
+    let market = |tokens, tier, r0, r1| {
+        let reserves = [U256::from(r0), U256::from(r1)];
+        Market {
+            tokens,
+            atf,
+            tier,
+            reserves,
+            balances: [reserves[0], reserves[1], U256::ZERO],
+            dividends: U256::ZERO,
+            lp_supply: U256::from(10000),
+            oracle_address: None,
+            oracle: None,
+        }
+    };
+    // The minimum ATF leg costs less than one raw output unit at these reserve ratios.
+    for priced in [0, 1] {
+        for donation in [0u64, 1200] {
+            let mut primary = market([a, b], 100, 1_000_000u64, 2_000_000u64);
+            primary.oracle = Some((priced, U256::from(1000) << 112));
+            let mut funding = market([atf, b], 100, 100_000_000u64, 1000u64);
+            funding.balances[0] += U256::from(donation);
+            funding.balances[2] = funding.balances[0];
+            let funds = AntfarmFunds::Wallet {
+                atf: U256::from(50_000),
+            };
+            let book = AntfarmBook {
+                market: primary,
+                funding: vec![(funding, None)],
+                limits: None,
+                proceeds: Some((100, funds)),
+            };
+            for target in [1u64, 5, 20, 75, 180] {
+                let size = U256::from(target);
+                let expected = (1u64..=200).find_map(|n| {
+                    book.paid_from_output(a, U256::from(n), 100, funds)
+                        .filter(|f| f.credit >= size)
+                });
+                let actual = book.output_order(a, false, size);
+                assert!(expected.is_some(), "missing exercised domain");
+                assert_eq!(
+                    actual.map(|f| f.primary.debit),
+                    expected.map(|f| f.primary.debit),
+                    "side {priced} donation {donation} target {target}"
+                );
+            }
+        }
+    }
+}

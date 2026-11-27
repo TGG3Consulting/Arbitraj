@@ -66,7 +66,9 @@ contract BancorV3Adapter {
                   uint256 limit,uint256 deadline) external returns(uint256 received) {
         require(s.kind==0 && s.userData.length==0 && f.sender==msg.sender && !f.fromInternalBalance && !f.toInternalBalance
                 && s.assetIn!=address(0) && s.assetOut!=address(0),"step");
-        (,received)=settle(Order(s.assetIn,s.assetOut,uint256(s.poolId),s.amount,limit,deadline,false),f.recipient);
+        uint256 form=uint256(s.poolId);
+        if (network.isWhitelisted(address(this))) form |= 4;
+        (,received)=settle(Order(s.assetIn,s.assetOut,form,s.amount,limit,deadline,false),f.recipient);
     }
     function cash(address token,address owner) private view returns(uint256){
         return token==address(0)?owner.balance:IBancorERC20(token).balanceOf(owner);

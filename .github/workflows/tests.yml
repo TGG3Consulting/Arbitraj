@@ -650,7 +650,7 @@ jobs:
       - if: startsWith(matrix.market, 'moon-wallet-')
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/moon" MooniswapWallet
-          python scripts/record_mooniswap_wallet.py "${MATRIX_MARKET#moon-wallet-}" "$RUNNER_TEMP/moon/MooniswapWallet.json" "$RUNNER_TEMP/market.json"
+          python scripts/record_mooniswap_wallet.py "${MATRIX_MARKET#moon-wallet-}" "$RUNNER_TEMP/moon/MooniswapWallet.json" "$RUNNER_TEMP/market.json" --manifest "$RUNNER_TEMP/mooniswap-${MATRIX_MARKET#moon-wallet-}-create.json"
         env:
           MATRIX_MARKET: ${{ matrix.market }}
       - if: startsWith(matrix.market, 'plaza-wallet-')
@@ -1059,6 +1059,7 @@ jobs:
             ${{ runner.temp }}/market.json
             ${{ runner.temp }}/directory.json
             ${{ runner.temp }}/uniswap-v1-create.json
+            ${{ runner.temp }}/mooniswap-*-create.json
             ${{ runner.temp }}/bancor-v3-create.json
             ${{ runner.temp }}/balancer-v1-create.json
             ${{ runner.temp }}/yield-basis-create.json

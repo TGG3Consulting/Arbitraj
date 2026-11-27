@@ -3,6 +3,7 @@ import argparse
 import gzip
 import json
 from pathlib import Path
+from hashlib import sha256
 
 from eth_abi import encode
 from eth_utils import keccak
@@ -33,7 +34,7 @@ def runtime(reader, artifact, parameters):
     return returned
 
 
-def capture(generation, artifact):
+def capture(generation, artifact, manifest):
     folder = ROOT/"tests/data/first_run_dex_2026-11-26"
     original = json.loads(gzip.decompress((folder/f"mooniswap_{generation}_ethereum.json.gz").read_bytes()))
     head = json.loads((folder/"ethereum.json").read_bytes())
@@ -106,11 +107,28 @@ def capture(generation, artifact):
                                   bare_gas=leg["exact"]["gas"],gas=int(filled["gasUsed"],16),approvals_gas=0 if source==ZERO else int(rows[left-1]["gasUsed"],16),
                                   before=list(map(str,old)),after=list(map(str,new)),high=bad["error"],expired=expired["error"],trade=trade,logs=filled["logs"]))
         markets.extend(cases)
+    if manifest is not None:
+        if {case["mode"] for case in markets} != {"wallet", "wallet_wrapped", "v5"}:
+            raise ValueError("unmeasured wallet forms")
+        args = encode(["address","address","bool"], [factory,WETH,generation=="successor"])
+        creation = bytes.fromhex(artifact["creation"]) + args
+        roles = {}
+        for name, address in (("factory", factory), ("wrapped", WETH)):
+            code = reader.one("eth_getCode", [address, reader.tag])
+            if not code or code == "0x":
+                raise ValueError(("missing role", name))
+            roles[name] = {"address":address,"keccak256":"0x"+keccak(hexstr=code).hex()}
+        data = dict(kind="mooniswap_v2" if generation=="successor" else "mooniswap_v1",
+                    chainId=1,network="Ethereum",roles=roles,hasSwapFor=generation=="successor",
+                    sourceBlock=reader.tag["blockHash"],runtimeKeccak="0x"+keccak(hexstr=deployed).hex(),
+                    runtimeSha256=sha256(bytes.fromhex(deployed[2:])).hexdigest(),creationSha256=sha256(creation).hexdigest(),
+                    data="0x"+creation.hex(),solc=artifact["solc"])
+        manifest.write_text(json.dumps(data,separators=(",",":")),encoding="utf8")
     return dict(generation=generation,factory=factory,selector=reader.tag,owner=OWNER,module=MODULE,executor=EXEC,
                 module_hash="0x"+keccak(hexstr=deployed).hex(),cases=markets)
 
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("generation",choices=FACTORIES)
-    ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);opt=ap.parse_args()
-    opt.output.write_text(json.dumps(capture(opt.generation,json.loads(opt.artifact.read_bytes())),separators=(",",":")),encoding="utf8")
+    ap.add_argument("artifact",type=Path);ap.add_argument("output",type=Path);ap.add_argument("--manifest",type=Path);opt=ap.parse_args()
+    opt.output.write_text(json.dumps(capture(opt.generation,json.loads(opt.artifact.read_bytes()),opt.manifest),separators=(",",":")),encoding="utf8")

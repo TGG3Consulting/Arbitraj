@@ -63,8 +63,9 @@ export function start() {
  * Принимает: имя, область {kind, id?}, значение (null — очистить). Возвращает: ничего.
  * Ошибки: Error с текстом бэкенда как есть.
  */
-export async function setValue(name, scope, value) {
+export async function setValue(name, scope, value, compare) {
   const body = { name, scope: scope.kind === 'Global' ? { kind: 'Global' } : scope, value };
+  if (compare !== undefined) body.compare = {value:compare};
   const change = await put('/api/settings', body);
   if (change) {
     const key = valueKey(name, scope);

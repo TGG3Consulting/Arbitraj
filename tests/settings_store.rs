@@ -219,3 +219,22 @@ async fn concurrent_writes_keep_cache_equal_to_db() {
     let cached = s.integer("signal.min_hold_updates", At::default()).unwrap();
     assert_eq!(last[0]["new"], json!(cached));
 }
+
+
+#[tokio::test]
+async fn stale_list_append_cannot_replace_another_wallets_entry() {
+    let (store,_) = fresh("concurrent-operator-change").await;
+    let scope=Scope::Venue("eth_dex".into());
+    let name="native_rfq.roles";
+    let original=json!(["network 1 ethereum"]);
+    store.set(name,scope.clone(),Some(original.clone()),"seed").await.unwrap();
+    let a=json!(["network 1 ethereum","module A"]);
+    let b=json!(["network 1 ethereum","module B"]);
+    let (first,second)=tokio::join!(
+        store.set_checked(name,scope.clone(),Some(a.clone()),"a",Some(Some(original.clone()))),
+        store.set_checked(name,scope.clone(),Some(b.clone()),"b",Some(Some(original.clone())))
+    );
+    assert_ne!(first.is_ok(),second.is_ok());
+    assert_eq!(store.get_exact(name,&scope),Some(if first.is_ok(){a}else{b}));
+    assert!(store.set_checked(name,scope.clone(),None,"stale",Some(Some(original))).await.is_err());
+}

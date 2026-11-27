@@ -21,6 +21,7 @@
   import HashflowQuote from './HashflowQuote.svelte';
   import ClipperQuote from './ClipperQuote.svelte';
   import SourcePrice from './SourcePrice.svelte';
+  import AirSwapSource from './AirSwapSource.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
 
@@ -68,6 +69,7 @@
       <button onclick={balances}>Обновить</button></p>
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}${q}`} />
+  {#if w.address && c.venue}<AirSwapSource venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue}<HashflowQuote venue={c.venue} trader={w.address} />{/if}
   {#if w.address && c.venue && c.fynd}<SourcePrice venue={c.venue} trader={w.address} />{/if}
   {#if w.address && c.venue && c.zeroex}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}

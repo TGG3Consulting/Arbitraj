@@ -52,6 +52,13 @@ pub struct SetBody {
     name: String,
     scope: Scope,
     value: Option<Value>,
+    #[serde(default)]
+    compare: Option<ExpectedValue>,
+}
+
+#[derive(Deserialize)]
+struct ExpectedValue {
+    value: Option<Value>,
 }
 
 /// Меняет значение. Возвращает: изменение (старое и новое) или null — значение не изменилось.
@@ -73,7 +80,7 @@ pub async fn set(
     }
     match st
         .settings
-        .set(&b.name, b.scope, value, CHANGED_BY_UI)
+        .set_checked(&b.name,b.scope,value,CHANGED_BY_UI,b.compare.map(|c|c.value))
         .await
     {
         Ok(c) => Ok(Json(c)),

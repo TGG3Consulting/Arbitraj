@@ -1,5 +1,6 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
+import {isAirSwap,loadAirSwap,checkExchange,checkAirSwapOwner} from './airswapDeploy.js';
 import {isLlamma, loadLlamma, checkLlamma} from './llammaDeploy.js';
 import {loadAmmalgam,checkAmmalgam} from './ammalgamDeploy.js';
 import {mooniswap, loadMooniswap, checkCashRoles} from './mooniswapDeploy.js';
@@ -13,7 +14,7 @@ import {loadAngstrom, checkAngstrom} from "./angstromDeploy.js";
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
-const bindsWallet = kind => isLlamma(kind) || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
+const bindsWallet = kind => isAirSwap(kind) || isLlamma(kind) || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -29,6 +30,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (isAirSwap(settings.kind) || isAirSwap(plan.kind)) return loadAirSwap(settings,plan,hashCode);
   if (isLlamma(settings.kind) || isLlamma(plan.kind)) return loadLlamma(settings,plan,hashCode);
   if (settings.kind==='ammalgam_dlex' || plan.kind==='ammalgam_dlex') return loadAmmalgam(settings,plan,hashCode);
   if (defiPlaza(settings.kind) || defiPlaza(plan.kind)) return loadDefiPlaza(settings,plan,hashCode);
@@ -61,6 +63,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (isAirSwap(p.kind)) return checkExchange(provider,p,at);
   if (isLlamma(p.kind)) return checkLlamma(provider,p,at);
   if (p.kind==='ammalgam_dlex') return checkAmmalgam(provider,p,at);
   if (mooniswap(p.kind) || defiPlaza(p.kind)) return checkCashRoles(provider,p,at);
@@ -96,6 +99,7 @@ export async function estimate(provider, p) {
   const accounts = await call(provider, 'eth_requestAccounts');
   requireFact(address.test(accounts?.[0]), 'Кошелёк не предоставил адрес плательщика.');
   const from = accounts[0].toLowerCase();
+  if (isAirSwap(p.kind)) requireFact(from===p.wallet,'Выберите в браузере тот кошелёк, для которого размещается AirSwap.');
   const head = await call(provider, 'eth_getBlockByNumber', ['latest', false]);
   const at = {blockHash:head.hash, requireCanonical:true};
   await checkMarket(provider, p, at);
@@ -135,6 +139,7 @@ export async function deployed(provider, p, hash, pending) {
   ]);
   requireFact(tx && r && r.transactionHash?.toLowerCase()===hash.toLowerCase(), 'Каноническая квитанция пока не найдена.');
   const resolveReplacement = bindsWallet(p.kind);
+  if (isAirSwap(p.kind)) requireFact(tx.from?.toLowerCase()===p.wallet,'Эту транзакцию подписал другой кошелёк.');
   const requested = tx.to == null && BigInt(tx.value) === 0n && tx.input?.toLowerCase() === p.data.toLowerCase();
   requireFact(tx.hash.toLowerCase() === hash.toLowerCase() && tx.blockHash === r.blockHash &&
     (requested || (resolveReplacement && pending)), 'Транзакция не создаёт этот модуль.');
@@ -170,5 +175,6 @@ export async function deployed(provider, p, hash, pending) {
   if (bindsWallet(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
   requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
+  if (isAirSwap(p.kind)) await checkAirSwapOwner(provider,p,r.contractAddress,at);
   return changed ? {address:r.contractAddress.toLowerCase(),replacementHash:hash} : {address:r.contractAddress.toLowerCase()};
 }

@@ -17,7 +17,7 @@
 use std::sync::Arc;
 
 use chrono::Utc;
-use rusqlite::params;
+use rusqlite::{OptionalExtension,params};
 use serde_json::{Value, json};
 use tokio::sync::{Mutex, broadcast};
 
@@ -205,6 +205,15 @@ impl Store {
         value: Option<Value>,
         by: &str,
     ) -> Result<Option<Change>, SetError> {
+        self.set_checked(name,scope,value,by,None).await
+    }
+
+    /// Optional compare-and-set for appending a verified deployment to a shared list.
+    /// The database comparison and its write share the same SQLite transaction.
+    pub async fn set_checked(
+        &self, name: &str, scope: Scope, value: Option<Value>, by: &str,
+        expected: Option<Option<Value>>,
+    ) -> Result<Option<Change>, SetError> {
         // Имени нет в каталоге (настройку удалили из кода, например dex.enabled) — разрешено только очистить
         // оставшееся значение: задать его нельзя (решение 59: устаревшие настройки удаляет человек из интерфейса).
         // Решение 239: копия настроек на момент входа — только для чтения.
@@ -270,6 +279,8 @@ impl Store {
             }
         }
         let old = self.get_exact(name, &scope);
+        let conflict = ||SetError::Invalid(format!("«{name}»: значение изменилось, обновите список перед сохранением"));
+        if expected.as_ref().is_some_and(|value|value!=&old){return Err(conflict());}
         if old == new {
             return Ok(None);
         }
@@ -284,9 +295,15 @@ impl Store {
             old.as_ref().map(Value::to_string),
             new.as_ref().map(Value::to_string),
         );
-        self.db
+        let expected=expected.map(|v|v.map(|value|value.to_string()));
+        let written=self.db
             .call(move |c| {
                 let tx = c.transaction()?;
+                if let Some(expected)=expected {
+                    let saved:Option<String>=tx.query_row("SELECT value FROM settings WHERE name=?1 AND scope=?2",
+                        params![n,sk], |row|row.get(0)).optional()?;
+                    if saved!=expected{return Ok(false);}
+                }
                 match &new_t {
                     Some(v) => tx.execute(
                         "INSERT INTO settings (name, scope, value, updated_at) VALUES (?1, ?2, ?3, ?4)
@@ -300,9 +317,11 @@ impl Store {
                      VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                     params![n, sk, old_t, new_t, by_s, at_s],
                 )?;
-                tx.commit()
+                tx.commit()?;
+                Ok(true)
             })
             .await?;
+        if !written{return Err(conflict());}
         // Решение 409: новый снимок значений под замком писателя кэша (settings/snapshot.rs); читатели видят старый
         // или новый снимок целиком.
         let applied = self.cache.update(

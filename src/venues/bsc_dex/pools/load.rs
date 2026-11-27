@@ -51,8 +51,26 @@ pub struct Loaded {
 /// StableSwap), токены (decimals USDT и монет StableSwap), реестр (решение 306: курс встречного токена к USDT для
 /// лесенки цен пула пары не с USDT — pools/ladder_counter.rs; другим видам не нужен), блок.
 /// Ошибки: не задана нужная настройка, узел, ответ не по ABI, нет tickSpacing/binStep у пула.
+// Один запрос состояния владеет своим future, независимо от размера самого крупного
+// загрузчика. Пакет Multicall остальных пулов не выделяет память для этих чтений.
 #[allow(clippy::too_many_arguments)]
-pub async fn state(
+pub fn state<'a>(
+    ctx: &'a Ctx,
+    tokens: &'a Tokens,
+    reg: &'a Registry,
+    f: &'a Family,
+    reference: &'a PoolRef,
+    spacing: Option<i32>,
+    step: Option<u32>,
+    usdt: Address,
+    pair: (Address, Address),
+    block: u64,
+) -> impl std::future::Future<Output = GatewayResult<Loaded>> + 'a {
+    Box::pin(read(ctx, tokens, reg, f, reference, spacing, step, usdt, pair, block))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn read(
     ctx: &Ctx,
     tokens: &Tokens,
     reg: &Registry,

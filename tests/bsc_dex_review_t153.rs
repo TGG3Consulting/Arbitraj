@@ -288,6 +288,35 @@ async fn unset_is_as_before() {
     assert!(a1.is_empty() && a2.is_empty());
 }
 
+// Измерение не конструирует и не опрашивает future: сравним и тот SHA, где исходная
+// проверка реальных ответов не помещалась на обычном стеке тестового потока.
+#[tokio::test]
+async fn batch_load_future_sizes() {
+    use arb::venues::bsc_dex::pools::{load, load_site};
+    fn size<F: std::future::Future>(_: impl FnOnce() -> F) -> usize {
+        std::mem::size_of::<F>()
+    }
+    let c = ctx("load-sizes").await;
+    let (tokens, reg) = (Tokens::default(), Registry::default());
+    let f = families::make("size-dodo", "dodo_dvm").unwrap();
+    let pool = Address::repeat_byte(1);
+    let reference = PoolRef::Contract(pool);
+    let pair = (Address::ZERO, pool);
+    let sizes = json!({
+        "solo": size(|| load::state(&c, &tokens, &reg, f, &reference, None, None, pool, pair, 1)),
+        "site": size(|| load_site::states(&c, &tokens, f, pool, &[], 1)),
+        "sequential": size(|| load_batch::states(&c, &tokens, &reg, &[], 1)),
+        "parallel": size(|| load_batch_par::states(&c, &tokens, &reg, &[], 1, 8)),
+        "dispatch": size(|| load_batch_par::states_with(&c, &tokens, &reg, &[], 1, Some(8))),
+    });
+    if let Ok(path) = std::env::var("ARB_CHECK_SIZES") {
+        std::fs::write(path, sizes.to_string()).unwrap();
+    }
+    if std::env::var_os("ARB_HISTORICAL_CHECK_SIZES").is_none() {
+        assert_eq!(sizes["solo"], std::mem::size_of::<usize>(), "{sizes}");
+    }
+}
+
 #[tokio::test]
 async fn parallel_read_equals_sequential_on_recorded_answers() {
     let c = ctx("par").await;

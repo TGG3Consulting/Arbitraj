@@ -57,6 +57,11 @@ on:
         description: Compare BSC startup futures and repeat the untouched trading check on historical commits
         type: boolean
         default: false
+      stack_check_target:
+        description: BSC regression to measure in the isolated stack check
+        type: choice
+        options: [startup, load]
+        default: startup
       native_v3_only:
         description: Run only the read-only replay of the three Base fork routers
         type: boolean
@@ -198,7 +203,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        revision: [0bff8340, ffce2052, candidate]
+        revision: ${{ fromJSON(inputs.stack_check_target == 'load' && '["e3cbb230a","4d104b383","candidate"]' || '["0bff8340","ffce2052","candidate"]') }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -211,21 +216,27 @@ jobs:
       - name: Compare the same BSC check on each revision
         env:
           REVISION: ${{ matrix.revision }}
+          CASE: ${{ inputs.stack_check_target }}
         run: |
-          cp tests/bsc_dex_check_start.rs "$RUNNER_TEMP/check.rs"
-          cp scripts/measure_bsc_startup_stack.py "$RUNNER_TEMP/measure.py"
+          test_file=tests/bsc_dex_check_start.rs
           args=()
+          if [[ "$CASE" == load ]]; then
+            test_file=tests/bsc_dex_review_t153.rs
+            args+=(--load)
+          fi
+          cp "$test_file" "$RUNNER_TEMP/check.rs"
+          cp scripts/measure_bsc_startup_stack.py "$RUNNER_TEMP/measure.py"
           if [[ "$REVISION" == candidate ]]; then
             args+=(--candidate)
           else
             git checkout --detach "$REVISION"
-            cp "$RUNNER_TEMP/check.rs" tests/bsc_dex_check_start.rs
+            cp "$RUNNER_TEMP/check.rs" "$test_file"
           fi
           python "$RUNNER_TEMP/measure.py" "$RUNNER_TEMP/bsc-startup.json" "${args[@]}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: bsc-startup-stack-${{ matrix.revision }}
+          name: bsc-${{ inputs.stack_check_target || 'startup' }}-stack-${{ matrix.revision }}
           path: ${{ runner.temp }}/bsc-startup.json
   base-v3-factory-directory:
     if: inputs.base_factory_directory

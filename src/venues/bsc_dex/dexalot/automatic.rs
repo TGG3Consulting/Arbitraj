@@ -34,6 +34,23 @@ pub(super) fn ready(c: &Ctx) -> bool {
     enabled(c) && c.vault.has_secret("dexalot.api_key") && super::profile::Config::read(c).is_ok()
 }
 impl Feed {
+    pub(super) fn admits(&self, c: &Ctx, coin: Address, cash: Address) -> bool {
+        let Some(id) = identity(c) else { return false };
+        let Ok(catalog) = self.catalog.lock() else {
+            return true;
+        };
+        let Some((generation, end, levels)) = catalog.as_ref() else {
+            return true;
+        };
+        if *generation != id || *end <= Instant::now() {
+            return true;
+        }
+        levels
+            .get()
+            .and_then(Option::as_deref)
+            .is_none_or(|v| v.find(coin, cash).is_some())
+    }
+
     pub(super) fn hold_signed(
         &self,
         c: &Ctx,

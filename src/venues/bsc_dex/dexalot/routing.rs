@@ -111,13 +111,21 @@ impl Book {
             .collect()
     }
 }
-pub(in crate::venues::bsc_dex) fn available(p: &Parts) -> bool {
-    super::automatic::ready(&p.ctx)
-        || (enabled(&p.ctx)
-            && p.dexalot
-                .tickets
-                .lock()
-                .is_ok_and(|rows| rows.values().any(|v| timely(&p.ctx, v.proof.expiry))))
+pub(in crate::venues::bsc_dex) fn available(p: &Parts, asset: &Asset) -> bool {
+    if !enabled(&p.ctx) {
+        return false;
+    }
+    let (Some(coin), Ok(cash)) = (asset.contract, p.tokens.usdt(&p.ctx)) else {
+        return false;
+    };
+    (super::automatic::ready(&p.ctx) && p.dexalot.feed.admits(&p.ctx, coin, cash))
+        || p.dexalot.tickets.lock().is_ok_and(|rows| {
+            rows.values().any(|v| {
+                ((v.proof.input, v.proof.output) == (coin, cash)
+                    || (v.proof.input, v.proof.output) == (cash, coin))
+                    && timely(&p.ctx, v.proof.expiry)
+            })
+        })
 }
 /// A simulated rebate can disappear at inclusion. Compare the calldata's maximum debit to the budget.
 pub(super) fn within_input(authorized: U256, decimals: u8, budget: Decimal) -> bool {
@@ -130,7 +138,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     qty: Decimal,
     old: GatewayResult<Quote>,
 ) -> GatewayResult<Quote> {
-    if !available(p)
+    if !available(p, a)
         || quote_stage::settlement()
         || qty <= Decimal::ZERO
         || old.as_ref().is_err_and(|e| e.code != ErrorCode::NoRoute)

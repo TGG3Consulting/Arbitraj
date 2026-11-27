@@ -87,13 +87,13 @@ impl Venue for BscDex {
 
     /// Решение 352: эпоха котировки DEX (signal_epoch.rs). Ошибок нет.
     fn signal_epoch(&self, asset: &Asset) -> Option<String> {
-        if super::airswap::routing::available(&self.p) || self.p.textile.has(asset) { return None; }
+        if super::dexalot::routing::available(&self.p) || super::airswap::routing::available(&self.p) || self.p.textile.has(asset) { return None; }
         super::signal_epoch::of(&self.p, asset)
     }
 
     /// Решение 372: строгий верх курса стороны DEX без котировок (quote/bound.rs). Ошибок нет.
     fn rate_bound(&self, asset: &Asset, side: Side) -> crate::gateway::rate_bound::RateBound {
-        if super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
+        if super::dexalot::routing::available(&self.p) || super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
@@ -236,6 +236,7 @@ impl Venue for BscDex {
         let baseline=super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=super::dexalot::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::airswap::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::textile::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
@@ -254,7 +255,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             return self.quote(asset, side, qty).await.map(|q| q.fillable_qty);
         }
-        if super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
+        if super::dexalot::routing::available(&self.p) || super::airswap::routing::available(&self.p) || self.p.textile.has(asset) || super::hashflow::enabled(&self.p.ctx) || super::native_rfq::routing::available(&self.p,asset,side) || super::gladius::routing::available(&self.p,asset,side) || super::raindex::routing::available(&self.p,asset,side) || super::epsilon::routing::available(&self.p,asset)
             || super::hanji::routing::active(&self.p)
             || super::ryze::routing::active(&self.p)
             || super::fermi::routing::active(&self.p)
@@ -283,6 +284,7 @@ impl Venue for BscDex {
         extra.extend(self.p.ryze.breaks(&self.p,asset,side,max_qty));
         extra.extend(super::raindex::routing::breaks(&self.p,asset,side,max_qty));
         if !crate::gateway::quote_stage::settlement() {
+            extra.extend(self.p.dexalot.breaks(&self.p,asset,side,max_qty));
             extra.extend(self.p.airswap.breaks(&self.p,asset,side,max_qty));
             extra.extend(self.p.textile.breaks(&self.p,asset,side,max_qty));
             extra.extend(super::hashflow::routing::breaks(

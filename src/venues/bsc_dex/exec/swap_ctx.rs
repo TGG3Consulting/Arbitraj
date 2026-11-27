@@ -45,6 +45,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) textile: Option<Box<super::super::textile::receipt::Saved>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub(in crate::venues::bsc_dex) dexalot: Option<Box<super::super::dexalot::receipt::Saved>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) airswap: Option<Box<super::super::airswap::receipt::Saved>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) epsilon: Option<Box<super::super::epsilon::wire::Saved>>,

@@ -1,6 +1,30 @@
 //! Same-chain Dexalot orders. The public reference price may use ETH as the WETH price source.
 mod client;
+mod firm;
 mod price;
+mod profile;
+pub(super) mod receipt;
+pub(super) mod routing;
+#[cfg(test)]
+mod tests;
+mod trade;
+mod wire;
+pub(super) use routing::Book;
+pub(super) use trade::trade;
+pub(super) const LABEL: &str = "Dexalot RFQ";
+pub(super) fn enabled(ctx: &Ctx) -> bool {
+    ctx.flag("dexalot.trading").unwrap_or(false)
+}
+pub(super) fn timely(ctx: &Ctx, exp: u64) -> bool {
+    let now = chrono::Utc::now().timestamp_millis().max(0) as u64;
+    exp.checked_mul(1000).is_some_and(|e| {
+        e > now
+            && ctx
+                .int("dexalot.min_validity_ms")
+                .is_ok_and(|ms| e - now >= ms)
+    })
+}
+
 use crate::{
     gateway::{
         errors::{ErrorCode, GatewayError, GatewayResult},
@@ -31,9 +55,6 @@ pub(super) async fn preview(p: &Parts, r: Request) -> GatewayResult<Preview> {
     if r.input == r.output || r.market.is_some() || r.builder.is_some() {
         return Err(bad());
     }
-    if r.firm.is_some() {
-        return Err(c.err(ErrorCode::NotApplicable,"Dexalot: для подписанного ордера требуется проверенный модуль расчёта и разрешение владельца"));
-    }
     let chain = c.chain_id().ok_or_else(bad)?;
     let pairs = price::Pairs::load(c, chain).await?;
     let pair = pairs.find(r.input, r.output).ok_or_else(|| {
@@ -57,6 +78,16 @@ pub(super) async fn preview(p: &Parts, r: Request) -> GatewayResult<Preview> {
         qty: qty.ok_or_else(bad)?,
         by_target: exact,
     };
+    if let Some(f) = r.firm {
+        return Box::pin(firm::report(
+            p,
+            q,
+            f,
+            r.trader,
+            (dec, pair.precision(r.output).ok_or_else(bad)?),
+        ))
+        .await;
+    }
     let answer = price::level(c, &pairs, pair, q, chain).await?;
     Ok(Preview {
         source: "dexalot".into(),

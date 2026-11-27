@@ -25,8 +25,8 @@ USDT = STABLES[1]
 
 def capture(endpoint, artifact, book):
     at = book["selector"]
-    head = rpc(endpoint, "eth_getBlockByHash", [at["blockHash"], False])
-    if rpc(endpoint, "eth_chainId", []) != "0x1" or int(head["number"], 16) != book["block"]:
+    head = rpc(endpoint, "eth_getBlockByNumber", [hex(book["block"]), False])
+    if rpc(endpoint, "eth_chainId", []) != "0x1" or head["hash"] != at["blockHash"] or int(head["number"], 16) != book["block"]:
         raise ValueError("foreign canonical chain or block")
     ts = int(head["timestamp"],16)
     c = Capture(dict(endpoint=endpoint,selector=at))

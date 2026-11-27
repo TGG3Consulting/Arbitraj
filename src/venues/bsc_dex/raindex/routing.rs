@@ -167,7 +167,11 @@ async fn candidate(
     } else {
         (funds.decimals, oi)
     };
-    let di = leg.decimals(leg.input, p)?;
+    let di = if leg.input == leg.pair().0 {
+        funds.decimals
+    } else {
+        leg.decimals(leg.input, p)?
+    };
     let dout = leg.decimals(leg.output, p)?;
     let wanted = direct::ceil_units(qty, decs.0)?;
     if num::to_decimal(wanted, decs.0)? != qty {
@@ -191,7 +195,11 @@ async fn candidate(
     };
     let (cap, ratio, word) = if let Some(h) = head {
         leg.p.verify(ctx, h).await.ok()?;
-        leg.current(ctx, h).await?
+        if leg.p.version == 3 {
+            (row.cap, row.ratio, B256::repeat_byte(255))
+        } else {
+            leg.current(ctx, h).await?
+        }
     } else {
         (row.cap, row.ratio, B256::ZERO)
     };
@@ -205,7 +213,10 @@ async fn candidate(
     } else {
         wanted
     };
-    if output.is_zero() || debit.is_zero() || output > cap.cap(dout)? {
+    if output.is_zero()
+        || debit.is_zero()
+        || (output > cap.cap(dout)? && (head.is_none() || row.max_budget.is_none()))
+    {
         return None;
     }
     let middle = if buy { debit } else { output };
@@ -214,7 +225,14 @@ async fn candidate(
         (Some(b), None) => b.estimate(buy, middle)?,
         (None, _) => middle,
     };
-    let budget = if buy { cash_units } else { wanted };
+    let budget = if buy && head.is_some() {
+        row.max_budget
+            .map_or(cash_units, |cap| cap.min(funds.spend))
+    } else if buy {
+        cash_units
+    } else {
+        wanted
+    };
     if budget > funds.spend {
         return None;
     }
@@ -224,7 +242,7 @@ async fn candidate(
             .timestamp
             .to::<u64>()
             .checked_add(ctx.int("dex.deadline_s").ok()?)?;
-        let receive_fixed = buy || leg.p.version == 4;
+        let receive_fixed = buy || leg.p.version <= 5;
         let action = leg.order.take(
             leg.i,
             leg.j,

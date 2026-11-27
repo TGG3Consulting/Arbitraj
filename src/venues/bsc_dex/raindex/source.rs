@@ -73,10 +73,10 @@ impl Source {
         }
     }
     async fn history(&self, ctx: &Ctx, h: white_state::Head) -> Option<Raw> {
-        let event = if self.profile.version == 4 {
-            wire::AddOrderV2::SIGNATURE_HASH
-        } else {
-            wire::AddOrderV3::SIGNATURE_HASH
+        let event = match self.profile.version {
+            3 => wire::AddOrder::SIGNATURE_HASH,
+            4 => wire::AddOrderV2::SIGNATURE_HASH,
+            _ => wire::AddOrderV3::SIGNATURE_HASH,
         };
         let mut rows = Raw::new();
         let mut cursor = None::<(u64, u64)>;
@@ -176,16 +176,24 @@ impl Source {
             }
         }
         use futures_util::{StreamExt, stream};
-        Some(
-            stream::iter(legs)
-                .map(|leg| async move {
-                    let (cap, ratio, _) = leg.current(&p.ctx, h).await?;
-                    Some(Live { leg, cap, ratio })
-                })
-                .buffer_unordered(4)
-                .filter_map(std::future::ready)
-                .collect()
-                .await,
-        )
+        let groups = stream::iter(legs)
+            .map(|leg| async move {
+                if leg.p.version == 3 {
+                    return legacy::read(p, leg, h).await;
+                }
+                match leg.current(&p.ctx, h).await {
+                    Some((cap, ratio, _)) => vec![Live {
+                        leg,
+                        cap,
+                        ratio,
+                        max_budget: None,
+                    }],
+                    None => vec![],
+                }
+            })
+            .buffer_unordered(4)
+            .collect::<Vec<_>>()
+            .await;
+        Some(groups.into_iter().flatten().collect())
     }
 }

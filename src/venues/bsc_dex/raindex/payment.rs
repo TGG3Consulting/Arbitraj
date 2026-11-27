@@ -58,6 +58,21 @@ impl Saved {
             rows.next().is_none().then_some(&row.inner.data)
         };
         let (sender, hash, i, j, empty) = match self.profile.version {
+            3 => {
+                let e = wire::TakeOrder::decode_log_data(unique(
+                    self.profile.book,
+                    wire::TakeOrder::SIGNATURE_HASH,
+                )?)
+                .ok()?;
+                let c = e.config;
+                (
+                    e.sender,
+                    keccak256(c.order.abi_encode()),
+                    c.inputIOIndex,
+                    c.outputIOIndex,
+                    c.signedContext.is_empty(),
+                )
+            }
             4 => {
                 let e = wire::TakeOrderV2::decode_log_data(unique(
                     self.profile.book,
@@ -73,10 +88,25 @@ impl Saved {
                     c.signedContext.is_empty(),
                 )
             }
-            6 => {
+            5 | 6 => {
                 let e = wire::TakeOrderV3::decode_log_data(unique(
                     self.profile.book,
                     wire::TakeOrderV3::SIGNATURE_HASH,
+                )?)
+                .ok()?;
+                let c = e.config;
+                (
+                    e.sender,
+                    keccak256(c.order.abi_encode()),
+                    c.inputIOIndex,
+                    c.outputIOIndex,
+                    c.signedContext.is_empty(),
+                )
+            }
+            7 => {
+                let e = wire::TakeOrderV4::decode_log_data(unique(
+                    self.profile.book,
+                    wire::TakeOrderV4::SIGNATURE_HASH,
                 )?)
                 .ok()?;
                 let c = e.config;

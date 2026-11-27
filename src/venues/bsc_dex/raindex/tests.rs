@@ -23,7 +23,16 @@ fn check(row: &Value, owner: Address, chain: u64) {
         module_hash: B256::ZERO,
     };
     let action: Bytes = from_value(row["action"].clone()).unwrap();
-    let (encoded, topic) = if p.version == 4 {
+    let (encoded, topic) = if p.version == 3 {
+        let c = wire::takeOrdersCall::abi_decode_validate(&action)
+            .unwrap()
+            .config;
+        assert_eq!(c.orders.len(), 1);
+        (
+            c.orders[0].order.abi_encode(),
+            wire::TakeOrder::SIGNATURE_HASH,
+        )
+    } else if p.version == 4 {
         let c = wire::takeOrders2Call::abi_decode_validate(&action)
             .unwrap()
             .config;
@@ -89,9 +98,13 @@ fn original_order_and_one_payment_match_own_wallet_on_both_networks() {
     let eth = include_bytes!(
         "../../../../tests/data/first_run_dex_2026-11-26/raindex_ethereum_protected_wallets.json.gz"
     );
+    let old = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_v3_ethereum.json.gz"
+    );
     for (archive, chain, expected) in [
         (base.as_slice(), 8453, (42, 7)),
         (eth.as_slice(), 1, (3, 0)),
+        (old.as_slice(), 1, (4, 0)),
     ] {
         let j: Value = serde_json::from_reader(GzDecoder::new(archive)).unwrap();
         let owner = from_value(j["payer"].clone()).unwrap();
@@ -190,4 +203,56 @@ fn stablecoin_route_restores_receipt_for_book_fill_and_conversion_of_its_change(
         }
     }
     assert_eq!((rows.len(), with_return), (6, 3));
+}
+
+#[test]
+fn public_v7_claims_decode_with_their_own_abi_and_do_not_create_spot_prices() {
+    let src = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_ethereum_quotes.json.gz"
+    );
+    let terms = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_v7_ethereum_terms.json.gz"
+    );
+    let j: Value = serde_json::from_reader(GzDecoder::new(src.as_slice())).unwrap();
+    let t: Value = serde_json::from_reader(GzDecoder::new(terms.as_slice())).unwrap();
+    let book = j["books"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["version"] == 7)
+        .unwrap();
+    let orders = book["live"].as_array().unwrap();
+    assert_eq!(orders.len(), 5);
+    for row in orders {
+        let terms = t["orders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|x| x["order"] == row["hash"])
+            .unwrap();
+        let raw: Bytes = from_value(terms["metadata"].clone()).unwrap();
+        assert_eq!(
+            alloy_primitives::keccak256(&raw),
+            from_value::<B256>(terms["content_hash"].clone()).unwrap()
+        );
+        let source = String::from_utf8_lossy(&raw);
+        assert!(
+            source.contains("order-counterparty()")
+                && source.contains("signed-context<0 1>()")
+                && source.contains("_: 0;")
+        );
+        let raw: Bytes = from_value(row["order"].clone()).unwrap();
+        let hash = from_value(row["hash"].clone()).unwrap();
+        let order = wire::Order::decode(7, &raw, hash).unwrap();
+        let q = order.quote(0, 0).unwrap();
+        assert_eq!(&q[..4], &wire::quote3Call::SELECTOR);
+        let action = order.take(0, 0, U256::ONE, 18, true, B256::ZERO).unwrap();
+        assert_eq!(&action[..4], &[0xb0, 0x46, 0x0f, 0x07]);
+        let c = wire::takeOrders5Call::abi_decode_validate(&action)
+            .unwrap()
+            .config;
+        assert!(c.data.is_empty() && c.orders[0].signedContext.is_empty());
+        let response = (true, Quantity::units(U256::ONE, 0).unwrap(), B256::ZERO).abi_encode();
+        assert!(order.price(&response).is_none());
+    }
 }

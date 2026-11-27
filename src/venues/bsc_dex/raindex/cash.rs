@@ -102,10 +102,9 @@ impl State {
                 wrapper.parse(),
                 hash.parse(),
                 fee.parse::<Decimal>().ok().and_then(v2::fee_ratio),
-            ) {
-                if !entries.iter().any(|e: &Entry| e.wrapper == wrapper) {
-                    entries.push(Entry { wrapper, hash, fee });
-                }
+            ) && !entries.iter().any(|e: &Entry| e.wrapper == wrapper)
+            {
+                entries.push(Entry { wrapper, hash, fee });
             }
         }
         let mut out = vec![];

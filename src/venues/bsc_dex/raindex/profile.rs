@@ -53,7 +53,7 @@ impl Profile {
             };
             let url = reqwest::Url::parse(url).ok()?;
             if p.chain != chain
-                || !matches!(p.version, 4 | 6)
+                || !matches!(p.version, 3..=7)
                 || p.book.is_zero()
                 || p.module.is_zero()
                 || p.book == p.module
@@ -103,10 +103,13 @@ impl Profile {
             word("takeSelector()")
         )?;
         use alloy::sol_types::SolCall;
-        let selector = if self.version == 4 {
-            wire::takeOrders2Call::SELECTOR
-        } else {
-            wire::takeOrders4Call::SELECTOR
+        let selector = match self.version {
+            3 => wire::takeOrdersCall::SELECTOR,
+            4 => wire::takeOrders2Call::SELECTOR,
+            5 => wire::takeOrders3Call::SELECTOR,
+            6 => wire::takeOrders4Call::SELECTOR,
+            7 => wire::takeOrders5Call::SELECTOR,
+            _ => return Err(bad()),
         };
         if ctx.chain_id() != Some(self.chain)
             || b != self.book.into_word()

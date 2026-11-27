@@ -26,6 +26,21 @@ interface IAmbientWrapped is IAmbientAsset {
 // https://docs.ambient.finance/developers/dex-contract-interface/swaps/hot-path-swap-migration/directly-calling-crocswapdex
 // Ethereum HotProxy checks only the variable leg. Check the recipient's net proceeds independently.
 contract AmbientWallet {
+    // https://docs.ambient.finance/developers/type-conventions#pool-type-index
+    uint256 private constant STANDARD_POOL_INDEX = 420;
+    // https://github.com/CrocSwap/CrocSwap-protocol/blob/d65b20f282e6ef7f52fe999601cd56098cde623e/contracts/mixins/StorageLayout.sol#L50-L59
+    uint256 private constant PROXY_PATHS_SLOT = 1;
+    // https://github.com/CrocSwap/CrocSwap-protocol/blob/d65b20f282e6ef7f52fe999601cd56098cde623e/contracts/mixins/StorageLayout.sol#L186-L195
+    uint16 private constant SWAP_CALLPATH = 1;
+    uint16 private constant FLAG_CROSS_CALLPATH = 3500;
+    // https://github.com/CrocSwap/CrocSwap-protocol/blob/d65b20f282e6ef7f52fe999601cd56098cde623e/contracts/libraries/TickMath.sol#L14-L16
+    // getTickAtSqrtRatio accepts [MIN_SQRT_RATIO, MAX_SQRT_RATIO): see line 68.
+    uint128 private constant MIN_LIMIT_PRICE = 65538;
+    uint128 private constant MAX_LIMIT_PRICE = 21267430153580247136652501917186561138 - 1;
+    // https://github.com/CrocSwap/CrocSwap-protocol/blob/d65b20f282e6ef7f52fe999601cd56098cde623e/contracts/callpaths/HotPath.sol#L103-L111
+    uint16 private constant NO_TIP = 0;
+    uint8 private constant EXTERNAL_SETTLEMENT = 0;
+
     struct Market { address base; address quote; uint256 index; }
     IAmbientDex public immutable dex;
     IAmbientQuery public immutable query;
@@ -52,8 +67,8 @@ contract AmbientWallet {
         wrapped=weth;
         venueHash=address(venue).codehash;
         // proxyPaths_[1] and proxyPaths_[3500] follow the packed flags at slot 0.
-        hot=address(uint160(venue.readSlot(2)));
-        knockout=address(uint160(venue.readSlot(3501)));
+        hot=address(uint160(venue.readSlot(PROXY_PATHS_SLOT + SWAP_CALLPATH)));
+        knockout=address(uint160(venue.readSlot(PROXY_PATHS_SLOT + FLAG_CROSS_CALLPATH)));
         if(hot.code.length==0 || knockout.code.length==0) revert InvalidMarket();
         hotHash=hot.codehash;
         knockoutHash=knockout.codehash;
@@ -73,7 +88,7 @@ contract AmbientWallet {
         return a==address(0)?address(wrapped):a;
     }
     function common(address a,address b) private pure returns(Market memory) {
-        return a<b ? Market(a,b,420) : Market(b,a,420);
+        return a<b ? Market(a,b,STANDARD_POOL_INDEX) : Market(b,a,STANDARD_POOL_INDEX);
     }
     function resolve(bytes32 id,address src,address dst) public view returns(Market memory m) {
         m=common(src,dst);
@@ -108,7 +123,7 @@ contract AmbientWallet {
         entered=true;
         bool buy=input==canonical(m.base);
         if(m.base>=m.quote || input!=canonical(buy?m.base:m.quote) || output!=canonical(buy?m.quote:m.base) ||
-           address(dex).codehash!=venueHash || dex.readSlot(2)!=uint160(hot) || dex.readSlot(3501)!=uint160(knockout) ||
+           address(dex).codehash!=venueHash || dex.readSlot(PROXY_PATHS_SLOT + SWAP_CALLPATH)!=uint160(hot) || dex.readSlot(PROXY_PATHS_SLOT + FLAG_CROSS_CALLPATH)!=uint160(knockout) ||
            hot.codehash!=hotHash || knockout.codehash!=knockoutHash) revert InvalidMarket();
         bool fromNative=(buy?m.base:m.quote)==address(0);
         bool toNative=(buy?m.quote:m.base)==address(0);
@@ -125,11 +140,11 @@ contract AmbientWallet {
         if(fromNative) wrapped.withdraw(funded);
         else tokenCall(src,abi.encodeCall(src.approve,(address(dex),funded)));
         // TickMath bounds from the deployed Ambient curve. A caller-specified limit may restrict a fill.
-        if(limit==0) limit=buy ? 21267430153580247136652501917186561137 : 65538;
+        if(limit==0) limit=buy ? MAX_LIMIT_PRICE : MIN_LIMIT_PRICE;
         bytes memory cmd=abi.encode(m.base,m.quote,m.index,buy,exactOut?!buy:buy,
-                                    exactOut?minimum:uint128(funded),uint16(0),limit,
-                                    exactOut?uint128(funded):minimum,uint8(0));
-        bytes memory result=dex.userCmd{value:fromNative?funded:0}(1,cmd);
+                                    exactOut?minimum:uint128(funded),NO_TIP,limit,
+                                    exactOut?uint128(funded):minimum,EXTERNAL_SETTLEMENT);
+        bytes memory result=dex.userCmd{value:fromNative?funded:0}(SWAP_CALLPATH,cmd);
         (int128 baseFlow,int128 quoteFlow)=abi.decode(result,(int128,int128));
         int256 debit=buy?int256(baseFlow):int256(quoteFlow);
         int256 credit=buy?-int256(quoteFlow):-int256(baseFlow);

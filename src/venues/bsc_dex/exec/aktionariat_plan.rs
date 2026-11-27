@@ -52,14 +52,14 @@ pub(super) async fn plan(ctx:&Ctx,s:&Step,payer:Address,height:u64,selected:Opti
 }
 pub(crate) fn probe(ctx:&Ctx,e:&Entry,o:&super::plan::Order,payer:Address,now:u64)->GatewayResult<(Vec<approve::Approval>,Address,Bytes)>{
     let market=terms(ctx,e)?;
-    let proof=Proof{market,payer,input:o.token_in,output:o.token_out,budget:o.amount_in,minimum:o.min_out,v5:None,
+    let proof=Proof{market,payer,issuer_steps:Vec::new(),input:o.token_in,output:o.token_out,budget:o.amount_in,minimum:o.min_out,v5:None,
         deadline:U256::from(now.checked_add(ctx.int("dex.deadline_s")?).ok_or_else(||changed(ctx))?)};
     Ok((approve::fork_exact(ctx,o.token_in,market.module,None,o.amount_in)?,market.module,proof.data()))
 }
 
 pub(super) fn capture(ctx:&Ctx,legs:&[Vec<Step>],call:&super::executor::call::ExecCall,payer:Address)->GatewayResult<Option<Box<Proof>>>{
-    let [leg]=legs else{return Ok(None)};
-    let [step]=leg.as_slice() else{return Ok(None)};
+    let [leg] = legs else {return super::aktionariat_graph::capture(ctx,legs,call,payer);};
+    let [step] = leg.as_slice() else {return super::aktionariat_graph::capture(ctx,legs,call,payer);};
     if !step.entry.family.variant.issuer_shares(){return Ok(None);}
     let m=terms(ctx,&step.entry)?;
     let [route]=call.steps.as_slice() else{return Err(changed(ctx));};
@@ -69,6 +69,6 @@ pub(super) fn capture(ctx:&Ctx,legs:&[Vec<Step>],call:&super::executor::call::Ex
         return Err(changed(ctx));
     }
     let signed=super::signed_call::Erc20Call{chain:1,payer,module:call.executor,calldata:alloy_primitives::keccak256(call.data())};
-    Ok(Some(Box::new(Proof{market:m,payer,input:call.token_in,output:call.token_out,budget:call.amount_in,
+    Ok(Some(Box::new(Proof{market:m,payer,issuer_steps:Vec::new(),input:call.token_in,output:call.token_out,budget:call.amount_in,
         minimum:call.min_out,deadline:call.deadline,v5:Some(signed)})))
 }

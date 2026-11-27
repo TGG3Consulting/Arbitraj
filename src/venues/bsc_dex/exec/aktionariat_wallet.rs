@@ -37,10 +37,12 @@ pub struct Proof {
     pub deadline: U256,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub v5: Option<signed_call::Erc20Call>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(super) issuer_steps: Vec<super::aktionariat_graph::IssuerStep>,
 }
 impl Market {
     pub(in crate::venues::bsc_dex) fn proof(self, order: &Order, minimum: U256, deadline: U256) -> Proof {
-        Proof {market:self, payer:order.payer, input:order.input, output:order.output, budget:order.amount, minimum, deadline, v5:None}
+        Proof {market:self, payer:order.payer, input:order.input, output:order.output, budget:order.amount, minimum, deadline, v5:None, issuer_steps:Vec::new()}
     }
 }
 impl Proof {
@@ -59,6 +61,14 @@ impl Proof {
         let h=receipt.block_hash.ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Aktionariat: в квитанции отсутствует блок"))?;
         let at=serde_json::json!({"blockHash":h,"requireCanonical":true});
         solidly_classic_factory::plain(ctx,self.market.module,self.market.runtime,&at).await?;
+        let mut pinned = vec![(self.market.module, self.market.runtime)];
+        for step in &self.issuer_steps {
+            let identity = (step.market.module, step.market.runtime);
+            if !pinned.contains(&identity) {
+                solidly_classic_factory::plain(ctx, identity.0, identity.1, &at).await?;
+                pinned.push(identity);
+            }
+        }
         if let Some(v)=self.v5 {
             let code=super::executor::code::runtime().map_err(|message|ctx.err(ErrorCode::OutcomeUnknown,message))?;
             solidly_classic_factory::plain(ctx,v.module,keccak256(code),&at).await?;
@@ -73,6 +83,9 @@ impl Proof {
     pub(super) fn amounts(&self,logs:&[Log],wallet:Address,input:Address,output:Address)->Option<(U256,U256)> {
         if (wallet,input,output)!=(self.payer,self.input,self.output) || self.minimum.is_zero() ||
             input==output || wallet==self.market.module || wallet.is_zero() {return None;}
+        if !self.issuer_steps.is_empty() {
+            return super::aktionariat_graph::amounts(self, logs);
+        }
         let mut events=logs.iter().filter(|l|l.address()==self.market.module &&
             l.topic0()==Some(&IAktionariatWallet::Paid::SIGNATURE_HASH));
         let paid=IAktionariatWallet::Paid::decode_log_data(&events.next()?.inner.data).ok()?;
@@ -131,7 +144,7 @@ mod tests {
             let broker=address(&row["broker"]);
             let market=Market{broker,module,runtime:d["manifest"]["runtimeKeccak"].as_str().unwrap().parse().unwrap()};
             let deadline=if graph{U256::ZERO}else{IAktionariatWallet::executeCall::abi_decode(&data).unwrap().order.deadline};
-            let mut proof=Proof{market,payer,input:source,output:target,budget,minimum:u(&row["received"]),deadline,
+            let mut proof=Proof{market,payer,issuer_steps:Vec::new(),input:source,output:target,budget,minimum:u(&row["received"]),deadline,
                 v5:graph.then(||signed_call::Erc20Call{chain:1,payer,module:exec,calldata:keccak256(&data)})};
             if !graph{assert_eq!(proof.data(),data);}
             let logs:Vec<crate::venues::bsc_dex::check::simulate::SimLog>=row["logs"].as_array().unwrap().iter().map(|l|{

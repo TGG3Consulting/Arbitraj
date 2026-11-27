@@ -54,6 +54,7 @@ pub(super) mod mars_wallet;
 pub(super) mod mars_plan;
 mod balancer_v1_abi;
 pub(super) mod bancor_legacy_wallet;
+mod aktionariat_graph;
 pub(super) mod aktionariat_plan;
 pub(super) mod aktionariat_wallet;
 pub(super) mod bancor_legacy_plan;

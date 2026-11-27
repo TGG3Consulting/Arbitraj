@@ -25,6 +25,7 @@ interface ICallbackShare {
 contract AktionariatWallet {
     IBrokerRegistry public immutable registry;
     address public immutable issuerHub;
+    mapping(address broker => bool) public issuerMarkets;
     bool private transient entered;
 
     struct Order {
@@ -38,10 +39,15 @@ contract AktionariatWallet {
     event Paid(address indexed payer,address indexed recipient,address indexed broker,
                address source,address target,uint256 spent,uint256 received);
 
-    constructor(IBrokerRegistry knownRegistry,address publishedHub) {
+    constructor(IBrokerRegistry knownRegistry,address publishedHub,address[] memory publishedMarkets) {
         require(address(knownRegistry).code.length != 0 && publishedHub.code.length != 0, "roles");
         registry=knownRegistry;
         issuerHub=publishedHub;
+        for (uint256 i; i < publishedMarkets.length; ++i) {
+            address broker=publishedMarkets[i];
+            require(!issuerMarkets[broker] && IEquityBroker(broker).paymenthub() == publishedHub, "issuer source");
+            issuerMarkets[broker]=true;
+        }
     }
 
     function execute(Order calldata order) external returns(uint256) {
@@ -50,8 +56,12 @@ contract AktionariatWallet {
 
     function swap(IBalancerVault.SingleSwap calldata leg,IBalancerVault.FundManagement calldata funds,
                   uint256 minimum,uint256 deadline) external returns(uint256) {
-        require(leg.kind == 0 && leg.userData.length == 0 && uint256(leg.poolId) >> 160 == 0 &&
+        require(leg.kind == 0 && leg.userData.length == 0 &&
                 !funds.fromInternalBalance && !funds.toInternalBalance && funds.sender == msg.sender, "step");
+        // On a wallet-funded first step this bound is in the signed V5 bytes. It also covers
+        // tokens which transfer the payer's dust in addition to the requested allowance.
+        uint256 cap=uint256(leg.poolId) >> 160;
+        require(cap == 0 || leg.amount <= cap, "signed input cap");
         return settle(Order(address(uint160(uint256(leg.poolId))),leg.assetIn,leg.assetOut,
                             leg.amount,minimum,deadline),funds.recipient);
     }
@@ -72,8 +82,9 @@ contract AktionariatWallet {
         require(buying || (o.source == share && o.target == cash), "assets");
         address hub=broker.paymenthub();
         // New issuer deployments can use the published hub without a legacy registry entry.
-        // Their broker and tokens are explicitly bound in the order. Funds always belong to its signer.
-        require(registry.getBrokerbot(cash,share) == o.broker || hub == issuerHub, "issuer");
+        // Both the issuer's broker and the original published hub must be bound by the constructor.
+        require(registry.getBrokerbot(cash,share) == o.broker ||
+                (hub == issuerHub && issuerMarkets[o.broker]), "issuer");
         require((broker.settings() & (buying ? 1 : 2)) != 0, "direction");
         IERC20 source=IERC20(o.source);
         IERC20 target=IERC20(o.target);
@@ -91,7 +102,8 @@ contract AktionariatWallet {
             require(spent > 0 && spent <= o.budget, "share cost");
         }
         tokenCall(o.source,abi.encodeCall(IERC20.transferFrom,(msg.sender,address(this),spent)));
-        require(source.balanceOf(address(this)) - priorSource == spent, "funding");
+        uint256 funded=source.balanceOf(address(this)) - priorSource;
+        require(funded >= spent && funded <= o.budget, "funding");
         if (buying) {
             tokenCall(o.source,abi.encodeCall(IERC20.approve,(hub,spent)));
             ISharePayment(hub).payAndNotify(o.broker,spent,hex"01");
@@ -105,9 +117,12 @@ contract AktionariatWallet {
         uint256 proceeds=target.balanceOf(address(this)) - priorTarget;
         require(proceeds >= o.minimum, "broker output");
         tokenCall(o.target,abi.encodeCall(IERC20.transfer,(recipient,proceeds)));
+        uint256 unused=source.balanceOf(address(this)) - priorSource;
+        if (unused != 0) tokenCall(o.source,abi.encodeCall(IERC20.transfer,(msg.sender,unused)));
+        spent=payerBefore-source.balanceOf(msg.sender);
         received=target.balanceOf(recipient) - recipientBefore;
         require(received >= o.minimum && target.balanceOf(address(this)) == priorTarget &&
-                source.balanceOf(address(this)) == priorSource && payerBefore-source.balanceOf(msg.sender) == spent, "cash");
+                source.balanceOf(address(this)) == priorSource && spent != 0 && spent <= o.budget, "cash");
         emit Paid(msg.sender,recipient,o.broker,o.source,o.target,spent,received);
         entered=false;
     }

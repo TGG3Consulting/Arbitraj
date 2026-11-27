@@ -15,6 +15,7 @@ pub mod check;
 pub mod coins;
 pub mod connection;
 pub mod hashflow;
+pub mod pancakex;
 pub mod ryze;
 mod native_rfq;
 mod gladius;

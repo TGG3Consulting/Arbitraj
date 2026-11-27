@@ -2697,6 +2697,16 @@ def main():
                   "`hopVersion()` возвращает 1. [Квитанции девяти маршрутов](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46034438302).", ""])
     ambient = json.loads(gzip.decompress(Path("tests/data/first_run_dex_2026-11-26/ambient_ethereum_wallet.json.gz").read_bytes()))
     preset = next(r["settings"] for r in profiles if r["id"] == "ambient-ethereum" and r["chain_id"] == 1)
+    lines.extend([
+        "### PancakeSwap X на Ethereum и Base",
+        "",
+        "Источник объёма #8823 считает входы исполненных заявок. В Ethereum транзакция 0x47a4158f… содержит также обмен через проверенный Kipseli. Одновременный учёт всего объёма заявки как дополнительной ликвидности обеих площадок завысит результат. [Адаптер объёма](https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/pancakeswap-x/index.ts).",
+        "",
+        "В архиве Ethereum 11 000 USDT оплачены за 6,481639816016846956 ETH, а 20 USDC — за 127386602595881921 атомов токена `0xc1ccf97dcd79e0edeaeb5cd80416ac243a4fbe52`. На Base 17688016 единиц GOOGLc дали 47,321950 USDC. Газ трёх транзакций оплатили отправители, в двух сетях он составил соответственно 170306341574362, 26540888436064 и 1525468041770 wei. [Квитанции и канонические блоки](https://github.com/TGG3Consulting/Arbitraj/actions/runs/46034344666).",
+        "",
+        "27 ноября 2026 года общедоступный список OPEN дал на Ethereum две заявки с нулевым входом и на Base пустую страницу. Отдельный запрос собственного кошелька с DUTCH_LIMIT и useSyntheticQuotes=false дал неподписанные условия для USDC/WETH в обе стороны на Ethereum и USDC/GOOGLc на Base. Для обычных WETH/USDC на Base сервер потребовал хотя бы один RWA-токен. Провайдеру маркетмейкерских котировок нужен отдельный канал регистрации; ключ интегратора увеличивает частоту запросов. [Образцы ответов](../tests/data/first_run_dex_2026-11-26/pancakex_unsigned_quotes.json.gz) · [Официальное описание доступа](https://developer.pancakeswap.finance/contracts/pcsx/overview).",
+        "",
+    ])
     lines.extend(["### Ambient на Ethereum", "",
         "Профиль `ambient-ethereum` работает с физическими адресами токенов и полным индексом uint256. "
         "В паре с нативным ETH исходный контракт принимает или отдаёт ETH. Защищённый модуль преобразует его в WETH для кошелька. "

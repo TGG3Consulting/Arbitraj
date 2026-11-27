@@ -7354,7 +7354,7 @@
     "network": "ethereum",
     "chain_id": 1,
     "id": "motoswap-ethereum",
-    "source": "https://docs.motoswap.org/dev/addresses · tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz · tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz",
+    "source": "https://docs.motoswap.org/dev/addresses · tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz · tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz · tests/data/first_run_dex_2026-11-26/motoswap_creation_v3.json.gz",
     "settings": {
       "dex.kind": "motoswap_v2",
       "dex.motoswap_cache_entries": 16,
@@ -7380,7 +7380,8 @@
       ],
       "dex.module_runtime_hashes": [
         "0xd397cb5f4e1208d3d837fb9cf66c3d2185aaa55bc4ce0cd936bba7ad162bbdca",
-        "0x25224db8613fa6fea356fd5bab0452d076be46caa1530c57363673fcf1621a59"
+        "0x25224db8613fa6fea356fd5bab0452d076be46caa1530c57363673fcf1621a59",
+        "0x8586e429284a8a0a9ee0a73bfe021167e25db9b8e0cf0313c11adf8a1f54ea71"
       ]
     }
   }

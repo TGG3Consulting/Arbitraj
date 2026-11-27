@@ -1,4 +1,12 @@
 // Одна операция кошелька привязана к профилю, открытому до первого асинхронного запроса.
+/** Карточки идут от новой к старой. Поручение и ручной CREATE ограничивают выбор точным кодом. */
+export function matchingCard(settings, pending, input, cards) {
+  const allowed = new Set((settings.hashes ?? []).map(h => h.toLowerCase()));
+  return cards.find(c => allowed.has(c.runtimeKeccak) &&
+    (!pending || c.creationSha256 === pending.creation) &&
+    (input === undefined || c.data.toLowerCase() === input?.toLowerCase()));
+}
+
 export function deploymentScope(storage, selected) {
   const initial = selected();
   if (!initial?.key) throw Error('Параметры размещения недоступны.');

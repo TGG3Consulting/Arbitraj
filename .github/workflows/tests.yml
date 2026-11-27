@@ -444,6 +444,8 @@ jobs:
       - run: node contracts/evmtest/mint_club.mjs
       - name: Проверка версий модулей слота PropAMM по архивному коду
         run: node contracts/evmtest/prop_slot_version.mjs
+      - name: Проверка ABI маршрута трёх сборок Motoswap по архивному коду
+        run: node contracts/evmtest/motoswap_path_version.mjs
   hanji-executor:
     if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
     runs-on: ubuntu-latest

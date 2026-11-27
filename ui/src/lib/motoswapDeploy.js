@@ -1,4 +1,5 @@
 import {runtimeKeccak} from './uniswapV1Deploy.js';
+import {matchingCard} from './deploymentScope.js';
 
 const names=['factory','fee_router','core','beacon','pair_impl','registry','creator','vault','collector'];
 const proxies=new Set(['factory','fee_router','collector']);
@@ -66,5 +67,22 @@ export async function checkMoto(provider,plan,at){
 export async function checkMotoModule(provider,plan,contract,at){
   await Promise.all([linked(provider,at,contract,'0xc45a0155',plan.roles.factory.target),
     linked(provider,at,contract,'0xf887ea40',plan.roles.fee_router.target)]);
+}
+
+/** Выбирает разрешённую сборку в Ethereum по исходному поручению или данным ручного CREATE. */
+export function selectMotoCard(settings,pending,input,cards){
+  const card=matchingCard(settings,pending,input,cards);
+  requireValue(card && card.kind===settings.kind && String(card.chainId)===String(settings.chainId) &&
+    (!pending || pending.chain===card.chainId),'Проверьте сеть и разрешённый хеш соответствующей версии MotoswapWallet.');
+  return card;
+}
+
+export async function motoCard(settings,pending,input){
+  const cards=await Promise.all([
+    import('../assets/motoswap-ethereum.json'),
+    import('../assets/motoswap-ethereum-previous.json'),
+    import('../assets/motoswap-ethereum-single.json'),
+  ]);
+  return {default:selectMotoCard(settings,pending,input,cards.map(c=>c.default))};
 }
 

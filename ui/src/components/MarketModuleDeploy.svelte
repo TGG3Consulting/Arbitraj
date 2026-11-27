@@ -1,6 +1,7 @@
 <!-- Размещение принятого модуля одним CREATE в выбранной сети по действию оператора. -->
 <script>
   import {fluidCard} from '../lib/fluidLiteDeploy.js';
+  import {motoCard} from '../lib/motoswapDeploy.js';
   import {unsignedCache} from '../lib/aquaDeploy.js';
   import {onDestroy} from 'svelte';
   import {propCard} from '../lib/propVenueDeploy.js';
@@ -32,7 +33,7 @@
     fluid_dex_lite:{file:'fluid-dex-lite-ethereum',key:'fluid-lite-wallet:1',name:'FluidDexLiteWallet в Ethereum',load:fluidCard},
     ambient_ethereum:{file:'ambient-ethereum',key:'ambient-wallet:1',name:'AmbientWallet в Ethereum',load:()=>import('../assets/ambient-ethereum-create.json')},
     ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
-    motoswap_v2:{file:'motoswap-ethereum',key:'motoswap-wallet:1',name:'MotoswapWallet в Ethereum',load:()=>import('../assets/motoswap-ethereum.json')},
+    motoswap_v2:{file:'motoswap-ethereum',key:'motoswap-wallet:1',name:'MotoswapWallet в Ethereum',load:motoCard},
     mooniswap_v1:{file:'mooniswap-original',key:'mooniswap-original:1',name:'MooniswapWallet для Mooniswap',load:()=>import('../assets/mooniswap-original-create.json')},
     mooniswap_v2:{file:'mooniswap-successor',key:'mooniswap-successor:1',name:'MooniswapWallet для 1inch Liquidity Protocol',load:()=>import('../assets/mooniswap-successor-create.json')},
     shibaswap_v2_module:{file:'shibaswap-v2-ethereum',key:'shibaswap-v2-create:1',name:'ShibaswapV2Adapter в Ethereum',load:()=>import('../assets/shibaswap-v2-ethereum.json')},
@@ -183,7 +184,7 @@
     refreshPending(action);
     const original=pending;
     readyAddress='';
-    if (plan.kind === 'fluid_dex_lite' || plan.kind === 'lambda_propamm') {
+    if (deployment.load === motoCard || deployment.load === fluidCard || deployment.load === propCard) {
       const loadCard = deployment.load;
       let input;
       if (!original && /^0x[a-fA-F0-9]{64}$/.test(supplied)) {

@@ -1,4 +1,5 @@
 import {runtimeKeccak} from './uniswapV1Deploy.js';
+import {matchingCard} from './deploymentScope.js';
 
 const officialResolver = '0x99b19a93ba0f516b173eef53d07b3253fbcfd564';
 const hash = /^0x[\da-f]{64}$/;
@@ -34,10 +35,7 @@ export async function checkFluidLite(provider, plan, at) {
 
 /** Точное исходное размещение имеет приоритет. Без поручения выбирается первая разрешённая версия. */
 export function selectFluidCard(settings, pending, input, cards) {
-  const allowed = new Set((settings.hashes ?? []).map(h => h.toLowerCase()));
-  const card = cards.find(c => allowed.has(c.runtimeKeccak) &&
-    (!pending || c.creationSha256 === pending.creation) &&
-    (input === undefined || c.data.toLowerCase() === input?.toLowerCase()));
+  const card = matchingCard(settings, pending, input, cards);
   if (!card) throw Error('Для размещения Fluid DEX Lite требуется разрешённый хеш соответствующей версии.');
   return card;
 }

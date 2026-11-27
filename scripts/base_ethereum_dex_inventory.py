@@ -1811,6 +1811,30 @@ def tables(network, snapshots, profiles):
     return out
 
 
+def hashflow_market_observation():
+    """Один одинаковый час наблюдения за именованным Trade на четырёх сетях."""
+    data = read(Path("tests/data/hashflow_direct_2026-11-26/markets_hour.json"))
+    out = ["### Hashflow в четырёх сетях", "",
+           "27.11.2026, 05:00–06:00 UTC. Для каждого эмитента исследованы обе связи с официальным роутером через "
+           "`authorizedPools(pool)` и `pool.router()`. Сумма событий относится к указанному часу. "
+           f"[Реестр Hashflow]({data['official_manifest']}) · [События и цели проверок](../tests/data/hashflow_direct_2026-11-26/markets_hour.json)", "",
+           "| Chain ID | Проверенный роутер | Диапазон блоков | События Trade | Направленные пары |",
+           "|---:|---|---:|---:|---:|"]
+    for network in data["networks"]:
+        out.append(f"| {network['chain']} | `{network['router']}` | {network['first']['number']}–{network['last']['number']} "
+                   f"| {len(network['events'])} | {len(network['market_events'])} |")
+    return out + ["", "Для рабочего модуля в форме владельца выберите Taker с доступом Multi-Wallet. "
+                  "Выданное имя укажите в `hashflow.source`, ключ — в секрете `hashflow.taker_key`. "
+                  "Taker API передаёт ключ заголовком Authorization. Подпись RFQ создаёт маркетмейкер, "
+                  "а транзакцию оплачивает и подписывает выбранный кошелёк. Установление HMAC для Taker API v3 не требуется. "
+                  "Для индивидуального режима в форме выберите Taker с привязкой к одному кошельку. Введите "
+                  "`api` в `hashflow.source`, выданный ключ в `hashflow.taker_key`, а зарегистрированный публичный адрес "
+                  "в `hashflow.api_wallet`. На GET передаётся wallet, в подписанной RFQ его роль выполняет trader. "
+                  "Персональные условия, актуальные рынки и ответы для своего кошелька проверяются после получения доступа. "
+                  "[Форма](https://forms.gle/EEzfL59vQaTebAXN9) · "
+                  "[Два вида доступа](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3)", ""]
+
+
 def main():
     """Заменяет только секцию DEX, сохраняя соседние ручные разделы."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -1833,6 +1857,7 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    lines.extend(hashflow_market_observation())
     doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")
 
 

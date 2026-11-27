@@ -1,6 +1,6 @@
 # Hashflow Taker API v3
 
-Модуль использует Multi-Wallet доступ для Ethereum mainnet (1), BSC (56), Base (8453) и Arbitrum One (42161). Официальные роутеры закреплены в `config/hashflow_routers.json`. Идентификатор `hashflow.source` задаётся глобально. Выданный для него ключ `hashflow.taker_key` хранится в vault. Он передаётся только службе Hashflow через Authorization. [Порядок подключения](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3)
+Модуль поддерживает именной Multi-Wallet и индивидуальный API Wallet Trader с публичным адресом `hashflow.api_wallet` и источником `api` для Ethereum mainnet (1), BSC (56), Base (8453) и Arbitrum One (42161). Официальные роутеры закреплены в `config/hashflow_routers.json`. Идентификатор `hashflow.source` задаётся глобально. Выданный для него ключ `hashflow.taker_key` хранится в vault. Он передаётся только службе Hashflow через Authorization. [Порядок подключения](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3)
 
 **Ручная проверка.** Вызов `POST /api/venues/{id}/hashflow/quote` принимает публичный адрес `trader`, контракты `input` и `output`, а также строчное `amount_tokens` либо `amount` в минимальных единицах. Десятичный объём должен соответствовать decimals входного токена на проверенном блоке. Нативный токен обозначается нулевым адресом. Ответ содержит публичные идентификаторы, селектор, хеш calldata, суммы, срок, газ и хеш канонической головы. У ручной операции отсутствуют подпись кошелька и отправка транзакции.
 

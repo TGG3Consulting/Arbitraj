@@ -34,13 +34,16 @@ pub(super) async fn read<T: DeserializeOwned>(ctx: &Ctx, req: RequestBuilder) ->
 }
 
 /// Экранирует значения source, maker и chain в запросе к официальной конечной точке.
-fn market_url(path: &str, source: &str, chain: u64) -> Result<reqwest::Url, String> {
+fn market_url(path: &str, source: &str, chain: u64, wallet: Option<Address>) -> Result<reqwest::Url, String> {
+    if (source=="api")!=wallet.is_some() || wallet.is_some_and(|a|a.is_zero()){return Err("Hashflow: параметры авторизации противоречат режиму источника".into());}
+    let path=if wallet.is_some() && path=="market-makers"{"marketMakers"}else{path};
     let mut url = reqwest::Url::parse(&format!("https://api.hashflow.com/taker/v3/{path}"))
         .map_err(|_| "Не удалось составить URL Hashflow")?;
     url.query_pairs_mut()
         .append_pair("source", source)
         .append_pair("baseChainType", "evm")
         .append_pair("baseChainId", &chain.to_string());
+    if let Some(w)=wallet {url.query_pairs_mut().append_pair("wallet",&format!("{w:#x}"));}
     Ok(url)
 }
 
@@ -54,8 +57,9 @@ pub(super) async fn makers(
     ctx: &Ctx,
     source: &str,
     chain: u64,
+    wallet:Option<Address>,
 ) -> Result<BTreeSet<String>, String> {
-    let url = market_url("market-makers", source, chain)?;
+    let url = market_url("market-makers", source, chain,wallet)?;
     let r: Makers = read(ctx, ctx.http.get(url)).await?;
     Ok(r.market_makers
         .into_iter()
@@ -125,12 +129,13 @@ pub(super) async fn book(
     source: &str,
     chain: u64,
     input: Option<Address>,
+    wallet:Option<Address>,
 ) -> Result<Book, String> {
-    let known = makers(ctx, source, chain).await?;
+    let known = makers(ctx, source, chain,wallet).await?;
     if known.is_empty() {
         return Err("Нет маркетмейкеров Hashflow на выбранной сети".into());
     }
-    let mut url = market_url("price-levels", source, chain)?;
+    let mut url = market_url("price-levels", source, chain,wallet)?;
     if let Some(token) = input {
         url.query_pairs_mut()
             .append_pair("baseToken", &format!("{token:#x}"));
@@ -278,5 +283,27 @@ mod tests {
         assert!(amount_at(&levels, Decimal::from(1499u16), true).is_none());
         assert!(amount_at(&levels, Decimal::new(7001, 3), false).is_none());
         assert!(amount_at(&levels, Decimal::from(20996u16), true).is_none());
+    }
+}
+
+#[cfg(test)]
+mod credential_tests{
+    use super::*;
+    #[test]
+    fn individual_and_multi_wallet_use_their_documented_identity(){
+        let a=Address::repeat_byte(9);
+        let maker=market_url("market-makers","api",1,Some(a)).unwrap();
+        let levels=market_url("price-levels","api",1,Some(a)).unwrap();
+        assert!(maker.path().ends_with("/marketMakers"));
+        assert!(levels.path().ends_with("/price-levels"));
+        for url in [&maker,&levels]{
+            assert!(url.query_pairs().any(|(k,v)|k=="wallet" && v==format!("{a:#x}")));
+        }
+        let named=market_url("market-makers","partner",8453,None).unwrap();
+        assert!(named.path().ends_with("/market-makers"));
+        assert!(!named.query_pairs().any(|(k,_)|k=="wallet"));
+        assert!(market_url("market-makers","api",1,None).is_err());
+        assert!(market_url("market-makers","partner",1,Some(a)).is_err());
+        assert!(!super::super::allowed(Some(a),Address::repeat_byte(8)));
     }
 }

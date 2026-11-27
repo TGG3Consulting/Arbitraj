@@ -2015,6 +2015,19 @@ SmarDex · фабрика перечислила 31 пар. Свои фабри�
 - `family-coverage-review.json` · `ae2a33ed64b78aebf771f711d4f57b8adc858d1da4901a4ea26ffd05fcf8136e`
 - `dex-contract-evidence.json` · `e7fa2f934ef09b4bde791c70566bbe0ab2355eb9dc38e9acc48a7aaf57199f93`
 
+### Hashflow в четырёх сетях
+
+27.11.2026, 05:00–06:00 UTC. Для каждого эмитента исследованы обе связи с официальным роутером через `authorizedPools(pool)` и `pool.router()`. Сумма событий относится к указанному часу. [Реестр Hashflow](https://raw.githubusercontent.com/hashflownetwork/x-protocol/e41cfaadac7d9bacfa368be904a93bd98b5a2df6/evm/deployed-contracts/IHashflowRouter.json) · [События и цели проверок](../tests/data/hashflow_direct_2026-11-26/markets_hour.json)
+
+| Chain ID | Проверенный роутер | Диапазон блоков | События Trade | Направленные пары |
+|---:|---|---:|---:|---:|
+| 1 | `0x55084ee0fef03f14a305cd24286359a35d735151` | 26504311–26504609 | 11 | 6 |
+| 56 | `0x55084ee0fef03f14a305cd24286359a35d735151` | 135978845–135986842 | 0 | 0 |
+| 8453 | `0xca310b1b942a30ff4b40a5e1b69ab4607ec79bc1` | 62826122–62844121 | 0 | 0 |
+| 42161 | `0x55084ee0fef03f14a305cd24286359a35d735151` | 527917584–527929289 | 0 | 0 |
+
+Для рабочего модуля в форме владельца выберите Taker с доступом Multi-Wallet. Выданное имя укажите в `hashflow.source`, ключ — в секрете `hashflow.taker_key`. Taker API передаёт ключ заголовком Authorization. Подпись RFQ создаёт маркетмейкер, а транзакцию оплачивает и подписывает выбранный кошелёк. Установление HMAC для Taker API v3 не требуется. Для индивидуального режима в форме выберите Taker с привязкой к одному кошельку. Введите `api` в `hashflow.source`, выданный ключ в `hashflow.taker_key`, а зарегистрированный публичный адрес в `hashflow.api_wallet`. На GET передаётся wallet, в подписанной RFQ его роль выполняет trader. Персональные условия, актуальные рынки и ответы для своего кошелька проверяются после получения доступа. [Форма](https://forms.gle/EEzfL59vQaTebAXN9) · [Два вида доступа](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3)
+
 <!-- /DEX -->
 
 <!-- ACCEPT -->
@@ -2048,7 +2061,8 @@ DEX-1/8453 — исследователь dex_coverage, оппонент counter
 
 | Что вводить | Откуда брать | Область |
 |---|---|---|
-| `hashflow.source` | Идентификатор source, выданный Hashflow для Multi-Wallet | Глобальные настройки |
+| `hashflow.source` | Имя источника, выданное Hashflow для Multi-Wallet, или `api` для индивидуального доступа | Глобальные настройки |
+| `hashflow.api_wallet` | Публичный адрес, к которому Hashflow привязал индивидуальный ключ | Глобальные настройки при `source=api` |
 | `hashflow.taker_key` | Authentication key той же интеграции | Зашифрованные секреты |
 
 Кнопка проверки подключения каждой площадки указывает число маркетмейкеров, доступных именно на chainId 56, 42161, 8453 или 1. Ответ HTTP 403 без ключа не подтверждает доступ кошелька. Для торгового допуска нужны подписанная твёрдая котировка, запас времени до истечения, проверка отправителя, объёма и конечного получателя, и проверка исполнения. Партнёрские условия и лимиты сообщает команда Hashflow. [Taker API v3](https://docs.hashflow.com/hashflow/taker/getting-started-api-v3) · [Официальные контакты](https://docs.hashflow.com/hashflow/company/official-links).
@@ -2056,7 +2070,7 @@ DEX-1/8453 — исследователь dex_coverage, оппонент counter
 
 ### Запрос производственного доступа Hashflow
 
-В [официальной форме Integration Request](https://forms.gle/EEzfL59vQaTebAXN9) выберите **Taker**. В Short Description укажите «multi-wallet, same-chain spot trades» и сети BSC (56), Arbitrum One (42161), Base (8453), Ethereum (1). Попросите source, authentication key, условия оплаты и лимиты. При заполнении Company Name и Other Contact Information используйте своё название проекта и свой контакт для ответа. Образец настроек выше содержит только имена полей.
+В [официальной форме Integration Request](https://forms.gle/EEzfL59vQaTebAXN9) выберите **Taker**. В Short Description укажите выбранный тип Taker, операции same-chain spot и нужные сети BSC (56), Arbitrum One (42161), Base (8453), Ethereum (1). Для Multi-Wallet попросите имя source и ключ. Для индивидуального API Wallet Trader укажите публичный адрес для привязки ключа. Уточните условия оплаты и лимиты. При заполнении Company Name и Other Contact Information используйте своё название проекта и свой контакт для ответа. Образец настроек выше содержит только имена полей.
 
 ### Проверка фиксированных комиссий V2 на Base и Ethereum
 

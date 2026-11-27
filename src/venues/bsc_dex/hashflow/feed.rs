@@ -15,7 +15,7 @@ pub(in crate::venues::bsc_dex) async fn clear(p: &Parts, out: &mpsc::Sender<Mark
     if !p.rfqs.populated() {
         return;
     }
-    p.rfqs.install("", 0, Instant::now(), None);
+    p.rfqs.install("", 0,None, Instant::now(), None);
     let _ = out
         .send(MarketEvent::RfqMarkets {
             source: crate::gateway::events::SourceId::new("Hashflow"),
@@ -36,11 +36,12 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
         let age = ctx.int("hashflow.levels_max_age_ms").ok()?;
         let source = ctx.text("hashflow.source").ok()?;
         let chain = ctx.chain_id()?;
-        if age == 0 || source.trim().is_empty() || source == "api" || super::router(chain).is_err()
+        let wallet=super::api_wallet(ctx,&source).ok()?;
+        if age == 0 || super::router(chain).is_err()
         {
             return None;
         }
-        Some((source, chain, age, p.tokens.usdt(ctx).ok()?))
+        Some((source,chain,wallet,age,p.tokens.usdt(ctx).ok()?))
     };
     let mut previous = None;
     let mut advertised = p.rfqs.populated();
@@ -48,7 +49,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
         let current = config();
         if current != previous || (current.is_none() && advertised) {
             if advertised {
-                p.rfqs.install("", 0, Instant::now(), None);
+                p.rfqs.install("", 0,None, Instant::now(), None);
                 if out
                     .send(MarketEvent::RfqMarkets {
                         source: crate::gateway::events::SourceId::new("Hashflow"),
@@ -66,7 +67,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             }
             previous.clone_from(&current);
         }
-        let Some((source, chain, age, quote)) = current.clone() else {
+        let Some((source,chain,wallet,age,quote)) = current.clone() else {
             if matches!(
                 changes.recv().await,
                 Err(tokio::sync::broadcast::error::RecvError::Closed)
@@ -79,7 +80,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
         let at = Utc::now().timestamp_millis();
         let duration = Duration::from_millis(age);
         let data = if ctx.vault.has_secret("hashflow.taker_key") {
-            let read = tokio::time::timeout(duration, market::book(ctx, &source, chain, None));
+            let read = tokio::time::timeout(duration, market::book(ctx, &source, chain,None,wallet));
             tokio::pin!(read);
             loop {
                 tokio::select! {
@@ -102,7 +103,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             .as_ref()
             .map(|book| book.markets(quote, &p.tokens))
             .unwrap_or_default();
-        p.rfqs.install(&source, chain, start, data);
+        p.rfqs.install(&source,chain,wallet,start,data);
         if !markets.is_empty() || advertised {
             advertised = !markets.is_empty();
             if out

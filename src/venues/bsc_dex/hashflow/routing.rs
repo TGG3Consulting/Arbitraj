@@ -21,7 +21,7 @@ use tokio::time::timeout;
 
 #[derive(Default)]
 struct State {
-    source: Option<(String, u64)>,
+    source: Option<(String,u64,Option<Address>)>,
     market: Option<(Instant, Option<Arc<market::Book>>)>,
 
     signed: HashMap<(Address, B256), Arc<Prepared>>,
@@ -39,11 +39,12 @@ impl Book {
         &self,
         source: &str,
         chain: u64,
+        wallet: Option<Address>,
         max_age: Duration,
     ) -> Option<Arc<market::Book>> {
         let s = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        let (name, id) = s.source.as_ref()?;
-        if name != source || *id != chain {
+        let (name,id,bound)=s.source.as_ref()?;
+        if name!=source || *id!=chain || *bound!=wallet {
             return None;
         }
         let (start, book) = s.market.as_ref()?;
@@ -53,17 +54,18 @@ impl Book {
         &self,
         source: &str,
         chain: u64,
+        wallet: Option<Address>,
         start: Instant,
         data: Option<Arc<market::Book>>,
     ) {
         let mut s = self.0.lock().unwrap_or_else(|e| e.into_inner());
         if s.source
             .as_ref()
-            .is_none_or(|(k, id)| k != source || *id != chain)
+            .is_none_or(|(k,id,w)| k!=source || *id!=chain || *w!=wallet)
         {
             *s = State::default();
         }
-        s.source = Some((source.to_owned(), chain));
+        s.source = Some((source.to_owned(),chain,wallet));
         s.market = Some((start, data));
     }
     fn save(&self, quote: Prepared) {
@@ -202,7 +204,9 @@ fn pair(
     let chain = super::super::node::chain_id::chain_id(&p.ctx).ok()?;
     let source = p.ctx.text("hashflow.source").ok()?;
     let age = Duration::from_millis(p.ctx.int("hashflow.levels_max_age_ms").ok()?);
-    let depth = p.rfqs.depth(&source, chain, age)?;
+    let bound=super::api_wallet(&p.ctx,&source).ok()?;
+    if let Some(address)=bound && super::super::wallet::signer::address(&p.ctx).ok()!=Some(address){return None;}
+    let depth=p.rfqs.depth(&source,chain,bound,age)?;
     Some((chain, source, age, input, output, depth))
 }
 

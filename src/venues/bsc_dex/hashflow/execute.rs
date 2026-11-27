@@ -297,6 +297,7 @@ async fn selected(
 ) -> GatewayResult<TradeResult> {
     let ctx = &p.ctx;
     if !super::enabled(ctx)
+        || !super::api_wallet(ctx,&q.source).is_ok_and(|w|super::allowed(w,who))
         || ctx.text("hashflow.source")? != q.source
         || !routing::timely(p, q)
         || req.remeasure.as_ref().is_some_and(|r| !r.any_executor)

@@ -45,12 +45,20 @@ fn router(chain: u64) -> Result<Address, String> {
         .ok_or_else(|| "Нет размещения Hashflow в этой сети".into())
 }
 
+/// Multi-wallet sources share levels. Individual API credentials belong to exactly one public address.
+fn api_wallet(ctx:&Ctx,source:&str)->Result<Option<Address>,String>{
+    if source.is_empty() || source.trim()!=source{return Err("Укажите идентификатор источника Hashflow без пробелов".into());}
+    if source!="api"{return Ok(None);}
+    ctx.addr("hashflow.api_wallet").ok().filter(|a|!a.is_zero()).map(Some)
+        .ok_or_else(||"Для индивидуального ключа укажите публичный адрес в hashflow.api_wallet".into())
+}
+fn allowed(wallet:Option<Address>,trader:Address)->bool{wallet.is_none_or(|w|w==trader)}
 pub(super) fn enabled(ctx: &Ctx) -> bool {
     ctx.flag("hashflow.trading").unwrap_or(false)
         && ctx.vault.has_secret("hashflow.taker_key")
         && ctx
             .text("hashflow.source")
-            .is_ok_and(|s| !s.trim().is_empty() && s.trim() != "api")
+            .is_ok_and(|s| api_wallet(ctx,&s).is_ok())
 }
 
 pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
@@ -70,7 +78,7 @@ pub(super) async fn connection(ctx: &Ctx) -> Option<Result<String, String>> {
         return None;
     }
     Some(
-        market::makers(ctx, &source, chain)
+        market::makers(ctx, &source, chain, match api_wallet(ctx,&source){Ok(w)=>w,Err(e)=>return Some(Err(e))})
             .await
             .map(|m| format!("chainId {chain}: доступно маркетмейкеров {}", m.len())),
     )
@@ -123,12 +131,7 @@ struct Response {
 pub(super) async fn preview(ctx: &Ctx, request: Request) -> GatewayResult<Preview> {
     let id = chain_id::chain_id(ctx)?;
     let source = ctx.text("hashflow.source")?;
-    if source.trim().is_empty() || source.trim() == "api" {
-        return Err(ctx.not_set(
-            "hashflow.source",
-            "Нужен источник multi-wallet, выданный Hashflow",
-        ));
-    }
+    api_wallet(ctx,&source).map_err(|e|ctx.err(ErrorCode::NotConfigured,e))?;
     check(ctx, id, &source, request, false, None)
         .await
         .map(|q| q.preview)
@@ -165,6 +168,8 @@ async fn check(
     if !ctx.vault.has_secret("hashflow.taker_key") {
         return Err("Нет ключа Hashflow в разблокированном хранилище секретов".into());
     }
+    let wallet=api_wallet(ctx,source)?;
+    if !allowed(wallet,r.trader){return Err("Hashflow: кошелёк поручения отличается от адреса индивидуального ключа".into());}
     let target = router(id)?;
     let h = sim::header(ctx, id).await?;
     let (di, do_) = tokio::try_join!(
@@ -174,7 +179,7 @@ async fn check(
     let (desired, human) = amount(&r, if exact_output { do_ } else { di })?;
     let (makers, indicative) = match known {
         Some(x) => x,
-        None => market::book(ctx, source, id, Some(r.input))
+        None => market::book(ctx, source, id, Some(r.input),wallet)
             .await?
             .at(&r, human, exact_output)?,
     };

@@ -152,7 +152,7 @@ def deployment_events(c, chain, factory, height):
 def candidate_fees(catalog,fixtures):
     candidates = {int(f) for p in catalog for f in p["settings"].get("dex.v3_fee_tiers",[])}
     for network in SPECS:
-        file = fixtures / ("v3_fee_events_"+network+".json.gz")
+        file = fixtures / ("v3_fee_state_base.json.gz" if network=="base" else "v3_fee_events_ethereum.json.gz")
         if file.exists():
             with gzip.open(file, "rt") as stream:
                 for row in json.load(stream)["factories"].values():

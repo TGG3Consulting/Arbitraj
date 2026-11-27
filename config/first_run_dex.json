@@ -19,7 +19,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "uniswap-v3-base",
-    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36) · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "uniswap_v3",
       "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
@@ -27,7 +27,16 @@
       "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
       "dex.factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
       "dex.quoter": "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a",
-      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d"
+      "dex.tick_lens": "0x0CdeE061c75D43c82520eD998C23ac2991c9ac6d",
+      "dex.v3_fee_tiers": [
+        "100",
+        "200",
+        "300",
+        "400",
+        "500",
+        "3000",
+        "10000"
+      ]
     }
   },
   {
@@ -77,7 +86,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "pancakeswap-v3-base",
-    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "pancakeswap_v3",
       "dex.universal_router": "0xd9C500DfF816a1Da21A48A732d3498Bf09dc9AEB",
@@ -85,7 +94,13 @@
       "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
       "dex.factory": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
       "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
-      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
     }
   },
   {
@@ -269,7 +284,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "uniswap_v3",
-    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
+    "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36) · tests/data/first_run_dex_2026-11-26/v3_fee_events_ethereum.json.gz",
     "settings": {
       "dex.kind": "uniswap_v3",
       "dex.universal_router": "0x23617e59A5925b2A4Bf75d73ff6711cD0b29De85",
@@ -277,7 +292,13 @@
       "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
       "dex.factory": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
       "dex.quoter": "0x61fFE014bA17989E743c5F6cB21bF9697530B21e",
-      "dex.tick_lens": "0xbfd8137f7d1516D3ea5cA83523914859ec47F573"
+      "dex.tick_lens": "0xbfd8137f7d1516D3ea5cA83523914859ec47F573",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
     }
   },
   {
@@ -316,7 +337,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "pancakeswap-v3-ethereum",
-    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts",
+    "source": "https://github.com/pancakeswap/pancake-developer/tree/c7a9ae547c0ddaa15b439172291d51594a384e78/docs/pages/contracts · tests/data/first_run_dex_2026-11-26/v3_fee_events_ethereum.json.gz",
     "settings": {
       "dex.kind": "pancakeswap_v3",
       "dex.universal_router": "0x65b382653f7C31bC0Af67f188122035461ec9C76",
@@ -324,7 +345,13 @@
       "dex.permit2": "0x31c2F6fcFf4F8759b3Bd5Bf0e1084A055615c768",
       "dex.factory": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
       "dex.tick_lens": "0x9a489505a00cE272eAa5e07Dba6491314CaE3796",
-      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997"
+      "dex.quoter": "0xB048Bbc1Ee6b733FFfCFb9e9CeF7375518e25997",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "2500",
+        "10000"
+      ]
     }
   },
   {
@@ -375,12 +402,18 @@
     "chain_id": 8453,
     "network": "base",
     "id": "sushiswap-v3-base",
-    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "v3_fork",
       "dex.factory": "0xc35dadb65012ec5796536bd9864ed8773abc74c4",
       "dex.tick_lens": "0xf4d73326c13a4fc5fd7a064217e12780e9bd62c3",
-      "dex.quoter": "0xb1e835dc2785b52265711e17fccb0fd018226a6e"
+      "dex.quoter": "0xb1e835dc2785b52265711e17fccb0fd018226a6e",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
     }
   },
   {
@@ -400,12 +433,18 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "sushiswap-v3-ethereum",
-    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts",
+    "source": "https://github.com/sushi-labs/sushi/blob/76d9cd5c1159804449e305339a00ff73331068b5/src/evm/config/features/sushiswap-v3.ts · tests/data/first_run_dex_2026-11-26/v3_fee_events_ethereum.json.gz",
     "settings": {
       "dex.kind": "v3_fork",
       "dex.factory": "0xbaceb8ec6b9355dfc0269c18bac9d6e2bdc29c4f",
       "dex.tick_lens": "0xfb70ad5a200d784e7901230e6875d91d5fa6b68c",
-      "dex.quoter": "0x64e8802fe490fa7cc61d3463958199161bb608a7"
+      "dex.quoter": "0x64e8802fe490fa7cc61d3463958199161bb608a7",
+      "dex.v3_fee_tiers": [
+        "100",
+        "500",
+        "3000",
+        "10000"
+      ]
     }
   },
   {
@@ -1560,7 +1599,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "crescentswap-base",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0x3539da2adb3f8311d203d334f25f7bee604a5c50 · https://sourcify.dev/server/v2/contract/8453/0x809568656c4874850d931570d0b5cd5bb1b0e3b9 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x3539da2adb3f8311d203d334f25f7bee604a5c50 · https://sourcify.dev/server/v2/contract/8453/0x809568656c4874850d931570d0b5cd5bb1b0e3b9 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "v3_fork",
       "dex.factory": "0x3539da2adb3f8311d203d334f25f7bee604a5c50",
@@ -1570,7 +1609,8 @@
         "100",
         "500",
         "3000",
-        "10000"
+        "10000",
+        "30000"
       ]
     }
   },
@@ -1613,7 +1653,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "swapbased-v3",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0xb5620f90e803c7f957a9ef351b8db3c746021bea · https://sourcify.dev/server/v2/contract/8453/0xf6062550e8711dd6a38ca87299b14dcd6d45d783 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xb5620f90e803c7f957a9ef351b8db3c746021bea · https://sourcify.dev/server/v2/contract/8453/0xf6062550e8711dd6a38ca87299b14dcd6d45d783 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "v3_fork_pancake",
       "dex.factory": "0xb5620f90e803c7f957a9ef351b8db3c746021bea",
@@ -1621,6 +1661,8 @@
       "dex.quoter_virtual": true,
       "dex.v3_fee_tiers": [
         "35",
+        "40",
+        "80",
         "100",
         "500",
         "2500",
@@ -1632,7 +1674,7 @@
     "chain_id": 8453,
     "network": "base",
     "id": "baseswap-v3",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0x38015d05f4fec8afe15d7cc0386a126574e8077b · https://sourcify.dev/server/v2/contract/8453/0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x38015d05f4fec8afe15d7cc0386a126574e8077b · https://sourcify.dev/server/v2/contract/8453/0xa3c2fb43c7445d8ff8bd93dac53d98bde7444020 · tests/data/first_run_dex_2026-11-26/verified_v3_base.json · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "v3_fork",
       "dex.factory": "0x38015d05f4fec8afe15d7cc0386a126574e8077b",
@@ -1642,6 +1684,9 @@
         "1",
         "50",
         "70",
+        "80",
+        "350",
+        "450",
         "2000",
         "2500",
         "10000",
@@ -2549,7 +2594,7 @@
     "id": "9mm-v3-base",
     "network": "base",
     "chain_id": 8453,
-    "source": "https://sourcify.dev/server/v2/contract/8453/0xa07d063b595168e081b51280ada5fc8e11cde52b · tests/data/first_run_dex_2026-11-26/base_native_v3.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0xa07d063b595168e081b51280ada5fc8e11cde52b · tests/data/first_run_dex_2026-11-26/base_native_v3.json · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "base_native_v3",
       "dex.module_runtime_hashes": [
@@ -2561,6 +2606,7 @@
       "dex.v3_fee_tiers": [
         "100",
         "500",
+        "2000",
         "2500",
         "10000",
         "20000"
@@ -3619,7 +3665,7 @@
     "network": "base",
     "chain_id": 8453,
     "id": "bluedex-v3-base",
-    "source": "https://sourcify.dev/server/v2/contract/8453/0x2f657b1002c3938d99a6adf706ef393b1fdb1a44?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x2f657b1002c3938d99a6adf706ef393b1fdb1a44?fields=sources · tests/data/first_run_dex_2026-11-26/registered_v3_base_profiles.json · tests/data/first_run_dex_2026-11-26/v3_fee_state_base.json.gz",
     "settings": {
       "dex.kind": "registered_v3",
       "dex.module_runtime_hashes": [
@@ -3635,7 +3681,8 @@
       "dex.tick_lens": "0xf41e702c90bfdc0e488b6286ecf1428466cfa8e6",
       "dex.v3_fee_tiers": [
         "500",
-        "3000"
+        "3000",
+        "10000"
       ],
       "dex.v3_quoter_method": "quoteExactInputSingle",
       "dex.quoter_virtual": false
@@ -4191,7 +4238,7 @@
     "chain_id": 1,
     "network": "ethereum",
     "id": "lif3-ethereum",
-    "source": "https://docs.lif3.com/liquidity/v3/contracts-swap-v3 · tests/data/first_run_dex_2026-11-26/lif3_ethereum_registry.json",
+    "source": "https://docs.lif3.com/liquidity/v3/contracts-swap-v3 · tests/data/first_run_dex_2026-11-26/lif3_ethereum_registry.json · tests/data/first_run_dex_2026-11-26/v3_fee_events_ethereum.json.gz",
     "settings": {
       "dex.router_exact_tokens": [
         "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
@@ -4211,8 +4258,10 @@
         "0x88ea7049e70592b519fc358b446165d4dbedb71ff7c3749add6dc16731e6cd5a"
       ],
       "dex.v3_fee_tiers": [
+        "100",
         "500",
-        "3000"
+        "3000",
+        "10000"
       ],
       "dex.v3_quoter_method": "quoteExactInputSingle",
       "dex.quoter_virtual": false,

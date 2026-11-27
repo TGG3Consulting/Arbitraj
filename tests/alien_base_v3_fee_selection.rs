@@ -90,3 +90,36 @@ fn registered_fee_is_discovered_and_its_wallet_output_competes_at_identical_size
         assert!(levels[&750] > levels[&200].max(levels[&400]));
     }
 }
+
+#[test]
+fn cold_discovery_checks_each_observed_factory_fee_in_its_own_network() {
+    let profiles: Vec<Value> = serde_json::from_reader(File::open("config/first_run_dex.json").unwrap()).unwrap();
+    for (name, chain, factory_count) in [("v3_fee_events_ethereum", 1, 11), ("v3_fee_state_base", 8453, 19)] {
+        let archive = capture(name);
+        assert_eq!(archive["chain_id"], chain);
+        assert_eq!(archive["selector"]["requireCanonical"], true);
+        let factories = archive["factories"].as_object().unwrap();
+        assert_eq!(factories.len(), factory_count);
+        for (address, record) in factories {
+            let tiers = record["tiers"].as_object().unwrap();
+            assert!(!tiers.is_empty(), "{address}");
+            for event in record["events"].as_array().unwrap() {
+                assert_eq!(tiers[&event["fee"].to_string()], event["spacing"]);
+                assert!(event["block"].as_u64().unwrap() >= record["creation_block"].as_u64().unwrap());
+            }
+            for id in record["profiles"].as_array().unwrap() {
+                let settings = &profiles.iter().find(|p| p["id"] == *id && p["chain_id"] == chain).unwrap()["settings"];
+                assert!(settings["dex.factory"].as_str().unwrap().eq_ignore_ascii_case(address));
+                let fees = settings["dex.v3_fee_tiers"].as_array().unwrap();
+                for (fee,spacing) in tiers {
+                    assert!(spacing.as_i64().unwrap() > 0);
+                    assert!(fees.iter().any(|v| v.as_str() == Some(fee.as_str())), "{id}: {fee}");
+                }
+                if id == "wagmi-ethereum" {
+                    assert_eq!(record["creation_block"], 18_240_112);
+                    assert_eq!(record["events"].as_array().unwrap().len(), 3);
+                }
+            }
+        }
+    }
+}

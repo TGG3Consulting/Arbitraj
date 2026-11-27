@@ -1014,6 +1014,15 @@ def tables(network, snapshots, profiles):
                     "[Платежи, комиссии пулов и адреса](../tests/data/first_run_dex_2026-11-26/base_native_v3.json) · "
                     "[Фабрики и TickLens](../tests/data/first_run_dex_2026-11-26/base_native_v3_profiles.json) · [970 пулов из событий фабрик](../tests/data/first_run_dex_2026-11-26/base_native_v3_directory.json)."])
     derp_path = Path("tests/data/first_run_dex_2026-11-26/derpdex_markets.json")
+    fee_file = Path("tests/data/first_run_dex_2026-11-26") / ("v3_fee_state_base.json.gz" if base else "v3_fee_events_ethereum.json.gz")
+    if fee_file.exists():
+        fees = json.loads(gzip.decompress(fee_file.read_bytes()))
+        out.append(f"**Комиссии фабрик V3.** Для {len(fees['factories'])} фабрик прочитаны исходные квитанции создания "
+                   f"и проверены {len(fees['probed_fees'])} значений через `feeAmountTickSpacing` на блоке {fees['block']}. "
+                   "Все найденные положительные ставки включены в профили первого запуска. "
+                   "На Base дополнительные регистрации вне проверенного набора возможны. "
+                   "Список применяется к поиску пулов по фабрике при включённом `index.factory_scan`. "
+                   f"[Исходные события, шаг тика и проверенные ставки](../{fee_file.as_posix()}).")
     if base and "alien-carbon-base" in configured:
         file = Path("tests/data/first_run_dex_2026-11-26/alien_carbon_base.json.gz")
         archived = json.loads(gzip.decompress(file.read_bytes()))

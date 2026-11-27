@@ -1,5 +1,6 @@
 """Reconcile Base V3 factory creations and compare protected wallet and V5 payments."""
 import argparse
+import gzip
 import json
 from pathlib import Path
 
@@ -142,11 +143,21 @@ def fund_venice(cap, run, seed, deadline):
     return prefix+[swap],received,dict(source=pool,spent=str(seed),received=str(received),gas=int(rows[4]["gasUsed"],16))
 
 
-def wallet(reader,cap,book):
+def wallet(reader,cap,book,artifact=None):
     assert reader.many(("eth_getCode",[a,cap.selector]) for a in (EXEC,OWNER)) == ["0x","0x"]
     word=lambda x:"0x"+format(x,"064x")
     overrides={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    wires = ("router02", "v5")
+    if artifact:
+        from record_registered_v3_module import ADAPTER
+        from record_fraxswap_swaps import bound_runtime
+        factory = book["roles"]["factory"]["address"]
+        assert book["key_type"] == "uint24" and reader.one("eth_getCode", [ADAPTER, cap.selector]) == "0x"
+        code = bound_runtime(artifact, factory, cap.endpoint, cap.selector)
+        overrides[ADAPTER] = {"code": "0x"+code}
+        book["module_hash"] = "0x"+keccak(hexstr=code).hex()
+        wires = ("module",)
     def canonical_simulation(_endpoint, method, params):
         if method != "eth_simulateV1" or params[-1] != cap.selector:
             raise ValueError("unexpected simulation selector")
@@ -170,20 +181,25 @@ def wallet(reader,cap,book):
             else:
                 initial,available,funding=fund_venice(cap,run,seed,deadline)
                 book.setdefault("funding",[]).append(funding)
-            for wire in ("router02","v5"):
-                target=router if wire=="router02" else EXEC
+            for wire in wires:
+                target = ADAPTER if wire == "module" else (router if wire == "router02" else EXEC)
                 prefix=initial.copy();amount=available
                 for a,b in ((base_token,other),(other,base_token)):
                     quotesig="(address,address,uint256,"+kind+",uint160)"
                     quote=tx(quoter,"quoteExactInputSingle("+quotesig+")",[quotesig],[(a,b,amount,market["key"],0)])
                     def order(minimum,expiry):
+                        if wire == "module":
+                            return tx(target, "execute(address,address,address,uint256,uint256,uint256)",
+                                      ["address","address","address","uint256","uint256","uint256"],
+                                      [market["pool"],a,b,amount,minimum,expiry])
                         if wire=="v5":
                             step=(1,market["pool"],a,b,10000,b"")
                             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,expiry,[step]])
                         shape="(address,address,"+kind+",address,uint256,uint256,uint160)"
                         inner=tx(router,"exactInputSingle("+shape+")",[shape],[(a,b,market["key"],OWNER,amount,minimum,0)])
                         return tx(router,"multicall(uint256,bytes[])",["uint256","bytes[]"],[expiry,[bytes.fromhex(inner["data"][2:])]])
-                    before=[balance(t,w) for w in (OWNER,EXEC) for t in (a,b)]
+                    custody = target if wire == "module" else EXEC
+                    before=[balance(t,w) for w in (OWNER,custody) for t in (a,b)]
                     permit=approval(a,target,amount); first=prefix+[permit,*before,quote]; i=len(first)
                     r=run(first+[order(1,deadline),*before])
                     if not all(v["status"]=="0x1" for v in r[:i-1]):raise ValueError(("funding and balance",market["pool"],wire))
@@ -214,7 +230,18 @@ def wallet(reader,cap,book):
 
 if __name__=="__main__":
     ap=argparse.ArgumentParser(description=__doc__);ap.add_argument("name",choices=VENUES);ap.add_argument("output",type=Path)
+    ap.add_argument("--module",type=Path,help="Verify the factory-bound net-settlement wallet on the same recorded markets")
     a=ap.parse_args();snap=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes()); reader=Reader("base",snap)
     cap=CanonicalCalls(reader)
-    book=wallet(reader,cap,registry(reader,cap,a.name,snap))
+    if a.module:
+        archive = ROOT / "tests/data/first_run_dex_2026-11-26/wagmi_thick_base.json.gz"
+        book = json.loads(gzip.decompress(archive.read_bytes()))[a.name]
+        assert book["selector"] == cap.selector and book["state_root"] == reader.header["stateRoot"]
+        native = {(c["pool"],c["input"],c["spent"]): c for c in book["cases"] if c["wire"] == "router02"}
+        book = wallet(reader,cap,book,json.loads(a.module.read_bytes()))
+        checked = {(c["pool"],c["input"],c["spent"]): c for c in book["cases"]}
+        assert native and checked.keys() == native.keys()
+        assert all(c["received"] == native[k]["received"] for k,c in checked.items())
+    else:
+        book=wallet(reader,cap,registry(reader,cap,a.name,snap))
     a.output.write_bytes(json.dumps(book,separators=(",",":")).encode())

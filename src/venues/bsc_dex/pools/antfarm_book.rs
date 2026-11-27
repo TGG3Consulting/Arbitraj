@@ -60,7 +60,7 @@ async fn projected(
             batch::view(at, oracle, IFarm::pairCall {}),
             batch::view(at, oracle, IFarm::price1CumulativeLastCall {}),
             batch::view(at, oracle, IFarm::blockTimestampLastCall {}),
-            batch::view(at, oracle, IFarm::firstUpdateCall {}),
+            batch::view(at, oracle, IFarm::firstUpdateCallCall {}),
             batch::view(at, oracle, IFarm::price1AverageCall {}),
         ],
     );
@@ -75,7 +75,7 @@ async fn projected(
         return Err(ctx.err(ErrorCode::NotApplicable, "Antfarm: другая пара оракула"));
     }
     let elapsed = now.wrapping_sub(batch::decode(&ts, IFarm::blockTimestampLastCall {})?);
-    if elapsed < 3600 && !batch::decode(&first, IFarm::firstUpdateCall {})? {
+    if elapsed < 3600 && !batch::decode(&first, IFarm::firstUpdateCallCall {})? {
         return Ok(Some(U256::from(batch::decode(
             &avg,
             IFarm::price1AverageCall {},

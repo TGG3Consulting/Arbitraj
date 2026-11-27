@@ -11,6 +11,7 @@ sol! {
         function poolDeployer() external view returns (address);
         function deployer() external view returns (address);
         function factoryAddress() external view returns (address);
+        function protocolFeeRecipient() external view returns (address);
         function lmPool() external view returns (address);
     }
 }
@@ -33,4 +34,18 @@ pub(super) async fn creator(ctx:&Ctx, family:&Family, factory:Address, quoter:Ad
         return Err(ctx.err(ErrorCode::NotApplicable,"HELLO V3: создатель связан с другой фабрикой"));
     }
     Ok(deployer)
+}
+
+/// Перевод накопленной платы протокола может совпасть с адресом участника этого маршрута.
+pub(crate) async fn separate_fee(ctx:&Ctx, family:&Family, path:&[&super::registry::Entry], at:&Value)->GatewayResult<()> {
+    let factory=ctx.dex_addr("dex.factory",family.id)?;
+    let call=IHello::protocolFeeRecipientCall {};
+    let [raw]=batch::read(ctx,[batch::view(at,factory,call.clone())]).await?;
+    let treasury=batch::decode(&raw,call)?;
+    if !treasury.is_zero() && (treasury==crate::venues::bsc_dex::wallet::signer::address(ctx)?
+        || Some(treasury)==crate::venues::bsc_dex::exec::executor::address(ctx)?
+        || path.iter().any(|e|e.pool.reference.address()==treasury)) {
+        return Err(ctx.err(ErrorCode::NoRoute,"HELLO V3: получатель сборов участвует в маршруте, чистая выплата отдельно не подтверждена"));
+    }
+    Ok(())
 }

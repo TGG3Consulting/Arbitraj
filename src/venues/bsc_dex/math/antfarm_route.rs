@@ -20,11 +20,15 @@ impl Route {
             .debit
             .checked_add(self.acquisition.as_ref().map_or(U256::ZERO, |v| v.debit))
     }
-    pub fn swapped(&self) -> Option<Swapped> {
+    pub fn swapped(&self, exact_in: bool, requested: U256) -> Option<Swapped> {
         Some(Swapped {
             amount_in: self.debit()?,
             amount_out: self.primary.output,
-            complete: true,
+            complete: if exact_in {
+                self.debit()? == requested
+            } else {
+                self.primary.output >= requested
+            },
         })
     }
 }
@@ -89,15 +93,7 @@ impl AntfarmBook {
             } else {
                 market.minimum_for(i, size)?
             };
-            let mut primary = market.settle(source, x, false)?;
-            if exact_in
-                && let Some(least) = market.minimum_for(i, primary.output)
-                && least < x
-                && let Some(f) = market.settle(source, least, false)
-                && f.output == primary.output
-            {
-                primary = f;
-            }
+            let primary = market.settle(source, x, false)?;
             return (exact_in || primary.output >= size).then_some(Route {
                 primary,
                 acquisition: None,
@@ -149,7 +145,7 @@ impl AntfarmBook {
                 continue;
             };
             let low = current.minimum_for(i, out).unwrap_or(x);
-            for amount in [low, x] {
+            for amount in [x, low] {
                 let Some(primary) = current.settle(source, amount, false) else {
                     continue;
                 };
@@ -165,8 +161,8 @@ impl AntfarmBook {
                 let improve = best.as_ref().is_none_or(|b| {
                     let old = b.debit().unwrap_or(U256::MAX);
                     if exact_in {
-                        (primary.output, std::cmp::Reverse(cost))
-                            > (b.primary.output, std::cmp::Reverse(old))
+                        (primary.output, cost == size, std::cmp::Reverse(cost))
+                            > (b.primary.output, old == size, std::cmp::Reverse(old))
                     } else {
                         (cost, std::cmp::Reverse(primary.output))
                             < (old, std::cmp::Reverse(b.primary.output))

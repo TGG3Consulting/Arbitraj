@@ -65,7 +65,7 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::Antfarm(book),PoolKind::V2) => book.route(token_in,exact_in,amount).and_then(|r|r.swapped())
+        (PoolState::Antfarm(book),PoolKind::V2) => book.route(token_in,exact_in,amount).and_then(|r|r.swapped(exact_in,amount))
             .ok_or_else(||why("Antfarm: объём или комиссия ATF не обеспечены по прочитанным рынкам")),
         (PoolState::Temple(s),PoolKind::V2) => {
             let out=if zero_for_one {e.pool.token1} else {e.pool.token0};

@@ -1,7 +1,6 @@
 //! Ищет акцию по обеим ориентациям. Сверка рынка в verify повторяет регистрацию или привязку эмитента.
 use super::{
     brokerbot, brokerbot_profile, discover, families,
-    family_variant::Variant,
     stable_list::Extra,
     verify::{Candidate, Verdict},
 };
@@ -16,7 +15,7 @@ pub(super) fn scan(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[Addres
     let mut out = Extra::default();
     for f in families::all(ctx)
         .into_iter()
-        .filter(|f| f.variant == Variant::Brokerbot)
+        .filter(|f| f.variant.issuer_shares())
     {
         let Ok(profiles) = brokerbot_profile::markets(ctx, f) else {
             continue;

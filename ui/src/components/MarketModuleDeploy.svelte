@@ -45,7 +45,7 @@
     officialRouter:value('dex.router'), routerHash:value('dex.router_runtime_hash'),deployer:value('dex.algebra_pool_deployer'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
-    poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
+    brokerMarkets:value('dex.broker_markets'),poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
     quoter:value('dex.quoter'), quoterHash:value('dex.quoter_runtime_hash'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations'),implementationHashes:value('dex.proxy_runtime_hashes')});
   let mounted = true;

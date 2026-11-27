@@ -1,10 +1,10 @@
 use super::{Quoting,routing::Input,v2_execution::{self,Execution,OptionQuote},v2_wallet_sim::{V5Step,Wire},white_state::Head};
 use crate::{core::types::{RouteMode,Side},venues::bsc_dex::{exec::{aktionariat_plan,aktionariat_wallet,executor},
-    pools::{family_variant::Variant,registry::Entry},num}};
+    pools::registry::Entry,num}};
 use alloy_primitives::{Address,Bytes};
 
 pub(super) async fn options(q:&Quoting,i:&Input,e:&Entry,payer:Address,graph:bool,head:Option<Head>)->Vec<OptionQuote> {
-    if e.family.variant!=Variant::Brokerbot {return vec![];}
+    if !e.family.variant.issuer_shares() {return vec![];}
     let Ok(m)=aktionariat_plan::terms(&q.ctx,e) else{return vec![];};
     if let Some(h)=head && aktionariat_plan::verify(&q.ctx,e,m,&h.selector()).await.is_err(){return vec![];}
     let direct=v2_execution::option(q,i,e.clone(),payer,Execution{wire:Wire::Aktionariat(m),mode:RouteMode::Direct,target:m.module},head);

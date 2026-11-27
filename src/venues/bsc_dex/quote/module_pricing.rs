@@ -106,7 +106,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             }
             continue;
         }
-        if e.family.variant==Variant::Brokerbot{quotes.extend(Box::pin(super::aktionariat_pricing::options(q,i,e,payer,graph,head)).await);continue}
+        if e.family.variant.issuer_shares(){quotes.extend(Box::pin(super::aktionariat_pricing::options(q,i,e,payer,graph,head)).await);continue}
         if e.family.variant==Variant::PropVenue{quotes.extend(Box::pin(super::prop_pricing::options(q,i,e,payer,head)).await);continue}
         if e.family.variant==Variant::IntegralSize{quotes.extend(Box::pin(super::integral_pricing::options(q,i,e,payer,graph,head)).await);continue}
         if e.family.variant==Variant::Bundles{

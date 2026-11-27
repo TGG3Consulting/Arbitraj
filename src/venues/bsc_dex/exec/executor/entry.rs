@@ -143,7 +143,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     let Some(k) = e.family.executor_kind else {
         return false;
     };
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot {
+    if e.family.variant.issuer_shares() {
         return k==ExecKind::Balancer && super::super::aktionariat_plan::terms(ctx,e).is_ok();
     }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
@@ -187,7 +187,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
 pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
-    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot &&
+    if e.family.variant.issuer_shares() &&
         !matches!((&e.pool.reference,&e.pool.state),(PoolRef::Contract(a),PoolState::Brokerbot(s)) if *a==s.broker && k==ExecKind::Balancer) {
         return Err("Aktionariat: неподтверждённый рынок или несовместимый вид шага".into());
     }

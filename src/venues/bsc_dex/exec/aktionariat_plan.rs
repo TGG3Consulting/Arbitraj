@@ -60,7 +60,7 @@ pub(crate) fn probe(ctx:&Ctx,e:&Entry,o:&super::plan::Order,payer:Address,now:u6
 pub(super) fn capture(ctx:&Ctx,legs:&[Vec<Step>],call:&super::executor::call::ExecCall,payer:Address)->GatewayResult<Option<Box<Proof>>>{
     let [leg]=legs else{return Ok(None)};
     let [step]=leg.as_slice() else{return Ok(None)};
-    if step.entry.family.variant!=crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot{return Ok(None);}
+    if !step.entry.family.variant.issuer_shares(){return Ok(None);}
     let m=terms(ctx,&step.entry)?;
     let [route]=call.steps.as_slice() else{return Err(changed(ctx));};
     let id=super::aktionariat_wallet::step_id(m.broker,Some(call.amount_in)).ok_or_else(||changed(ctx))?;

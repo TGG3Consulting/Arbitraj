@@ -168,7 +168,7 @@ pub fn build(
         };
         left = left.saturating_sub(first_in);
         for (i, s) in leg.iter().enumerate() {
-            let (params, pool) = if s.entry.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot {
+            let (params, pool) = if s.entry.family.variant.issuer_shares() {
                 let m=super::super::aktionariat_plan::terms(ctx,&s.entry)?;
                 let cap=(i==0).then_some(s.order.amount_in);
                 let id=super::super::aktionariat_wallet::step_id(m.broker,cap)

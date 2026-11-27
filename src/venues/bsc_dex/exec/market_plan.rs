@@ -115,7 +115,7 @@ impl Market {
             _ if e.family.variant==Variant::IntegralSize=>Some(Self::Integral),
             PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
-            _ if e.family.variant==Variant::Brokerbot=>Some(Self::Aktionariat),
+            _ if e.family.variant.issuer_shares()=>Some(Self::Aktionariat),
             _ if e.family.variant==Variant::BancorLegacy=>Some(Self::BancorLegacy),
             _ if e.family.variant==Variant::YieldBasis=>Some(Self::YieldBasis),
             PoolState::BalancerV1(_) => Some(Self::BalancerV1),

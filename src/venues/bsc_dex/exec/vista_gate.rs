@@ -28,7 +28,7 @@ pub(super) async fn check(
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
     for (e, input) in steps {
-        if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot {
+        if e.family.variant.issuer_shares() {
             let m=super::aktionariat_plan::terms(ctx,e)?;
             Box::pin(super::aktionariat_plan::verify(ctx,e,m,&head.selector())).await?;
             continue;

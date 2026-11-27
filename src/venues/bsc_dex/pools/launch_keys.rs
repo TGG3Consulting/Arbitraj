@@ -42,7 +42,7 @@ pub(super) fn roles(ctx: &Ctx, f: &Family) -> GatewayResult<Vec<Role>> {
             .ok_or_else(|| invalid(ctx))?;
         if !matches!(
             kind,
-            "hook" | "after_hook" | "factory" | "escrow" | "registry" | "airlock"
+            "component" | "hook" | "after_hook" | "factory" | "escrow" | "registry" | "airlock"
         ) || parts.next().is_some()
             || addr.is_zero()
             || hash.is_zero()
@@ -68,7 +68,7 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
         && !k.hooks.is_zero()
         && match f.variant {
             Variant::LaunchDoppler => k.fee == 0x800000 && k.tick_spacing.as_i32() == 200,
-            Variant::LaunchIndex => k.fee == 0 && k.tick_spacing.as_i32() == 1,
+            Variant::LaunchIndex | Variant::LaunchBaseline => k.fee == 0 && k.tick_spacing.as_i32() == 1,
             Variant::LaunchO1Wrapped => k.currency0.is_zero() && k.fee == 0 && k.tick_spacing.as_i32() == 200,
             Variant::LaunchO1 => k.fee == 0 && k.tick_spacing.as_i32() == 200,
             _ => false,

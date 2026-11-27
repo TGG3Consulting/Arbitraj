@@ -323,6 +323,16 @@ pub struct CandySwapState {
     pub receiver: Address,
 }
 
+/// ToonSwap transfers the floored referral and treasury portions independently before Sync.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ToonState {
+    pub reserves: [U256; 2],
+    pub balances: [U256; 2],
+    pub rates: [U256; 2],
+    pub recipients: [Address; 2],
+    pub pool: Address,
+}
+
 /// Состояние DeltaSwapPair для ordinary caller. У gammaPool отдельная ставка.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct DeltaFee {
@@ -490,6 +500,7 @@ pub enum PoolState {
     Antfarm(Box<AntfarmBook>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
+    ToonSwap(Box<ToonState>),
     Memebox(Box<MemeboxState>),
 }
 

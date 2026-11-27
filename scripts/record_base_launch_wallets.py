@@ -29,6 +29,9 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
     at=d["selector"];header=rpc(endpoint,"eth_getBlockByHash",[at["blockHash"],False]);end=int(header["timestamp"],16)+120
     if d["state_root"]!=header["stateRoot"]:raise ValueError("изменилось состояние родителя")
     cfg=next(p["settings"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["chain_id"]==8453 and p["settings"]["dex.kind"]=="uniswap_v4")
+    flux=d.get("flux")
+    if flux:cfg=flux
+    key_type="(address,address,address,address,uint24,bytes32)" if flux else KEY
     router,permit,manager,quoter=[cfg["dex."+k].lower() for k in ("universal_router","permit2","pool_manager","quoter")]
     if manager!=d["manager"] or rpc(endpoint,"eth_getCode",[EXEC,at])!="0x":raise ValueError("другой manager или занятый тестовый адрес")
     runtime="0x"+RUNTIME.read_text().strip().removeprefix("0x")
@@ -63,14 +66,18 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             if mode=="wrapped":
                 return tx(wrapped_module[0],"execute(bytes32,address,address,uint256,uint256,uint256)",["bytes32","address","address","uint256","uint256","uint256"],[keccak(encode([KEY],[k])),x,y,qty,minimum,deadline])
             if mode in ("v5","wrapped_v5"):
-                step=(17,wrapped_module[0],x,y,10000,keccak(encode([KEY],[k]))) if mode=="wrapped_v5" else (19,manager,x,y,10000,encode([KEY],[k]))
+                step=(17,wrapped_module[0],x,y,10000,keccak(encode([KEY],[k]))) if mode=="wrapped_v5" else (
+                    20 if flux else 19,cfg["dex.vault"] if flux else manager,x,y,10000,encode([key_type],[k]))
                 return tx(EXEC,f"execute(address,uint256,address,uint256,uint256,{STEP}[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[x,qty,y,minimum,deadline,[step]])
-            params=encode([f"({KEY},bool,uint128,uint128,uint256,bytes)"],[(k,forward,qty,minimum,0,b"")])
+            if flux:
+                params=encode([f"({key_type},bool,uint128,uint128,bytes)"],[(k,forward,qty,minimum,b"")])
+            else:
+                params=encode([f"({KEY},bool,uint128,uint128,uint256,bytes)"],[(k,forward,qty,minimum,0,b"")])
             body=encode(["bytes","bytes[]"],[bytes([6,12,15]),[params,encode(["address","uint256"],[x,qty]),encode(["address","uint256"],[y,minimum])]])
             args=tx(router,"execute(bytes,bytes[],uint256)",["bytes","bytes[]","uint256"],[b"\x10",[body],deadline])
             if x==ZERO:args["value"]=hex(qty)
             return args
-        exact=f"({KEY},bool,uint128,bytes)"
+        exact=f"({key_type},bool,uint128,bytes)"
         quote=tx(quoter,f"quoteExactInputSingle({exact})",[exact],[(k,forward,qty,b"")])
         base=prefix+approvals+[bal(x),bal(y),quote];front=simulate(owner,base,mode)
         if any(v["status"]!="0x1" for v in front):return None,dict(input=str(qty),stage="quote",calls=base,results=front)
@@ -97,11 +104,12 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             sizes += [10**15,10**16] if cash==WETH else [10**8,10**9]
         if cash=="0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf":
             sizes=[10**13,10**15]
+        wire_key=(*key[:-1],bytes.fromhex(key[-1][2:])) if flux else key
         for qty in sizes:
             modes=["wrapped","wrapped_v5"] if wrapped_module else (["router"] if ZERO in key[:2] else ["router","v5"])
             for mode in modes:
-                prefix,buy=leg(key,owner,[],mode,cash,asset,qty)
-                sell=leg(key,owner,prefix,mode,asset,cash,int(buy["net"]))[1] if prefix else None
+                prefix,buy=leg(wire_key,owner,[],mode,cash,asset,qty)
+                sell=leg(wire_key,owner,prefix,mode,asset,cash,int(buy["net"]))[1] if prefix else None
                 item["cases"].append(dict(mode=mode,amount=str(qty),buy=buy,sell=sell))
     return dict(group=group,height=d["height"],selector=at,state_root=header["stateRoot"],roles=cfg,v5_hash="0x"+keccak(bytes.fromhex(runtime[2:])).hex(),markets=markets)
 

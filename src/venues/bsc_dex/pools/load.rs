@@ -122,6 +122,10 @@ pub async fn state(
         let m=Box::pin(super::concave::market(ctx,f,*pool,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::V2{reserve0:m.reserves.0,reserve1:m.reserves.1},ticks:None,bins:None,fee_pips:Some(m.fee)});
     }
+    if f.variant == Variant::ToonSwap && let PoolRef::Contract(pool)=reference {
+        let at=super::nami::block(ctx,&tag).await?;
+        return Box::pin(super::toonswap::read(ctx,f,*pool,pair,&at)).await;
+    }
     if f.variant == Variant::BunnySwap && let PoolRef::Contract(pool)=reference {
         let at=super::nami::block(ctx,&tag).await?;
         let fee=Box::pin(super::bunnyswap::market(ctx,f,*pool,pair,&at)).await?;

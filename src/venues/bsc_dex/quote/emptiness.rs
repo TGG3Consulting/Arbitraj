@@ -51,6 +51,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::CandySwap(s) => s.reserves.iter().any(|r|r.is_zero()),
         PoolState::Virtuals(s) => s.invariant.is_zero() || s.backing.iter().all(|v|v.is_zero()),
         PoolState::EtherVista(s) => s.reserve0.is_zero() || s.reserve1.is_zero(),
+        PoolState::ToonSwap(s) => s.reserves.contains(&U256::ZERO),
         PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. } | PoolState::DeltaSwap { reserve0, reserve1, .. } => reserve0.is_zero() || reserve1.is_zero(),
         // Решение 393 (t178): ликвидность 0 на ТЕКУЩЕМ тике — ещё не пустой пул, если в прочитанной карте есть
         // установленный тик: цена в «дыре» между позициями, обмен в сторону позиции проходит дыру даром (шаг обмена

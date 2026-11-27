@@ -88,6 +88,7 @@ pub fn swap(
             super::super::math::candy::funded(s,zero_for_one,fee,exact_in,amount)
                 .map(|(fill,_)|fill).ok_or_else(none)
         }
+        (PoolState::ToonSwap(state), PoolKind::V2) => state.trade(zero_for_one,exact_in,amount).map(|(s,_)|s).ok_or_else(none),
         (PoolState::EtherVista(state), PoolKind::V2) =>
             super::super::math::ethervista::quote(state, token_in, zero_for_one, exact_in, amount)
                 .ok_or_else(|| why("EtherVista: объём не покрывает фиксированную плату или не помещается в резервы")) ,

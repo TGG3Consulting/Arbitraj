@@ -179,6 +179,11 @@ pub(crate) async fn state(
     {
         return Err(bad());
     }
+    if f.variant == super::family_variant::Variant::SolidlyPairOverride
+        && (method!="factory_pair_override" || !matches!(rule,crate::core::types::FeeRule::Numerator{denominator:10000})
+            || fee::optional(ctx,"dex.solidly_pause_method",f.id)?.as_deref()!=Some("isPaused()")) {
+        return Err(bad());
+    }
     let (target, wire) = fee::fee_call(ctx, f, Some(&method), (factory, pool, m.st))?;
     let pair = IThenaV1Factory::getPairCall {
         tokenA: m.t0,
@@ -186,13 +191,19 @@ pub(crate) async fn state(
         stable: m.st,
     };
     let bal = IERC20::balanceOfCall { owner: pool };
+    // У старых профилей getFee(bool) фактический вызывающий контракта — проверенная выше CREATE2-пара.
+    let read_fee=if method=="factory_stable" {
+        json!([{"from":pool,"to":target,"data":wire},tag])
+    } else {
+        json!([{"to":target,"data":wire},tag])
+    };
     let [listed, left, right, raw] = batch::read(
         ctx,
         [
             batch::view(tag, factory, pair.clone()),
             batch::view(tag, m.t0, bal.clone()),
             batch::view(tag, m.t1, bal.clone()),
-            ("eth_call", json!([{"to":target,"data":wire},tag])),
+            ("eth_call",read_fee),
         ],
     )
     .await?;

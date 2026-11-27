@@ -63,6 +63,8 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
             if any(before[2:]+after[2:]):raise ValueError("executor residue")
             data=dict(status=result["status"],spent=str(before[0]-after[0]),received=str(after[1]-before[1]),
                       gas=result["gasUsed"],approval_gas=answers[start-1]["gasUsed"],error=result.get("error"))
+            if router_method == "swapExactTokensForTokens" and result["status"]=="0x1":
+                data.update(calldata=action["data"],logs=result["logs"],payer=OWNER)
             return data,action
         loose,_=trial(1)
         if loose["status"]!="0x1":raise ValueError(f"could not settle {mode}: {loose['error']}")

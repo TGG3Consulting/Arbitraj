@@ -208,6 +208,7 @@ fn side(
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)
         }
+        (PoolState::ToonSwap(s), PoolKind::V2) => { let i=usize::from(!zfo); xy_band(s.reserves[i],s.reserves[1-i],b,buy) }
         (PoolState::CandySwap(s), PoolKind::V2) => {
             let i=usize::from(!zfo);
             xy_band(s.reserves[i],s.reserves[1-i],b,buy)

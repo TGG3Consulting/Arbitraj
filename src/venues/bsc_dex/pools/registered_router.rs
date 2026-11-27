@@ -27,7 +27,8 @@ pub(crate) async fn checked(
             "V3 Router: не подтверждены фабрика, код или точная выплата ERC20",
         )
     };
-    if e.family.variant != super::family_variant::Variant::RegisteredUniV3
+    use super::family_variant::Variant;
+    if !matches!(e.family.variant, Variant::V2ExactRouter | Variant::RegisteredUniV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))
     {
@@ -39,7 +40,23 @@ pub(crate) async fn checked(
         .parse::<B256>()
         .map_err(|_| bad())?;
     tokio::try_join!(
-        registered_v3::fresh(ctx, e, at),
+        async {
+            if e.family.variant == Variant::RegisteredUniV3 {
+                return registered_v3::fresh(ctx,e,at).await;
+            }
+            let pool=e.pool.reference.address();
+            let factory=ctx.dex_addr("dex.factory",id)?;
+            let query=super::abi_v2v3::IV2Factory::getPairCall {tokenA:input,tokenB:output};
+            let owner=Pool::factoryCall {};
+            let ((),[listed,actual])=tokio::try_join!(
+                super::v2_pair_binding::code(ctx,id,pool,at),
+                batch::read(ctx,[batch::view(at,factory,query.clone()),batch::view(at,pool,owner.clone())])
+            )?;
+            if batch::decode(&listed,query)? != pool || batch::decode(&actual,owner)? != factory {
+                return Err(bad());
+            }
+            Ok(())
+        },
         plain(ctx, router, hash, at),
         super::exact_wallet_tokens::check(ctx, id, input, output, at)
     )?;

@@ -55,7 +55,7 @@ def recovered(network):
         f"создан в транзакции `{bl['index']['createdAtTxnId']}`, хук `{bl['hook']['address']}`. "
         "На 100 и 1000 raw cbBTC владелец получил 26019463245970438 и 260194412075800528 raw BSR. "
         "При продаже этих объёмов вернулись 98 и 980 raw cbBTC. Роутер и V5 дали одинаковый чистый выход во всех восьми ногах. "
-        f"Реестр Relay вернул семь компонентов, 113 распределённых ABI-селекторов и разрешённый пул. [Привязки и паузы](../{DATA/'baseline_base_components.json.gz'}). "
+        f"Реестр Relay вернул семь компонентов, 113 распределённых ABI-селекторов и разрешённый пул. При расчёте вновь сверяются весь реестр, хеши, маршруты, обратимое соответствие ключа и bToken, валюта резерва и обе паузы. [Привязки и паузы](../{DATA/'baseline_base_components.json.gz'}). "
         f"[Выплаты BSR/cbBTC](../{DATA/'baseline_base_wallets.json.gz'}).",
         "", "У Omni Flux перечислен 71 NFT позиции. Их 38 уникальных ключей проверены через CLPoolManager.poolIdToPoolKey; "
         "на 11 ключах была активная ликвидность и у всех 38 адрес хука нулевой. Охват ограничен этой выборкой CL; отдельный BinPoolManager установлен через роутер. "
@@ -77,7 +77,7 @@ def registry_row(network,id):
             m=r["ryze"]
             return m["markets"][0]["pool"]["address"],m["factory"]["address"],"factory.pools и Router.factory","DEX-41 · для собственной выплаты требуется подписанный ордер, nonce и данные оракула"
         b=r["baseline"]
-        return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; для профиля требуется проверить привязку изменяемых ролей хука"
+        return b["pool_id"],b["initialize"]["address"],"квитанция deploy → Initialize → ключ","DEX-41 · BSR/cbBTC, 8 выплат Router/V5; профиль Mercury сверяет действующие компоненты и их селекторы"
     if id=="omni-exchange-v4-base":
         d=evidence("omni_flux_base_directory.json.gz")
         return d["markets"][0]["id"],d["roles"]["clPoolManager"],"Flux Router, NFT и канонические PoolKey","DEX-41 · у Flux 38 подтверждённых рынков CL; атрибуция идентификатора индексатора остаётся открытой"

@@ -65,6 +65,9 @@ def directory(c,header):
 def wallets(c,d,header):
     markets=[m for m in d["markets"] if WETH in m["tokens"] and min(map(int,m["reserves"]))>0]
     markets.sort(key=lambda m:-int(m["reserves"][m["tokens"].index(WETH)]))
+    # Canonical DAI/WETH provides an independent exact-transfer Router01 recovery sample.
+    reference=d["roles"]["Pair"]["address"]
+    markets.sort(key=lambda m:m["pool"]!=reference)
     checked=[];unavailable=[]
     for m in markets:
         if m["reserves"]!=m["balances"]:
@@ -81,7 +84,7 @@ def wallets(c,d,header):
             except (ValueError,KeyError) as error:
                 unavailable.append(dict(pool=m["pool"],mode=mode,reason=str(error)[:220]))
         if legs:checked.append(dict(pool=m["pool"],rounds=legs))
-        if len(checked)>=4 and any(r["mode"]=="router" for s in checked for r in s["rounds"]):break
+        if len(checked)>=5 and any(r["mode"]=="router" for s in checked for r in s["rounds"]):break
     if not checked:raise ValueError(("не получена выплата кошелька",unavailable[:5]))
     return dict(wallets=checked,unavailable=unavailable)
 

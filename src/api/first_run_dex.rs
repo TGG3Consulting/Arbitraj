@@ -363,6 +363,16 @@ mod tests {
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
                         assert_eq!(proof["selector"],snapshot["selector"]);
                         assert_eq!(proof["init_code_hash"].as_str(),Some(text.as_str()));
+                    } else if k == "dex.pool_code_hashes" && matches!(p.id.as_str(),"unicly"|"hopeswap"|"archly-ethereum") {
+                        let raw:&[u8]=if p.id=="archly-ethereum"{include_bytes!("../../tests/data/first_run_dex_2026-11-26/archly_ethereum_wallets.json.gz")}else if p.id=="unicly"{include_bytes!("../../tests/data/first_run_dex_2026-11-26/unicly_ethereum_wallets.json.gz")}else{include_bytes!("../../tests/data/first_run_dex_2026-11-26/hopeswap_ethereum_wallets.json.gz")};
+                        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw)).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert_eq!(proof["pair_init"].as_str(),Some(text.as_str()));
+                    } else if k == "dex.pool_code_hashes" && p.id == "toonswap" {
+                        let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/toonswap_ethereum_wallets.json.gz");
+                        let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
+                        assert_eq!(proof["selector"],snapshot["selector"]);
+                        assert_eq!(proof["pair_init"].as_str(),Some(text.as_str()));
                     } else if k == "dex.pool_code_hashes" && p.id == "swapr_ethereum" {
                         let raw=include_bytes!("../../tests/data/first_run_dex_2026-11-26/swapr_ethereum.json.gz");
                         let proof:Value=serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();

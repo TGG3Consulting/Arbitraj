@@ -118,6 +118,7 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
             };
             pair(rout, U256::ONE, rin, U256::ONE)
         }
+        (PoolState::ToonSwap(s),PoolKind::V2) => { let i=usize::from(!zfo); let rin=if s.balances[i]>s.reserves[i] {U256::ONE} else {s.reserves[i]}; pair(s.reserves[1-i],U256::ONE,rin,U256::ONE) }
         (PoolState::V2 { reserve0, reserve1 } | PoolState::Oasis { reserve0, reserve1, .. }, PoolKind::V2) => {
             let (r_in, r_out) = if zfo {
                 (*reserve0, *reserve1)

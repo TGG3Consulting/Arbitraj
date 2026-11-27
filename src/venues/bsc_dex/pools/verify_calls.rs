@@ -96,7 +96,7 @@ pub fn fee_method(ctx: &Ctx, f: &Family) -> Result<Option<String>, String> {
                 .trim()
                 .to_string(),
         )),
-        "factory" => {
+        "factory" | "pool_retained" => {
             Err("Чтение комиссии фабрики требует v2_fork_executor_create2_live_fee".into())
         }
         _ => Ok(None),

@@ -68,6 +68,7 @@ pub enum Variant {
     OmniV2,
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
+    LaunchBaseline,
     LaunchDoppler,
     LaunchIndex,
     LaunchO1,
@@ -80,6 +81,8 @@ pub enum Variant {
     V2RouterCreate2,
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
     V2DualCreate2,
+    ToonSwap,
+    V2ExactRouter,
     /// Зарегистрированные Router02 и V5 с изменяемой комиссией пары и проверкой обоих runtime.
     V2DualCreate2LiveFee,
     DeltaSwap,
@@ -93,6 +96,7 @@ pub enum Variant {
     SolidlyGenerator,
     /// Solidly Ethereum V2 delegates factory and pair calls to independently upgradable logic.
     SolidlyProxy,
+    SolidlyPairOverride,
     BasePluginV1,
     AlgebraSingleV19,
     TrebleIntegral,
@@ -181,14 +185,14 @@ pub enum Variant {
 }
 
 impl Variant {
-    pub fn launch(self)->bool {matches!(self,Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
+    pub fn launch(self)->bool {matches!(self,Self::LaunchBaseline|Self::LaunchDoppler|Self::LaunchIndex|Self::LaunchO1|Self::LaunchO1Wrapped)}
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::SolidlyProxy)}
-    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::RegisteredUniV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
     pub(crate) fn diamond_router(self)->bool {matches!(self,Self::DiamondV2 | Self::KewlV2)}
@@ -201,17 +205,17 @@ impl Variant {
         matches!(self, Self::FraxTwamm | Self::FraxTwammRouter)
     }
     pub fn dual_v2_execution(self) -> bool {
-        matches!(self,Self::Gemswap | Self::V2DualCreate2 | Self::V2DualCreate2LiveFee) || self.diamond_router()
+        matches!(self,Self::Gemswap | Self::V2ExactRouter | Self::V2DualCreate2 | Self::ToonSwap | Self::V2DualCreate2LiveFee) || self.diamond_router()
     }
     pub fn registered_v2_router(self) -> bool {
-        matches!(self, Self::V2RouterCreate2 | Self::V2DualCreate2 | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
+        matches!(self, Self::V2RouterCreate2 | Self::V2ExactRouter | Self::V2DualCreate2 | Self::ToonSwap | Self::V2DualCreate2LiveFee | Self::DiamondV2 | Self::DeltaSwap)
     }
 
     /// Резервы и комиссия этих V2-пар должны обновляться одним чтением состояния блока.
     pub fn v2_block_state(self) -> bool {
         matches!(
             self,
-            Self::Gemswap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
+            Self::Gemswap | Self::ToonSwap | Self::V2Create2LiveFee | Self::V2DualCreate2LiveFee | Self::CandySwap | Self::DiamondV2 | Self::FraxTwamm | Self::FraxTwammRouter | Self::Memebox | Self::DeltaSwap | Self::Oasis | Self::EtherVista
         )
     }
 }
@@ -257,10 +261,13 @@ pub fn of(kind: &str) -> Variant {
         "oasisswap_v2_router" | "oasisswap_v2_v5" => Variant::Oasis,
         "v2_deltaswap_router" => Variant::DeltaSwap,
         "v2_fork_router_create2" => Variant::V2RouterCreate2,
+        "toonswap" => Variant::ToonSwap,
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
+        "v2_fork_dual_router01" => Variant::V2ExactRouter,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
         "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
+        "launch_baseline" => Variant::LaunchBaseline,
         "launch_doppler" => Variant::LaunchDoppler,
         "launch_index" => Variant::LaunchIndex,
         "launch_o1" => Variant::LaunchO1,
@@ -284,6 +291,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_executor_create2_live_fee" => Variant::V2Create2LiveFee,
         "slipstream_ramses" => Variant::RamsesClV2,
         "solidly_v2_proxy" => Variant::SolidlyProxy,
+        "solidly_v1_pair_override" => Variant::SolidlyPairOverride,
         "leetswap_v2" => Variant::LeetSwap,
         "solidly_v1_ramses" => Variant::RamsesLegacy,
         _ => Variant::Base,

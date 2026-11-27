@@ -445,14 +445,14 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
-        "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
         "antfarm" | "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
         }
-        "v2_fork" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_create2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
+        "v2_fork" | "toonswap" | "gemswap_v2" | "v2_diamond_router" | "v2_diamond_create" | "v2_deltaswap_router" | "v2_fork_router_create2" | "v2_fork_dual_router01" | "v2_fork_dual_create2" | "v2_fork_dual_create2_live_fee" | "v2_whiteswap" => {
             (PoolKind::V2, Proto::V2, true, true, true)
         }
         // V2-форк без известного роутера (решение 280): в графе и сигналах как v2_fork (V2-математика, своя комиссия
@@ -527,7 +527,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // В графе и сигналах; исполнение — шаг SOLIDLY контракта-исполнителя (exec_kind::via_executor).
         // Решение 483: Ramses Legacy V2 — тот же вид (вариант RamsesLegacy: getAmountOut − 1, Sync uint112, PairCreated без
         // stable; pools/ramses.rs).
-        "solidly_v1" | "solidly_v1_generator" | "solidly_v2_proxy" | "solidly_v1_ramses" | "leetswap_v2" => {
+        "solidly_v1" | "solidly_v1_generator" | "solidly_v1_pair_override" | "solidly_v2_proxy" | "solidly_v1_ramses" | "leetswap_v2" => {
             (PoolKind::Solidly, Proto::SolidlyV1, true, false, false)
         }
         // StableSwap (Ellipsis; решение 122 F): в графе и сигналах; исполнение — шаг CURVE контракта-исполнителя.
@@ -869,6 +869,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                     | Variant::DiamondV2
                     | Variant::V2RouterCreate2
                     | Variant::V2DualCreate2
+                    | Variant::ToonSwap
+                    | Variant::V2ExactRouter
                     | Variant::V2DualCreate2LiveFee
                     | Variant::WhiteSwap
             ) {
@@ -877,7 +879,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             if f.variant == Variant::WhiteSwap {
                 list.extend(["dex.proxy_implementations", "dex.proxy_runtime_hashes"]);
             }
-            if f.variant == Variant::V2DualCreate2LiveFee { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash"]); }
+            if matches!(f.variant,Variant::V2ExactRouter|Variant::V2DualCreate2LiveFee) { list.extend(["dex.pair_runtime_hash","dex.factory_runtime_hash"]); }
+            if f.variant == Variant::ToonSwap { list.extend(["dex.factory_runtime_hash","dex.pair_runtime_hash"]); }
             if f.variant == Variant::CandySwap && f.tradable {list.push("dex.module_runtime_hashes");}
             if f.variant == Variant::KewlV2 { list.push("dex.pair_runtime_hash"); }
             if f.variant.diamond_router() {
@@ -889,11 +892,11 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             // Роутер — только у вида со своим путём исполнения (PancakeSwap/Uniswap V2, v2_fork: сверка getAmountsOut и
             // обмен роутером форка). v2_fork_executor (решение 280, tradable=false) роутера не имеет: сверка и обмен —
             // через контракт-исполнитель (quote/v2_pair_quote.rs).
-            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2 | Variant::KewlV2 | Variant::V2DualCreate2 | Variant::V2DualCreate2LiveFee) {
+            if f.tradable && !matches!(f.variant, Variant::WhiteSwap | Variant::DiamondV2 | Variant::KewlV2 | Variant::V2ExactRouter | Variant::V2DualCreate2 | Variant::ToonSwap | Variant::V2DualCreate2LiveFee) {
                 list.push("dex.router");
             }
             match ctx.dex_text("dex.v2_fee_source", f.id).as_deref() {
-                Ok("pool" | "factory") => {
+                Ok("pool" | "factory" | "pool_retained") => {
                     list.extend(["dex.v2_fee_method", "dex.v2_fee_denominator"])
                 }
                 Ok(_) => list.push("dex.v2_fee_pct"),
@@ -929,6 +932,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         Proto::UniswapV4 if f.variant.launch() => {
             list.extend(["dex.pool_manager","dex.quoter","dex.state_view","dex.launch_roles","dex.launch_pool_keys"]);
+            if f.variant == Variant::LaunchBaseline { list.push("dex.factory"); }
             if f.variant == Variant::LaunchO1Wrapped { list.extend(["dex.router", "dex.module_runtime_hashes"]); }
         }
         Proto::UniswapV4 if f.variant == Variant::DeliCl => list.extend([

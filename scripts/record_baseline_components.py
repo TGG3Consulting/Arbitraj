@@ -2,7 +2,6 @@
 import argparse
 import json
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from eth_abi import decode, encode
 from eth_utils import keccak
 from record_base_launch_bindings import read, record as contracts

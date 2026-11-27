@@ -1,5 +1,6 @@
 """WAGMI и Lif3 Ethereum. Регистрация CREATE2 и расчёт собственного кошелька через штатные роутеры и V5."""
 import argparse
+import gzip
 import json
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from eth_utils import keccak
 from record_bitswap_ethereum import ENDPOINTS, EXEC, FUNDING, OWNER, ROOT, RUNTIME, WETH, balance, read_batch, rpc, simulate_block, tx
 from record_base_slipstream_executor import STEP
 from record_concave_ethereum import approval
+from record_fraxswap_swaps import bound_runtime
+from record_registered_v3_module import ADAPTER
+from record_ethereum_x7 import ROOT_HASH
 
 DATA=ROOT/"tests/data/first_run_dex_2026-11-26"
 STABLE="0xdac17f958d2ee523a2206206994597c13d831ec7"
@@ -41,7 +45,8 @@ def registry(url,d,tag):
         target=roles[role]["address"]
         if [address(b) for b in views([tx(target,"factory()"),tx(target,"WETH9()")])]!=[f,WETH]:
             raise ValueError(("назначение роли",role))
-    nonce=int(rpc(url,"eth_getTransactionCount",[f,tag]),16)
+    deployer=d.get("deployer",f)
+    nonce=int(rpc(url,"eth_getTransactionCount",[deployer,tag]),16)
     if nonce!=len(markets)+1 or len({m["pool"] for m in markets})!=len(markets):
         raise ValueError("реестр не покрывает все создания фабрики")
     receipts=read_batch(url,[("eth_getTransactionReceipt",[m["tx"]]) for m in markets])
@@ -51,7 +56,7 @@ def registry(url,d,tag):
         logs=[l for l in receipt["logs"] if int(l["logIndex"],16)==m["index"]]
         if len(logs)!=1 or receipt["blockHash"]!=m["hash"] or receipt["status"]!="0x1":raise ValueError("receipt регистрации")
         event=logs[0];spacing,pool=decode(["int24","address"],bytes.fromhex(event["data"][2:]))
-        predicted="0x"+keccak(b"\xff"+bytes.fromhex(f[2:])+keccak(encode(["address","address","uint24"],[a,b,fee]))+bytes.fromhex(d["init"][2:]))[-20:].hex()
+        predicted="0x"+keccak(b"\xff"+bytes.fromhex(deployer[2:])+keccak(encode(["address","address","uint24"],[a,b,fee]))+bytes.fromhex(d["init"][2:]))[-20:].hex()
         if (pool,spacing)!=(m["pool"],m["spacing"]) or predicted!=pool or event["address"].lower()!=f or event["topics"]!=[CREATED,*["0x"+format(int(v,16),"064x") for v in (a,b)],"0x"+format(fee,"064x")]:
             raise ValueError(("CREATE2 и PoolCreated",pool))
         calls.extend([tx(pool,k+"()") for k in ("token0","token1","factory","fee","tickSpacing","liquidity","slot0")]+
@@ -65,7 +70,7 @@ def registry(url,d,tag):
         m.update(liquidity=str(int.from_bytes(v[5],"big")),slot0="0x"+v[6].hex(),balances=[str(int.from_bytes(w,"big")) for w in v[9:]])
     checks=[]
     for m in markets:
-        tick=decode(["uint160","int24","uint16","uint16","uint16","uint8","bool"],bytes.fromhex(m["slot0"][2:]))[1]
+        tick=decode(["uint160","int24"],bytes.fromhex(m["slot0"][2:])[:64])[1]
         word=(tick//m["spacing"])//256
         for index in range(max(-32768,word-1),min(32767,word+1)+1):
             checks.append((m,index))
@@ -84,68 +89,92 @@ def registry(url,d,tag):
         if decode(["uint128","int128"],v[:64])!=(gross,net):raise ValueError(("TickLens gross/net",m["pool"],t))
 
 
-def capture(url,venue):
-    d=json.loads((DATA/f"{venue}_ethereum_registry.json").read_bytes());tag=d["selector"];head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]);end=int(head["timestamp"],16)+300
+def capture(url,venue,artifact=None):
+    expanded=venue in ("blueprint","vvs")
+    if expanded:
+        d=json.loads(gzip.decompress((DATA/f"{venue}_ethereum_directory.json.gz").read_bytes()))
+    else:
+        d=json.loads((DATA/f"{venue}_ethereum_registry.json").read_bytes())
+    tag=d["selector"];head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]);end=int(head["timestamp"],16)+300
     if int(head["number"],16)!=d["height"] or rpc(url,"eth_chainId",[])!="0x1":raise ValueError("неверный блок Ethereum")
+    if head["stateRoot"]!=d.get("state_root",ROOT_HASH):raise ValueError("different archive root")
     registry(url,d,tag)
     if read_batch(url,[("eth_getCode",[a,tag]) for a in (OWNER,EXEC)])!=["0x","0x"]:raise ValueError("тестовый адрес занят")
     word=lambda x:"0x"+format(x,"064x")
     changes={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
             "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    if venue=="vvs":
+        if rpc(url,"eth_getCode",[ADAPTER,tag])!="0x" or not artifact:raise ValueError("VVS isolated module or build")
+        code=bound_runtime(artifact,d["factory"],url,tag)
+        changes[ADAPTER]={"code":"0x"+code}
+        d["module_hash"]="0x"+keccak(hexstr=code).hex()
     run=lambda calls:simulate_block(url,tag,changes,calls)
     roles={k:v["address"] for k,v in d["roles"].items()};output=[];missing=[]
+    usdc="0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+    wbtc="0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
+    budgets={WETH:([10**14,10**16] if expanded else [10**12,10**14]),STABLE:([100_000,1_000_000] if expanded else [1000,100000]),usdc:[100_000,1_000_000],wbtc:[100,1000]}
+    swap_signature=SWAP if venue!="vvs" else "0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)").hex()
+    modes=("router","module","v5") if venue=="vvs" else (("router","router02","v5") if "router02" in roles else ("router","v5"))
     for m in d["markets"]:
-        pool=m["pool"];fee=m["fee"];cash=WETH if WETH in m["tokens"] else STABLE
-        if cash not in m["tokens"]:raise ValueError("нужен собственный источник входа")
+        pool=m["pool"];fee=m["fee"]; cash=next((a for a in budgets if a in m["tokens"]),None)
+        if expanded and (cash is None or not all(int(n)>0 for n in m["balances"])):
+            missing.append(dict(pool=pool,reason="no measured funding source" if cash is None else "one reserve empty on captured block"));continue
+        if cash is None:raise ValueError("нужен собственный источник входа")
         other=next(t for t in m["tokens"] if t!=cash)
-        for seed in ([10**12,10**14] if cash==WETH else [1000,100000]):
+        for seed in budgets[cash]:
             fund=tx(WETH,"deposit()",value=seed) if cash==WETH else tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[seed,[WETH,cash],OWNER,end],10**16)
-            for wire in ("router", "router02", "v5") if "router02" in roles else ("router", "v5"):
-                spender=EXEC if wire=="v5" else roles[wire];prefix=[fund];amount=seed
+            for wire in modes:
+                spender=EXEC if wire=="v5" else (ADAPTER if wire=="module" else roles[wire]);prefix=[fund];amount=seed
                 for a,b in [(cash,other),(other,cash)]:
                     permit=approval(a,spender,amount)
                     quote=tx(roles["quoter"],"quoteExactInputSingle("+QUOTE+")",[QUOTE],[(a,b,amount,fee,0)])
                     def order(minimum,deadline):
+                        if wire=="module":
+                            return tx(ADAPTER,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[pool,a,b,amount,minimum,deadline])
                         if wire=="v5":
-                            return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,deadline,[(1,pool,a,b,10000,b"")]])
+                            step=(17,ADAPTER,a,b,10000,encode(["address"],[pool])) if venue=="vvs" else (1,pool,a,b,10000,b"")
+                            return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,minimum,deadline,[step]])
                         if wire=="router":
                             return tx(spender,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,fee,OWNER,deadline,amount,minimum,0)])
                         inner=tx(spender,"exactInputSingle("+ORDER02+")",[ORDER02],[(a,b,fee,OWNER,amount,minimum,0)])
                         return tx(spender,"multicall(uint256,bytes[])",["uint256","bytes[]"],[deadline,[bytes.fromhex(inner["data"][2:])]])
-                    checks=[balance(t,w) for w in (OWNER,EXEC) for t in (a,b)]
+                    checks=[balance(t,w) for w in ((OWNER,EXEC,ADAPTER) if venue=="vvs" else (OWNER,EXEC)) for t in (a,b)]
+                    width=len(checks)
                     base=prefix+[permit,*checks,quote];i=len(base)
                     trial=run(base+[order(1,end),*checks])
                     if any(v["status"]!="0x1" for v in trial[:i-1]):raise ValueError("финансирование или баланс")
                     if trial[i-1]["status"]!="0x1" or trial[i]["status"]!="0x1":
                         missing.append(dict(pool=pool,wire=wire,source=a,amount=str(amount),quote=trial[i-1].get("error"),swap=trial[i].get("error")));break
-                    if any(v["status"]!="0x1" for v in trial[-4:]):raise ValueError("баланс после выплаты")
+                    if any(v["status"]!="0x1" for v in trial[-width:]):raise ValueError("баланс после выплаты")
                     words=lambda rs:[int(v["returnData"],16) for v in rs]
-                    before=words(trial[i-5:i-1]);after=words(trial[-4:]);spent=before[0]-after[0];out=after[1]-before[1]
+                    before=words(trial[i-width-1:i-1]);after=words(trial[-width:]);spent=before[0]-after[0];out=after[1]-before[1]
                     q=decode(["uint256","uint160","uint32","uint256"],bytes.fromhex(trial[i-1]["returnData"][2:]))
                     if spent!=amount or out!=q[0] or out<=0 or before[2:]!=after[2:]:
                         missing.append(dict(pool=pool,wire=wire,source=a,amount=str(amount),spent=str(spent),net=str(out),quoted=str(q[0]),before=list(map(str,before)),after=list(map(str,after))));break
                     exact=order(out,end);rr=run(base+[order(out+1,end),order(out,1),*checks,exact,*checks])
-                    if [k for k,v in enumerate(rr) if v["status"]!="0x1"]!=[i,i+1] or words(rr[i+2:i+6])!=before or words(rr[-4:])!=after:
+                    if [k for k,v in enumerate(rr) if v["status"]!="0x1"]!=[i,i+1] or words(rr[i+2:i+2+width])!=before or words(rr[-width:])!=after:
                         raise ValueError(("min, срок, исходный и конечный балансы",wire,pool))
-                    result=rr[i+6]
-                    settlements=[v for v in result["logs"] if v["address"].lower()==pool and v["topics"][0].lower()==SWAP]
+                    result=rr[i+2+width]
+                    settlements=[v for v in result["logs"] if v["address"].lower()==pool and v["topics"][0].lower()==swap_signature]
                     if len(settlements)!=1:raise ValueError(("фактический Swap",wire,pool))
                     realized=decode(["int256","int256","uint160","uint128","int24"],bytes.fromhex(settlements[0]["data"][2:]))
                     side=m["tokens"].index(a)
                     if realized[side]!=spent or realized[1-side]!=-out or realized[2]!=q[1]:
                         raise ValueError(("реальные pool delta и sqrtPrice после сделки",wire,pool))
                     output.append(dict(pool=pool,wire=wire,source=a,target=b,spent=str(spent),received=str(out),quote=[str(n) for n in q],gas=int(result["gasUsed"],16),
-                                       approval_gas=int(rr[len(prefix)]["gasUsed"],16),before=list(map(str,before)),after=list(map(str,after)),logs=result["logs"]))
+                                       signed=exact,minimum_plus_one=rr[i].get("error"),expired=rr[i+1].get("error"),approval_gas=int(rr[len(prefix)]["gasUsed"],16),before=list(map(str,before)),after=list(map(str,after)),logs=result["logs"]))
                     prefix+=[permit,exact];amount=out
+    if expanded and not all(any(r["wire"]==wire and r["target"] in budgets for r in output) for wire in modes):
+        raise ValueError("missing confirmed return leg for a selected wire")
     d.update(cases=output,unavailable=missing)
     return d
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3"],default="wagmi");args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3","blueprint","vvs"],default="wagmi");cli.add_argument("--module",type=Path);args=cli.parse_args()
     errors=[]
     for url in ENDPOINTS:
         try:
-            args.output.write_text(json.dumps(capture(url,args.venue),separators=(",",":")),encoding="utf8");break
+            args.output.write_text(json.dumps(capture(url,args.venue,json.loads(args.module.read_bytes()) if args.module else None),separators=(",",":")),encoding="utf8");break
         except (ValueError,KeyError,RuntimeError,requests.RequestException) as err:
             errors.append((url,str(err)[:650]))
     else:raise RuntimeError(errors)

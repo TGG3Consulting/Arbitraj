@@ -18,7 +18,10 @@ use alloy_primitives::{Address, Bytes, U256};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-sol! {interface Router {
+sol! {struct PoolRoute {address from; address to; bool stable;}
+interface Router {
+    function swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256 amountIn,uint256 amountOutMin, PoolRoute[] routes,address to,uint256 deadline) external;
+    function swapExactTokensForTokens(uint256 amountIn,uint256 amountOutMin,address[] path,address to,uint256 deadline) external returns(uint256[] amounts);
     function swapExactTokensForTokensSimple(uint256 amountIn,uint256 amountOutMin,address tokenFrom,address tokenTo,
         bool stable,address to,uint256 deadline) external returns(uint256[] amounts);
 }}
@@ -26,7 +29,9 @@ sol! {interface Router {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Market {
     pub pool: Address,
-    pub stable: bool,
+    pub stable: Option<bool>,
+    #[serde(default)]
+    pub supporting_fee: bool,
 }
 impl RouterMarket for Market {
     fn pool(self) -> Address {
@@ -52,12 +57,20 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
+        let Some(stable)=self.stable else {
+            return Router::swapExactTokensForTokensCall {amountIn:amount,amountOutMin:minimum,path:vec![input,output],to:wallet,deadline}.abi_encode().into();
+        };
+        if self.supporting_fee {
+            return Router::swapExactTokensForTokensSupportingFeeOnTransferTokensCall {
+                amountIn:amount,amountOutMin:minimum,routes:vec![PoolRoute{from:input,to:output,stable}],to:wallet,deadline
+            }.abi_encode().into();
+        }
         Router::swapExactTokensForTokensSimpleCall {
             amountIn: amount,
             amountOutMin: minimum,
             tokenFrom: input,
             tokenTo: output,
-            stable: self.stable,
+            stable,
             to: wallet,
             deadline,
         }
@@ -84,17 +97,19 @@ pub(super) async fn plan(
     let e = &s.entry;
     let o = &s.order;
     let head = white_state::head(ctx, &format!("{height:#x}")).await?;
-    let target = solidly_proxy::router(ctx, e, o.token_in, o.token_out, &head.selector()).await?;
+    let plain=e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::V2ExactRouter;
+    let target=if plain {
+        crate::venues::bsc_dex::pools::registered_router::checked(ctx,e,o.token_in,o.token_out,&head.selector()).await?
+    } else {solidly_proxy::router(ctx, e, o.token_in, o.token_out, &head.selector()).await?};
     if selected != Some(target) || !s.from_wallet || !s.to_wallet {
         return Err(fail());
     }
-    let crate::core::types::PoolState::Solidly { stable, .. } = &e.pool.state else {
-        return Err(fail());
+    let stable=match &e.pool.state {
+        crate::core::types::PoolState::Solidly{stable,..} if !plain => Some(*stable),
+        crate::core::types::PoolState::V2{..} if plain => None,
+        _=>return Err(fail()),
     };
-    let market = Market {
-        pool: e.pool.reference.address(),
-        stable: *stable,
-    };
+    let market=Market{pool:e.pool.reference.address(),stable,supporting_fee:e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::SolidlyPairOverride};
     let now = head.timestamp.to::<u64>();
     let proof = Proof {
         market,
@@ -142,7 +157,8 @@ mod tests {
         for m in archive["markets"].as_array().unwrap() {
             let market = Market {
                 pool: addr(&m["pool"]),
-                stable: m["stable"].as_bool().unwrap(),
+                stable: m["stable"].as_bool(),
+                supporting_fee:false,
             };
             for c in m["cases"].as_array().unwrap() {
                 let payer = addr(&c["owner"]);

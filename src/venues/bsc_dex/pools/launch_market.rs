@@ -75,18 +75,27 @@ pub(super) async fn market(
     let slot = IStateView::getSlot0Call { poolId: id };
     let view = ctx.dex_addr("dex.state_view", f.id)?;
     let quoter = ctx.dex_addr("dex.quoter", f.id)?;
+    let hook_manager = async {
+        if f.variant != super::family_variant::Variant::LaunchBaseline {
+            let [raw] = batch::read(ctx, [batch::view(at, hook, mgr.clone())]).await?;
+            if batch::decode(&raw, mgr.clone())? != manager {
+                return Err(invalid(ctx));
+            }
+        }
+        // У Mercury фактический PoolKey проверяется по реестру Relay и Initialize.
+        Ok(())
+    };
     let calls = [
-        batch::view(at, hook, mgr.clone()),
         batch::view(at, view, mgr.clone()),
         batch::view(at, quoter, mgr.clone()),
         batch::view(at, view, slot.clone()),
     ];
-    let ((), [m, v, q, s]) = tokio::try_join!(
+    let ((), (), [v, q, s]) = tokio::try_join!(
         bound(ctx, &roles, "hook", hook, at),
+        hook_manager,
         batch::read(ctx, calls)
     )?;
-    if batch::decode(&m, mgr.clone())? != manager
-        || batch::decode(&v, mgr.clone())? != manager
+    if batch::decode(&v, mgr.clone())? != manager
         || batch::decode(&q, mgr)? != manager
         || batch::decode(&s, slot)?.sqrtPriceX96.is_zero()
     {

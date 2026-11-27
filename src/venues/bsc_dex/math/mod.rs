@@ -115,6 +115,7 @@ pub(crate) mod candy;
 pub(crate) mod memebox;
 pub(crate) mod ethervista;
 pub mod v2;
+pub mod toonswap;
 pub mod virtuals;
 pub mod mint_club;
 pub mod umbrae_damm;

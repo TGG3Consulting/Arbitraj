@@ -22,6 +22,7 @@ fn rule_hash(
     let target = match source {
         "factory" => 1u8,
         "pool" => 0u8,
+        "pool_retained" => 2u8,
         _ => return None,
     };
     if factory.is_zero() || init.is_zero() || denominator == 0 {
@@ -70,12 +71,14 @@ pub(in crate::venues::bsc_dex) struct Rate {
     target: Address,
     selector: Bytes,
     denominator: u64,
+    retained: bool,
     mars_info: bool,
 }
 
 struct FeeRule {
     factory: Address,
     factory_source: bool,
+    retained: bool,
     init: B256,
     getter: String,
     denominator: u64,
@@ -115,6 +118,7 @@ impl FeeRule {
         Ok(Self {
             factory,
             factory_source: source == "factory",
+            retained: source == "pool_retained",
             init,
             getter,
             denominator,
@@ -136,6 +140,7 @@ impl FeeRule {
                 miss("Метод комиссии должен принимать (), (address пары) или (address token0, address token1)")
             })?,
             denominator: self.denominator,
+            retained: self.retained,
             mars_info: self.factory_source && self.getter == "lpInfo()",
         })
     }
@@ -158,6 +163,10 @@ impl Rate {
             }
             U256::from_be_slice(bytes)
         };
+        let value = if self.retained {
+            U256::from(self.denominator).checked_sub(value)
+                .ok_or_else(|| miss("Сохраняемая доля V2 превышает знаменатель"))?
+        } else { value };
         if value >= U256::from(self.denominator) {
             return Err(miss("Комиссия V2 должна быть меньше 100%"));
         }
@@ -418,6 +427,7 @@ mod tests {
             init,
             getter: getter.to_owned(),
             factory_source: true,
+            retained: false,
             denominator: 10_000,
         };
         let rate = rule.at(market).unwrap();
@@ -444,9 +454,17 @@ mod tests {
             &fee_call("getFeeForPair(address)", market).unwrap()[4..],
             pool.abi_encode()
         );
+        let retained = Rate { retained:true, ..rate };
+        for (net, pips) in [(9970u64,3000),(9990,1000),(10000,0),(9700,30000)] {
+            assert_eq!(retained.decode(&U256::from(net).abi_encode()).unwrap(),pips);
+        }
+        assert!(retained.decode(&U256::from(10001).abi_encode()).is_err());
+        assert_ne!(rule_hash(1,factory,init,"pool",getter,10000),
+                   rule_hash(1,factory,init,"pool_retained",getter,10000));
         let inexact = Rate {
             denominator: 3,
-            ..rate
+            retained: false,
+            ..retained
         };
         assert!(inexact.decode(&U256::from(1).abi_encode()).is_err());
     }

@@ -88,7 +88,16 @@ fn factory_ownership_fee_and_both_wallet_directions_match_the_v1_curve() {
             dir["factory"]["runtime_hash"]
         );
         assert_eq!(profile["dex.pool_code_hashes"][0], dir["init"]);
-        assert_eq!(profile["dex.solidly_fee_source"], dir["fee_source"]);
+        if dir["id"]=="archly-base" {
+            let controls:Value=serde_json::from_reader(flate2::read::GzDecoder::new(&include_bytes!("data/first_run_dex_2026-11-26/archly_base_fee_overrides.json.gz")[..])).unwrap();
+            assert_eq!(controls["selector"],dir["selector"]);
+            assert_eq!(profile["dex.factory"],controls["factory"]);
+            assert_eq!(profile["dex.solidly_fee_source"],"factory_pair_override");
+            for (raw,pair) in controls["rows"].as_array().unwrap().iter().zip(dir["markets"].as_array().unwrap()) {
+                assert_eq!(raw[0],pair["pool"]);assert_eq!(raw[3],0);
+            }
+            assert_eq!(controls["rows"].as_array().unwrap().len(),dir["markets"].as_array().unwrap().len());
+        } else {assert_eq!(profile["dex.solidly_fee_source"], dir["fee_source"]);}
         let denominator = dir["denominator"].as_str().unwrap().parse::<u64>().unwrap();
         assert_eq!(profile["dex.solidly_fee_denominator"], denominator);
         assert_eq!(wallets["selector"], dir["selector"]);

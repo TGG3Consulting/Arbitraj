@@ -109,6 +109,17 @@ def tables(network, snapshots, profiles):
                     out.append(f"| `{deal['pool']}` / `{deal['cash']}` | {a['input']} → {a['net']} → {b['net']} | {a['gas']} / {b['gas']} |")
         out.append(f"[Реестр CREATE2](../tests/data/first_run_dex_2026-11-26/hello_base_directory.json) · [Дельты трёх способов оплаты, minOut+1 и deadline](../{file}).")
 
+    if not base and "toonswap" in configured:
+        toon_path = Path("tests/data/first_run_dex_2026-11-26/toonswap_ethereum_wallets.json.gz")
+        with gzip.open(toon_path, "rt", encoding="utf8") as stream:
+            toon=json.load(stream)
+        out.extend(["", "#### ToonSwap на Ethereum", "",
+                    f"Фабрика зарегистрировала {len(toon['markets'])} пар. На блоке {toon['height']} получено {len(toon['cases'])} выплат, "
+                    f"штатным Router {sum(c['wire']=='router' for c in toon['cases'])} и V5 {sum(c['wire']=='v5' for c in toon['cases'])}. "
+                    "Комиссия обмена 0,25%. Из неё пара отдельными переводами выплачивает долю рефералу и казначейству. "
+                    f"По этому блоку доли составляют {toon['rates'][0]}/10000 и {toon['rates'][1]}/10000. "
+                    f"В {sum(c['reserve_model_matches'] for c in toon['cases'])} случаях последующий резерв подтверждён событием Sync. "
+                    f"В архиве также {len(toon['unavailable'])} отказов. [Оплаты, суммы и отказы](../{toon_path.as_posix()})."])
     if not base and "sashimiswap" in configured:
         out.extend(["", "#### SashimiSwap на Ethereum", "",
                     "На блоке 26494988 фабрика зарегистрировала 83 пары. Внутренний учёт Router02 совпал с обоими резервами у 80 ненулевых пар. "
@@ -116,7 +127,7 @@ def tables(network, snapshots, profiles):
                     "При нехватке остатка роутер запрашивает средства у общего хранилища. Возможность выплаты на выбранный объём проверяет кошельковая симуляция.",
                     "На 53 парах проверены 102 входа. Кошельковой симуляцией подтверждены 73 покупки и 56 обратных продаж, включая полные циклы на 31 паре. "
                     "У 16 покупок вырос показанный токеном баланс, но его Transfer в квитанции отсутствовал, а чтение allowance перед обратной продажей откатилось. "
-                    "Для этих покупок стандартный денежный учёт по событиям не подтверждён. "
+                    "У десяти таких контрактов совпал весь runtime (608 байт). [Привязка каждой покупки к коду](../tests/data/first_run_dex_2026-11-26/sashimi_ethereum_token_evidence.json). "
                     "[Архив GitHub](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45925784274).",
                     "[Фабрика в SDK](https://github.com/SashimiProject/sashimiswap-sdk/blob/50fb3f0b7fcc7108be957a0616158a952f60ca2e/src/constants.ts) · "
                     "[Реестр, остатки и хранилище](../tests/data/first_run_dex_2026-11-26/sashimi_ethereum_registry.json.gz)."])
@@ -1326,6 +1337,18 @@ def tables(network, snapshots, profiles):
             status="Integral SIZE · релеер отключил все 15 пар. Для публичной заявки Delay нужна отдельная транзакция исполнения"
         if not base and id == "ring-exchange-ethereum" and ring_path.exists():
             status = "Ring Few · адресная проверка всех пар; котировки, обеспечение и контрольные обмены выше"
+        if not base and id=="toonswap" and id in configured:
+            pool=pool or toon["markets"][0]["pool"]
+            if any(m["pool"]==pool.lower() for m in toon["markets"]):
+                factory=toon["roles"]["factory"]
+                roundtrip="CREATE2 + getPair в обоих порядках"
+        if not base and id=="sashimiswap" and id in configured:
+            with gzip.open("tests/data/first_run_dex_2026-11-26/sashimi_ethereum_registry.json.gz","rt",encoding="utf8") as stream:
+                market_registry=json.load(stream)
+            pool=pool or next(r["pool"] for r in market_registry["pools"] if all(map(int,r["reserves"])))
+            if any(r["pool"]==pool.lower() for r in market_registry["pools"]):
+                factory=configured[id]["settings"]["dex.factory"]
+                roundtrip="CREATE2, реестр пар и учёт обоих токенов у Router02"
         specific=base_launch_inventory.registry_row(network,id)
         if specific:
             selected, factory, roundtrip, status = specific

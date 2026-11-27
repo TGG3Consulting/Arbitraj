@@ -17,7 +17,7 @@ use serde_json::json;
 
 pub(super) fn configured(ctx: &Ctx, e: &Entry) -> bool {
     e.family.variant.exact_router()
-        && registered_router::eligible(ctx, e.family.id, e.coin, e.usdt)
+        && (e.family.variant==Variant::SolidlyPairOverride || registered_router::eligible(ctx, e.family.id, e.coin, e.usdt))
         && ctx.dex_addr("dex.router", e.family.id).is_ok()
 }
 pub(super) async fn funded(
@@ -40,7 +40,7 @@ pub(super) async fn funded(
 }
 pub(super) async fn router(ctx: &Ctx, e: &Entry, head: Head) -> GatewayResult<Address> {
     let at = head.selector();
-    if e.family.variant == Variant::SolidlyProxy {
+    if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
         Box::pin(super::super::pools::solidly_proxy::router(
             ctx, e, e.usdt, e.coin, &at,
         ))
@@ -68,13 +68,17 @@ pub(super) fn leg(
             .ok_or_else(fail)?,
     );
     let pool = e.pool.reference.address();
-    let d = if e.family.variant == Variant::SolidlyProxy {
+    let d = if e.family.variant == Variant::V2ExactRouter {
+        super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false}
+          .order(order.token_in,order.token_out,order.amount_in,order.min_out,wallet,end)
+    } else if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride) {
         let crate::core::types::PoolState::Solidly { stable, .. } = &e.pool.state else {
             return Err(fail());
         };
         super::super::exec::solidly_router_wallet::Market {
             pool,
-            stable: *stable,
+            stable: Some(*stable),
+            supporting_fee:e.family.variant==Variant::SolidlyPairOverride,
         }
         .order(
             order.token_in,

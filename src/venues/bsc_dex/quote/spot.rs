@@ -53,6 +53,7 @@ pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
             let i=usize::from(!coin0);
             mul_div(amount,s.reserves[i],s.reserves[1-i])
         }
+        PoolState::ToonSwap(s) => { let i=usize::from(!coin0); mul_div(amount,s.reserves[i],s.reserves[1-i]) }
         PoolState::CandySwap(s) => {
             let i=usize::from(!coin0);
             mul_div(amount,s.reserves[i],s.reserves[1-i])

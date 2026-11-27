@@ -54,7 +54,7 @@ impl Selection {
 impl Market {
     pub(super) fn of(e: &Entry) -> Option<Self> {
         match &e.pool.state {
-            _ if e.family.variant==Variant::SolidlyProxy => Some(Self::SolidlyRouter),
+            _ if matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride|Variant::V2ExactRouter) => Some(Self::SolidlyRouter),
             _ if e.family.variant==Variant::RegisteredUniV3 => Some(Self::RegisteredV3),
             _ if super::o1_wallet::enabled(e) => Some(Self::O1),
             _ if e.family.variant.umbrae() => Some(Self::Umbrae),
@@ -112,7 +112,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
-            Self::O1 => Box::pin(super::o1_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::O1 => Box::pin(super::o1_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(
                     ctx,

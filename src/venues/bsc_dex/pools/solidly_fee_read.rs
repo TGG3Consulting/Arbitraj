@@ -97,6 +97,11 @@ pub fn fee_call(
         None if f.proto == Proto::SolidlyV1 => (factory, v1()),
         None | Some("factory_pool") => (factory, by_pool()),
         Some("factory_stable") => (factory, v1()),
+        Some("factory_pair_override") => {
+            let mut data = selector("getRealFee(address)").to_vec();
+            data.extend_from_slice(&pool.abi_encode());
+            (factory, data.into())
+        }
         Some("factory_address") => {
             let signature = need("dex.solidly_fee_method")?;
             let mut data = selector(&signature).to_vec();

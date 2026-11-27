@@ -37,8 +37,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     let mut options = Vec::new();
     for e in entries {
         let pool = e.pool.reference.address();
-        let classic = e.family.variant == Variant::SolidlyProxy;
-        let router = if registered_router::eligible(ctx, e.family.id, input, output) {
+        let classic = matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride);
+        let router = if e.family.variant==Variant::SolidlyPairOverride || registered_router::eligible(ctx, e.family.id, input, output) {
             match head {
                 Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
                     ctx,
@@ -57,12 +57,16 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         } else {
             None
         };
-        let wire = if classic {
+        let plain=e.family.variant==Variant::V2ExactRouter;
+        let wire = if plain {
+            Some(Wire::SolidlyRouter(super::super::exec::solidly_router_wallet::Market{pool,stable:None,supporting_fee:false}))
+        } else if classic {
             match &e.pool.state {
                 crate::core::types::PoolState::Solidly { stable, .. } => Some(Wire::SolidlyRouter(
                     super::super::exec::solidly_router_wallet::Market {
                         pool,
-                        stable: *stable,
+                        stable: Some(*stable),
+                        supporting_fee:e.family.variant==Variant::SolidlyPairOverride,
                     },
                 )),
                 _ => None,
@@ -86,10 +90,15 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             }
         }
         if let Some(target) = executor {
+            let (kind,data)=if plain {
+                use alloy::sol_types::SolValue;
+                let Some(fee)=e.pool.fee_pips else {continue};
+                (0,Bytes::from(fee.abi_encode()))
+            } else {(if classic {3} else {1},Bytes::new())};
             let wire = Wire::V5(V5Step {
-                kind: if classic { 3 } else { 1 },
+                kind,
                 pool,
-                data: Bytes::new(),
+                data,
                 native: None,
             });
             let order = Execution {

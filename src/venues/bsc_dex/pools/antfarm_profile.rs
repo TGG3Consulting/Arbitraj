@@ -307,7 +307,43 @@ mod tests {
         let output = archive(include_bytes!(
             "../../../../tests/data/first_run_dex_2026-11-26/antfarm_output_ethereum.json.gz"
         ));
-        for fixture in [stock, output] {
+        for (fixture, selector, lender) in [
+            (
+                stock,
+                super::super::super::exec::antfarm_wallet::selector(),
+                None,
+            ),
+            (
+                output,
+                super::super::super::exec::antfarm_output_wallet::selector(),
+                Some(addr(&cfg["dex.vault"])),
+            ),
+        ] {
+            let binding = &fixture["binding"];
+            let actual_selector: alloy_primitives::Bytes =
+                serde_json::from_value(binding["selector"].clone()).unwrap();
+            assert_eq!(&actual_selector[..], selector);
+            let mut getters = vec![
+                (IModule::routerCall::SELECTOR, p.router),
+                (IModule::feeTokenCall::SELECTOR, p.atf),
+            ];
+            if let Some(v) = lender {
+                getters.push((IModule::vaultCall::SELECTOR, v));
+            }
+            assert_eq!(getters.len(), binding["calls"].as_array().unwrap().len());
+            for (i, (selector, expected)) in getters.into_iter().enumerate() {
+                let call = &binding["calls"][i];
+                assert_eq!(call["to"], fixture["module"]);
+                let data: alloy_primitives::Bytes =
+                    serde_json::from_value(call["data"].clone()).unwrap();
+                assert_eq!(&data[..], selector);
+                let actual: alloy_primitives::Bytes =
+                    serde_json::from_value(binding["returns"][i].clone()).unwrap();
+                assert_eq!(
+                    IModule::feeTokenCall::abi_decode_returns_validate(&actual).unwrap(),
+                    expected
+                );
+            }
             let deployed = hash(&fixture["runtime_hash"]);
             assert!(
                 cfg["dex.module_runtime_hashes"]

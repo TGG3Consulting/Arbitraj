@@ -167,6 +167,18 @@ pub(in crate::venues::bsc_dex) async fn router(
             "Solidly Router01: изменились фабрика, расчёт адреса пары или исполняемый код",
         )
     };
+    if e.family.variant==super::family_variant::Variant::SolidlyPairOverride {
+        if !((input,output)==(e.pool.token0,e.pool.token1)||(output,input)==(e.pool.token0,e.pool.token1)){return Err(bad());}
+        let generation=ctx.settings.generation();
+        let target=ctx.dex_addr("dex.router",id)?;
+        let hash=ctx.dex_text("dex.router_runtime_hash",id)?.parse::<B256>().map_err(|_|bad())?;
+        let (gate,(),[owner])=tokio::try_join!(Box::pin(super::solidly_classic::fresh(ctx,e,at)),
+            super::solidly_classic_factory::plain(ctx,target,hash,at),
+            super::nami_batch::read(ctx,[super::nami_batch::view(at,target,super::abi_check::IPoolImmutables::factoryCall{})]))?;
+        if gate.paused || super::nami_batch::decode(&owner,super::abi_check::IPoolImmutables::factoryCall{})?!=ctx.dex_addr("dex.factory",id)?
+            || generation!=ctx.settings.generation(){return Err(bad());}
+        return Ok(target)
+    }
     if e.family.variant != super::family_variant::Variant::SolidlyProxy
         || !((input, output) == (e.pool.token0, e.pool.token1)
             || (output, input) == (e.pool.token0, e.pool.token1))

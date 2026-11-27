@@ -60,6 +60,7 @@ pub(super) async fn read(
             }
             (asset, true, true)
         }
+        Variant::LaunchBaseline => return super::baseline::read(ctx,f,key,roles,at).await,
         Variant::LaunchIndex => {
             let vault = ILaunch::vaultOfCall { id };
             let factory = ILaunch::factoryCall {};

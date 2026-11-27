@@ -373,7 +373,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
         }
         return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
     }
-    if matches!(e.family.variant,super::super::super::pools::family_variant::Variant::MaverickOne | super::super::super::pools::family_variant::Variant::Stabull | super::super::super::pools::family_variant::Variant::Pendle) {
+    if e.family.variant.euler() || matches!(e.family.variant,super::super::super::pools::family_variant::Variant::MaverickOne | super::super::super::pools::family_variant::Variant::Stabull | super::super::super::pools::family_variant::Variant::Pendle) {
         if k!=ExecKind::Balancer || !matches!(e.pool.state,PoolState::OraclePmm(_)) || (token_in!=e.pool.token0 && token_in!=e.pool.token1){return Err(ctx.err(ErrorCode::NoRoute,"Для модуля требуется подтверждённая сторона рынка"));}
         return Ok((Params::Balancer{pool_id:pool.into_word()},ctx.dex_addr("dex.router",e.family.id)?));
     }

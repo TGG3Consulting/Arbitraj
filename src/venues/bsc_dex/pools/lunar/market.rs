@@ -198,6 +198,7 @@ pub async fn load(
         base_is_token0: ordered.0 == r.profile.bases[0],
         ladder_quote_in: buy,
         ladder_base_in: sell,
+        shared_accounts: Vec::new(),
         pool_token0: Some(Address::ZERO),
     })))
 }

@@ -57,7 +57,7 @@ pub fn market(ctx: &Ctx, entry: &Entry) -> GatewayResult<Address> {
         (PoolRef::Contract(address), super::families::Proto::UniswapV3)
             if matches!(entry.family.variant, super::family_variant::Variant::RegisteredV3 | super::family_variant::Variant::ShibaswapV2) => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::V2)
-            if matches!(entry.family.variant,super::family_variant::Variant::Stabull | super::family_variant::Variant::MaverickOne) || entry.family.variant.ammalgam() || entry.family.variant.umbrae() || matches!(entry.family.variant,super::family_variant::Variant::Virtuals | super::family_variant::Variant::EmpireModule | super::family_variant::Variant::CandySwap | super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
+            if entry.family.variant.euler() || matches!(entry.family.variant,super::family_variant::Variant::Stabull | super::family_variant::Variant::MaverickOne) || entry.family.variant.ammalgam() || entry.family.variant.umbrae() || matches!(entry.family.variant,super::family_variant::Variant::Virtuals | super::family_variant::Variant::EmpireModule | super::family_variant::Variant::CandySwap | super::family_variant::Variant::Memebox | super::family_variant::Variant::BunnySwap) => Ok(*address),
         (PoolRef::Contract(address),super::families::Proto::KyberElastic)
             if entry.family.variant==super::family_variant::Variant::ElasticV5 && entry.family.tradable => Ok(*address),
         (PoolRef::Contract(address), super::families::Proto::Slipstream) => Ok(*address),
@@ -121,6 +121,8 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
         return Ok(());
     }
     let expected=match f.variant {
+        super::family_variant::Variant::EulerV1 => "eulerswap_v1_module",
+        super::family_variant::Variant::EulerV2 => "eulerswap_v2_module",
         super::family_variant::Variant::Stabull => "stabull_module",
         super::family_variant::Variant::MaverickOne => "maverick_v1_module",
         super::family_variant::Variant::EmpireModule => "empire_module",
@@ -136,6 +138,15 @@ pub async fn verify_factory(ctx: &Ctx, f: &Family, addr: Address, at: &Value) ->
     }
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     verify_code(ctx, f.id, addr, at).await?;
+    if f.variant.euler(){
+        let bound=if f.variant==super::family_variant::Variant::EulerV2 {
+            super::super::node::call::canonical(ctx,at,addr,super::euler_swap::IEuler::currentCall{}).await?
+        }else{
+            super::super::node::call::canonical(ctx,at,addr,super::euler_swap::IEuler::legacyCall{}).await?
+        };
+        if bound!=factory || generation!=ctx.settings.generation(){return Err(ctx.err(ErrorCode::NotApplicable,"EulerSwap: модуль привязан к другой фабрике"));}
+        return Ok(());
+    }
     let call = super::abi_check::IPoolImmutables::factoryCall {};
     let [raw] = super::nami_batch::read(ctx, [super::nami_batch::view(at, addr, call.clone())]).await?;
     if generation!=ctx.settings.generation(){

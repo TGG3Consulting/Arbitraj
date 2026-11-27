@@ -157,6 +157,13 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::temple::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
+        if f.variant.euler(){
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            let backing=Box::pin(super::super::pools::euler_swap::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+            if !backing.installed{return Err(ctx.err(ErrorCode::NoRoute,"EulerSwap: LP отключил оператор пула"));}
+            Box::pin(super::super::pools::direct_module::verify_factory(ctx,f,ctx.dex_addr("dex.router",f.id)?,at)).await?;
+            continue;
+        }
         if f.variant==Variant::Stabull {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::stabull::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;

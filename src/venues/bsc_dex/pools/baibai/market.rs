@@ -191,6 +191,7 @@ pub async fn load(
         paused: false,
         implementation: m.profile.implementation,
         base_is_token0: ordered.0 == m.coin,
+        shared_accounts: Vec::new(),
         pool_token0: None,
         ladder_quote_in: buy,
         ladder_base_in: sell,

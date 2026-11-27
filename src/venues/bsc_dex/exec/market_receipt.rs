@@ -326,7 +326,7 @@ impl Saved<'_> {
             Self::Empire(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Empire: исходный рынок, участники или выплата расходятся с измерением модуля"),
             Self::Aqua(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Aqua: фактическая оплата или программа расходятся с подписанным поручением"),
             Self::Angstrom(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Angstrom: фактическая оплата или PoolId расходятся с подписанным поручением"),
-            Self::Stabull(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Stabull: поручение, Curve Trade и дельты кошелька не совпадают"),
+            Self::Stabull(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Поручение, обмен выбранного пула и движения кошелька расходятся"),
             Self::Integral(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Integral SIZE: поручение, событие или дельты кошелька не совпадают"),
             Self::Dagrow(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("DAGrow: исходные границы, получатель или движения кошелька не подтверждены"),
             Self::SafeSwap(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("SafeSwap: фактические выплаты пула и кошелька расходятся с исходным поручением"),

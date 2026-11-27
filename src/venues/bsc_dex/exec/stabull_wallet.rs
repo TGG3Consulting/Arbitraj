@@ -30,6 +30,7 @@ pub enum Form {
     Curve,
     Router,
     Module,
+    Euler{v2:bool,guarded:bool,vaults:[Address;2]},
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Terms {
@@ -80,7 +81,8 @@ impl Proof {
         } = *self;
         let desired = t.desired.unwrap_or_default().max(minimum);
         match (t.form, t.desired.is_some()) {
-            (Form::Module, true) => IModule::executeTargetCall {
+            (Form::Euler{guarded:false,..},_)=>return super::euler_wallet::calldata(self),
+            (Form::Module | Form::Euler{guarded:true,..}, true) => IModule::executeTargetCall {
                 pool: t.pool,
                 a,
                 b,
@@ -89,7 +91,7 @@ impl Proof {
                 deadline,
             }
             .abi_encode(),
-            (Form::Module, false) => IModule::executeCall {
+            (Form::Module | Form::Euler{guarded:true,..}, false) => IModule::executeCall {
                 pool: t.pool,
                 a,
                 b,
@@ -176,6 +178,9 @@ impl Proof {
         {
             return None;
         }
+        if let Form::Euler{v2,guarded,vaults}=t.form{
+            super::euler_wallet::payment(self,logs,v2,guarded,vaults,spent,received)?;
+        }else{
         let mut swaps = logs
             .iter()
             .filter(|l| l.address() == t.pool && l.topic0() == Some(&IPool::Trade::SIGNATURE_HASH));
@@ -190,7 +195,10 @@ impl Proof {
         {
             return None;
         }
-        if t.form == Form::Module {
+            if t.form!=Form::Module && ((event.originAmount,event.targetAmount)!=(spent,received)
+                || cash(input,Some(payer),Some(t.target))!=spent || cash(output,Some(t.target),Some(payer))!=received){return None;}
+        }
+        if matches!(t.form,Form::Module | Form::Euler{guarded:true,..}) {
             let mut events = logs.iter().filter(|l| {
                 l.address() == t.target && l.topic0() == Some(&IModule::Filled::SIGNATURE_HASH)
             });
@@ -208,11 +216,6 @@ impl Proof {
             {
                 return None;
             }
-        } else if (event.originAmount, event.targetAmount) != (spent, received)
-            || cash(input, Some(payer), Some(t.target)) != spent
-            || cash(output, Some(t.target), Some(payer)) != received
-        {
-            return None;
         }
         Some((spent, received))
     }

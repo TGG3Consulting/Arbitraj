@@ -98,6 +98,7 @@ pub fn plan(
                 .map(|market|vec![Q::Rubicon(market,false),Q::Rubicon(market,true)]).unwrap_or_default(),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => vec![Q::UmbraeBins],
             Proto::V2 if f.variant==super::family_variant::Variant::Bundles => [10,105,222,500,1000,2000].into_iter().map(Q::Antfarm).collect(),
+            Proto::V2 if f.variant.euler()=>vec![Q::EulerSwap],
             Proto::V2 if f.variant==super::family_variant::Variant::Stabull => vec![Q::Stabull(false),Q::Stabull(true)],
             Proto::V2 if f.variant==super::family_variant::Variant::Antfarm => [10,50,100,150,250,500,750,1000].into_iter().map(Q::Antfarm).collect(),
             Proto::V2 | Proto::NomiStable | Proto::Smardex | Proto::CamelotV2 => vec![Q::V2],
@@ -166,6 +167,8 @@ pub fn plan(
         // WooFi: «реестр» — оракул (state(монета)); остальные — фабрика DEX.
         let registry = if matches!(f.proto, Proto::BaiBai | Proto::Elfomo | Proto::Lunar) {
             "dex.pmm_pool"
+        } else if f.variant == super::family_variant::Variant::EulerV2 {
+            "dex.euler_registry"
         } else if f.proto == Proto::WooPP {
             "dex.oracle"
         } else {

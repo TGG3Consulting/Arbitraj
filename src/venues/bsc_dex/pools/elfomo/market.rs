@@ -164,6 +164,7 @@ pub async fn load(
         base_is_token0: ordered.0 == coin,
         ladder_quote_in: buy,
         ladder_base_in: sell,
+        shared_accounts: Vec::new(),
         pool_token0: None,
     })))
 }

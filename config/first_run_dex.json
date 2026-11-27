@@ -7028,5 +7028,120 @@
         "10"
       ]
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "eulerswap-v1-base",
+    "source": "https://github.com/euler-xyz/euler-interfaces/tree/3ab308dda14dd57ccc340bcf55840f2c70760cfb/addresses · tests/data/first_run_dex_2026-11-26/eulerswap_base_registry.json.gz · tests/data/first_run_dex_2026-11-26/eulerswap_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "eulerswap_v1",
+      "dex.factory": "0xf0cfe22d23699ff1b2cfe6b8f706a6db63911262",
+      "dex.factory_runtime_hash": "0x9bf073f03f25261c74b8a2021d6df6ba28cd132f1ca6cd7bbb4507a665241b0e",
+      "dex.quoter": "0x18e5f5c1ff5e905b32ce860576031ae90e1d1336",
+      "dex.quoter_runtime_hash": "0x049ab695ed713b86e39f788371be338a5580a73bb6b9e53e129e584d8b8eb50f",
+      "dex.quoter_virtual": false,
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "10",
+        "100"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b"
+      ],
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "eulerswap-v2-base",
+    "source": "https://github.com/euler-xyz/euler-interfaces/tree/3ab308dda14dd57ccc340bcf55840f2c70760cfb/addresses · tests/data/first_run_dex_2026-11-26/eulerswap_base_registry.json.gz · tests/data/first_run_dex_2026-11-26/eulerswap_base_wallets.json.gz",
+    "settings": {
+      "dex.kind": "eulerswap_v2",
+      "dex.factory": "0x6c5f4c239ced289447737eab8eea64523bd9c05e",
+      "dex.factory_runtime_hash": "0xfb04267c2a4bd8d8376c15408008a9ff7fd65cd6b251e6868d923ab122a45f5c",
+      "dex.quoter": "0xa564dae65ea7b1ce049abacfc4cb1a32c93e127c",
+      "dex.quoter_runtime_hash": "0x4a5aafa3383f113c4228669162fd3e293819c38fc4f6e2124b1bcf3fc302f48d",
+      "dex.quoter_virtual": false,
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "10",
+        "100"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b"
+      ],
+      "dex.euler_registry": "0x35d410a5052c7362ecdd72cfb65651a71adfaf61",
+      "dex.router_exact_tokens": [
+        "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "eulerswap-v1-ethereum",
+    "source": "https://github.com/euler-xyz/euler-interfaces/tree/3ab308dda14dd57ccc340bcf55840f2c70760cfb/addresses · tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_registry.json.gz · tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "eulerswap_v1",
+      "dex.factory": "0xb013be1d0d380c13b58e889f412895970a2cf228",
+      "dex.factory_runtime_hash": "0xa034fcaae2bda9b64b3876e0c31de3265b35a82e22f84523a936d9e1acef6248",
+      "dex.quoter": "0x208ff5eb543814789321daa1b5eb551881d16b06",
+      "dex.quoter_runtime_hash": "0x9769c059efbf3caff1aeadaf9de22fb71a780f2d06964e7b467dfbc5cc8a4e07",
+      "dex.quoter_virtual": false,
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "10",
+        "100"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c"
+      ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "eulerswap-v2-ethereum",
+    "source": "https://github.com/euler-xyz/euler-interfaces/tree/3ab308dda14dd57ccc340bcf55840f2c70760cfb/addresses · tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_registry.json.gz · tests/data/first_run_dex_2026-11-26/eulerswap_ethereum_wallets.json.gz",
+    "settings": {
+      "dex.kind": "eulerswap_v2",
+      "dex.factory": "0xd05213331221fab8a3c387f2affbb605bb04df5f",
+      "dex.factory_runtime_hash": "0x875fab4bc563f8472f7090e305dfb849a81e5ea244de0370ea88ccf473784896",
+      "dex.quoter": "0xd3a349ee0a21ea0a7e9513ac236ae614b5fd513e",
+      "dex.quoter_runtime_hash": "0x4a5aafa3383f113c4228669162fd3e293819c38fc4f6e2124b1bcf3fc302f48d",
+      "dex.quoter_virtual": false,
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "0.01",
+        "0.1",
+        "1",
+        "10",
+        "100"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c"
+      ],
+      "dex.euler_registry": "0x5fccb84363f020c0cade052c9c654aabf932814a",
+      "dex.router_exact_tokens": [
+        "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0 0x630181884786c962140041cffa3acffbf39d8c93bde1a62b7b55046e57400557",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
+      ]
+    }
   }
 ]

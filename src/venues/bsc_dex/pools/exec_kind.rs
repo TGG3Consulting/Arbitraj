@@ -295,7 +295,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // Решение 289: Vault.swap — вызывающий = sender, без relayer и белого списка (Swaps.sol L56-L104: whenNotPaused,
         // authenticateFor(funds.sender)); проба на цепи — tests/data/balancer_acsi_2026-11-15/exec_sim.json; шаг 17, v2.
         "aqua_swapvm" |
-        "ambient_ethereum" | "mooniswap_v1" | "mooniswap_v2" | "aktionariat" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "stabull_module" | "maverick_v1_module" | "pendle_market_v5" | "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" | "shibaswap_v2_module" => ExecKind::Balancer,
+        "ambient_ethereum" | "mooniswap_v1" | "mooniswap_v2" | "aktionariat" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "eulerswap_v1_module" | "eulerswap_v2_module" | "stabull_module" | "maverick_v1_module" | "pendle_market_v5" | "balancer_v2" | "omni_flux_native_cl" | "omni_flux_native_bin" | "bundles_swap_v5" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "registered_v3_module" | "vvs_v3_module" | "shibaswap_v2_module" => ExecKind::Balancer,
         // Решение 290: LBPair.swap(swapForY, to) — вызывающий не ограничен (nonReentrant), вход = баланс − резерв
         // (LBPair.sol L483-L490, BinHelper.sol L290-L306); проба на цепи — tests/data/lb_v21_2026-11-15/exec_state.json;
         // шаг 18, v2.
@@ -441,6 +441,7 @@ mod tests {
             "surge_native",
             "angstrom_l1",
             "empire_nominal",
+            "eulerswap_v1", "eulerswap_v2",
             "stabull",
             "maverick_v1",
             "lambda_propamm",

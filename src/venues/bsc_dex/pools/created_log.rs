@@ -73,6 +73,8 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // Nomiswap Stable (решение 284): PairCreated фабрики — та же подпись, что у UniswapV2Factory (L1216).
             // SmarDex (решение 288): PairCreated(token0, token1, pair, uint) — та же подпись (ISmardexFactory.sol L12).
             // Camelot V2 (решение 443): PairCreated(token0 indexed, token1 indexed, pair, uint) — CamelotFactory.sol L23.
+            Proto::V2 if f.variant==super::family_variant::Variant::EulerV1 => ("dex.factory",super::euler_swap::IV1::PoolDeployed::SIGNATURE_HASH,false),
+            Proto::V2 if f.variant==super::family_variant::Variant::EulerV2 => ("dex.factory",super::euler_swap::IV2::PoolDeployed::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::Stabull => ("dex.factory",super::stabull::IStabull::NewCurve::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::MaverickOne => ("dex.factory",super::maverick_one::IMaverickOne::PoolCreated::SIGNATURE_HASH,false),
             Proto::V2 if f.variant==super::family_variant::Variant::UmbraeDlmm => ("dex.factory",super::umbrae::IMarket::PairCreated::SIGNATURE_HASH,false),
@@ -393,6 +395,8 @@ async fn one(p: &Pools, w: &Watch, log: &Log, v4: bool, f: &'static Family) -> R
             coin: x.coin,
             quote: w.usdt,
         }
+    } else if f.variant.euler() {
+        let Some(candidate)=super::euler_swap::created(f,log,w.usdt)? else{return Ok(())};candidate
     } else if f.variant==super::family_variant::Variant::Stabull {
         let Some(candidate)=super::stabull::created(&p.ctx,f,log,w.usdt).await? else{return Ok(())};candidate
     } else if f.variant==super::family_variant::Variant::Carbon {

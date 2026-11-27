@@ -69,7 +69,7 @@ impl Market {
             | Market::O1
             | Market::Antfarm
             | Market::Angstrom
-            | Market::Stabull
+            | Market::EulerSwap | Market::Stabull
             | Market::Integral
             | Market::Llamma
             | Market::Dagrow

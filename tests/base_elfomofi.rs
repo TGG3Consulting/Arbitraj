@@ -158,6 +158,7 @@ fn one_sided_depth_stays_in_the_graph_and_markets_share_one_vault() {
             paused: false,
             implementation: Address::ZERO,
             base_is_token0: true,
+            shared_accounts: Vec::new(),
             pool_token0: None,
             ladder_quote_in: purchases,
             ladder_base_in: sales,

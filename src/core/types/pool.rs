@@ -621,6 +621,9 @@ pub struct OraclePmmData {
     /// zeroForOne). None — у вида порядок не нужен (WooFi). `#[serde(default)]` — старые записи эпизодов.
     #[serde(default)]
     pub pool_token0: Option<Address>,
+    /// Счёт LP и кредитные хранилища, деньги которых доступны нескольким разным пулам.
+    #[serde(default,skip_serializing_if="Vec::is_empty")]
+    pub shared_accounts: Vec<Address>,
 }
 
 /// Точка лесенки цен пула: точный вход и ответ квотера контракта (выход) на нём.

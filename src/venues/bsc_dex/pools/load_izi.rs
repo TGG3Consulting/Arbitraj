@@ -120,6 +120,7 @@ pub fn state(
         base_is_token0: pair.0 == coin,
         ladder_quote_in,
         ladder_base_in,
+        shared_accounts: Vec::new(),
         pool_token0: Some(pair.0),
     }))
 }

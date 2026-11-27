@@ -146,6 +146,9 @@ impl Entry {
     }
 
     pub fn shares_liquidity(&self, other: &Entry) -> bool {
+        if self.family.variant.euler() && other.family.variant.euler()
+            && let (crate::core::types::PoolState::OraclePmm(a),crate::core::types::PoolState::OraclePmm(b))=(&self.pool.state,&other.pool.state)
+            && a.shared_accounts.iter().any(|x|b.shared_accounts.contains(x)){return true;}
         let left = self.liquidity_site();
         let right = other.liquidity_site();
         if left == right {return true;}

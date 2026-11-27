@@ -58,9 +58,14 @@ pub(crate) async fn checked(
     let g = ctx.settings.generation();
     let f = e.family;
     let pool = e.pool.reference.address();
+    if f.variant.euler(){
+        let form=super::euler_wallet::checked(ctx,e,pair,target,at).await?;
+        return Ok(Terms{form,pool,target,desired,quote:Address::ZERO});
+    }
     let form = form(ctx, e, target, desired)?;
     stabull::market(ctx, f, pool, pair, at).await?;
     match form {
+        Form::Euler{..}=>return Err(bad(ctx)),
         Form::Module => direct_module::verify_factory(ctx, f, target, at).await?,
         Form::Curve | Form::Router => {
             exact_wallet_tokens::check(ctx, f.id, pair.0, pair.1, at).await?;
@@ -162,12 +167,13 @@ pub(crate) fn probe(
     let target = if e.family.executor_kind.is_some() {
         ctx.dex_addr("dex.router", e.family.id)?
     } else if exact_wallet_tokens::eligible(ctx, e.family.id, o.token_in, o.token_out) {
-        pool
+        if e.family.variant.euler(){ctx.dex_addr("dex.quoter",e.family.id)?}else{pool}
     } else {
         return Err(bad(ctx));
     };
     let t = Terms {
-        form: form(ctx, e, target, None)?,
+        form: if e.family.variant.euler(){Form::Euler{v2:e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::EulerV2,
+                    guarded:e.family.executor_kind.is_some(),vaults:[Address::ZERO;2]}}else{form(ctx, e, target, None)?},
         pool,
         target,
         quote: Address::ZERO,

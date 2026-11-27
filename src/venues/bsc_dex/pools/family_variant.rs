@@ -157,6 +157,8 @@ pub enum Variant {
     BancorV3,
     UniswapV1,
     Pendle,
+    EulerV1,
+    EulerV2,
     Stabull,
     MaverickOne,
     MaverickTwoRouter,
@@ -233,6 +235,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn euler(self)->bool {matches!(self,Self::EulerV1 | Self::EulerV2)}
     pub(crate) fn llamma(self)->bool{matches!(self,Self::Llamma(_))}
     pub(crate) fn defiplaza_stable(self)->bool {self==Self::DefiPlazaStable}
     pub(crate) fn defiplaza(self)->bool { matches!(self,Self::DefiPlazaMulti|Self::DefiPlazaStable) }
@@ -245,7 +248,7 @@ impl Variant {
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     /// У шага 17 адрес отдельного рынка закодирован как poolId, а назначение — модуль фабрики.
-    pub fn pool_address_step(self)->bool{self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
+    pub fn pool_address_step(self)->bool{self.euler() || self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
     pub(crate) fn checked_slipstream_fee(self) -> bool { matches!(self, Self::TopazCl | Self::RegisteredSlipstream) }
     /// Плоский ABI QuoterV1 и защита выплаты кошелька у модуля Shiba.
@@ -263,7 +266,7 @@ impl Variant {
     pub(crate) fn empire_module(self)->bool {matches!(self,Self::EmpireModule)}
     pub(crate) fn empire_nominal(self)->bool {matches!(self,Self::EmpireNominal)}
     pub(crate) fn empire(self)->bool {matches!(self,Self::EmpireRaw|Self::EmpireModule|Self::EmpireNominal)}
-    pub fn wallet_module(self)->bool { matches!(self,Self::Ammalgam|Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
+    pub fn wallet_module(self)->bool { self.euler() || matches!(self,Self::Ammalgam|Self::EmpireModule|Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::ShibaswapV2|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn exact_router(self)->bool {self==Self::TrebleSpot || matches!(self,Self::RegisteredSlipstream|Self::RegisteredSpacingV3|Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::TheoremIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::ShibaswapV2|Self::SolidlyClone|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter|Self::EmpireNominal)}
     /// Площадка торгует целыми акциями эмитента с отдельными правилами оплаты и выдачи.
     pub(crate) fn issuer_shares(self)->bool { self==Self::Brokerbot }
@@ -382,6 +385,8 @@ pub fn of(kind: &str) -> Variant {
         "gemswap_v2" => Variant::Gemswap,
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
+        "eulerswap_v1" | "eulerswap_v1_module" => Variant::EulerV1,
+        "eulerswap_v2" | "eulerswap_v2_module" => Variant::EulerV2,
         "stabull" | "stabull_module" => Variant::Stabull,
         "maverick_v2_router" => Variant::MaverickTwoRouter,
         "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,

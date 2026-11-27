@@ -183,6 +183,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant.deli() => {e.valid=false;Applied::Refresh("Изменили состояние Deli и внешних контрактов".into())}
         _ if e.family.variant==super::family_variant::Variant::Bundles => {e.valid=false;Applied::Refresh("Изменились резервы Bundles Swap".into())}
         _ if e.family.variant==super::family_variant::Variant::Antfarm => {e.valid=false;Applied::Refresh("Изменилось состояние пары Antfarm".into())}
+        _ if e.family.variant.euler()=>{e.valid=false;Applied::Refresh("Обновился EulerSwap или счёт кредитного оператора".into())}
         _ if e.family.variant==super::family_variant::Variant::Stabull=>{e.valid=false;Applied::Refresh("Обновилось состояние Curve Stabull".into())}
         _ if e.family.variant==super::family_variant::Variant::MaverickOne=>{e.valid=false;Applied::Refresh("Изменилось состояние Maverick V1".into())}
         _ if e.family.variant==super::family_variant::Variant::Surge=>{e.valid=false;Applied::Refresh("Обновилось состояние Surge".into())}

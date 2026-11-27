@@ -32,16 +32,12 @@ pub(super) async fn debit(
 ) -> GatewayResult<U256> {
     let at = head.selector();
     let (nominal, balance) = tokio::try_join!(
-        call::canonical(
-            ctx,
-            &at,
-            terms.pool,
-            IStabull::viewTargetSwapCall {
-                a: input,
-                b: output,
-                amount: want
-            }
-        ),
+        async{
+            if matches!(terms.form,Form::Euler{..}){
+                call::canonical(ctx,&at,terms.pool,crate::venues::bsc_dex::pools::euler_swap::IEuler::computeQuoteCall{
+                    input,output,amount:want,exactIn:false}).await
+            }else{call::canonical(ctx,&at,terms.pool,IStabull::viewTargetSwapCall{a:input,b:output,amount:want}).await}
+        },
         dagrow::balance(ctx, input, payer, &at)
     )?;
     if nominal.is_zero() || balance.is_zero() {
@@ -99,7 +95,7 @@ pub(super) async fn options(
     let mut rows = Vec::new();
     let mut targets = Vec::new();
     if exact_wallet_tokens::eligible(ctx, e.family.id, input, output) {
-        targets.push(pool);
+        if !e.family.variant.euler(){targets.push(pool);}
         if let Ok(router) = ctx.dex_addr("dex.quoter", e.family.id) {
             targets.push(router);
         }
@@ -126,7 +122,7 @@ pub(super) async fn options(
                 rows.push(qt);
             }
         }
-        if t.form == Form::Module
+        if matches!(t.form,Form::Module | Form::Euler{guarded:true,..})
             && graph
             && let Ok(Some(executor)) = executor::address(ctx)
         {

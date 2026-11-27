@@ -117,6 +117,13 @@ pub fn state<'a>(
             Ok(Loaded {state: PoolState::Empire(Box::new(state)),ticks:None,bins:None,fee_pips:Some(super::super::math::empire::FEE_PIPS)})
         });
     }
+    if f.variant.euler() {
+        return Box::pin(async move {
+            let at=super::nami::block(ctx,&block_tag(block)).await?;
+            let state=Box::pin(super::euler_quotes::ladder(ctx,tokens,reg,f,reference.address(),pair,usdt,&at)).await?;
+            Ok(Loaded{state,ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::Stabull {
         return Box::pin(async move {
             let tag = block_tag(block);

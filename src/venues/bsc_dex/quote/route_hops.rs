@@ -26,7 +26,7 @@ pub(super) fn physical_overlap(
     if !sites.is_empty() && sites.contains(&edge.entry.pool.reference) {
         return true;
     }
-    edge.entry.family.variant == super::super::pools::family_variant::Variant::YieldBasis
+    (edge.entry.family.variant.euler() || edge.entry.family.variant == super::super::pools::family_variant::Variant::YieldBasis)
         && steps
             .iter()
             .any(|(prior, _, _)| edge.entry.shares_liquidity(&prior.entry))

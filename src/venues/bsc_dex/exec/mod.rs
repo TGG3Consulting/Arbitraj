@@ -81,6 +81,9 @@ pub(super) mod rubicon_plan;
 pub(super) mod prop_wallet;
 pub(super) mod prop_abi;
 pub(super) mod prop_plan;
+#[cfg(test)]
+mod euler_wallet_tests;
+pub(super) mod euler_wallet;
 pub(super) mod stabull_wallet;
 mod ammalgam_receipt;
 pub(super) mod empire_wallet;

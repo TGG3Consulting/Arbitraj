@@ -81,7 +81,7 @@ pub(super) fn verify(ctx: &Ctx, id: &str, code: &[u8], hash: B256) -> GatewayRes
     let with_vault = match kind.as_str() {
         "baibai_module" | "elfomofi_module" => true,
         "lunarbase_module" => false,
-        "aqua_swapvm" | "lambda_propamm" | "integral_size_v5" | "stabull_module" | "maverick_v1_module" | "degenswap_module" | "safeswap_trade_module" | "bundles_swap_v5" | "omni_flux_native_cl" | "omni_flux_native_bin" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "bunnyswap_module" | "memebox_v5" | "registered_v3_module" | "shibaswap_v2_module" | "vvs_v3_module" | "base_native_v3_module" | "solidly_v3_module" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => return Ok(()),
+        "aqua_swapvm" | "lambda_propamm" | "integral_size_v5" | "eulerswap_v1_module" | "eulerswap_v2_module" | "stabull_module" | "maverick_v1_module" | "degenswap_module" | "safeswap_trade_module" | "bundles_swap_v5" | "omni_flux_native_cl" | "omni_flux_native_bin" | "launch_o1_wrapped" | "umbrae_dlmm_module" | "umbrae_damm_module" | "bunnyswap_module" | "memebox_v5" | "registered_v3_module" | "shibaswap_v2_module" | "vvs_v3_module" | "base_native_v3_module" | "solidly_v3_module" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => return Ok(()),
         _ => return Err(wrong()),
     };
     let mut roles = vec![ctx.dex_addr("dex.pmm_pool", id)?];

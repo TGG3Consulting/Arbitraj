@@ -7081,7 +7081,8 @@
         "100"
       ],
       "dex.module_runtime_hashes": [
-        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b"
+        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b",
+        "0x9bdedabdee1aeaa331971aca6562dcd6d3ae5dc4d7d9e47e4dba313e214671a3"
       ],
       "dex.router_exact_tokens": [
         "0x4200000000000000000000000000000000000006 0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c"
@@ -7110,7 +7111,8 @@
         "100"
       ],
       "dex.module_runtime_hashes": [
-        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b"
+        "0x125059924cf19f97a726d29363866c7a0539f55634e75ad3b556488d2f00828b",
+        "0x9bdedabdee1aeaa331971aca6562dcd6d3ae5dc4d7d9e47e4dba313e214671a3"
       ],
       "dex.euler_registry": "0x35d410a5052c7362ecdd72cfb65651a71adfaf61",
       "dex.euler_markets": [
@@ -7148,7 +7150,8 @@
         "100"
       ],
       "dex.module_runtime_hashes": [
-        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c"
+        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c",
+        "0x7d0ea4c2296a3a189f86e04e6c0cb2bd4e2abc2245c195537cdf4427b18c5356"
       ],
       "dex.router_exact_tokens": [
         "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
@@ -7177,7 +7180,8 @@
         "100"
       ],
       "dex.module_runtime_hashes": [
-        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c"
+        "0x5f915756d126543e0d95160e2cd4a0107b8c1f3c625a03ff69a019d52db7fd9c",
+        "0x7d0ea4c2296a3a189f86e04e6c0cb2bd4e2abc2245c195537cdf4427b18c5356"
       ],
       "dex.euler_registry": "0x5fccb84363f020c0cade052c9c654aabf932814a",
       "dex.euler_markets": [

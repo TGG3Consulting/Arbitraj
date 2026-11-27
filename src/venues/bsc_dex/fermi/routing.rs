@@ -168,16 +168,32 @@ pub(in crate::venues::bsc_dex) async fn consider(
     .await;
     let mut best = baseline;
     let mut value = old;
-    let mut ticket = None;
+    let mut ticket: Option<Prepared> = None;
     for (prepared, mut q) in options.into_iter().flatten() {
         if mixed && let Some(route) = q.route.as_mut() {
             route.exec_note = Some(crate::gateway::quote_stage::PROP_SETTLEMENT_SLOT.into());
         }
-        let Some(net) = hashflow::routing::total(p, &q).await else {
+        let score = match &prepared {
+            Some(t) => super::firm::value(p, &q, t).await,
+            None => hashflow::routing::total(p, &q).await,
+        };
+        let Some(net) = score else {
             continue;
         };
         if !improves(side, net, value) {
-            continue;
+            if Some(net) != value {
+                continue;
+            }
+            let (Some(prior), Some(new), Ok(old_quote)) = (&ticket, &prepared, &best) else {
+                continue;
+            };
+            let (a, b) = tokio::join!(
+                super::firm::capital(p, &q, new),
+                super::firm::capital(p, old_quote, prior)
+            );
+            if !matches!((a,b),(Some(x),Some(y)) if x<y) {
+                continue;
+            }
         }
         if prepared
             .as_ref()

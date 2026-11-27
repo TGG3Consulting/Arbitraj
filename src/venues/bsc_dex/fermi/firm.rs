@@ -11,6 +11,7 @@ use alloy::{
     sol_types::SolValue,
 };
 use chrono::Utc;
+use rust_decimal::Decimal;
 pub(super) async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
     let b = c.book.clone();
     let h = &b.head;
@@ -102,4 +103,33 @@ pub(super) async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
         },
         quote,
     ))
+}
+
+/// Для двух равных денежных результатов сравнивает необходимый резерв. На продаже объём монеты одинаков.
+pub(super) async fn capital(p: &Parts, q: &Quote, t: &Prepared) -> Option<Decimal> {
+    let wei = U256::from(t.gas_limit).checked_mul(U256::from(t.fees.max_fee))?;
+    let mut reserved = q.clone();
+    let cost = reserved
+        .costs
+        .iter_mut()
+        .find(|c| c.kind == CostKind::Gas && !c.in_price)?;
+    cost.amount = num::to_decimal(wei, 18)?;
+    let mut quoting = p.quoting();
+    quoting.tokens = quoting.tokens.pinned();
+    let gas = super::super::best_of::extra::usdt(&quoting, &reserved).await?;
+    if q.side == Side::Buy {
+        num::to_decimal(t.spent, t.decs.1)?.checked_add(gas)
+    } else {
+        Some(gas)
+    }
+}
+pub(super) async fn value(p: &Parts, q: &Quote, t: &Prepared) -> Option<Decimal> {
+    let mut quoting = p.quoting();
+    quoting.tokens = quoting.tokens.pinned();
+    let cost = super::super::best_of::extra::usdt(&quoting, q).await?;
+    if q.side == Side::Buy {
+        num::to_decimal(t.spent, t.decs.1)?.checked_add(cost)
+    } else {
+        num::to_decimal(t.received, t.decs.1)?.checked_sub(cost)
+    }
 }

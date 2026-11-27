@@ -1,6 +1,7 @@
-"""Exercise the real DOCSwap factory, router and V5 on both empty registries in an isolated EVM state."""
+"""Fund a pair on an archived, empty DOCSwap or MarSwap factory in an isolated EVM block."""
 import argparse
 import json
+import gzip
 from pathlib import Path
 
 from eth_abi import decode, encode
@@ -19,8 +20,24 @@ LAB = "0x" + keccak(text="arb docswap empty factory laboratory wrapper")[-20:].h
 # Read EXTCODEHASH for a nested CREATE2 while the isolated block is still in scope.
 CODEHASH = "0x"+keccak(text="arb simulation code hash reader")[-20:].hex()
 
-def capture(url, network):
-    roles=json.loads(DATA.read_bytes())[network]
+def capture(url, network, mars=False):
+    if mars:
+        from types import SimpleNamespace
+        from record_omni_v2_base import role
+        if network != "base":
+            raise ValueError("the Ethereum MarSwap registry already has historical funded pools")
+        directory = json.loads(gzip.decompress((DATA.parent / "marswap-base.json.gz").read_bytes()))
+        # Deployer nonce 8 created the factory, nonce 10 the router. Verify its immutable roles below.
+        router = "0xc10f17b52ab0f230cc8e0866be1533ea55a6c0d9"
+        source, binding = role(SimpleNamespace(endpoint=url,selector=directory["selector"]), router)
+        if source["compilation"]["name"] != "MarsRouter":
+            raise ValueError("unexpected verified router")
+        factory = directory["factory"]
+        roles = {"selector":directory["selector"], "chain":8453, "factory":factory, "router":router,
+                 "wrapped":"0x4200000000000000000000000000000000000006",factory:{"hash":directory["factory_code_hash"]},
+                 router:{"hash":binding["runtime"]}}
+    else:
+        roles=json.loads(DATA.read_bytes())[network]
     at=roles["selector"]
     chain,factory,router=roles["chain"],roles["factory"],roles["router"]
     wrapped="0x"+roles["wrapped"][-40:]
@@ -40,10 +57,20 @@ def capture(url, network):
         for i,r in enumerate(result):
             if r["status"]!="0x1":raise ValueError(("preparation",i,r.get("error")))
         return [bytes.fromhex(r["returnData"][2:]) for r in result]
-    read=[tx(factory,n+"()") for n in ("allPairsLength","INIT_CODE_PAIR_HASH","totalFee","MAX_TOTAL_FEE_PERCENT")]
-    count,init,fee,den=values(read)
+    count, init, router_factory, router_wrapped = values([
+        tx(factory, "allPairsLength()"), tx(factory, "INIT_CODE_PAIR_HASH()"), tx(router, "factory()"), tx(router, "WETH()")])
+    if decode(["address"],router_factory)[0] != factory or decode(["address"],router_wrapped)[0] != wrapped:
+        raise ValueError("router immutables do not match the selected factory and wrapper")
     integer=lambda x:int.from_bytes(x,"big")
-    count,fee,den=map(integer,(count,fee,den))
+    count = integer(count)
+    flat = None
+    if mars:
+        terms = decode(["address","uint256","uint256","uint256"],values([tx(factory,"lpInfo()")])[0])
+        if list(terms)!=directory["terms"] or "0x"+init.hex()!=directory["init_hash"]:
+            raise ValueError("historical fee terms or CREATE2 hash changed")
+        fee,den,flat=terms[1]+terms[2],10000,terms[3]
+    else:
+        fee,den=map(integer,values([tx(factory,"totalFee()"),tx(factory,"MAX_TOTAL_FEE_PERCENT()")]))
     if count!=0 or not 0<=fee<den: raise ValueError("unexpected original supply")
     t0,t1=sorted([wrapped,LAB])
     salt=keccak(bytes.fromhex(t0[2:]+t1[2:]))
@@ -74,12 +101,13 @@ def capture(url, network):
             model=amount*(den-fee)*reserve//(reserve*den+amount*(den-fee))
             quoted=decode(["uint256[]"],values(prefix+[tx(router,"getAmountsOut(uint256,address[])",["uint256","address[]"],[amount,[source,target]])])[-1])[0][-1]
             if quoted!=model:raise ValueError(("quote",quoted,model))
-            for mode in ("router","v5"):
-                dest=router if mode=="router" else EXEC
+            for mode in (("router","v5","flat") if mars else ("router","v5")):
+                model=quoted if mode!="flat" else amount*reserve//(reserve+amount)
+                dest=EXEC if mode=="v5" else router
                 def trade(minimum,deadline):
-                    if mode=="router":
+                    if mode!="v5":
                         return tx(router,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-                                  ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[source,target],OWNER,deadline])
+                                  ["uint256","uint256","address[]","address","uint256"],[amount,minimum,[source,target],OWNER,deadline],value=flat if mode=="flat" else 0)
                     step=(0,pair,source,target,10000,encode(["uint32"],[fee*10**6//den]))
                     return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                               ["address","uint256","address","uint256","uint256",STEP+"[]"],[source,amount,target,minimum,deadline,[step]])
@@ -92,19 +120,19 @@ def capture(url, network):
                     if label=="paid":
                         if op["status"]!="0x1" or (b[0]-a[0],a[1]-b[1])!=(amount,model) or b[2:]!=a[2:]:
                             raise ValueError(("settlement",mode,label,op.get("error"),b,a))
-                        rows.append(dict(mode=mode,source=source,target=target,input=amount,output=model,gas=int(op["gasUsed"],16),
+                        rows.append(dict(mode=mode,fee_value_wei=flat if mode=="flat" else 0,source=source,target=target,input=amount,output=model,gas=int(op["gasUsed"],16),
                                          logs=op["logs"]))
                     elif op["status"]!="0x0" or b!=a:raise ValueError(("protection",mode,label))
-    return dict(chain=chain,selector=at,state_root=head["stateRoot"],factory=factory,router=router,original_count=count,
+    return dict(chain=chain,selector=at,router_runtime_hash=roles[router]["hash"],factory_runtime_hash=roles[factory]["hash"],state_root=head["stateRoot"],factory=factory,router=router,original_count=count,
                 init_hash="0x"+init.hex(),pair=pair,assets=[t0,t1],lab_token=LAB,fee=fee,denominator=den,
                 pair_runtime_hash="0x"+runtime.hex(),source="registered simulated pool on original factory",cases=rows)
 
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("network",choices=("ethereum","base"));cli.add_argument("out",type=Path);args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("network",choices=("ethereum","base"));cli.add_argument("out",type=Path);cli.add_argument("--mars", action="store_true");args=cli.parse_args()
     for url in BASE_ENDPOINTS if args.network=="base" else (ENDPOINT,"https://ethereum-rpc.publicnode.com"):
         try:
-            record=capture(url,args.network)
+            record=capture(url,args.network,args.mars)
             break
         except (RuntimeError,OSError) as err: print(str(err)[:180])
     else: raise RuntimeError("archive unavailable")

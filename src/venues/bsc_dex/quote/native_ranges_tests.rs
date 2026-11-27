@@ -78,9 +78,17 @@ fn v5_uses_native_payment_and_reconciles_both_directions_on_three_ranges_pools()
                     (U256::ZERO, received)
                 }
             );
-            let receipt:crate::venues::bsc_dex::send::track::Receipt=serde_json::from_value(serde_json::json!({
-                "status":"0x1","blockNumber":"0x1","gasUsed":"0x1","effectiveGasPrice":"0x0","logs":fill["logs"]
+            let mut receipt:crate::venues::bsc_dex::send::track::Receipt=serde_json::from_value(serde_json::json!({
+                "status":"0x1","blockNumber":"0x1","gasUsed":"0x1","effectiveGasPrice":"0x0","logs":[]
             })).unwrap();
+            // eth_simulateV1 returns EVM logs, without the RPC inclusion metadata of mined logs.
+            receipt.logs = logs
+                .into_iter()
+                .map(|log| alloy::rpc::types::Log {
+                    inner: alloy_primitives::Log::new(log.address, log.topics, log.data).unwrap(),
+                    ..Default::default()
+                })
+                .collect();
             use crate::core::types::Side;
             use crate::venues::bsc_dex::exec::executor::fact::native_amounts;
             assert_eq!(

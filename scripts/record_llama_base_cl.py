@@ -83,8 +83,13 @@ def wallet(reader,cap,book):
     word=lambda x:"0x"+format(x,"064x")
     overrides={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
+    def canonical_simulation(_endpoint, method, params):
+        if method != "eth_simulateV1" or params[-1] != cap.selector:
+            raise ValueError("unexpected simulation selector")
+        return reader.one(method, params)
+
     def run(calls):
-        return simulate_block(cap.endpoint,cap.selector,overrides,calls,read_rpc=reader.one)
+        return simulate_block(cap.endpoint,cap.selector,overrides,calls,read_rpc=canonical_simulation)
     kind=book["key_type"]; router=book["roles"]["router"]["address"]; quoter=book["roles"]["quoter"]["address"]
     deadline=int(reader.header["timestamp"],16)+300
     funded=sorted((m for m in book["markets"] if WETH in m["tokens"] and m["liquidity"]>0),

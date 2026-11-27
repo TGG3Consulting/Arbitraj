@@ -1,5 +1,6 @@
 """Measure ordinary Ammalgam spot swaps independently of its six lending token balances."""
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -83,7 +84,9 @@ def capture(url, compiled):
     if compiled:
         assert rpc(url, "eth_getTransactionCount", [OWNER, tag]) == "0x0"
         assert all(rpc(url, "eth_getCode", [a, tag]) == "0x" for a in (EXEC,module))
-        args = encode(["address"]*3, [FACTORY,HELPER,market["pool"]])
+        executor_code = RUNTIME.read_text().strip().removeprefix("0x")
+        executor_hash = keccak(bytes.fromhex(executor_code))
+        args = encode(["address"]*3+["bytes32"], [FACTORY,HELPER,market["pool"],executor_hash])
         deploy = {"from": OWNER, "data": "0x"+compiled["creation"]+args.hex(), "gas": hex(6000000)}
         word = lambda n: "0x"+format(n,"064x")
         env[EXEC] = {"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
@@ -91,7 +94,9 @@ def capture(url, compiled):
         created, = simulate_block(url,tag,env,[deploy])
         assert created["status"] == "0x1" and created["returnData"] != "0x"
         data["module"] = dict(address=module, runtime="0x"+keccak(hexstr=created["returnData"]).hex(),
-                              creation=deploy["data"], constructor=[FACTORY,HELPER,market["pool"]],
+                              creation=deploy["data"], constructor=[FACTORY,HELPER,market["pool"],"0x"+executor_hash.hex()],
+                              runtime_sha256=hashlib.sha256(bytes.fromhex(created["returnData"][2:])).hexdigest(),
+                              creation_sha256=hashlib.sha256(bytes.fromhex(deploy["data"][2:])).hexdigest(),
                               gas=int(created["gasUsed"],16))
         prefix = [deploy]
     stable = "0xdac17f958d2ee523a2206206994597c13d831ec7"
@@ -140,9 +145,14 @@ def capture(url, compiled):
                 rejects = [swap(received+1)]
                 if mode in ("wallet","v5"):
                     rejects.append(swap(received,1))
+                if mode == "wallet":
+                    rejects += [swap(0), tx(module,"swapFrom(address,address,uint256,uint256,address,uint256)",
+                                           ["address","address","uint256","uint256","address","uint256"],
+                                           [src,dst,amount,0,OWNER,end])]
                 checked = replay(rejects + [swap(received)])
                 assert all(q["status"] == "0x0" for q in checked[at+2:at+2+len(rejects)])
                 assert checked[at+2+len(rejects)]["status"] == "0x1"
+                row["owner_zero_minimum_refusals"] = len(rejects)-2 if mode=="wallet" else 0
                 row["expired"] = checked[at+3]["error"] if len(rejects)>1 else None
                 assert [x["returnData"] for x in checked[-2:]] == [x["returnData"] for x in result[-2:]]
                 row.update(spent=str(spent), received=str(received), gas=int(call["gasUsed"],16),

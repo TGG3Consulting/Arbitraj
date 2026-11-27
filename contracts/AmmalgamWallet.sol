@@ -29,6 +29,7 @@ contract AmmalgamWallet {
     IAmmalgamHelper public immutable helper;
     address public immutable beacon;
     bytes32 public immutable helperHash;
+    bytes32 public immutable executorHash;
     bytes32 public immutable pairHash;
     bytes32 public immutable implementationHash;
     bool transient private entered;
@@ -38,7 +39,9 @@ contract AmmalgamWallet {
     event Filled(address indexed pair,address indexed payer,address indexed recipient,address input,address output,
                  uint256 spent,uint256 funded,uint256 received);
 
-    constructor(IAmmalgamRegistry registry, IAmmalgamHelper venue, IAmmalgamMarket referencePair) {
+    constructor(IAmmalgamRegistry registry, IAmmalgamHelper venue, IAmmalgamMarket referencePair, bytes32 executorRuntime) {
+        if (executorRuntime == bytes32(0)) revert InvalidMarket();
+        executorHash = executorRuntime;
         if (address(registry).code.length == 0 || address(venue).code.length == 0) revert InvalidMarket();
         (address x,address y) = referencePair.underlyingTokens();
         if (x == y || registry.getPair(x,y) != address(referencePair)) revert InvalidMarket();
@@ -60,6 +63,7 @@ contract AmmalgamWallet {
 
     function swapFrom(address input,address output,uint256 amount,uint256 minimum,address recipient,uint256 deadline)
         external returns (uint256) {
+        if (minimum == 0 && msg.sender.codehash != executorHash) revert InvalidOrder();
         return settle(factory.getPair(input,output),input,output,amount,minimum,recipient,deadline);
     }
 

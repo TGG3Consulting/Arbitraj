@@ -217,6 +217,10 @@ mod tests {
             assert_eq!(selector,&base["selector"]);
             pairs.push(serde_json::json!({"dex":id,"network":"base","creation_code_hash":hash}));
         }
+        let bitswap:Value=serde_json::from_str(include_str!("../../tests/data/first_run_dex_2026-11-26/bitswap_ethereum_registry.json")).unwrap();
+        assert_eq!(bitswap["block_hash"],eth["selector"]["blockHash"]);
+        assert_eq!(bitswap["chain"],eth["chain_id"]);
+        pairs.push(serde_json::json!({"dex":"bitswap","network":"ethereum","creation_code_hash":bitswap["init"]}));
         for p in all {
             let snapshot = [&base, &eth]
                 .into_iter()

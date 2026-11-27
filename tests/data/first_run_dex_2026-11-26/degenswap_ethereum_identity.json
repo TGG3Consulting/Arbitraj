@@ -1,0 +1,25 @@
+{
+  "chain": 1,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "listing": {
+    "url": "https://api.geckoterminal.com/api/v2/networks/eth/dexes/degenswap/pools?page=1",
+    "rows": []
+  },
+  "candidates": [
+    {
+      "address": "0xa01c3d760738c79e10334408ae59684aa36b1131",
+      "network": 250,
+      "source": "https://raw.githubusercontent.com/cryptoinhero/degenswap-sdk/05cdc12058862baee781074ed9b3353ac708583d/src/constants.ts",
+      "ethereum_code": "0x"
+    },
+    {
+      "address": "0xa5e57cab76caa09f66280f9eb1529ed1059e87ba",
+      "network": "Degen",
+      "source": "https://raw.githubusercontent.com/DefiLlama/DefiLlama-Adapters/86d9d93f95cc7d1380982177cca9a51e6884d80c/projects/degenswap/index.js",
+      "ethereum_code": "0x"
+    }
+  ]
+}

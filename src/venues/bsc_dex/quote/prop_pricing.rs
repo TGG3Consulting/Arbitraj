@@ -44,14 +44,13 @@ pub(super) async fn options(
     .into_iter()
     .flatten()
     {
-        if let Some(h) = head
-            && prop_plan::checked(ctx, e, input, output, target, allow, &h.selector())
-                .await
-                .is_err()
-        {
-            continue;
-        }
-        let Ok(t) = r.terms(ctx, target, allow) else {
+        let terms = match head {
+            Some(h) => {
+                prop_plan::checked(ctx, e, input, output, target, allow, &h.selector()).await
+            }
+            None => r.terms(ctx, target, allow),
+        };
+        let Ok(t) = terms else {
             continue;
         };
         let exec = Execution {

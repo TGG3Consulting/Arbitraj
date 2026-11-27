@@ -20,6 +20,8 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Terms {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module_hash: Option<B256>,
     pub target: Address,
     pub fallback_allowed: bool,
     pub router: Address,
@@ -109,6 +111,21 @@ impl Proof {
             self.data(),
         )
         .await?;
+        if let Some(accepted) = self.terms.module_hash {
+            let block = r.block_hash.ok_or_else(|| {
+                ctx.err(
+                    crate::gateway::errors::ErrorCode::OutcomeUnknown,
+                    "Нет канонического блока оплаты PropVenueAdapter",
+                )
+            })?;
+            crate::venues::bsc_dex::pools::solidly_classic_factory::plain(
+                ctx,
+                self.terms.target,
+                accepted,
+                &serde_json::json!({"blockHash":block,"requireCanonical":true}),
+            )
+            .await?;
+        }
         self.terms
             .code
             .at_transaction(ctx, self.terms.router, hash, r, None)

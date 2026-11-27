@@ -20,6 +20,7 @@ pub(super) fn make(args: &IProp::swapViaVenueV1Call, owner: Address, fixture: &V
     let router = address(&d["router"]);
     Proof {
         terms: Terms {
+            module_hash: None,
             target: router,
             router,
             venue,

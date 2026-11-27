@@ -42,7 +42,7 @@ fn chosen_fee(
         (false, None | Some(RouterFeeMode::Standard)) => Some(false),
         (
             false,
-            Some(RouterFeeMode::EulerModuleV5{..}|RouterFeeMode::Llamma{..}|RouterFeeMode::BancorLegacy{..}|RouterFeeMode::Mooniswap{..}|RouterFeeMode::DefiPlaza{..}|RouterFeeMode::YieldBasis{..}|RouterFeeMode::BalancerV1{..}|RouterFeeMode::BancorV3{..}|RouterFeeMode::UniswapV1{..} | RouterFeeMode::NativeFlat{..} | RouterFeeMode::VenueFallback{..} | RouterFeeMode::NativeWallet{..} | RouterFeeMode::FluxEth{..} | RouterFeeMode::NativeGrossMinimum | RouterFeeMode::NativeSettlement { .. } | RouterFeeMode::ProtectedWallet{..}|RouterFeeMode::CarbonWallet{..}|RouterFeeMode::AntfarmProceeds{..}|RouterFeeMode::WalletBounds{..}|RouterFeeMode::Dagrow{..}),
+            Some(RouterFeeMode::FluidHop{..}|RouterFeeMode::EulerModuleV5{..}|RouterFeeMode::Llamma{..}|RouterFeeMode::BancorLegacy{..}|RouterFeeMode::Mooniswap{..}|RouterFeeMode::DefiPlaza{..}|RouterFeeMode::YieldBasis{..}|RouterFeeMode::BalancerV1{..}|RouterFeeMode::BancorV3{..}|RouterFeeMode::UniswapV1{..} | RouterFeeMode::NativeFlat{..} | RouterFeeMode::VenueFallback{..} | RouterFeeMode::NativeWallet{..} | RouterFeeMode::FluxEth{..} | RouterFeeMode::NativeGrossMinimum | RouterFeeMode::NativeSettlement { .. } | RouterFeeMode::ProtectedWallet{..}|RouterFeeMode::CarbonWallet{..}|RouterFeeMode::AntfarmProceeds{..}|RouterFeeMode::WalletBounds{..}|RouterFeeMode::Dagrow{..}),
         ) => None,
     }
 }

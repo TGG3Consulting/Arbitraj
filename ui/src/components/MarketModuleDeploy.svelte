@@ -53,7 +53,9 @@
     'thick-base':{file:'thick-community-base',key:'thick-community-create:8453',name:'CommunityV3Adapter для Thick',load:()=>import('../assets/thick-community-base.json')},
   };
   const target = $derived(['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router');
-  const deployment = $derived(kind==='registered_uni_v3'
+  const deployment = $derived(kind==='lambda_propamm'
+    ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='1' ? {file:'prop-venue-'+id,key:'prop-venue-create:1:'+venue+':'+id,name:'PropVenueAdapter в Ethereum',load:()=>import('../assets/prop-venue-ethereum.json')} : null)
+    : kind==='registered_uni_v3'
     ? (String(store.values['dex.evm_chain_id|Venue|'+venue])==='8453' && value('dex.module_runtime_hashes')?.length ? communityPlans[id.split('@')[0]] : null)
     : /^eulerswap_v[12](?:_module)?$/.test(kind) ? eulerByChain[String(store.values['dex.evm_chain_id|Venue|'+venue])]
     : ['stabull','stabull_module'].includes(kind)
@@ -71,7 +73,7 @@
     officialRouter:value('dex.router'), routerHash:value('dex.router_runtime_hash'),deployer:value('dex.algebra_pool_deployer'),
     factoryHash:value('dex.factory_runtime_hash'), template:value('dex.v1_template'),
     templateHash:value('dex.v1_template_runtime_hash'), cloneHash:value('dex.pair_runtime_hash'), kind:value('dex.kind'), market:value('dex.factory'),
-    ambientRoles:value('dex.ambient_roles'),ambientQuery:value('dex.ambient_query'),
+    propRoles:value('dex.propamm_roles'),ambientRoles:value('dex.ambient_roles'),ambientQuery:value('dex.ambient_query'),
     brokerMarkets:value('dex.broker_markets'),poolManager:value('dex.pool_manager'),launchRoles:value('dex.launch_roles'),
     quoter:value('dex.quoter'), quoterHash:value('dex.quoter_runtime_hash'), vault:value('dex.vault'), native:value('dex.bancor_native_token'), roles:value('dex.bancor_roles'),
     hashes:value('dex.module_runtime_hashes'), implementations:value('dex.proxy_implementations'),implementationHashes:value('dex.proxy_runtime_hashes')});
@@ -256,6 +258,8 @@
           <button class="quiet" disabled={busy} onclick={()=>run(()=>cacheFile(entry))}>Скачать неподписанное поручение cache</button>
         {/each}
       {/if}
+    {:else if kind==='lambda_propamm'}
+      <p>Площадка <code>{manifest.market}</code>, касса <code>{manifest.roles.vault.target}</code>, публичный роутер <code>{manifest.roles.router.target}</code>. Сумма CREATE — 0 ETH.</p>
     {:else if kind==='fluid_dex_lite'}
       <p>Модуль проверяет пул и сумму зачисления. После размещения адрес сохраняется в настройке dex.router.</p>
     {:else if kind==='ambient_ethereum'}

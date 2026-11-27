@@ -28,15 +28,16 @@ pub(crate) async fn checked(
     if !on {
         return Err(prop::bad(ctx));
     }
+    let mut terms = r.terms(ctx, target, fallback_allowed)?;
     if target == r.router() {
         if !fallback_allowed {
             return Err(prop::bad(ctx));
         }
         exact_wallet_tokens::check_input(ctx, e.family.id, i, at).await?
     } else {
-        prop::module(ctx, e.family, &r, target, at).await?
+        terms.module_hash = Some(prop::module(ctx, e.family, &r, target, at).await?);
     }
-    r.terms(ctx, target, fallback_allowed)
+    Ok(terms)
 }
 pub(super) async fn plan(
     ctx: &Ctx,

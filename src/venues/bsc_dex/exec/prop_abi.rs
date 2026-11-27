@@ -14,6 +14,9 @@ alloy::sol! {
         event Swapped(address indexed sender,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut,address recipient);
     }
     interface IStrict {
+        function routerHash() external view returns(bytes32);
+        function marketHash() external view returns(bytes32);
+        function vaultHash() external view returns(bytes32);
         function market() external view returns(address);
         function vault() external view returns(address);
         function router() external view returns(address);

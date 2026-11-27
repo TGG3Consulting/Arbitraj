@@ -125,6 +125,7 @@ impl Roles {
         fallback_allowed: bool,
     ) -> GatewayResult<Terms> {
         Ok(Terms {
+            module_hash: None,
             target,
             fallback_allowed,
             router: self.router.address,
@@ -201,30 +202,38 @@ pub(crate) async fn module(
     r: &Roles,
     m: Address,
     at: &Value,
-) -> GatewayResult<()> {
+) -> GatewayResult<B256> {
     if m != ctx.dex_addr("dex.router", f.id)? {
         return Err(bad(ctx));
     }
-    let (row, ()) = tokio::try_join!(
+    let (row, hash) = tokio::try_join!(
         batch::read(
             ctx,
             [
                 batch::view(at, m, IStrict::routerCall {}),
                 batch::view(at, m, IStrict::marketCall {}),
-                batch::view(at, m, IStrict::vaultCall {})
+                batch::view(at, m, IStrict::vaultCall {}),
+                batch::view(at, m, IStrict::routerHashCall {}),
+                batch::view(at, m, IStrict::marketHashCall {}),
+                batch::view(at, m, IStrict::vaultHashCall {})
             ]
         ),
-        super::direct_module::verify_code(ctx, f.id, m, at)
+        super::direct_module::verified_hash(ctx, f.id, m, at)
     )?;
     if [
         batch::decode(&row[0], IStrict::routerCall {})?,
         batch::decode(&row[1], IStrict::marketCall {})?,
         batch::decode(&row[2], IStrict::vaultCall {})?,
     ] != [r.router.address, r.venue.address, r.vault.address]
+        || [
+            batch::decode(&row[3], IStrict::routerHashCall {})?,
+            batch::decode(&row[4], IStrict::marketHashCall {})?,
+            batch::decode(&row[5], IStrict::vaultHashCall {})?,
+        ] != [r.router.hash, r.venue.hash, r.vault.hash]
     {
         return Err(bad(ctx));
     }
-    Ok(())
+    Ok(hash)
 }
 pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     let check = async {

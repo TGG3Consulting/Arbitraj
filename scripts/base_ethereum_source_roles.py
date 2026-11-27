@@ -106,11 +106,20 @@ def describe(network,source_id,adapter,configured,candidates):
         own=[r for r in protected if r["status"]=="paid" and r["actual"]==paid["roles"]["venue"]["address"]]
         assert all(r["withoutUpdate"]["status"]=="reverted" for r in protected)
         assert len(own)==(4 if name=="kaliber" else 9)
+        feeds=archive.with_name(name+"_ethereum_builder_wallets.json.gz")
+        builders=json.loads(gzip.decompress(feeds.read_bytes()))["builders"]
+        outcomes=[]
+        for feed in builders:
+            tested=[r for r in feed["rows"] if r["form"]=="strict"]
+            named=[r for r in tested if r["withFrame"].get("actual")==paid["roles"]["venue"]["address"] and r["withFrame"]["status"]=="paid"]
+            outcomes.append(f"{feed['builder']} {len(named)}/{len(tested)}")
+        counts=", ".join(outcomes)
         return (f"Профиль `{profile}`, фактическая выплата {paid['received']/1_000_000:.6f} USDC в блоке {paid['height']}. "
                 f"При проверке после блока все {len(strict)} требований выплаты исходным DEX отклонены. "
                 f"Разрешённая замена рассчиталась через Uniswap V3. На том же родителе, после подписанного обновления цены "
                 f"внутри целевого блока исходная площадка оплатила {len(own)} из {len(protected)} проверок. Без обновления — 0. "
-                f"[Квитанция и проверки](../{archive.as_posix()}) · [Сравнение в слоте](../{within_block.as_posix()}).")
+                f"Публичный кадр строителя, H26507885: {counts} направлений дали выплату на проверенном объёме. "
+                f"[Квитанция и проверки](../{archive.as_posix()}) · [Сравнение в слоте](../{within_block.as_posix()}) · [Кадр и выплаты](../{feeds.as_posix()}).")
     if network=="ethereum" and source_id=="2121" and path=="dexs/frax-swap/index.ts":
         factory=configured["fraxswap_ethereum"]["settings"]["dex.factory"]
         return (f"Fraxswap. Профиль `fraxswap_ethereum`, реестр `{factory}`, проверено 30 пар. "

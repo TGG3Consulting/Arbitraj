@@ -118,6 +118,11 @@
   {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && dex && w.clipper}<ClipperQuote venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.bopamm}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
+  {#if w.address && dex}
+    {#each (w.prop_sources ?? []) as source}
+      <SourcePrice venue={dex} trader={w.address} wallet={w.id} {source} label={source.startsWith('kaliber') ? 'Kaliber' : 'TaurusFi'} />
+    {/each}
+  {/if}
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>

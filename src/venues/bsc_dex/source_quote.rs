@@ -17,6 +17,9 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
     if source == "clipper" {
         return super::clipper::preview(ctx, req).await;
     }
+    if matches!(source,"kaliber-lambda-ethereum"|"taurus-lambda-ethereum") {
+        return super::fermi::prop_market::preview(ctx,source,req).await;
+    }
     if source == "bopamm" {
         return super::fermi::bopamm::preview(ctx, req).await;
     }

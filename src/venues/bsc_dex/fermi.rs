@@ -3,6 +3,7 @@
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
 pub(super) mod bopamm;
+pub(super) mod prop_market;
 mod deployment;
 mod frame;
 pub(super) mod markets;

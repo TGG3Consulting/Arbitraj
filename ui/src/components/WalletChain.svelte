@@ -79,6 +79,11 @@
   {#if w.address && c.venue && c.kipseli}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && c.venue && c.clipper}<ClipperQuote venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue && c.bopamm}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
+  {#if w.address && c.venue}
+    {#each (c.prop_sources ?? []) as source}
+      <SourcePrice venue={c.venue} trader={w.address} wallet={w.id} {source} label={source.startsWith('kaliber') ? 'Kaliber' : 'TaurusFi'} />
+    {/each}
+  {/if}
   <p>Исполнитель: {#if c.executor}<code>{c.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут в этой сети{/if}</p>
   {#if c.executor}
     <p class={features.nativeOk ? 'ok' : 'warn-text'}>Версия: {#if features.nativeOk}{c.executor_version} — нативная монета идёт через исполнитель (обёртка <code>{c.executor_wrapped}</code>){:else if features.native}{c.executor_version}, но обёртка <code>{c.executor_wrapped ?? 'не прочитана'}</code> ≠ dex.native_wrapped <code>{c.native_wrapped ?? 'не задана'}</code>{:else if c.executor_version === 'v1'}v1 — переразверните{:else}не сверена — нажмите «Проверить подключение» исполнителя{/if}</p>

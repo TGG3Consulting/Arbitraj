@@ -1,6 +1,7 @@
 """Carbon V1 Ethereum. Enumerate every strategy at one canonical block, then settle real
 controller calldata with a separately funded wallet. No signatures or submissions."""
 import argparse
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from eth_abi import decode
@@ -23,16 +24,26 @@ MULTI="0xca11bde05977b3631167028862be2a173976ca11"
 def tx(address,name,types,values,value=0):
     return call(address,calldata(name,types,values),value)
 
-def collect(c):
-    pairs,=c.one(CTRL,"pairs()",[],[],["address[2][]"])
+@dataclass(frozen=True)
+class Market:
+    controller: str
+    wrapped: str
+    funding: str
+
+
+ETH_MARKET=Market(CTRL,WETH,FUNDING)
+
+
+def collect(c,controller=CTRL):
+    pairs,=c.one(controller,"pairs()",[],[],["address[2][]"])
     if len(set(pairs))!=len(pairs):raise ValueError("duplicate Carbon pair")
-    operations=[(CTRL,name,["address","address"],p) for p in pairs for name in ("strategiesByPairCount(address,address)","pairTradingFeePPM(address,address)")]
+    operations=[(controller,name,["address","address"],p) for p in pairs for name in ("strategiesByPairCount(address,address)","pairTradingFeePPM(address,address)")]
     meta=[int.from_bytes(r,"big") for r in posts(c,operations)]
     directory=[dict(tokens=p,count=meta[i*2],fee_ppm=meta[i*2+1],orders=[]) for i,p in enumerate(pairs)]
     cursor=[(row,offset,min(offset+32,row["count"])) for row in directory for offset in range(0,row["count"],32)]
     for start in range(0,len(cursor),6):
         pages=cursor[start:start+6]
-        ops=[(CTRL,"strategiesByPair(address,address,uint256,uint256)",["address","address","uint256","uint256"],[*r["tokens"],lo,hi]) for r,lo,hi in pages]
+        ops=[(controller,"strategiesByPair(address,address,uint256,uint256)",["address","address","uint256","uint256"],[*r["tokens"],lo,hi]) for r,lo,hi in pages]
         for (r,lo,hi),raw in zip(pages,posts(c,ops),strict=True):
             rows,=decode([STRATEGY+"[]"],raw)
             if len(rows)!=hi-lo or any(set(row[2])!=set(r["tokens"]) for row in rows):raise ValueError("wrong strategy members")
@@ -41,7 +52,8 @@ def collect(c):
     if len(ids)!=len(set(ids)) or len(ids)!=sum(row["count"] for row in directory):raise ValueError("incomplete strategy population")
     return directory
 
-def wallet(c,row,source,target,amount,by_target,end):
+def wallet(c,row,source,target,amount,by_target,end,market=None):
+    if market is None:market=ETH_MARKET
     # The controller accepts order IDs, not a pair-wide implicit swap. Verify fills against each
     # order's actual remaining target inventory. Compare all eligible single-order allocations.
     eligible=[]
@@ -54,7 +66,7 @@ def wallet(c,row,source,target,amount,by_target,end):
     candidates=[]
     for off in range(0,len(eligible),32):
         group=eligible[off:off+32]
-        calls=[(CTRL,True,bytes.fromhex(calldata(sig,["address","address",ACTION],[source,target,[(sid,amount)]])[2:])) for sid,_ in group]
+        calls=[(market.controller,True,bytes.fromhex(calldata(sig,["address","address",ACTION],[source,target,[(sid,amount)]])[2:])) for sid,_ in group]
         batch,=c.one(MULTI,"aggregate3((address,bool,bytes)[])",["(address,bool,bytes)[]"],[calls],["(bool,bytes)[]"])
         for (sid,y),(ok,data) in zip(group,batch,strict=True):
             if not ok:continue
@@ -63,23 +75,24 @@ def wallet(c,row,source,target,amount,by_target,end):
     if not candidates:return None
     other,sid=(min if by_target else max)(candidates)
     spent,received=(other,amount) if by_target else (amount,other)
-    result=settle(c,source,target,[(sid,amount)],spent,received,by_target,end)
+    result=settle(c,source,target,[(sid,amount)],spent,received,by_target,end,market)
     return dict(result,id=str(sid),quote_comparisons=len(candidates))
 
 
-def settle(c,source,target,actions,spent,received,by_target,end):
+def settle(c,source,target,actions,spent,received,by_target,end,market=None):
     """Measure the supplied plan unchanged, including rollback on a tighter limit and expiry."""
+    if market is None:market=ETH_MARKET
     def approve(coin,n):
-        return tx(coin,"approve(address,uint256)",["address","uint256"],[CTRL,n])
+        return tx(coin,"approve(address,uint256)",["address","uint256"],[market.controller,n])
     def getbalance(t):
         return tx(MULTI,"getEthBalance(address)",["address"],[OWNER]) if t==NATIVE else tx(t,"balanceOf(address)",["address"],[OWNER])
     name="tradeByTargetAmount" if by_target else "tradeBySourceAmount"
     def order(limit,expires):
         value=(limit if by_target else spent) if source==NATIVE else 0
-        return tx(CTRL,name+"(address,address,"+ACTION+",uint256,uint128)",["address","address",ACTION,"uint256","uint128"],[source,target,actions,expires,limit],value)
+        return tx(market.controller,name+"(address,address,"+ACTION+",uint256,uint128)",["address","address",ACTION,"uint256","uint128"],[source,target,actions,expires,limit],value)
     prep=[]
     if source!=NATIVE:
-        prep=[tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[spent,[WETH,source],OWNER,end],10**18),approve(source,spent)]
+        prep=[tx(market.funding,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[spent,[market.wrapped,source],OWNER,end],10**18),approve(source,spent)]
     balances=[getbalance(source),getbalance(target)]
     limit=spent if by_target else received
     calls=prep+balances+[order(limit-1 if by_target else limit+1,end),order(limit,1)]+balances+[order(limit,end)]+balances

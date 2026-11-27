@@ -1,4 +1,5 @@
 """Выплата через CarbonWallet на каноническом родителе официальных контролей, без ключа или отправки транзакций."""
+from record_carbon_ethereum import ETH_MARKET
 import argparse
 import json
 from pathlib import Path
@@ -11,8 +12,8 @@ MODULE = "0x7900000000000000000000000000000000000064"
 ABI = ["address", "address", ACTION, "bool", "uint256", "uint128"]
 
 
-def runtime_at(url, tag, artifact):
-    word = encode(["address"], [CTRL])
+def runtime_at(url, tag, artifact, controller=CTRL):
+    word = encode(["address"], [controller])
     expected = bytearray.fromhex(artifact["runtime"])
     refs = list(artifact["immutableReferences"].values())
     if len(refs) != 1 or not refs[0]:
@@ -30,21 +31,21 @@ def runtime_at(url, tag, artifact):
     return "0x"+expected.hex()
 
 
-def capture(url, source, artifact):
+def capture(url, source, artifact, market=ETH_MARKET, chain_id=1, block=BLOCK):
     tag = source["selector"]
-    if tag != {"blockHash":BLOCK,"requireCanonical":True} or rpc(url,"eth_chainId",[]) != "0x1":
+    if tag != {"blockHash":block,"requireCanonical":True} or int(rpc(url,"eth_chainId",[]),16) != chain_id:
         raise ValueError("incorrect physical network")
-    header = rpc(url,"eth_getBlockByHash",[BLOCK,False])
+    header = rpc(url,"eth_getBlockByHash",[block,False])
     if header["stateRoot"] != source["state_root"]:
         raise ValueError("canonical state root")
-    runtime = runtime_at(url,tag,artifact)
+    runtime = runtime_at(url,tag,artifact,market.controller)
     overrides = {OWNER:{"balance":hex(20*10**18)}, MODULE:{"code":runtime}}
     rows=[]
     for v in source["controls"]:
         original = v["transaction"]
         src,dst,actions,deadline,_=decode(["address","address",ACTION,"uint256","uint128"],bytes.fromhex(original["data"][10:]))
         spent, received, by_target=int(v["input"]),int(v["output"]),v["by_target"]
-        if src!=v["source"] or dst!=v["target"] or original["to"]!=CTRL or original["from"]!=OWNER:
+        if src!=v["source"] or dst!=v["target"] or original["to"]!=market.controller or original["from"]!=OWNER:
             raise ValueError("original signed market")
         def order(limit, expires):
             value=(limit if by_target else spent) if src==NATIVE else 0
@@ -53,11 +54,11 @@ def capture(url, source, artifact):
             return tx(MULTI,"getEthBalance(address)",["address"],[w]) if a==NATIVE else tx(a,"balanceOf(address)",["address"],[w])
         prep=[]
         if src!=NATIVE:
-            prep=[tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[spent,[WETH,src],OWNER,deadline],10**18),
+            prep=[tx(market.funding,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[spent,[market.wrapped,src],OWNER,deadline],10**18),
                   tx(src,"approve(address,uint256)",["address","uint256"],[MODULE,spent])]
         # Запас при точном выходе проверяет возврат собственных ETH отправителю; сравниваются обе стороны и остаток модуля.
         limit=spent+(1 if src==NATIVE else 0) if by_target else received
-        balances=[balance(a,w) for w in [OWNER,CTRL,MODULE] for a in [src,dst]]
+        balances=[balance(a,w) for w in [OWNER,market.controller,MODULE] for a in [src,dst]]
         calls=prep+balances+[order(spent-1 if by_target else received+1,deadline),order(limit,1)]+balances+[order(limit,deadline)]+balances
         result=simulate_block(url,tag,overrides,calls)
         n=len(prep)
@@ -73,7 +74,7 @@ def capture(url, source, artifact):
                          input=str(spent),output=str(received),before=list(map(str,a)),after=list(map(str,c)),
                          transaction=calls[n+14],logs=fill["logs"],gas=int(fill["gasUsed"],16),
                          exact_refusal=result[n+6]["error"],expired=result[n+7]["error"]))
-    return dict(selector=tag,state_root=source["state_root"],controller=CTRL,module=MODULE,
+    return dict(selector=tag,state_root=source["state_root"],controller=market.controller,module=MODULE,
                 runtime_hash="0x"+keccak(hexstr=runtime).hex(),controls=rows)
 
 

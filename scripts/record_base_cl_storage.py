@@ -51,7 +51,8 @@ def directory(name):
                   storage_root=proof["storageHash"], layout=layout, owner=owner, tiers=tiers, pools=pools,
                   creation_fees=sorted(initial), source=url, runtime=proof["codeHash"])
     if "allPairs" in layout:
-        size, = cap.one(factory, "allPairsLength()", returns=["uint256"])
+        # THICK exports the indexed getter only. The array length is stored in its compiler layout slot.
+        size = int(reader.one("eth_getStorageAt", [factory, hex(layout["allPairs"]), reader.tag]), 16)
         assert size == len(pools)
         values = posts(cap, [(factory, "allPairs(uint256)", ["uint256"], [i]) for i in range(size)])
         record["all_pairs"] = [decode(["address"], value)[0] for value in values]

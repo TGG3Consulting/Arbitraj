@@ -158,14 +158,23 @@ def wallet(reader,cap,book,artifact=None):
     overrides={OWNER:{"balance":hex(10**18)},EXEC:{"code":"0x"+RUNTIME.read_text().strip().removeprefix("0x"),
                "stateDiff":{word(0):word(int(OWNER,16)),word(1):word(int(WETH,16))}}}
     wires = ("router02", "v5")
+    constructor = []
     if artifact:
-        from record_registered_v3_module import ADAPTER
+        import hashlib
+        from record_empire_module import MODULE as ADAPTER, deployment
         from record_fraxswap_swaps import bound_runtime
         factory = book["roles"]["factory"]["address"]
         assert book["key_type"] == "uint24" and reader.one("eth_getCode", [ADAPTER, cap.selector]) == "0x"
         code = bound_runtime(artifact, factory, cap.endpoint, cap.selector)
-        overrides[ADAPTER] = {"code": "0x"+code}
-        book["module_hash"] = "0x"+keccak(hexstr=code).hex()
+        create, identity = deployment(cap.endpoint,cap.selector,factory,artifact)
+        assert identity["runtime"] == "0x"+keccak(hexstr=code).hex()
+        constructor.append(create)
+        book["module_hash"] = identity["runtime"]
+        book["deployment"] = dict(kind="registered_uni_v3",chainId=8453,factory=factory,
+            factoryHash=book["roles"]["factory"]["runtime"],sourceBlock=cap.selector["blockHash"],
+            runtimeKeccak=identity["runtime"],data=create["data"],
+            creationSha256=hashlib.sha256(bytes.fromhex(create["data"][2:])).hexdigest(),
+            runtimeSha256=hashlib.sha256(bytes.fromhex(code)).hexdigest())
         wires = ("module",)
     def canonical_simulation(_endpoint, method, params):
         if method != "eth_simulateV1" or params[-1] != cap.selector:
@@ -173,7 +182,11 @@ def wallet(reader,cap,book,artifact=None):
         return reader.one(method, params)
 
     def run(calls):
-        return simulate_block(cap.endpoint,cap.selector,overrides,calls,read_rpc=canonical_simulation)
+        result = simulate_block(cap.endpoint,cap.selector,overrides,constructor+calls,read_rpc=canonical_simulation)
+        if constructor:
+            assert result[0]["status"] == "0x1"
+            book["deployment_gas"] = int(result[0]["gasUsed"],16)
+        return result[len(constructor):]
     kind=book["key_type"]; router=book["roles"]["router"]["address"]; quoter=book["roles"]["quoter"]["address"]
     deadline=int(reader.header["timestamp"],16)+300
     funded=sorted((m for m in book["markets"] if WETH in m["tokens"] and m["liquidity"]>0),

@@ -41,7 +41,7 @@ def facets(c,proxy,signatures):
     return dict(address=proxy,runtime=digest(root),selectors=selected,implementations=implementations,loupe=loupe,bytes=len(root),implementation_bytes=lengths)
 
 
-def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH):
+def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None, wrapped=WETH, router_method="swapExactTokensForTokensSupportingFeeOnTransferTokens", modes=("v5","router")):
     token=next(t for t in market["tokens"] if t!=wrapped)
     deadline=timestamp+120
     word=lambda n:"0x"+format(n,"064x")
@@ -50,10 +50,10 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
     def leg(prefix, input_token, output_token, size, mode):
         target=EXEC if mode=="v5" else router
         approve=tx(input_token,"approve(address,uint256)",["address","uint256"],[target,size])
-        def trial(minimum):
-            action=(swap(market["pool"],input_token,output_token,size,minimum,deadline,fee_pips) if mode=="v5"
-                    else tx(router,"swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-                            ["uint256","uint256","address[]","address","uint256"],[size,minimum,[input_token,output_token],OWNER,deadline]))
+        def trial(minimum,expiry=deadline):
+            action=(swap(market["pool"],input_token,output_token,size,minimum,expiry,fee_pips) if mode=="v5"
+                    else tx(router,router_method+"(uint256,uint256,address[],address,uint256)",
+                            ["uint256","uint256","address[]","address","uint256"],[size,minimum,[input_token,output_token],OWNER,expiry]))
             reads=[tx(t,"balanceOf(address)",["address"],[who]) for who in (OWNER,EXEC) for t in (input_token,output_token)]
             answers=simulate_block(c.endpoint,c.selector,env,[*prefix,approve,*reads,action,*reads])
             start=len(prefix)+1
@@ -71,10 +71,15 @@ def direct_wallet(c, market, sizes, timestamp, fee_pips, router, fund_sale=None,
         above,_=trial(net+1)
         if (exact["status"],exact["spent"],exact["received"],above["status"],above["spent"],above["received"])!=("0x1",str(size),str(net),"0x0","0","0"):
             raise ValueError("recipient floor or wallet debit differs")
-        return dict(input=input_token,output=output_token,exact=exact,above=above),[*prefix,approve,action]
+        expired={}
+        if router_method=="swapExactTokensForTokens":
+            expired,_=trial(net,1)
+            if (expired["status"],expired["spent"],expired["received"])!=("0x0","0","0"):
+                raise ValueError("expired transaction changed wallet balances")
+        return dict(input=input_token,output=output_token,exact=exact,above=above,expired=expired),[*prefix,approve,action]
     trials=[]
     for size in sizes:
-        for mode in ("v5","router"):
+        for mode in modes:
             if fund_sale is not None:
                 sell,_=leg([fund_sale(size)],token,wrapped,size,mode)
                 trials.append(dict(mode=mode,size=str(size),sell=sell))

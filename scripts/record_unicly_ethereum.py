@@ -1,6 +1,7 @@
 """Unicly Ethereum. Проверка байткода фабрики, 91 пары, двух init-хешей и обычного платежа Router/V5."""
 import argparse
 import json
+import re
 from pathlib import Path
 
 import requests
@@ -38,11 +39,12 @@ def directory(c,header):
     if offset<0 or codes["Factory"].count(init_code)!=1 or init==SDK_INIT:
         raise ValueError("не подтверждён фактический код создания пары")
     def source(role):
-        return "".join("".join(s["content"].split()) for s in records[role]["sources"].values())
+        return "".join("".join(re.sub(r"/\*.*?\*/|//[^\n]*", "", s["content"], flags=re.S).split()) for s in records[role]["sources"].values())
     if not all(x in source("Pair") for x in ("balance0.mul(1000).sub(amount0In.mul(3))","balance1.mul(1000).sub(amount1In.mul(3))",
                    "balance0Adjusted.mul(balance1Adjusted)>=uint(_reserve0).mul(_reserve1).mul(1000**2)")):
         raise ValueError("изменился инвариант пары")
-    if (init[2:] not in source("Router02") or "balanceOf(to).sub(balanceBefore)>=amountOutMin" not in source("Router02")
+    if (init[2:] not in source("Router02") or "amounts[amounts.length-1]>=amountOutMin" not in source("Router02")
+            or bytes.fromhex("38ed1739") not in codes["Router02"] or bytes.fromhex("5c11d795") in codes["Router02"]
             or c.one(ROUTER,"factory()",returns=["address"])!=(FACTORY,) or c.one(ROUTER,"WETH()",returns=["address"])!=(WETH,)):
         raise ValueError("фабрика, обёртка или минимальная выплата роутера изменились")
     markets=registry(c,FACTORY,init)
@@ -71,12 +73,15 @@ def wallets(c,d,header):
         reserve=int(m["reserves"][m["tokens"].index(WETH)])
         sizes=sorted({min(10**15,reserve//10000),min(10**16,reserve//500)}-{0})
         if len(sizes)!=2:continue
-        try:
-            legs=direct_wallet(c,m,sizes,int(header["timestamp"],16),3000,ROUTER,wrapped=WETH)
-        except (ValueError,KeyError) as error:
-            unavailable.append(dict(pool=m["pool"],reason=str(error)[:220]));continue
-        checked.append(dict(pool=m["pool"],rounds=legs))
-        if len(checked)==4:break
+        legs=[]
+        for mode in ("v5","router"):
+            try:
+                legs.extend(direct_wallet(c,m,sizes,int(header["timestamp"],16),3000,ROUTER,wrapped=WETH,
+                              router_method="swapExactTokensForTokens",modes=(mode,)))
+            except (ValueError,KeyError) as error:
+                unavailable.append(dict(pool=m["pool"],mode=mode,reason=str(error)[:220]))
+        if legs:checked.append(dict(pool=m["pool"],rounds=legs))
+        if len(checked)>=4 and any(r["mode"]=="router" for s in checked for r in s["rounds"]):break
     if not checked:raise ValueError(("не получена выплата кошелька",unavailable[:5]))
     return dict(wallets=checked,unavailable=unavailable)
 

@@ -225,6 +225,7 @@ async fn run(
                             }
                     )
                 ),
+                super::mint_club_direct::selected(&leg),
             ),
             trade_direct::trade(q, env, nonces, req, &route, &leg, graph_mins),
         ))

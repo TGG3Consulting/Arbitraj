@@ -73,6 +73,14 @@ pub async fn details(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
+    if let Some(crate::core::types::RouterFeeMode::FluxEth{target,..})=hop.fee_mode {
+        let m=super::super::exec::flux_eth::Market::read(ctx,&e)?;
+        if target!=m.router{return Err(bad());} if token==m.wrapped{return Ok(None);}
+        let owner=signer::address(ctx)?; let (_,now)=q.heads.at(ctx).await?;
+        let r=q.allow.read(ctx,token,owner,m.permit,m.router).await?;
+        let count=approve::lacking(ctx,&r,(token,m.permit,m.router),amount,now)?.len();
+        if count==0{return Ok(None);} return Ok(measured(q,&e.pool.reference,quote.side)?.map(|gas|(gas,count)));
+    }
     if matches!(&e.pool.state,crate::core::types::PoolState::Carbon(s) if s.native_side.and_then(|i|s.tokens.get(i)).copied()==Some(token)){return Ok(None);}
     if super::ekubo_v2_pricing::enabled(&e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native==Some(token)) {return Ok(None);}
     if route.mode==RouteMode::Direct && e.family.variant==super::super::pools::family_variant::Variant::Surge

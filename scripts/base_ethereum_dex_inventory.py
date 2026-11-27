@@ -133,7 +133,15 @@ def tables(network, snapshots, profiles):
                     "", "| Покупка, wei ETH | Получено, raw SRG | Продажа, wei ETH net | Газ покупки / продажи |", "|---:|---:|---:|---:|"])
         for r in surge["cases"]:
             out.append(f"| {r['input']} | {r['bought']} | {r['received']} | {r['buy']['gas']} / {r['sell']['gas']} |")
-        out.append("Газ оплачивается отдельно. В этих двух случаях валовая и чистая выплаты совпали при ставке снимка. Для USDT нужен отдельный исполнимый денежный маршрут. [Квитанции и контрольные отказы](../tests/data/first_run_dex_2026-11-26/surge_ethereum_wallets.json.gz).")
+        out.append("Газ оплачивается отдельно. Валовая и чистая выплаты совпали при ставке архивного блока. [Квитанции прямого ETH/SRG](../tests/data/first_run_dex_2026-11-26/surge_ethereum_wallets.json.gz).")
+        with gzip.open(market_path / "surge_ethereum_protected_wallets.json.gz", "rt") as stream:
+            guarded = json.load(stream)
+        out.extend(["", "| Исполнение | Валюта | Бюджет raw | Куплено SRG raw | Обратно raw | Газ покупки / продажи | Газ разрешений |", "|---|---|---:|---:|---:|---:|---:|"])
+        for case in guarded["cases"]:
+            currency = "WETH" if case["cash"] == guarded["wrapped"] else "USDT"
+            buy, sell = case["buy"], case["sell"]
+            out.append(f"| {case['mode']} | {currency} | {buy['spent']} | {buy['received']} | {sell['received']} | {buy['gas']} / {sell['gas']} | {' / '.join(map(str,case['approval_gas']))} |")
+        out.append("Для SRG покупки и продажи идут в последовательных блоках. В каждом направлении архив проверяет остатки плательщика, минимум на единицу выше выплаты и истечение срока. Прямая форма с WETH и шаг V5 требуют проверенного адреса развёрнутого модуля в настройках владельца. [Симуляции обеих форм и маршрута из USDT](../tests/data/first_run_dex_2026-11-26/surge_ethereum_protected_wallets.json.gz).")
 
     if not base and "toonswap" in configured:
         toon_path = Path("tests/data/first_run_dex_2026-11-26/toonswap_ethereum_wallets.json.gz")
@@ -1457,7 +1465,7 @@ def tables(network, snapshots, profiles):
         if not base and id=="surge-protocol-eth":
             pool=surge["address"]
             roundtrip="проверенный код SURGE и собственные события Bought и Sold"
-            status="Проверены нативные покупки и продажи ETH/SRG в последовательных блоках. Для других контрактов SRG20 нужен отдельный реестр"
+            status="Проверены ETH/SRG, защищённый WETH/SRG и две стороны пути V5 USDT/WETH/SRG. Для других контрактов SRG20 нужен отдельный реестр"
         if not base and id in ("bundles-swap","dagrow"):
             stem="bundles" if id=="bundles-swap" else "dagrow"
             with gzip.open(f"tests/data/first_run_dex_2026-11-26/{stem}_ethereum_directory.json.gz","rt") as handle:

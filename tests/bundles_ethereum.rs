@@ -62,7 +62,7 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
             fee_pair: fee_pair.clone(),
             bun: address(&data["protocol_token"]),
             weth: address(&router["weth"]),
-            fee_rate_after:None,
+            fee_rate_after: None,
             router_balance: qty(&router["fee_token_balance"]),
             deposits: qty(&router["total_deposits"]),
         };
@@ -72,9 +72,12 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
             .unwrap();
         assert_eq!(fill.credit, qty(&row["quote"]));
         if row["mode"] != "separate" || book.market.tokens.contains(&book.bun) {
-            let (least, _) = book
-                .swap(input, false, fill.credit)
-                .unwrap_or_else(|| panic!("Bundles inverse pool={pool:#x} input={input:#x} amount={} target={} mode={}",row["amount"],fill.credit,row["mode"]));
+            let (least, _) = book.swap(input, false, fill.credit).unwrap_or_else(|| {
+                panic!(
+                    "Bundles inverse pool={pool:#x} input={input:#x} amount={} target={} mode={}",
+                    row["amount"], fill.credit, row["mode"]
+                )
+            });
             assert!(least.amount_in <= qty(&row["amount"]));
             assert!(least.amount_out >= fill.credit);
             assert!(
@@ -120,4 +123,55 @@ fn both_payment_methods_match_the_wallet_and_every_affected_pool() {
         }
         assert_eq!(count, if row["mode"] == "converted" { 2 } else { 1 });
     }
+}
+
+#[test]
+fn shared_fee_pool_and_oracle_follow_two_v5_swaps_in_the_same_block() {
+    use arb::venues::bsc_dex::math::bundles_sequence::Sequence;
+    let payload = include_bytes!("data/first_run_dex_2026-11-26/bundles_ethereum_wallets.json.gz");
+    let market: Value =
+        serde_json::from_reader(flate2::read::GzDecoder::new(&payload[..])).unwrap();
+    let obs: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bundles_ethereum_oracles.json"
+    ))
+    .unwrap();
+    let seq: Value = serde_json::from_str(include_str!(
+        "data/first_run_dex_2026-11-26/bundles_ethereum_sequence.json"
+    ))
+    .unwrap();
+    assert_eq!(seq["selector"], market["selector"]);
+    assert_eq!(seq["state_root"], market["state_root"]);
+    let router = &market["router"];
+    let weth = address(&router["weth"]);
+    let mut changed = 0;
+    for row in seq["sequences"].as_array().unwrap() {
+        let mut order = Sequence::default();
+        for i in 0..2 {
+            let b = Book {
+                market: state(&market, &obs, address(&row["pools"][i])),
+                fee_pair: state(&market, &obs, address(&router["oracle_pair"])),
+                bun: address(&market["protocol_token"]),
+                weth,
+                deposits: qty(&router["total_deposits"]),
+                router_balance: qty(&router["fee_token_balance"]),
+                fee_rate_after: Some(qty(&row["rates"][1])),
+            };
+            let n = qty(&row["amounts"][i]);
+            if i == 1 {
+                let before = b.exact_in(weth, n, false).unwrap().credit;
+                assert_eq!(before, qty(&row["standalone_second"]));
+                changed += usize::from(before != qty(&row["paid"][i]));
+            }
+            assert_eq!(
+                order.current(&b).market.oracle.unwrap().1,
+                qty(&row["rates"][i])
+            );
+            assert_eq!(
+                order.advance(&b, weth, n).unwrap().credit,
+                qty(&row["paid"][i])
+            );
+        }
+    }
+    assert_eq!(seq["sequences"].as_array().unwrap().len(), 10);
+    assert!(changed > 0);
 }

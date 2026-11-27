@@ -112,7 +112,7 @@ abstract contract BaseNativeSettlement {
     }
 
     function _payMarket(address locker, address input, address output, uint256 qty, address recipient,
-                        int256 debt, int256 credit) internal {
+                        int256 debt, int256 credit) internal virtual {
         require(debt == -int256(qty), "partial");
         require(credit > 0, "output");
         ISingletonSettle pay = ISingletonSettle(locker);
@@ -134,7 +134,7 @@ abstract contract BaseNativeSettlement {
         return int256(uint256(manager.exttload(keccak256(abi.encode(address(this), currency)))));
     }
 
-    function _call(address token, bytes memory payload) private {
+    function _call(address token, bytes memory payload) internal {
         (bool ok, bytes memory data) = token.call(payload);
         require(ok && (data.length == 0 || abi.decode(data, (bool))), "transfer");
     }

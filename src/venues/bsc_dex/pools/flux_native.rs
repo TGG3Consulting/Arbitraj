@@ -2,7 +2,6 @@
 //! и одну пару активов на общем каноническом блоке. token0 наблюдаемого рынка остаётся ETH в PoolKey.
 use super::{
     abi_check::IInfinityKeys,
-    direct_module,
     discover::{Found, sorted},
     discover_v4,
     families::{Family, Proto},
@@ -18,7 +17,11 @@ use crate::{
 };
 use alloy_primitives::{Address, B256, keccak256};
 use serde_json::{Value, json};
+#[path = "flux_native_module.rs"]
+mod module_roles;
+pub(in crate::venues::bsc_dex) use module_roles::module;
 alloy::sol! { interface IFlux {
+    function poolManager() external view returns(address);
     function fluxCl() external view returns(address);
     function fluxBin() external view returns(address);
     function fluxVault() external view returns(address);
@@ -62,7 +65,6 @@ pub(in crate::venues::bsc_dex) async fn market(
 ) -> GatewayResult<Found> {
     let generation = ctx.settings.generation();
     let wrapped = ctx.addr("dex.native_wrapped")?;
-    let module = ctx.dex_addr("dex.router", f.id)?;
     let vault = ctx.dex_addr("dex.vault", f.id)?;
     let quoter = ctx.dex_addr("dex.quoter", f.id)?;
     if manager != ctx.dex_addr("dex.pool_manager", f.id)?
@@ -79,47 +81,26 @@ pub(in crate::venues::bsc_dex) async fn market(
         return Err(invalid(ctx));
     };
     let cl = f.proto == Proto::InfinityCl;
-    let role = if cl {
-        batch::view(at, module, IFlux::fluxClCall {})
-    } else {
-        batch::view(at, module, IFlux::fluxBinCall {})
-    };
     let get = IInfinityKeys::poolIdToPoolKeyCall { id };
-    let mk = IFlux::fluxMarketCall { id, token };
     let views = [
-        role,
-        batch::view(at, module, IFlux::fluxVaultCall {}),
-        batch::view(at, module, IFlux::wrappedCall {}),
         batch::view(at, manager, IFlux::vaultCall {}),
         batch::view(at, manager, get.clone()),
-        batch::view(at, module, mk),
+        batch::view(at, quoter, IFlux::poolManagerCall {}),
+        batch::view(at, quoter, IFlux::vaultCall {}),
     ];
-    let roles = [manager, vault, quoter];
     let hashes = ctx.dex_list("dex.infinity_runtime_hashes", f.id)?;
-    let requests = roles.map(|a| ("eth_getCode", json!([a, at])));
-    let ((), [m, v, w, actual_vault, raw, reply], codes) = tokio::try_join!(
-        direct_module::verify_code(ctx, f.id, module, at),
-        batch::read(ctx, views),
-        batch::read(ctx, requests)
-    )?;
-    if hashes.len() != roles.len()
+    let roles = [manager, vault, quoter];
+    let requests = roles.map(|addr| ("eth_getCode", json!([addr, at])));
+    let ([actual_vault, raw, q_manager, q_vault], codes) =
+        tokio::try_join!(batch::read(ctx, views), batch::read(ctx, requests))?;
+    if hashes.len() != 3
         || !hashes
             .iter()
             .zip(codes)
             .all(|(h, code)| !code.is_empty() && h.parse::<B256>().ok() == Some(keccak256(code)))
-    {
-        return Err(invalid(ctx));
-    }
-    let role = if cl {
-        batch::decode(&m, IFlux::fluxClCall {})?
-    } else {
-        batch::decode(&m, IFlux::fluxBinCall {})?
-    };
-    if role != manager
-        || batch::decode(&v, IFlux::fluxVaultCall {})? != vault
-        || batch::decode(&w, IFlux::wrappedCall {})? != wrapped
         || batch::decode(&actual_vault, IFlux::vaultCall {})? != vault
-        || reply != raw
+        || batch::decode(&q_manager, IFlux::poolManagerCall {})? != manager
+        || batch::decode(&q_vault, IFlux::vaultCall {})? != vault
         || raw.len() != 192
         || keccak256(&raw) != id
     {

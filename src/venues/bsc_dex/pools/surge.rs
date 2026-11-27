@@ -182,10 +182,18 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
     .await;
     match checked {
-        Ok(_) => Verdict::Taken(Box::new(super::verify_woo::found(
-            c,
-            PoolRef::Contract(token),
-        ))),
+        Ok(s) => {
+            let reference = if c.family.executor_kind.is_some() {
+                PoolRef::Multi {
+                    contract: token,
+                    token0: token.min(s.wrapped),
+                    token1: token.max(s.wrapped),
+                }
+            } else {
+                PoolRef::Contract(token)
+            };
+            Verdict::Taken(Box::new(super::verify_woo::found(c, reference)))
+        }
         Err(e) if e.code == ErrorCode::NotApplicable => Verdict::Rejected(e.message),
         Err(e) => Verdict::Failed(e.message),
     }

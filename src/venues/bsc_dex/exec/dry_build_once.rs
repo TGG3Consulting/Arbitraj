@@ -127,6 +127,7 @@ pub(super) async fn once(
         if !direct || !market.currency(&s.entry,is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
             return Err(unavailable("требуется прямая сделка в выбранной физической валюте"));
         }
+        if s.entry.family.variant.flux_native(){super::market_plan::router_shape(q,route,leg,is_native,usdt)?;}
         let selected=super::market_plan::Selection::for_leg(leg);
         let (height,time)=q.heads.at(ctx).await?;
         let p=Box::pin(market.plan(ctx,s,h,(wallet,height),req.side==crate::core::types::Side::Buy,selected)).await?;

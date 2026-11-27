@@ -77,6 +77,7 @@ impl Market {
     }
     pub(super) fn currency(self, e: &Entry, native: bool) -> bool {
         match (&e.pool.state, self) {
+            (_,Self::O1) if e.family.variant.flux_native()=>true,
             (PoolState::Carbon(s), Self::Carbon) => s.native_side.is_some() == native,
             _ => !native,
         }
@@ -123,6 +124,7 @@ impl Market {
         match self {
             Self::SolidlyRouter => Box::pin(super::solidly_router_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::RegisteredV3 => Box::pin(super::registered_v3_wallet::plan(ctx,s,wallet,height,selected.target)).await,
+            Self::O1 if s.entry.family.variant.flux_native() && selected.target==ctx.dex_addr("dex.universal_router",s.entry.family.id).ok()=> Box::pin(super::flux_eth_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::O1 => Box::pin(super::o1_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Umbrae => {
                 Box::pin(super::umbrae::plan(
@@ -204,6 +206,10 @@ pub(super) fn router_shape(
     native_asset:bool,cash:Address,
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::FluxEth{..})=hop.fee_mode {
+        if direct && route.legs.len()==1 && (native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.flux_native()) {return Ok(());}
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
+    }
     let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
         (direct && (matches!(e.family.variant,Variant::Dagrow|Variant::Bundles) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset

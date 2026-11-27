@@ -32,6 +32,8 @@ interface IPendleWalletRouter {
     struct Order {uint256 salt;uint256 expiry;uint256 nonce;uint8 orderType;address token;address yt;address maker;address receiver;uint256 making;uint256 lnRate;uint256 failSafe;bytes permit;}
     struct Fill {Order order;bytes signature;uint256 amount;}
     struct Limit {address router;uint256 eps;Fill[] normal;Fill[] flash;bytes data;}
+    function swapExactSyForPtSimple(address receiver,address market,uint256 exactSy,uint256 minimum) external returns(uint256,uint256);
+    function swapExactPtForSy(address receiver,address market,uint256 exactPt,uint256 minimum,Limit calldata orders) external returns(uint256,uint256);
     function swapExactTokenForPtSimple(address receiver,address market,uint256 minimum,Terminal calldata input) external payable returns(uint256,uint256,uint256);
     function swapExactPtForToken(address receiver,address market,uint256 exactPt,Terminal calldata output,Limit calldata orders) external returns(uint256,uint256,uint256);
 }
@@ -77,8 +79,9 @@ contract PendleMarketAdapter {
         (address sy,address pt,address yt)=venue.readTokens();bool buy=output==pt;
         if(IPendleSeries(pt).SY()!=sy || IPendleSeries(pt).YT()!=yt || IPendleSeries(yt).SY()!=sy || IPendleSeries(yt).PT()!=pt
             || IPendleSeries(pt).expiry()!=venue.expiry() || IPendleSeries(yt).expiry()!=venue.expiry() || recipient==sy || recipient==yt
-            || recipient==pt || (buy? !IPendleSy(sy).isValidTokenIn(input) : input!=pt || !IPendleSy(sy).isValidTokenOut(output))
-            || input==yt || output==yt || input==sy || output==sy) revert InvalidMarket();
+            || recipient==pt || (buy? input!=sy && !IPendleSy(sy).isValidTokenIn(input)
+                                     : input!=pt || (output!=sy && !IPendleSy(sy).isValidTokenOut(output)))
+            || input==yt || output==yt) revert InvalidMarket();
         IPendleCurrency src=IPendleCurrency(input);IPendleCurrency dst=IPendleCurrency(output);
         uint256 spentBefore=src.balanceOf(msg.sender);uint256 beforeOut=dst.balanceOf(recipient);
         uint256 own=src.balanceOf(address(this));uint256 out=dst.balanceOf(address(this));
@@ -89,10 +92,12 @@ contract PendleMarketAdapter {
         _call(input,abi.encodeCall(src.approve,(address(router),amount)));
         IPendleWalletRouter.Terminal memory term;
         term.token=buy?input:output;term.syToken=term.token;term.amount=buy?amount:minimum;
-        if(buy)router.swapExactTokenForPtSimple(recipient,market,minimum,term);
+        if(input==sy)router.swapExactSyForPtSimple(recipient,market,amount,minimum);
+        else if(buy)router.swapExactTokenForPtSimple(recipient,market,minimum,term);
         else {
             IPendleWalletRouter.Limit memory limit;
-            router.swapExactPtForToken(recipient,market,amount,term,limit);
+            if(output==sy)router.swapExactPtForSy(recipient,market,amount,minimum,limit);
+            else router.swapExactPtForToken(recipient,market,amount,term,limit);
         }
         if(src.allowance(address(this),address(router))!=0) _call(input,abi.encodeCall(src.approve,(address(router),0)));
         received=dst.balanceOf(recipient)-beforeOut;

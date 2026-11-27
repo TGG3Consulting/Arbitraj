@@ -285,3 +285,94 @@ fn surge_native_recovers_raw_ether_and_token_payments_from_the_signed_market() {
         }
     }
 }
+
+#[test]
+fn surge_protected_wallet_recovers_exact_transfers_and_keeps_v5_cash_units() {
+    let d: Value = serde_json::from_reader(GzDecoder::new(&include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/surge_ethereum_protected_wallets.json.gz"
+    )[..])).unwrap();
+    let wallet = addr(&d["payer"]);
+    let wrapped = addr(&d["wrapped"]);
+    let market = addr(&d["market"]);
+    let mut legs = [0usize; 3];
+    for case in d["cases"].as_array().unwrap() {
+        let cash = addr(&case["cash"]);
+        assert_eq!(case["buy"]["after"], case["sell"]["before"]);
+        assert!(
+            case["same_block"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("same block")
+        );
+        for (name, source, dest) in [("buy", cash, market), ("sell", market, cash)] {
+            let paid = &case[name];
+            let before = paid["before"].as_array().unwrap();
+            let after = paid["after"].as_array().unwrap();
+            assert_eq!(&before[2..], &after[2..]);
+            let (i, o) = if name == "buy" { (0, 1) } else { (1, 0) };
+            let amount = number(&paid["spent"]);
+            let minimum = number(&paid["received"]);
+            assert_eq!(number(&before[i]) - number(&after[i]), amount);
+            assert_eq!(number(&after[o]) - number(&before[o]), minimum);
+            assert!(
+                paid["failures"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|f| f["code"] == 3)
+            );
+            assert_eq!(paid["failures"].as_array().unwrap().len(), 2);
+            let t = &paid["calldata"];
+            let direct = case["mode"] == "module";
+            let target = addr(&t["to"]);
+            assert_eq!(
+                target,
+                addr(&d[if direct { "modeled_module" } else { "executor" }])
+            );
+            assert_eq!(addr(&t["from"]), wallet);
+            if direct {
+                legs[0] += 1;
+                let data: Bytes = serde_json::from_value(t["data"].clone()).unwrap();
+                let p = Proof {
+                    call: Call {
+                        form: Form::SurgeToken,
+                        wrapped,
+                        fee: U256::ZERO,
+                    },
+                    target,
+                    wallet,
+                    input: source,
+                    output: dest,
+                    amount,
+                    minimum,
+                    data_hash: keccak256(&data),
+                };
+                let logs: Vec<_> = paid["logs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|l| alloy::rpc::types::Log {
+                        inner: serde_json::from_value(l.clone()).unwrap(),
+                        ..Default::default()
+                    })
+                    .collect();
+                let restored: Proof =
+                    serde_json::from_value(serde_json::to_value(p).unwrap()).unwrap();
+                assert!(restored.signed_data(&data));
+                assert_eq!(
+                    restored.amounts(&logs, wallet, source, dest),
+                    Some((amount, minimum))
+                );
+                let wrong = Proof {
+                    minimum: minimum + U256::ONE,
+                    ..restored
+                };
+                assert!(!wrong.signed_data(&data));
+                assert!(wrong.amounts(&logs, wallet, source, dest).is_none());
+            } else {
+                legs[if cash == wrapped { 1 } else { 2 }] += 1;
+            }
+        }
+    }
+    assert_eq!(legs, [4, 4, 4]);
+}

@@ -1,0 +1,22 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "tokens": {
+    "0xf7178122a087ef8f5c7bea362b7dabe38f20bf05": {
+      "address": "0xf7178122a087ef8f5c7bea362b7dabe38f20bf05",
+      "keccak256": "0x7cd93c8ad7848b1b20d480f433d8b16bc7021dc953e5f3961ae8d70edb14e13a",
+      "source": "https://repo.sourcify.dev/contracts/full_match/8453/0xf7178122a087ef8f5c7bea362b7dabe38f20bf05",
+      "contract": "OmniToken",
+      "sourcify": "exact_match"
+    },
+    "0xbc6a610690ddd2f5522efa96ed3caa9796e4c3de": {
+      "address": "0xbc6a610690ddd2f5522efa96ed3caa9796e4c3de",
+      "keccak256": "0x38b62b358bab4bfa3424dad27d98d03667d9471708998d9d8d8d43b43453db90",
+      "source": "https://repo.sourcify.dev/contracts/full_match/8453/0xbc6a610690ddd2f5522efa96ed3caa9796e4c3de",
+      "contract": "Token",
+      "sourcify": "exact_match"
+    }
+  }
+}

@@ -150,6 +150,8 @@ pub enum RouterFeeMode {
     Rebate,
     /// Официальный роутер проверяет валовую выплату ETH; аванс прибавлен к подписанному минимуму.
     NativeGrossMinimum,
+    /// Нативный ETH Omni Flux, подписанный Universal Router и направление расчёта.
+    FluxEth {target:alloy_primitives::Address, native_cash:bool},
     /// Защитный модуль ERC20 выбран по чистой выплате и закреплён до подписи.
     ProtectedWallet { target: alloy_primitives::Address },
     /// DAGrow SSP: точный вход или заявленная сумма выхода, привязанные к адресу исполнения.

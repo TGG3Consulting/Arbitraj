@@ -12,7 +12,7 @@ use super::{
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use alloy_primitives::{Address, U256};
-tokio::task_local! {pub(super) static NATIVE:(bool,bool);}
+tokio::task_local! {pub(super) static NATIVE:(bool,bool,Option<Address>);}
 pub(super) fn native() -> bool {
     NATIVE.try_with(|v| v.0).unwrap_or(false)
 }
@@ -42,6 +42,9 @@ pub(super) async fn plan(
             let state=super::super::pools::surge::market(ctx,s.entry.family,s.entry.pool.reference.address(),
                 (s.entry.pool.token0,s.entry.pool.token1),&h.selector()).await?;
             let direct=super::super::quote::surge_pricing::wire(ctx,&s.entry,&state,o.token_in,native())?;
+            if direct.1.form == Form::SurgeToken && NATIVE.try_with(|v| v.2).ok().flatten() != Some(direct.0) {
+                return Err(ctx.err(ErrorCode::QuoteMismatch,"Surge: адрес модуля изменился после выбора котировки"));
+            }
             if direct.1.form==Form::SurgeEthOut {
                 let required=super::super::math::surge::gross_for_net(o.min_out,90).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Surge: валовой минимум не помещается в заявку"))?;
                 if state.gross(o.token_in,o.amount_in).is_none_or(|gross|gross<required){

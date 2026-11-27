@@ -35,6 +35,7 @@ pub(super) enum DirectCall {
     RegisteredV3(std::sync::Arc<super::registered_v3_wallet::Proof>),
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
     O1(std::sync::Arc<super::o1_wallet::Proof>),
+    FluxEth(std::sync::Arc<super::flux_eth::Proof>),
     Bundles(std::sync::Arc<super::bundles_wallet::Proof>),
     Dagrow(std::sync::Arc<super::dagrow_wallet::Proof>),
     Temple(std::sync::Arc<super::temple_wallet::Proof>),
@@ -140,6 +141,7 @@ impl Plan {
                 "минимум выхода 0 — обмен без минимума не отправляется",
             ));
         }
+        if let Some(DirectCall::FluxEth(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::Bundles(proof))=self.direct_market.as_deref_mut(){std::sync::Arc::make_mut(proof).minimum=m;}
         if let Some(DirectCall::Dagrow(proof))=self.direct_market.as_deref_mut(){
             std::sync::Arc::make_mut(proof).minimum=m;
@@ -159,6 +161,7 @@ impl Plan {
     /// Сколько BNB (wei) уходит с транзакцией обмена: сумма WRAP_ETH или 0. Ошибок нет.
     pub(super) fn ekubo_proof(&self)->Option<super::ekubo_v2_fact::Proof>{super::ekubo_v2_fact::Proof::of(self,self.deadline)}
     pub fn value(&self) -> U256 {
+        if let Some(DirectCall::FluxEth(p))=self.direct_market(){return p.value();}
         if let Some(DirectCall::Carbon(c))=self.direct_market(){return c.value();}
         if let Some(DirectCall::EkuboV2{key,..})=self.direct_market(){return key.value();}
         if let Some(DirectCall::Vista { call, amount, .. }) = self.direct_market() {
@@ -177,6 +180,7 @@ impl Plan {
     pub fn data(&self, base: U256) -> Bytes {
         if let Some(direct) = self.direct_market() {
             return match direct {
+                DirectCall::FluxEth(p)=>p.data(),
                 DirectCall::Module {
                     pool,
                     input,

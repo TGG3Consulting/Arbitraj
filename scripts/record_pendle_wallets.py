@@ -18,16 +18,20 @@ LIMIT="(address,uint256,"+FILL+"[],"+FILL+"[],bytes)"
 BUY="swapExactTokenForPtSimple(address,address,uint256,"+TOKEN+")"
 SELL="swapExactPtForToken(address,address,uint256,"+TOKEN+","+LIMIT+")"
 CORE_SLOT=0xf168c5b0cb4aca9a68f931815c18a144c61ad01d6dd7ca15bd6741672a0ab800
+BUY_SY="swapExactSyForPtSimple(address,address,uint256,uint256)"
+SELL_SY="swapExactPtForSy(address,address,uint256,uint256,"+LIMIT+")"
 def payment(market,quantity,minimum,buy):
     token=(USDC,quantity if buy else minimum,USDC,ZERO,(0,ZERO,b"",False))
     if buy:return tx(ROUTER,BUY,["address","address","uint256",TOKEN],[OWNER,market,minimum,token])
     return tx(ROUTER,SELL,["address","address","uint256",TOKEN,LIMIT],[OWNER,market,quantity,token,(ZERO,0,[],[],b"")])
 MODULE="0x"+keccak(text="Arbitraj isolated Ethereum PendleMarketAdapter")[12:].hex()
-def route(mode,m,a,b,qty,minimum,expiry):
+def route(mode,m,a,b,qty,minimum,expiry,sy):
     if mode=="module":return tx(MODULE,"execute(address,address,address,uint256,uint256,uint256)",["address","address","address","uint256","uint256","uint256"],[m,a,b,qty,minimum,expiry])
     if mode=="v5":
         return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                   ["address","uint256","address","uint256","uint256",STEP+"[]"],[a,qty,b,minimum,expiry,[(17,MODULE,a,b,10000,encode(["address"],[m]))]])
+    if a==sy:return tx(ROUTER,BUY_SY,["address","address","uint256","uint256"],[OWNER,m,qty,minimum])
+    if b==sy:return tx(ROUTER,SELL_SY,["address","address","uint256","uint256",LIMIT],[OWNER,m,qty,minimum,(ZERO,0,[],[],b"")])
     return payment(m,qty,minimum,a==USDC)
 def capture(url,mode,artifact=None):
     f=ROOT/"tests/data/first_run_dex_2026-11-26/pendle_ethereum_registry.json.gz"
@@ -55,7 +59,7 @@ def capture(url,mode,artifact=None):
         selector=keccak(text=sig)[:4];slot=keccak(encode(["bytes4","uint256"],[selector,CORE_SLOT+2]))
         prop=read_batch(url,[("eth_getStorageAt",[ROUTER,"0x"+slot.hex(),AT])])[0];a="0x"+prop[-40:]
         code=read_batch(url,[("eth_getCode",[a,AT])])[0];return dict(facet=a,bytes=(len(code)-2)//2,runtime_hash="0x"+keccak(hexstr=code).hex())
-    bindings={s:binding(s) for s in [BUY,SELL]};result=[]
+    bindings={s:binding(s) for s in [BUY,SELL,BUY_SY,SELL_SY]};result=[]
     for r in directory["registrations"]:
         if not r.get("series") or not r.get("router_state") or min(map(int,r["physical"]))<=0 or min(map(int,r["router_state"][:3]))<=0:continue
         syaddr,pt,_=r["tokens"];allowed=sy[syaddr]
@@ -68,25 +72,25 @@ def capture(url,mode,artifact=None):
             case={"market":m,"pt":pt,"sy":syaddr,"size":str(size),"expiry":r["expiry"]};result.append(case)
             prefix=[fund]
             if artifact:prefix.append(tx(USDC,"transfer(address,uint256)",["address","uint256"],[MODULE,1]))
-            for buy in (True,False):
-                token_in,token_out=(USDC,pt) if buy else (pt,USDC)
-                amount=size if buy else int(case["buy"]["net"])
-                if not buy and artifact and amount>1:
-                    prefix.append(tx(pt,"transfer(address,uint256)",["address","uint256"],[MODULE,1]));amount-=1
-                base=prefix+[approve(token_in,amount)]
-                reads=[balance(token_in,OWNER),balance(token_out,OWNER),balance(syaddr,OWNER),balance(r["tokens"][2],OWNER)]
+            def measure(leg,source,token_in,token_out,amount):
+                base=source+[approve(token_in,amount)]
+                reads=[balance(token_in,OWNER),balance(token_out,OWNER),balance(r["tokens"][2],OWNER)]
+                if syaddr not in (token_in,token_out):reads.append(balance(syaddr,OWNER))
                 if artifact:
                     reads.extend([balance(t,h) for h in (MODULE,EXEC) for t in (token_in,token_out,syaddr,r["tokens"][2])])
                     reads.append(tx(token_in,"allowance(address,address)",["address","address"],[MODULE,ROUTER]))
                 def probe(minimum,expiry=directory["timestamp"]+240):
-                    op=route(mode,m,token_in,token_out,amount,minimum,expiry);rs=run(base+reads+[op]+reads);idx=len(base)+len(reads)
+                    inventory=[balance(t,ROUTER) for t in (pt,syaddr)]
+                    op=route(mode,m,token_in,token_out,amount,minimum,expiry,syaddr);rs=run(base+inventory+reads+[op]+reads+inventory);idx=len(base)+2+len(reads)
                     if any(x["status"]!="0x1" for j,x in enumerate(rs) if j!=idx):raise ValueError("funds, approvals or reads failed")
                     vals=lambda a:[int(x["returnData"],16) for x in a]
-                    return op,rs[idx],vals(rs[len(base):idx]),vals(rs[idx+1:]),int(rs[len(base)-1]["gasUsed"],16)
-                _,q,_,_,_=probe(1);leg="buy" if buy else "sell"
-                if q["status"]!="0x1":case[leg]={"stage":"unavailable","error":q.get("error")};break
+                    if minimum==1 and expiry>1:
+                        case.setdefault("router_inventory",{})[leg]=[vals(rs[len(base):len(base)+2]),vals(rs[-2:])]
+                    return op,rs[idx],vals(rs[len(base)+2:idx]),vals(rs[idx+1:-2]),int(rs[len(base)-1]["gasUsed"],16)
+                _,q,_,_,_=probe(1)
+                if q["status"]!="0x1":case[leg]={"stage":"unavailable","error":q.get("error")};return None
                 received=token_flow(q["logs"],token_out,OWNER)
-                if received<=0:case[leg]={"stage":"no receiver credit"};break
+                if received<=0:case[leg]={"stage":"no receiver credit"};return None
                 op,res,before,after,approval=probe(received)
                 if res["status"]!="0x1" or before[0]-after[0]!=amount or after[1]-before[1]!=received or before[2:]!=after[2:] or token_flow(res["logs"],token_in,OWNER)!=-amount:raise ValueError("wallet debit, credit or extra derivative")
                 _,strict,bs,af,_=probe(received+1)
@@ -98,7 +102,16 @@ def capture(url,mode,artifact=None):
                     expiry_error=expired.get("error")
                 case[leg]={"stage":"accepted","expiry_error":expiry_error,"input":token_in,"output":token_out,"paid":str(amount),"net":str(received),"before":list(map(str,before)),"after":list(map(str,after)),
                            "gas":int(res["gasUsed"],16),"approval_gas":approval,"returned":res["returnData"],"logs":res["logs"],"transaction":op,"strict":strict.get("error")}
-                prefix=base+[op]
+                return base+[op]
+            paid=measure("buy",prefix,USDC,pt,size)
+            if paid:
+                amount=int(case["buy"]["net"])
+                if artifact and amount>1:
+                    paid=paid+[tx(pt,"transfer(address,uint256)",["address","uint256"],[MODULE,1])];amount-=1
+                measure("sell",paid,pt,USDC,amount)
+                paid_sy=measure("sell_to_sy",paid,pt,syaddr,amount)
+                if paid_sy:
+                    measure("buy_with_sy",paid_sy,syaddr,pt,int(case["sell_to_sy"]["net"]))
     return {"mode":mode,"runtime":runtime,"module":MODULE if artifact else None,"executor":EXEC if artifact else None,"selector":AT,"state_root":ROOT_HASH,"payer":OWNER,"router":ROUTER,"bindings":bindings,"terminal":USDC,"cases":result}
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);p.add_argument("--module",type=Path);opts=p.parse_args();failures=[]

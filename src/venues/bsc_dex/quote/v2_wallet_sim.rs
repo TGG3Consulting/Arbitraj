@@ -56,6 +56,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Antfarm(std::sync::Arc<super::super::exec::antfarm_wallet::Terms>),
     Vault(B256),
     O1(B256),
+    FluxEth(super::super::exec::flux_eth::Market),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
@@ -104,6 +105,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         input,
     };
     let (wrapped, value) = match &o.wire {
+        Wire::FluxEth(m)=>(Some(m.wrapped),if o.input==m.wrapped{o.amount}else{U256::ZERO}),
         Wire::Carbon(c)=>(c.wrapped(),c.value()),
         Wire::EkuboV2(key,wrapped)=>(*wrapped,key.value()),
         Wire::Vista(v) => (
@@ -153,7 +155,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             approve::fork_exact(ctx,token,o.target,Some(U256::from_be_slice(&current)),amount)
         } else {approve::fork_known(ctx,token,o.target,U256::from_be_slice(&current),amount)}
     };
-    let mut approvals=if wrapped==Some(o.input) || matches!(&o.wire,Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut){Vec::new()}else{
+    let mut approvals=if let Wire::FluxEth(m)=&o.wire {super::super::exec::flux_eth_plan::approvals(ctx,h,*m,&o).await?}else if wrapped==Some(o.input) || matches!(&o.wire,Wire::Vista(v) if v.form==super::super::exec::vista_wire::Form::SurgeEthOut){Vec::new()}else{
         let cap=match &o.wire {Wire::Carbon(c)=>c.cap(),Wire::MintClub(c) if c.mint=>c.limit,_=>o.amount};
         allowed(o.input,cap).await?
     };
@@ -215,6 +217,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::antfarm_wallet::Proof{runtime:None,terms:(**t).clone(),payer:o.payer,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::FluxEth(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((o.amount,received)) {return Err(fail());}
     if let Wire::O1(id)=&o.wire {
         let proof=super::super::exec::o1_wallet::Proof{id:*id,module:o.target,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -274,6 +277,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
+        Wire::FluxEth(m)=>m.proof(o,minimum,deadline).data(),
         Wire::O1(id) => super::super::exec::o1_wallet::data(*id,o.input,o.output,o.amount,minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,

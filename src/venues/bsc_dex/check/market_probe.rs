@@ -25,6 +25,7 @@ use alloy_primitives::{Address, B256, Bytes, U256};
 
 enum Venue {
     Regular,
+    FollowingBlock(Head),
     WalletRouter(Address),
     FundedExecutor,
     Dagrow,
@@ -44,6 +45,15 @@ pub(super) struct Leg {
     pub call: (Vec<Approval>, Address, Bytes),
 }
 impl Market {
+    pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
+        matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+            || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
+            || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
+    }
+    pub async fn following_block(&self, ctx: &Ctx, e: &Entry, wallet: Address, amount: U256, min: Option<U256>) -> Option<GatewayResult<Result<probe::Measured, String>>> {
+        let Venue::FollowingBlock(h) = self.venue else { return None };
+        Some(Box::pin(super::surge_probe::run(ctx,e,h,wallet,amount,min)).await)
+    }
     pub async fn load(
         ctx: &Ctx,
         e: &Entry,
@@ -54,7 +64,9 @@ impl Market {
     ) -> GatewayResult<Self> {
         let mut anchor = None;
         let mut vista = None;
-        let venue = if mint_club_direct::enabled(e) {
+        let venue = if e.family.variant == super::super::pools::family_variant::Variant::Surge {
+            Venue::FollowingBlock(white_state::head(ctx, &format!("{number:#x}")).await?)
+        } else if mint_club_direct::enabled(e) {
             let head = white_state::head(ctx, &format!("{number:#x}")).await?;
             let state = mint_club_direct::state(ctx, e, head).await?;
             mint_club_direct::funded(ctx, wallet, e.usdt, amount, head).await?;
@@ -169,7 +181,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Bundles | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -290,7 +302,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::Bundles | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
         }
     }
 }

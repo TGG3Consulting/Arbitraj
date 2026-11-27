@@ -43,7 +43,7 @@ pub(in crate::venues::bsc_dex) async fn at(ctx: &Ctx, e: &Entry, tag: &Value) ->
         return Err(missing(ctx));
     };
     if e.family.variant.flux_native() {
-        return flux_native::market(ctx, e.family, manager, id, (e.pool.token0,e.pool.token1), tag).await.map(|_| ());
+        return flux_native::module(ctx,e,tag).await;
     }
     launch_market::check(
         ctx,

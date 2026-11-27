@@ -1087,6 +1087,16 @@ def tables(network, snapshots, profiles):
             f"В {sum(c['stage']=='pool rejected' for c in cases)} проверках исходный пул отклонил обмен и баланс владельца сохранился. "
             "Для размещения у семейства выберите YieldBasisAdapter в Ethereum. Сохраните подтверждённый адрес в dex.router. "
             f"[Кошельковые суммы и расходы газа](../{fixture.as_posix()})."])
+        routes=fixture.with_name("yield_basis_usdt_routes.json.gz")
+        with gzip.open(routes,"rt") as stream:
+            paid=json.load(stream)["rows"]
+        gas=[row["gas"] for row in paid]
+        approval=sorted({row["approval_gas"] for row in paid})
+        out.extend(["",f"Curve USDT/crvUSD и YieldBasis WETH/crvUSD провели {len(paid)} обменов через V5 одним вызовом. "
+            "При покупке вход составлял 2 или 10 USDT, при продаже — 0,001 или 0,005 WETH. "
+            f"Газ двух шагов составил {min(gas)}–{max(gas)} единиц, первоначального разрешения — {approval[0]} или {approval[-1]}. "
+            "При окончательном минимуме на один атом выше выплаты обе ноги откатывались. "
+            f"[Движения USDT, промежуточного crvUSD и WETH](../{routes.as_posix()})."])
     if not base:
         original_path=Path("tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz")
         paid_path=original_path.with_name("balancer_v1_wallet.json.gz")

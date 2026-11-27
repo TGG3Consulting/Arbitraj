@@ -50,14 +50,25 @@ pub(crate) fn shape(e: &Entry) -> Option<(alloy_primitives::B256, Address)> {
     {
         return None;
     }
-    let PoolRef::Singleton { manager, id } = e.pool.reference else {
+    physical(
+        &e.pool.reference,
+        [e.pool.token0, e.pool.token1],
+        &e.pool.state,
+    )
+}
+fn physical(
+    reference: &PoolRef,
+    pair: [Address; 2],
+    state: &PoolState,
+) -> Option<(alloy_primitives::B256, Address)> {
+    let PoolRef::Singleton { manager, id } = *reference else {
         return None;
     };
     let (idx, role, venue) = y::key(id)?;
     if manager.is_zero() || (role == 0) != (manager == venue) {
         return None;
     }
-    let coins = match &e.pool.state {
+    let coins = match state {
         PoolState::YieldBasisLev(s)
             if idx == s.index && role == 1 && venue == s.amm && manager == s.lp =>
         {
@@ -67,6 +78,8 @@ pub(crate) fn shape(e: &Entry) -> Option<(alloy_primitives::B256, Address)> {
             if id == s.id
                 && venue == s.venue
                 && manager == s.cryptopool
+                && !s.amm.is_zero()
+                && s.amm != manager
                 && ((role == 0 && venue == manager)
                     || (role == 2 && venue != manager && venue != s.amm)) =>
         {
@@ -74,7 +87,6 @@ pub(crate) fn shape(e: &Entry) -> Option<(alloy_primitives::B256, Address)> {
         }
         _ => return None,
     };
-    let pair = [e.pool.token0, e.pool.token1];
     (!coins[0].is_zero()
         && !coins[1].is_zero()
         && coins[0] != coins[1]
@@ -195,4 +207,75 @@ pub(crate) async fn load(
             levels,
         },
     )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloy_primitives::B256;
+    use std::io::Read;
+    #[test]
+    fn signed_step_and_cached_state_share_the_same_physical_market() {
+        let mut data = String::new();
+        flate2::read::GzDecoder::new(
+            include_bytes!(
+                "../../../../tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz"
+            )
+            .as_slice(),
+        )
+        .read_to_string(&mut data)
+        .unwrap();
+        let json: Value = serde_json::from_str(&data).unwrap();
+        let rows = json["markets"].as_array().unwrap();
+        let address = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
+        let stable = address(&json["stable"]);
+        let mut checked = 0;
+        for (index, r) in rows.iter().enumerate() {
+            let manager = address(&r["cryptopool"]);
+            let amm = address(&r["amm"]);
+            for (role, label) in [(0, "cryptopool"), (2, "virtual_pool")] {
+                let venue = address(&r[label]);
+                if venue.is_zero() {
+                    continue;
+                }
+                let pair = [stable, address(&r["asset"])];
+                let mut bytes = [0u8; 32];
+                bytes[3..11].copy_from_slice(&(index as u64).to_be_bytes());
+                bytes[11] = role;
+                bytes[12..].copy_from_slice(venue.as_slice());
+                let id = B256::from(bytes);
+                let s =
+                    PoolState::YieldBasisPool(Box::new(crate::core::types::yield_basis::Preview {
+                        id,
+                        venue,
+                        cryptopool: manager,
+                        amm,
+                        coins: pair,
+                        levels: Default::default(),
+                    }));
+                let reference = PoolRef::Singleton { manager, id };
+                assert_eq!(physical(&reference, pair, &s), Some((id, stable)));
+                assert_eq!(
+                    physical(&reference, [pair[1], pair[0]], &s),
+                    Some((id, stable))
+                );
+                assert!(physical(&reference, [stable, stable], &s).is_none());
+                bytes[10] ^= 1;
+                assert!(
+                    physical(
+                        &PoolRef::Singleton {
+                            manager,
+                            id: B256::from(bytes)
+                        },
+                        pair,
+                        &s
+                    )
+                    .is_none()
+                );
+                assert!(physical(&PoolRef::Singleton { manager: amm, id }, pair, &s).is_none());
+                checked += 1;
+            }
+        }
+        assert_eq!(checked, 22);
+    }
 }

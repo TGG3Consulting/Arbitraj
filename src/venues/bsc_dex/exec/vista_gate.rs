@@ -10,7 +10,8 @@ use crate::{
 use alloy_primitives::Address;
 
 pub(super) fn needs(e:&Entry)->bool{
-    vista_pricing::is_vista(e)||e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Pendle
+    use crate::venues::bsc_dex::pools::family_variant::Variant;
+    vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::YieldBasis)
 }
 pub(super) async fn check(
     ctx: &Ctx,
@@ -27,6 +28,10 @@ pub(super) async fn check(
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
     for (e, input) in steps {
+        if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis {
+            Box::pin(super::yield_basis_plan::check_step(ctx,e,input,&head.selector())).await?;
+            continue;
+        }
         if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Pendle {
             Box::pin(crate::venues::bsc_dex::pools::pendle_module::checked(ctx,e,input,head)).await?;continue
         }

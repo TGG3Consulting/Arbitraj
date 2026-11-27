@@ -23,6 +23,18 @@ pub(crate) async fn check_module(ctx:&Ctx,e:&Entry,t:Terms,at:&Value)->GatewayRe
     if factory!=ctx.dex_addr("dex.factory",e.family.id)? || wrapped!=t.wrapped{return Err(bad(ctx));}
     Ok(())
 }
+pub(super) async fn check_step(ctx:&Ctx,e:&Entry,input:Address,at:&Value)->GatewayResult<()> {
+    let t=terms(ctx,e,ctx.dex_addr("dex.router",e.family.id)?,false)?;
+    check_market(ctx,e,input,t,at).await
+}
+async fn check_market(ctx:&Ctx,e:&Entry,input:Address,t:Terms,at:&Value)->GatewayResult<()> {
+    let (registered,())=tokio::try_join!(
+        yield_basis_quotes::bound(ctx,e.family,&e.pool.reference,(e.pool.token0,e.pool.token1),at),
+        check_module(ctx,e,t,at)
+    )?;
+    if registered.stable!=t.stable || !registered.coins().contains(&input){return Err(bad(ctx));}
+    Ok(())
+}
 pub(super) async fn plan(ctx:&Ctx,s:&Step,payer:Address,height:u64,pick:Option<(Address,bool)>)->GatewayResult<Plan> {
     let generation=ctx.settings.generation();
     if !s.from_wallet || !s.to_wallet{return Err(bad(ctx));}
@@ -32,9 +44,7 @@ pub(super) async fn plan(ctx:&Ctx,s:&Step,payer:Address,height:u64,pick:Option<(
     let o=&s.order;
     let h=white_state::head(ctx,&format!("{height:#x}")).await?;
     let at=h.selector();
-    let (registered,())=tokio::try_join!(yield_basis_quotes::bound(ctx,e.family,&e.pool.reference,(e.pool.token0,e.pool.token1),&at),
-                                        check_module(ctx,e,t,&at))?;
-    if registered.stable!=t.stable{return Err(bad(ctx));}
+    check_market(ctx,e,o.token_in,t,&at).await?;
     let order=sim::Order{payer,target,input:o.token_in,output:o.token_out,amount:o.amount_in,minimum:o.min_out,wire:sim::Wire::YieldBasis(t)};
     let deadline=U256::from(h.timestamp.to::<u64>().checked_add(ctx.int("dex.deadline_s")?).ok_or_else(||bad(ctx))?);
     let proof=t.proof(&order,o.min_out,deadline);

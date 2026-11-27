@@ -35,7 +35,8 @@ def wallets(reader,book):
                 return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                           ["address","uint256","address","uint256","uint256",STEP+"[]"],
                           [a,size,b,floor,end,[(2,market["pool"],a,b,10000,b"")]])
-            return tx(ROUTER,"exactInputSingle("+ORDER+")",[ORDER],[(a,b,market["deployer"],OWNER,end,size,floor,0)])
+            method = "exactInputSingleSupportingFeeOnTransferTokens" if wire == "router_fot" else "exactInputSingle"
+            return tx(ROUTER,method+"("+ORDER+")",[ORDER],[(a,b,market["deployer"],OWNER,end,size,floor,0)])
         quote=tx(QUOTER,"quoteExactInputSingle("+QUOTE+")",[QUOTE],[(a,b,market["deployer"],size,0)])
         permit=approval(a,target,size)
         reads=[balance(t,who) for who in (OWNER,EXEC) for t in (a,b)]
@@ -82,11 +83,18 @@ def wallets(reader,book):
             if cash==WETH:prefix=[tx(WETH,"deposit()",value=amount)]
             else:prefix=[tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                          ["uint256","address[]","address","uint256"],[amount,[WETH,cash],OWNER,deadline],value=10**17)]
-            for wire in ("router","v5"):
+            guarded_size, guarded_prefix = None, None
+            for wire in ("v5","router","router_fot"):
                 buy,again=leg(prefix,m,cash,other,amount,wire)
                 rec=dict(pool=m["pool"],input=cash,requested=str(amount),wire=wire,buy=buy);rows.append(rec)
                 if again:
-                    rec["sell"],_=leg(again,m,other,cash,int(buy["received"]),wire)
+                    acquired = int(buy["received"])
+                    if wire == "v5":
+                        guarded_size, guarded_prefix = acquired, again
+                    rec["sell"],_=leg(again,m,other,cash,acquired,wire)
+                elif guarded_prefix is not None:
+                    rec["sell_funded_by"] = "v5"
+                    rec["sell"],_=leg(guarded_prefix,m,other,cash,guarded_size,wire)
     assert any("received" in r.get("sell",{}) for r in rows)
     return dict(selector=tag,height=book["height"],state_root=book["state_root"],cases=rows,payer=OWNER,executor=EXEC)
 

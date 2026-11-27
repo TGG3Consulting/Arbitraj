@@ -695,6 +695,14 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/safeswap" SafeSwapAdapter
           python scripts/record_safeswap_protected.py "$RUNNER_TEMP/safeswap/SafeSwapAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: startsWith(matrix.market, 'gladius-protected-')
+        env:
+          MARKET: ${{ matrix.market }}
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/gladius" GladiusInventory
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_gladius_protected.py "${MARKET#gladius-protected-}" "$RUNNER_TEMP/gladius/GladiusInventory.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'gladius-inventory-')
         env:
           MARKET: ${{ matrix.market }}

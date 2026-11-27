@@ -989,15 +989,19 @@
     "chain_id": 8453,
     "network": "base",
     "id": "rubicon-base",
-    "source": "https://docs.rubicon.finance/developers/protocol/aquila · https://sourcify.dev/server/v2/contract/8453/0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd · https://sourcify.dev/server/v2/contract/8453/0xa883c11a3742f74f0b29750764146e8675306e24 · tests/data/base_ethereum_v2_probes.json",
+    "source": "https://docs.rubicon.finance/developers/protocol/aquila · https://sourcify.dev/server/v2/contract/8453/0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd · https://sourcify.dev/server/v2/contract/8453/0xa883c11a3742f74f0b29750764146e8675306e24 · tests/data/base_ethereum_v2_probes.json · tests/data/first_run_dex_2026-11-26/rubicon_aquila_base.json.gz",
     "settings": {
-      "dex.kind": "v2_fork_executor_create2",
+      "dex.kind": "v2_fork_dual_create2",
       "dex.factory": "0xa5ca8ba2e3017e9af3bd9eda69e9e8c263abf6cd",
       "dex.pool_code_hashes": [
         "0x79cb29831f0abd24ae48de6fa5dc9eb647f10df38618ed09b70b2044d35dfba5"
       ],
       "dex.v2_fee_source": "fixed",
-      "dex.v2_fee_pct": "0.3"
+      "dex.v2_fee_pct": "0.3",
+      "dex.router": "0x109074b31759a5b08164e54c44333f33247e7fd1",
+      "dex.router_runtime_hash": "0x93ecb43da72002a38c0aa11ff95c42d50bc04b7f88b655a7525b08b3bcc6f093",
+      "dex.factory_runtime_hash": "0xe74ca32bf656e2ee7a8e0ba6aa59ec43d86fc7b51fb428763ba0bed09cf47aac",
+      "dex.pair_runtime_hash": "0xab65c61d2206cc4a10dc22a391a344b66b9499f514a7cd1bfcff0e176e5b5bdf"
     }
   },
   {

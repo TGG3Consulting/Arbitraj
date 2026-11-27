@@ -1,0 +1,35 @@
+{
+  "base": {
+    "selector": {
+      "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+      "requireCanonical": true
+    },
+    "height": 62262756,
+    "roles": {
+      "allowance_holder": {
+        "address": "0x0000000000001ff3684f28c67538d4d072c22734",
+        "bytes": 1009,
+        "runtime": "0x99f5e8edaceacfdd183eb5f1da8a7757b322495b80cf7928db289a1b1a09f799"
+      },
+      "kipseli_router": {
+        "address": "0x71c2ed90cc288229be59f26b8b3eef3c07d7ab99",
+        "bytes": 3402,
+        "runtime": "0x66533a884fbfadbd32297de6dbc1de6beebc3905b1ddd9b0354dd23daa6c5239"
+      }
+    }
+  },
+  "ethereum": {
+    "selector": {
+      "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+      "requireCanonical": true
+    },
+    "height": 26494988,
+    "roles": {
+      "allowance_holder": {
+        "address": "0x0000000000001ff3684f28c67538d4d072c22734",
+        "bytes": 1009,
+        "runtime": "0x99f5e8edaceacfdd183eb5f1da8a7757b322495b80cf7928db289a1b1a09f799"
+      }
+    }
+  }
+}

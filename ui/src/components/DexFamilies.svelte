@@ -17,6 +17,7 @@
   import { store, setValue, defOf } from '../lib/settings.svelte.js';
   import { dirStatus } from '../lib/directory.js';
   import SettingEditor from './SettingEditor.svelte';
+  import RubiconDeploy from './RubiconDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
 
   /** families — [DexFamily] (DEX с заданным видом); dir — PoolDirectory или null (справочник не получен). */
@@ -128,6 +129,9 @@
         <td>
           <details>
             <summary>Адреса и настройки DEX</summary>
+            {#if store.values['dex.kind|Dex|'+r.id] === 'rubicon_classic'}
+              <RubiconDeploy id={r.id}/>
+            {/if}
             {#each rest as def (def.name)}
               <div class="setting-line">
                 <code>{def.name}</code> <span class="muted">{def.description}</span>

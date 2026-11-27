@@ -942,6 +942,8 @@ jobs:
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/aktionariat" AktionariatWallet
           python scripts/record_aktionariat_protected.py "$RUNNER_TEMP/aktionariat/AktionariatWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'aktionariat-ethereum-usdt'
+        run: python scripts/record_aktionariat_usdt.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'aktionariat-ethereum-wallet'
         run: python scripts/record_aktionariat_wallet.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'aktionariat-ethereum-directory'

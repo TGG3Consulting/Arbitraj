@@ -450,7 +450,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "launch_o1_wrapped" => (PoolKind::Cl, Proto::UniswapV4, true, false, true),
         "launch_umia" | "launch_baseline" | "launch_doppler" | "launch_index" | "launch_o1" | "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "rubicon_classic" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
+        "bundles_swap" | "bundles_swap_v5" | "antfarm" | "temple" | "temple_v5" | "aktionariat" | "rubicon_classic" | "yield_basis" | "balancer_v1" | "bancor_legacy" | "bancor_v3" | "uniswap_v1" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "stabull" | "maverick_v1" => (PoolKind::V2,Proto::V2,true,false,true),
         "empire_module" | "stabull_module" | "maverick_v1_module" | "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "lambda_propamm" | "integral_size" | "integral_size_v5" | "pendle_market_v5" => (PoolKind::OraclePmm, Proto::V2, true, true, true),
@@ -883,6 +883,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
             if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
         }
+        Proto::V2 if f.variant==Variant::Brokerbot => list.extend(["dex.factory","dex.factory_runtime_hash","dex.quoter","dex.broker_markets"]),
         Proto::V2 if f.variant==Variant::YieldBasis => list.extend(["dex.factory","dex.factory_runtime_hash"]),
         Proto::V2 if f.variant==Variant::BalancerV1 => list.extend(["dex.factory","dex.factory_runtime_hash","dex.pair_runtime_hash"]),
         Proto::V2 if f.variant==Variant::BancorLegacy => list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.quoter_runtime_hash","dex.bancor_native_token","dex.pmm_ladder_usd"]),

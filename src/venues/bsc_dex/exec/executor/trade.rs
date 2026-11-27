@@ -189,6 +189,7 @@ pub async fn trade(
     // Ревью 272 (Б4): вызов executeNative — признаком в контексте (позднее выяснение не гадает по событию).
     sc.executor_native = c.native.is_some();
     sc.shiba = Box::pin(shiba_executor::capture(ctx, &legs, &c, wallet)).await?;
+    sc.aktionariat = super::super::aktionariat_plan::capture(ctx,&legs,&c,wallet)?;
     // Решение 272: продажа нативного BNB — value = вход, только сверх резерва на газ (как прямой путь, swap_send.rs).
     let value = c.value();
     if !value.is_zero() {
@@ -202,14 +203,14 @@ pub async fn trade(
         Box::pin(super::super::vista_gate::check(ctx,legs.iter().flatten().map(|s|(&s.entry,s.order.token_in)).collect(),generation)).await?;
     }
     let submit = txs::send_capped(env, &slot, (executor, c.data(), value), true, None, cap);
-    let d = if sc.shiba.is_some() {
+    let d = if sc.shiba.is_some() || sc.aktionariat.is_some() {
         settlement_swap::with_parse(&sc, submit).await
     } else {
         submit.await
     }.map_err(|e| sc.attach(e))?;
     drop(slot);
     let mut sc = SwapCtx { tip_bnb: d.tip_bnb, ..sc };
-    let mut r = if sc.shiba.is_some() {
+    let mut r = if sc.shiba.is_some() || sc.aktionariat.is_some() {
         market_receipt::check_module_cancel(ctx, &sc, &d)
             .await.map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
         if let Some(receipt) = &d.receipt {

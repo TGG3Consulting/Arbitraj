@@ -20,6 +20,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         Some(DirectCall::FluxEth(t))=>c.flux_eth=Some(Box::new((*t).clone())),
         Some(DirectCall::O1(t)) => c.o1 = Some(Box::new((*t).clone())),
         Some(DirectCall::Bundles(t))=>c.bundles=Some(Box::new((*t).clone())),
+        Some(DirectCall::Aktionariat(p))=>c.aktionariat=Some(Box::new((*p).clone())),
         Some(DirectCall::BancorLegacy(t))=>c.bancor_legacy=Some(Box::new((*t).clone())),
         Some(DirectCall::YieldBasis(t))=>c.yield_basis=Some(Box::new((*t).clone())),
         Some(DirectCall::BalancerV1(t))=>c.balancer_v1=Some(Box::new((*t).clone())),
@@ -76,6 +77,7 @@ pub(super) enum Saved<'a> {
     O1(&'a super::o1_wallet::Proof),
     FluxEth(&'a super::flux_eth::Proof),
     Bundles(&'a super::bundles_wallet::Proof),
+    Aktionariat(&'a super::aktionariat_wallet::Proof),
     BancorLegacy(&'a super::bancor_legacy_wallet::Proof),
     YieldBasis(&'a super::yield_basis_wallet::Proof),
     BalancerV1(&'a super::balancer_v1_wallet::Proof),
@@ -111,6 +113,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.o1.as_deref().map(Saved::O1),
         c.flux_eth.as_deref().map(Saved::FluxEth),
         c.bundles.as_deref().map(Saved::Bundles),
+        c.aktionariat.as_deref().map(Saved::Aktionariat),
         c.bancor_legacy.as_deref().map(Saved::BancorLegacy),
         c.yield_basis.as_deref().map(Saved::YieldBasis),
         c.balancer_v1.as_deref().map(Saved::BalancerV1),
@@ -146,6 +149,12 @@ pub(in crate::venues::bsc_dex) async fn included(
     nonce: Option<u64>,
     receipt: &Receipt,
 ) -> GatewayResult<()> {
+    if let Some(p)=c.aktionariat.as_deref() {
+        let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Aktionariat: нет исходного хеша или nonce");
+        let nonce=nonce.or_else(||c.chain.as_ref().map(|v|v.nonce)).ok_or_else(bad)?;
+        if c.chain.as_ref().is_some_and(|v|(v.hash,v.nonce)!=(hash,nonce)){return Err(bad());}
+        return p.included(ctx,hash,nonce,receipt).await;
+    }
     if let Some(p)=c.shiba.as_deref_mut() {
         let bad=||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"ShibaSwap: нет исходного хеша или nonce");
         let nonce=nonce.or_else(||c.chain.as_ref().map(|v|v.nonce)).ok_or_else(bad)?;
@@ -205,6 +214,7 @@ pub(in crate::venues::bsc_dex) async fn included(
             Saved::FluxEth(p)=>p.included(ctx,hash,receipt).await?,
             Saved::O1(p) => p.included(ctx, hash, receipt).await?,
             Saved::Bundles(p)=>p.included(ctx,hash,receipt).await?,
+            Saved::Aktionariat(_)=>return Err(ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Aktionariat: исходное поручение отсутствует")),
             Saved::BancorLegacy(p)=>p.included(ctx,hash,receipt).await?,
             Saved::YieldBasis(p)=>p.included(ctx,hash,receipt).await?,
             Saved::BalancerV1(p)=>p.included(ctx,hash,receipt).await?,
@@ -254,6 +264,7 @@ impl Saved<'_> {
             Self::FluxEth(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Omni Flux: физический ETH, PoolId или перевод токена не подтверждены"),
             Self::O1(p) => p.amounts(&r.logs, wallet, input, output).ok_or("o1: ключ, списание или выплата расходятся с подписанным поручением"),
             Self::Bundles(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Bundles Swap: подписанное поручение и движения денег расходятся"),
+            Self::Aktionariat(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Aktionariat: выплата или списание расходятся с подписанным поручением"),
             Self::BancorLegacy(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("BancorLegacy: поручение, событие пула или поступление кошельку не совпали"),
             Self::YieldBasis(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("YieldBasis: поручение, событие пула или поступление кошельку не совпали"),
             Self::BalancerV1(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Balancer V1: расход, обмен BPool или выплата не совпали"),

@@ -86,6 +86,7 @@ pub(super) async fn paid(
         v2_wallet_sim::Wire::BancorLegacy(t) => !t.value(input,U256::ONE).is_zero(),
         v2_wallet_sim::Wire::YieldBasis(t) => !t.value(input, U256::ONE).is_zero(),
         v2_wallet_sim::Wire::V5(v)
+        | v2_wallet_sim::Wire::AktionariatV5(v, _)
         | v2_wallet_sim::Wire::V5Funded(v, _)
         | v2_wallet_sim::Wire::V5Burn(v, _) => {
             matches!(v.native,Some((wrapped,true)) if wrapped==input)

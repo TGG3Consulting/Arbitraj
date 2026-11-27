@@ -447,6 +447,13 @@ pub fn state<'a>(
             })
         });
     }
+    if f.variant == Variant::Brokerbot {
+        return Box::pin(async move {
+            let at = super::nami::block(ctx,&block_tag(block)).await?;
+            let state=super::brokerbot::market(ctx,f,reference.address(),pair,&at).await?;
+            Ok(Loaded{state:PoolState::Brokerbot(Box::new(state)),ticks:None,bins:None,fee_pips:None})
+        });
+    }
     if f.variant == Variant::Temple {
         return Box::pin(async move {
             let tag = block_tag(block);

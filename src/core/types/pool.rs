@@ -329,6 +329,27 @@ pub struct MemeboxState {
     pub protocol_bps: u16,
 }
 
+/// Цена за одну неделимую акцию в атомах расчётного токена на каноническом блоке.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BrokerbotState {
+    pub broker: Address,
+    pub cash: Address,
+    pub share: Address,
+    pub hub: Address,
+    pub registered: bool,
+    pub buying: bool,
+    pub selling: bool,
+    pub price: U256,
+    pub increment: U256,
+    pub cash_balance: U256,
+    pub share_balance: U256,
+    pub base_price: U256,
+    pub supply: U256,
+    pub average_first: bool,
+    pub license_bps: u16,
+    pub drift: bool,
+}
+
 /// Логические резервы EmpirePair включают долг одного токена. Балансы ERC20 — физическая выплата.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EmpireState {
@@ -539,6 +560,7 @@ pub enum PoolState {
     ToonSwap(Box<ToonState>),
     Memebox(Box<MemeboxState>),
     Empire(Box<EmpireState>),
+    Brokerbot(Box<BrokerbotState>),
 }
 
 /// Состояние пары PMM от оракула (решение 122 F, 3) — боксируется в `PoolState::OraclePmm`. Только то, что читается

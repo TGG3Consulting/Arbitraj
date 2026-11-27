@@ -11,7 +11,7 @@ use alloy_primitives::Address;
 
 pub(super) fn needs(e:&Entry)->bool{
     use crate::venues::bsc_dex::pools::family_variant::Variant;
-    vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::BancorLegacy|Variant::YieldBasis)
+    vista_pricing::is_vista(e) || matches!(e.family.variant,Variant::Pendle|Variant::Brokerbot|Variant::BancorLegacy|Variant::YieldBasis)
 }
 pub(super) async fn check(
     ctx: &Ctx,
@@ -28,6 +28,11 @@ pub(super) async fn check(
         crate::venues::bsc_dex::pools::ethervista::VistaMarket,
     )> = Vec::new();
     for (e, input) in steps {
+        if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot {
+            let m=super::aktionariat_plan::terms(ctx,e)?;
+            Box::pin(super::aktionariat_plan::verify(ctx,e,m,&head.selector())).await?;
+            continue;
+        }
         if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
             Box::pin(super::bancor_legacy_plan::check_step(ctx,e,input,&head.selector())).await?;
             continue;

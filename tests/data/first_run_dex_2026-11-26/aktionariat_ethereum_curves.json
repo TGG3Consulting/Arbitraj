@@ -1,0 +1,119 @@
+{
+ "height": 26494988,
+ "selector": {
+  "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+  "requireCanonical": true
+ },
+ "rows": [
+  {
+   "broker": "0x28cbf0350fcd845cca8eab9bb5b1fa357e7c882f",
+   "setting": "0x28cbf0350fcd845cca8eab9bb5b1fa357e7c882f 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x2adcbee886d23eff5adecc7767bf102e4a1ce151 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x7e9c0f7c72565ab9af73d3352b07d423881e1e888796428b18415725754d8be0 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 registry total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x28cbf0350fcd845cca8eab9bb5b1fa357e7c882f",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "44896000000000000000",
+   "base_price": "44896000000000000000",
+   "increment": "500000000000000",
+   "supply": "13851",
+   "drift": false
+  },
+  {
+   "broker": "0x2f2c3cf0b2d6f4f6cd5f57665ae629eee813350b",
+   "setting": "0x2f2c3cf0b2d6f4f6cd5f57665ae629eee813350b 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x6f38e0f1a73c96cb3f42598613ea3474f09cb200 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x8446e6a242aee6427b102ecbfd96a4a063d6caa2e25d7a8812bfde5e6ee4ac9b 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 registry total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x2f2c3cf0b2d6f4f6cd5f57665ae629eee813350b",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "7250000000000000000",
+   "base_price": "7250000000000000000",
+   "increment": "0",
+   "supply": "800000",
+   "drift": false
+  },
+  {
+   "broker": "0x3e73d3fc22a8637b2c16790aa2c0e2d552d44e69",
+   "setting": "0x3e73d3fc22a8637b2c16790aa2c0e2d552d44e69 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x2e880962a9609aa3eab4def919fe9e917e99073b 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x29f19f7d4f69132e91127bd5e7fdffb67b9cb1001f2df1499d490d7a110ae6ca 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 registry total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x3e73d3fc22a8637b2c16790aa2c0e2d552d44e69",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "8501970000000000000",
+   "base_price": "8501970000000000000",
+   "increment": "5000000000000",
+   "supply": "10650100",
+   "drift": false
+  },
+  {
+   "broker": "0x5deb1aa15df2325c9274cd87003804c5d0874dfe",
+   "setting": "0x5deb1aa15df2325c9274cd87003804c5d0874dfe 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0xbc8538387481dfb0c6a5acb62226b3144d60e108 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x47baaa2866a8586027257443fcb30e33482930197011218eb9cc09c30f536fab 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 0x4bb3c05dbf07c3167993cf7ad3c6ffae65fc0378 total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x5deb1aa15df2325c9274cd87003804c5d0874dfe",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "44000000000000000000",
+   "base_price": "44000000000000000000",
+   "increment": "0",
+   "supply": "37563",
+   "drift": false
+  },
+  {
+   "broker": "0x82b26de8227e23014c6f29f7fbbc20ee8be794a9",
+   "setting": "0x82b26de8227e23014c6f29f7fbbc20ee8be794a9 0xb4272071ecadd69d933adcd19ca99fe80664fc08 0x34b4f3a225057361bfe663de0aae77c5f6acf2ce 0xfb330379134ea1efce9cf6f28e2ccb917899e007 0xbbd9eabefde49ff60082b22390c168cd78b6d17ebfe44529e58418ce74263245 0x2650f5e097538a0380ab08545620a6d2453cd311c40ae004c8bc95109f86521a registry average 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x82b26de8227e23014c6f29f7fbbc20ee8be794a9",
+   "source_sha256": "ea35eea773e4927324fd4261079cdcdb6a94978e408af56bdd90ba44b603e878",
+   "price": "165530000000000000000",
+   "base_price": "161230000000000000000",
+   "increment": "25000000000000000",
+   "supply": "100000",
+   "drift": true
+  },
+  {
+   "broker": "0x84098db9c012adcf8a8bd2fa1b7227f3a0b83f9c",
+   "setting": "0x84098db9c012adcf8a8bd2fa1b7227f3a0b83f9c 0xb4272071ecadd69d933adcd19ca99fe80664fc08 0x0b7955e8611a2b3fb2d39d1bca55f0e86c6e1d8f 0xfb330379134ea1efce9cf6f28e2ccb917899e007 0x1c2434119c44d757a44be7a92b5e0777eb08bcc043a79683a3dfbf3a63c7946a 0x2650f5e097538a0380ab08545620a6d2453cd311c40ae004c8bc95109f86521a registry average 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x84098db9c012adcf8a8bd2fa1b7227f3a0b83f9c",
+   "source_sha256": "70241cbc0d560642c7ab5de4a4a3325340ea1bc47366345f53d486bf1714a029",
+   "price": "2000000000000000000",
+   "base_price": "2000000000000000000",
+   "increment": "5000000000000",
+   "supply": "1000000",
+   "drift": false
+  },
+  {
+   "broker": "0x8d90319fe817fe9e23973fcab9f1ff0f1e0d9b65",
+   "setting": "0x8d90319fe817fe9e23973fcab9f1ff0f1e0d9b65 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x343324f53cbeee3ee6d171f2a20f005964c98047 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x11e5e831998b46657f48a0e4e5bd7ffcb84fc142ee073787da935d8cfa604dd0 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 registry total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x8d90319fe817fe9e23973fcab9f1ff0f1e0d9b65",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "68010500000000000000",
+   "base_price": "68010500000000000000",
+   "increment": "500000000000000",
+   "supply": "27277",
+   "drift": false
+  },
+  {
+   "broker": "0x9f61e2b3fe63aa013b606160d0525fc141d495bf",
+   "setting": "0x9f61e2b3fe63aa013b606160d0525fc141d495bf 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x0f4dc5ada841cf5a7652e52d04ae786070cc9472 0xa537d23a76ec454f0874ad4508794b17ed9be610 0x6ebd73e6b6ee7238a0979fea9c28a361371afaa5378ab92288b946d4bcd69dff 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 registry total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0x9f61e2b3fe63aa013b606160d0525fc141d495bf",
+   "source_sha256": "43f2eea6ad8ee778024563cb58fdd2d0e22cb7b701ef1795e45ae81d76c767d6",
+   "price": "6236990000000000000",
+   "base_price": "6236990000000000000",
+   "increment": "35000000000000",
+   "supply": "100000",
+   "drift": false
+  },
+  {
+   "broker": "0xa19e7a69a67299481a609db3ebc4d8be4af9b04c",
+   "setting": "0xa19e7a69a67299481a609db3ebc4d8be4af9b04c 0xb58e61c3098d85632df34eecfb899a1ed80921cb 0x30db17899c247193e2943da3b640df1af8ff26f4 0xa537d23a76ec454f0874ad4508794b17ed9be610 0xbe9a9274aaebe11c3a167d514d83a70d964e69853263c0f631ee664066a90ba5 0x35e2428d8c49bdb61fff2e72100f565e718ced64c3081d1fc308a4e9ba06bfa5 0xa3be8358e55bf0cf5d0736dedbdb31eb14b2daee total 0",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xa19e7a69a67299481a609db3ebc4d8be4af9b04c",
+   "source_sha256": "158e51b8fcccb66fdb3486f7f7c0c9c070fefc2ba2a112c9258c060be5cd7db1",
+   "price": "450000000000000000",
+   "base_price": "450000000000000000",
+   "increment": "0",
+   "supply": "10000000",
+   "drift": false
+  },
+  {
+   "broker": "0xcf1f5270916e41f5cf4221f68798438c3e5404e6",
+   "setting": "0xcf1f5270916e41f5cf4221f68798438c3e5404e6 0xb4272071ecadd69d933adcd19ca99fe80664fc08 0xb446566d6d644249d5d82aab5fea8a5b7da3f691 0x56217a14a65bcc6a3b5e547cf7e9301c8d602787 0xdda098428371496020377418d9f10c9d92a250c6999a8618d8f6c8d97436221a 0x9429a75889dcbdd2c4560ccaab57800dea958ed1ad45a9a3b9291376d95e1f89 registry average 90",
+   "source": "https://eth.blockscout.com/api/v2/smart-contracts/0xcf1f5270916e41f5cf4221f68798438c3e5404e6",
+   "source_sha256": "5e78fb35108cd1842caa79a3fe2e511c73190e1119d1011e1380ae4ecd9e4d9b",
+   "price": "144495000000000000000",
+   "base_price": "144495000000000000000",
+   "increment": "10000000000000000",
+   "supply": "22572",
+   "drift": false
+  }
+ ]
+}

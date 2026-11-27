@@ -62,7 +62,7 @@ pub fn woo_pairs(ctx: &Ctx, f: &Family) -> bool {
 pub fn multi_dex(ctx: &Ctx) -> HashSet<String> {
     let mut out: HashSet<String> = families::all(ctx)
         .into_iter()
-        .filter(|f| matches!(f.variant, super::family_variant::Variant::Temple | super::family_variant::Variant::YieldBasis | super::family_variant::Variant::BalancerV1 | super::family_variant::Variant::BancorV3 | super::family_variant::Variant::UniswapV1) || enabled(ctx, f) || woo_pairs(ctx, f))
+        .filter(|f| matches!(f.variant, super::family_variant::Variant::Brokerbot | super::family_variant::Variant::Temple | super::family_variant::Variant::YieldBasis | super::family_variant::Variant::BalancerV1 | super::family_variant::Variant::BancorV3 | super::family_variant::Variant::UniswapV1) || enabled(ctx, f) || woo_pairs(ctx, f))
         .map(|f| f.id.to_string())
         .collect();
     for (parent, subs) in super::sub_dex::groups(ctx) {

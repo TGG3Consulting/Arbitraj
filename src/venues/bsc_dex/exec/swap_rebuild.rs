@@ -92,7 +92,7 @@ pub fn rebuild(
         cancels: Vec::new(),
     };
     let out = match c.executor {
-        Some(_) if c.shiba.is_some() => result::with_native_fact(ctx,req,d,wallet,tokens,decs,&[],Some(c)),
+        Some(_) if c.shiba.is_some() || c.aktionariat.is_some() => result::with_native_fact(ctx,req,d,wallet,tokens,decs,&[],Some(c)),
         Some(x) => fact::result(ctx, req, d, (wallet, x), tokens, decs, native),
         None => result::with_native_fact(
             ctx,

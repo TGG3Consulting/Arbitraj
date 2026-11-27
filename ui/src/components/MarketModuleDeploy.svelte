@@ -13,6 +13,7 @@
     empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
+    aktionariat:{file:'aktionariat-ethereum',key:'aktionariat-create:1',name:'AktionariatWallet в Ethereum',load:()=>import('../assets/aktionariat-ethereum.json')},
     bancor_legacy:{file:'bancor-v21-ethereum',key:'bancor-v21-create:1',name:'BancorLegacyAdapter в Ethereum',load:()=>import('../assets/bancor-v21-ethereum.json')},
     bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
     yield_basis:{file:'yield-basis-ethereum',key:'yield-basis-create:1',name:'YieldBasisAdapter в Ethereum',load:()=>import('../assets/yield-basis-ethereum.json')},
@@ -197,6 +198,8 @@
       <p>Контроллер Carbon <code>{manifest.market}</code>. Реализация <code>{manifest.implementation}</code>. Сумма перевода при создании — 0 ETH.</p>
     {:else if deployment === stabullPlan}
       <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
+    {:else if kind === 'aktionariat'}
+      <p>Реестр акций <code>{manifest.registry}</code>. Дополнительных брокеров эмитентов: {manifest.issuerMarkets.length}. При создании кошелёк отправляет 0 ETH.</p>
     {:else if kind === 'bancor_legacy'}
       <p>Реестр конвертеров <code>{manifest.factory}</code>, BancorNetwork <code>{manifest.network}</code>, WETH <code>{manifest.wrapped}</code>. При создании кошелёк отправляет 0 ETH.</p>
     {:else if kind === 'bancor_v3'}

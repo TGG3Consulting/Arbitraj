@@ -186,6 +186,17 @@ fn side(
             let amount=book.swap(token_in,true,budget).map_or(U256::ZERO,|p|pick(p.amount_in,p.amount_out));
             Ok((amount,false))
         }
+        (PoolState::Brokerbot(s),PoolKind::V2)=>{
+            let buying=token_in==s.cash;
+            let Some(cap)=s.max_units(buying) else{return Ok((U256::ZERO,true))};
+            let limit=if s.increment.is_zero(){cap}else{
+                let width=super::super::math::full_math::mul_div(s.price,U256::from((b*SCALE) as u64),U256::from(SCALE as u64)).ok_or("Aktionariat: переполнение границы глубины")?;
+                let n=width/s.increment;
+                cap.min(if buying{n.saturating_add(U256::ONE)}else{n})
+            };
+            let f=s.swap(token_in,!buying,limit);
+            Ok((f.map_or(U256::ZERO,|v|pick(v.amount_in,v.amount_out)),true))
+        }
         (PoolState::Temple(s),PoolKind::V2) => {
             let out=if zfo{e.pool.token1}else{e.pool.token0};
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};

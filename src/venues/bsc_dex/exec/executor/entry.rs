@@ -59,7 +59,7 @@ fn pinned_module_target(ctx:&Ctx,e:&Entry)->Option<Address>{
 /// A stored route carries its market reference; market-specific steps also need
 /// the registered token pair, physical deployment and currently configured target.
 pub fn route_fits(ctx:&Ctx,reg:&super::super::super::pools::registry::Registry,f:&Family,r:&PoolRef)->bool{
-    if matches!(f.variant,super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::BancorLegacy){
+    if matches!(f.variant,super::super::super::pools::family_variant::Variant::YieldBasis | super::super::super::pools::family_variant::Variant::Brokerbot | super::super::super::pools::family_variant::Variant::BancorLegacy){
         return reg.entry(r).is_some_and(|e|e.family.id==f.id && e.family.variant==f.variant && fits_ok(ctx,&e));
     }
     if f.executor_kind.is_some_and(|k|k.singleton()){
@@ -118,7 +118,7 @@ pub fn supported(f: &Family, pool: &PoolRef) -> Result<(ExecKind, Address), Stri
 /// supported. Ошибок иных нет.
 pub fn fits(ctx: &Ctx, e: &Entry) -> Result<(ExecKind, Address), String> {
     let (k, a, hooks) = shape(e)?;
-    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
+    if matches!(e.family.variant,crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis | crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot | crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy){
         return pinned_module_target(ctx,e).map(|t|(k,t)).ok_or_else(||format!("{}: не настроен модуль исполнения", e.family.id));
     }
 
@@ -143,6 +143,9 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
     let Some(k) = e.family.executor_kind else {
         return false;
     };
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot {
+        return k==ExecKind::Balancer && super::super::aktionariat_plan::terms(ctx,e).is_ok();
+    }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
         return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some_and(|s|s.second.is_none()) && pinned_module_target(ctx,e).is_some();
     }
@@ -184,6 +187,10 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
 /// пула, крючок ключа (у шагов не менеджера — нулевой). Ошибок иных нет.
 pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
     let (k, a) = supported(e.family, &e.pool.reference)?;
+    if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::Brokerbot &&
+        !matches!((&e.pool.reference,&e.pool.state),(PoolRef::Contract(a),PoolState::Brokerbot(s)) if *a==s.broker && k==ExecKind::Balancer) {
+        return Err("Aktionariat: неподтверждённый рынок или несовместимый вид шага".into());
+    }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy &&
         (k!=ExecKind::Balancer || super::super::bancor_legacy_plan::state(e).is_none()) {
         return Err("Bancor V2.1: конвертер или валюты не совпадают с реестром".into());

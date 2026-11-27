@@ -1856,6 +1856,20 @@ def tables(network, snapshots, profiles):
                 task += " · конкретный источник использует подграф; адрес его физической фабрики здесь отсутствует"
             elif kind == "absent":
                 task = "В сетевой записи этого адаптера нет данной сети. Отдельные развёртывания проверяются по своему реестру."
+        if not base and str(row["id"]) == "2782":
+            index = json.loads(gzip.decompress((data_dir/"aktionariat_ethereum_directory.json.gz").read_bytes()))
+            fills = json.loads(gzip.decompress((data_dir/"aktionariat_ethereum_protected.json.gz").read_bytes()))
+            settled = [r for r in fills["controls"] if "received" in r]
+            task = (f"Профиль `aktionariat-ethereum`. Ethereum {index['height']}, реестр 43 пар и два дополнительных брокера эмитентов. "
+                    f"Проверки собственной оплаты дали {sum(r['buying'] for r in settled)} покупок и "
+                    f"{sum(not r['buying'] for r in settled)} продаж после пополнения рынка прямым платежом. "
+                    "При продаже одной акции старый Market выплатил 143,194545 из показанных 144,495 XCHF. Удержано 0,9%. "
+                    "Дробная часть акции не покупается. Для нового кошелька разверните AktionariatWallet из карточки DEX, "
+                    "адрес сохраняется в dex.router. Валюты рынков XCHF и ZCHF, для расчёта в USDT требуется исполнимый обмен валюты. "
+                    "За 7 201 блок в 5 транзакциях эмитенты передали акции 96 раз. В этих транзакциях движения CHF отсутствуют. "
+                    "Вторичный рынок с заявками и подписями учитывается отдельно от публичных Brokerbot. "
+                    "[Реестр](../tests/data/first_run_dex_2026-11-26/aktionariat_ethereum_directory.json.gz) · "
+                    "[Оплаченные входы и отказы](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45998983838).")
         if not base and str(row["id"]) == "6815":
             wallets = data_dir / "shibaswap_v2_ethereum_payments.json.gz"
             book = json.loads(gzip.decompress(wallets.read_bytes()))

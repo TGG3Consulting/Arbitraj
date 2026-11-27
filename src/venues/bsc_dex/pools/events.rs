@@ -191,6 +191,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::IntegralSize=>{e.valid=false;Applied::Refresh("Изменилось состояние пары Integral SIZE".into())}
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
+        _ if e.family.variant==super::family_variant::Variant::Brokerbot => {e.valid=false;Applied::Refresh("Изменились курс или обязательства Brokerbot".into())}
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}
         _ if e.family.variant==super::family_variant::Variant::BalancerV1=>{e.valid=false;Applied::Refresh("Balancer V1: изменились условия обмена или токены пула".into())}
         _ if e.family.variant==super::family_variant::Variant::BancorLegacy=>{e.valid=false;Applied::Refresh("Bancor 2.1: состояние конвертера изменилось".into())}

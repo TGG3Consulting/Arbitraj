@@ -502,3 +502,8 @@ pub mod verify_wombat;
 pub mod verify_woo;
 pub mod woo_quote;
 pub mod wrapped;
+
+pub(crate) mod brokerbot;
+pub(crate) mod brokerbot_quotes;
+mod brokerbot_profile;
+mod brokerbot_directory;

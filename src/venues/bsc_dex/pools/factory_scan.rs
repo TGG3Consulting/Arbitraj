@@ -142,6 +142,8 @@ async fn pass(
     let carbon=super::carbon_directory::scan(ctx,coins,&quote_list).await;
     for (coin,rows) in carbon.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(carbon.notes);no_answer+=carbon.no_answer;
+    let brokers=super::brokerbot_directory::scan(ctx,coins,&quote_list);
+    for (coin,rows) in brokers.found{found.entry(coin).or_default().extend(rows);}
     let temple=Box::pin(super::temple_directory::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in temple.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(temple.notes);no_answer+=temple.no_answer;

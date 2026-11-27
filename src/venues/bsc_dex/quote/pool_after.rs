@@ -36,6 +36,7 @@ pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
         (PoolState::VaultPool(d),PoolKind::VaultPool)=>super::super::math::ranges_sequence::supported(d),
         (PoolState::UmbraeDamm(_) | PoolState::ToonSwap(_), PoolKind::V2) => true,
+        (PoolState::Brokerbot(_),PoolKind::V2)=>true,
         (PoolState::Empire(s),PoolKind::V2)=>s.exact_tokens,
         (PoolState::BalancerV1(s),PoolKind::V2)=>[e.pool.token0,e.pool.token1].iter().all(|t|s.assets.iter().any(|a|a.token==*t && a.exact_transfer)),
         (PoolState::Antfarm(_) | PoolState::Temple(_) | PoolState::BancorV3(_), PoolKind::V2) => true,
@@ -111,6 +112,11 @@ pub fn apply(
         (PoolState::Memebox(s),PoolKind::V2) => super::super::math::memebox::quote(s,zero_for_one,true,amount)
             .map(|(fill,next)|(fill,PoolState::Memebox(Box::new(next))))
             .ok_or_else(||no("Memebox: объём не обеспечен")),
+        (PoolState::Brokerbot(s),PoolKind::V2)=>{
+            let f=s.swap(token_in,true,amount).ok_or_else(||no("Aktionariat: сумма не обеспечена"))?;
+            let next=s.after(token_in,amount).ok_or_else(||no("Aktionariat: состояние после сделки не подтверждено"))?;
+            Ok((f,PoolState::Brokerbot(Box::new(next))))
+        }
         (PoolState::Empire(s),PoolKind::V2) if s.exact_tokens =>
             s.paid(zero_for_one,amount).map(|(fill,next)|(fill,PoolState::Empire(Box::new(next))))
                 .ok_or_else(||no("Empire: физическое обеспечение повторного обмена исчерпано")),

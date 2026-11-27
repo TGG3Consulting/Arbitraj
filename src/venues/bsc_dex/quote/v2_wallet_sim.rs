@@ -54,6 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
+    Aktionariat(super::super::exec::aktionariat_wallet::Market),
     BancorLegacy(Box<super::super::exec::bancor_legacy_wallet::Terms>),
     YieldBasis(super::super::exec::yield_basis_wallet::Terms),
     BalancerV1(super::super::exec::balancer_v1_wallet::Terms),
@@ -76,6 +77,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
     V5(V5Step),
+    AktionariatV5(V5Step,super::super::exec::aktionariat_wallet::Market),
     /// Терминальные держатели входного ERC20, подтверждённые протоколом выбранного шага.
     V5Funded(V5Step, Vec<Address>),
     V5Burn(V5Step, Box<BurnFunding>),
@@ -140,7 +142,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             },
             v.value(o.amount),
         ),
-        Wire::V5(v) | Wire::V5Funded(v,_) | Wire::V5Burn(v,_) => (
+        Wire::V5(v) | Wire::AktionariatV5(v,_) | Wire::V5Funded(v,_) | Wire::V5Burn(v,_) => (
             v.native.map(|(w, _)| w),
             if matches!(v.native, Some((_, true))) {
                 o.amount
@@ -170,7 +172,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::Stabull(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::Stabull(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -215,12 +217,18 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
     let exact_target=matches!(&o.wire,Wire::BalancerV1(t) if t.desired.is_some())||matches!(&o.wire,Wire::Stabull(t) if t.desired.is_some())||matches!(&o.wire,Wire::BancorV3(t) if t.desired.is_some())||matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
-    let bounded_input=matches!(&o.wire,Wire::RegisteredV3(m) if m.algebra_wallet.is_some());
+    let bounded_input=matches!(&o.wire,Wire::Aktionariat(_)|Wire::AktionariatV5(_,_)) || matches!(&o.wire,Wire::RegisteredV3(m) if m.algebra_wallet.is_some());
     let charged=spent.ok_or_else(fail)?;
     if charged.is_zero() || charged>o.amount || (!exact_target && !bounded_input && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::AktionariatV5(_,m)=&o.wire {
+        let mut proof=m.proof(&o,o.minimum,deadline);
+        proof.v5=Some(crate::venues::bsc_dex::exec::signed_call::Erc20Call{chain:1,payer:o.payer,module:o.target,calldata:alloy_primitives::keccak256(calldata(&o,deadline,o.minimum))});
+        if proof.measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
+    }
+    if let Wire::Aktionariat(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BancorLegacy(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::YieldBasis(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BalancerV1(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
@@ -326,6 +334,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::Aktionariat(m)=>m.proof(o,minimum,deadline).data(),
         Wire::BancorLegacy(t)=>t.proof(o,minimum,deadline).data(),
         Wire::YieldBasis(t)=>t.proof(o,minimum,deadline).data(),
         Wire::BalancerV1(t)=>t.proof(o,minimum,deadline).data(),
@@ -348,7 +357,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,
         ),
         Wire::Vista(v) => v.data(o.input, o.output, o.amount, minimum, o.payer, deadline),
-        Wire::V5(v5) | Wire::V5Funded(v5,_) | Wire::V5Burn(v5,_) => {
+        Wire::V5(v5) | Wire::AktionariatV5(v5,_) | Wire::V5Funded(v5,_) | Wire::V5Burn(v5,_) => {
             let step = ArbExecutor::Step {
                 kind: v5.kind,
                 pool: v5.pool,

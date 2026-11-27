@@ -67,6 +67,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub prop:Option<Box<super::prop_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub(in crate::venues::bsc_dex) aktionariat:Option<Box<super::aktionariat_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) bancor_legacy:Option<Box<super::bancor_legacy_wallet::Proof>>,
     #[serde(default, skip_serializing_if="Option::is_none")]
     pub yield_basis:Option<Box<super::yield_basis_wallet::Proof>>,
@@ -153,6 +155,7 @@ pub struct SwapCtx {
 impl SwapCtx {
     pub(in crate::venues::bsc_dex) fn module_order(&self)->Option<super::signed_call::Erc20Call> {
         self.shiba.as_deref().map(super::shiba_payment::Proof::signed)
+            .or_else(|| self.aktionariat.as_deref().map(super::aktionariat_wallet::Proof::signed))
             .or_else(|| self.empire.as_deref().map(super::empire_wallet::Proof::signed))
     }
     /// Контекст из «чем найти». Принимает: PendingRef. Возвращает: None — parse нет или не разобран. Ошибок нет.

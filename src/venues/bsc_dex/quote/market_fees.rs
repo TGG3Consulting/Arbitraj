@@ -12,6 +12,9 @@ pub(super) fn by_volume(
     token_in: Address,
     input: U256,
 ) -> Option<GatewayResult<Decimal>> {
+    if let PoolState::Brokerbot(s)=&e.pool.state {
+        return Some(Ok(if token_in==s.share {Decimal::new(i64::from(s.license_bps),2)}else{Decimal::ZERO}));
+    }
     if let PoolState::Surge(s)=&e.pool.state {
         let multiplier=if token_in==s.wrapped{s.buy_mul}else{s.sell_mul};
         return Some(Ok(Decimal::from(100u8-multiplier)));

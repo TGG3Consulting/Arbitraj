@@ -89,7 +89,8 @@ pub(crate) fn stable_net(
     Some(y.checked_mul(decimals_out)? / one)
 }
 
-/// Минимальный сырой вход с проверенной выплатой. Оба конца двоичного поиска — в единицах плательщика.
+/// Сырой вход с проверенной выплатой. Предшествующий атом либо платит меньше, либо недоступен.
+/// При отдельных откатах исходного расчёта между выполнимыми объёмами глобальный минимум не гарантирован.
 pub(crate) fn input_for(
     seed: U256,
     want: U256,
@@ -106,7 +107,7 @@ pub(crate) fn input_for(
     }
     while hi - lo > U256::ONE {
         let mid = lo + (hi - lo) / U256::from(2);
-        if quote(mid)? >= want {
+        if quote(mid).is_some_and(|out| out >= want) {
             hi = mid;
         } else {
             lo = mid;

@@ -79,7 +79,7 @@ fn both_classic_factories_match_initial_quotes_each_round_trip_and_restored_rece
                 let need = swap_solidly::input_for(paid, out, quote).unwrap();
                 assert!(need <= paid && quote(need).unwrap() >= out);
                 if need > U256::ONE {
-                    assert!(quote(need - U256::ONE).unwrap() < out);
+                    assert!(quote(need - U256::ONE).is_none_or(|previous| previous < out));
                 }
                 let call: Bytes = r["tx"]["data"].as_str().unwrap().parse().unwrap();
                 let p = Proof {

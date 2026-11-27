@@ -1,0 +1,23 @@
+{
+  "block": 26494988,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "pool": "0x21b8065d10f73ee2e260e5b47d3344d3ced7596e",
+  "tokens": [
+    "0x66a0f676479cee1d7373f3dc2e2952778bff5bd6",
+    "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+  ],
+  "symbols": [
+    "WISE",
+    "WETH"
+  ],
+  "factory": "0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f",
+  "getPair": "0x21b8065d10f73ee2e260e5b47d3344d3ced7596e",
+  "reserves": [
+    523623728609074021534172901,
+    28389405888761626349228,
+    1795628387
+  ]
+}

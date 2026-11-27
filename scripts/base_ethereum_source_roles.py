@@ -81,6 +81,28 @@ def describe(network,source_id,adapter,configured,candidates):
         if helper=="rainCard":
             return "Расход по карте. Источник суммирует выплаченные токены из Liquidation связанного с картой залогового контракта Rain."
         return "Расход по карте. Источник суммирует токены, поступившие на указанные получающие адреса карточной программы."
+    if network=="base" and source_id=="3409" and path=="dexs/swapbased-v3.ts":
+        factory=configured["swapbased-v3"]["settings"]["dex.factory"].lower()
+        assert factory=="0xb5620f90e803c7f957a9ef351b8db3c746021bea"
+        return f"Профиль `swapbased-v3`. Источник отбирает PoolCreated исходной фабрики `{factory}` и Swap созданных ею пулов. [Код]({repository}{path}#L10)."
+    if network=="ethereum" and source_id=="8449" and path=="dexs/wise-token.ts":
+        archive=Path("tests/data/first_run_dex_2026-11-26/wise_token_ethereum.json")
+        proof=json.loads(archive.read_bytes())
+        assert proof["factory"]==configured["uniswap_v2"]["settings"]["dex.factory"].lower()
+        assert proof["getPair"]==proof["pool"]=="0x21b8065d10f73ee2e260e5b47d3344d3ced7596e" and all(proof["reserves"][:2])
+        return f"Пара WISE/WETH исходного Uniswap V2. На блоке {proof['block']} адрес пары совпал у источника и getPair фабрики профиля `uniswap_v2`. [Ответы пула и фабрики](../{archive.as_posix()})."
+    if network=="ethereum" and (source_id,path) in {("7508","dexs/aptos-caliber-prop-amm/index.ts"),("9437","dexs/taurusfi/index.ts")}:
+        name="kaliber" if source_id=="7508" else "taurus"
+        profile=name+"-lambda-ethereum"
+        archive=Path("tests/data/first_run_dex_2026-11-26")/(name+"_ethereum_wallets.json.gz")
+        proof=json.loads(gzip.decompress(archive.read_bytes()))
+        paid=proof["historicalSettlement"]
+        assert paid["roles"]["venue"]["address"]==configured[profile]["settings"]["dex.factory"]
+        strict=[r for r in proof["rows"] if r["strict"]]
+        assert strict and all(r["status"]=="reverted" for r in strict)
+        return (f"Профиль `{profile}`, фактическая выплата {paid['received']/1_000_000:.6f} USDC в блоке {paid['height']}. "
+                f"При проверке после блока все {len(strict)} требований выплаты исходным DEX отклонены. "
+                f"Разрешённая замена рассчиталась через Uniswap V3. [Квитанция и проверки](../{archive.as_posix()}).")
     if network=="ethereum" and source_id=="2121" and path=="dexs/frax-swap/index.ts":
         factory=configured["fraxswap_ethereum"]["settings"]["dex.factory"]
         return (f"Fraxswap. Профиль `fraxswap_ethereum`, реестр `{factory}`, проверено 30 пар. "

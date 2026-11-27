@@ -1079,6 +1079,11 @@ jobs:
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
+      - if: matrix.market == 'kaliber-base-canonical'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          contracts/node_modules/.bin/solcjs --optimize --bin contracts/evmtest/KaliberCashProbe.sol -o "$RUNNER_TEMP/probe"
+          python scripts/record_kaliber_canonical.py "$RUNNER_TEMP/probe" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'kaliber-base-access'
         run: python scripts/record_kaliber_access.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'kaliber-base-vaults'

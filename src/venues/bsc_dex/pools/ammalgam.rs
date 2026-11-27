@@ -154,6 +154,6 @@ pub(super) async fn verify(ctx: &Ctx, c: &Candidate) -> Verdict {
     }
 }
 pub(super) use super::ammalgam_state::state;
-pub(crate) use super::ammalgam_state::{payout, request};
+pub(crate) use super::ammalgam_state::{payout, request,state_at};
 
 pub(crate) use super::ammalgam_step::{check_step, graph_target};

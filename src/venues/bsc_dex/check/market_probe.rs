@@ -28,6 +28,7 @@ enum Venue {
     FollowingBlock(Head),
     WalletRouter(Address),
     FundedExecutor,
+    Ammalgam,
     Mooniswap,
     DefiPlaza,
     SafeSwap,
@@ -77,8 +78,11 @@ impl Market {
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             Box::pin(super::super::pools::ammalgam::check_step(ctx,e,e.usdt,&head.selector())).await?;
             Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
-            anchor=Some((head,Box::new(e.clone())));
-            Venue::FundedExecutor
+            let mut market=Box::new(e.clone());
+            let state=Box::pin(super::super::pools::ammalgam::state_at(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),head)).await?;
+            market.pool.state=PoolState::Ammalgam(Box::new(state));market.pool.block=number;
+            anchor=Some((head,market));
+            Venue::Ammalgam
         } else if let PoolState::DefiPlaza(s)=&e.pool.state{
             let head=white_state::head(ctx,&format!("{number:#x}")).await?;
             let fresh=Box::pin(super::super::pools::defiplaza::state(ctx,e.family,s.pool,(e.pool.token0,e.pool.token1),&head.selector())).await?;
@@ -255,7 +259,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::FundedExecutor
+            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -272,6 +276,14 @@ impl Market {
         now: u64,
         prefix: &[Call],
     ) -> GatewayResult<Leg> {
+        if matches!(self.venue,Venue::Ammalgam){
+            let pool=e.pool.reference.address();
+            let module=super::super::pools::ammalgam::graph_target(ctx,e).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Ammalgam: отсутствует модуль кошелька"))?;
+            let approvals=super::super::wallet::approve::fork_all(ctx,order.token_in,module,order.amount_in)?;
+            let end=U256::from(now+ctx.int("dex.deadline_s")?);
+            let data=super::super::pools::solidly_v3::execution_data(pool,order.token_in,order.token_out,order.amount_in,order.min_out,end);
+            return Ok(Leg{entry:None,call:(approvals,module,data)});
+        }
         if matches!(self.venue, Venue::FundedExecutor) {
             let call = Box::pin(super::probe_exec::part(ctx, e, order, wallet, now)).await?;
             return Ok(Leg { entry: None, call });
@@ -392,7 +404,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::DefiPlaza | Venue::Ammalgam | Venue::FundedExecutor => Ok(None),
         }
     }
 }

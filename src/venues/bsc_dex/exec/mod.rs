@@ -78,6 +78,7 @@ pub(super) mod prop_wallet;
 pub(super) mod prop_abi;
 pub(super) mod prop_plan;
 pub(super) mod stabull_wallet;
+mod ammalgam_receipt;
 pub(super) mod empire_wallet;
 pub(super) mod shiba_payment;
 mod shiba_return;

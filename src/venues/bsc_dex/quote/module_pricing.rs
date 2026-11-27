@@ -155,6 +155,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 super::super::pools::maverick_one::market(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),&h.selector()).await.map(|_|())
             } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
+            } else if e.family.variant.ammalgam(){
+                Box::pin(super::super::pools::ammalgam::state_at(ctx,e.family,e.pool.reference.address(),(e.pool.token0,e.pool.token1),h)).await
+                    .map(|s|e.pool.state=crate::core::types::PoolState::Ammalgam(Box::new(s)))
             } else if e.family.variant.empire_module() {
                 Box::pin(super::super::pools::empire::fresh(ctx,&e,&h.selector())).await
             } else if e.family.variant == Variant::CandySwap {

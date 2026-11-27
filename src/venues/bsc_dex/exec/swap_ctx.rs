@@ -61,6 +61,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub empire:Option<Box<super::empire_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub ammalgam:Option<Box<super::empire_wallet::Proof>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub angstrom:Option<Box<super::angstrom_wallet::Proof>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub stabull:Option<Box<super::stabull_wallet::Proof>>,
@@ -162,7 +164,7 @@ impl SwapCtx {
     pub(in crate::venues::bsc_dex) fn module_order(&self)->Option<super::signed_call::Erc20Call> {
         self.shiba.as_deref().map(super::shiba_payment::Proof::signed)
             .or_else(|| self.aktionariat.as_deref().map(super::aktionariat_wallet::Proof::signed))
-            .or_else(|| self.empire.as_deref().map(super::empire_wallet::Proof::signed))
+            .or_else(|| self.empire.as_deref().or(self.ammalgam.as_deref()).map(super::empire_wallet::Proof::signed))
     }
     /// Контекст из «чем найти». Принимает: PendingRef. Возвращает: None — parse нет или не разобран. Ошибок нет.
     pub fn of(p: &PendingRef) -> Option<Self> {

@@ -21,8 +21,17 @@ pub(super) async fn state(
     pair: (Address, Address),
     tag: &str,
 ) -> GatewayResult<AmmalgamState> {
-    let generation = ctx.settings.generation();
     let head = white_state::head(ctx, tag).await?;
+    state_at(ctx, f, pool, pair, head).await
+}
+pub(crate) async fn state_at(
+    ctx: &Ctx,
+    f: &Family,
+    pool: Address,
+    pair: (Address, Address),
+    head: white_state::Head,
+) -> GatewayResult<AmmalgamState> {
+    let generation = ctx.settings.generation();
     let at = head.selector();
     let bal = IERC20::balanceOfCall { owner: pool };
     let req = [

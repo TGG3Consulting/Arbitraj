@@ -33,7 +33,10 @@ pub(super) async fn plan(
     }
     let pool = direct_module::market(ctx, &step.entry)?;
     let router = ctx.dex_addr("dex.router", step.entry.family.id)?;
-    if step.entry.family.variant.empire_module() {
+    if step.entry.family.variant.ammalgam(){
+        let at=super::super::pools::nami::block(ctx,"latest").await?;
+        Box::pin(super::super::pools::ammalgam::check_step(ctx,&step.entry,step.order.token_in,&at)).await?;
+    } else if step.entry.family.variant.empire_module() {
         let at = super::super::pools::nami::block(ctx, "latest").await?;
         tokio::try_join!(
             super::super::pools::empire::fresh(ctx, &step.entry, &at),
@@ -58,9 +61,8 @@ pub(super) async fn plan(
         order.min_out,
         deadline,
     )?;
-    if step.entry.family.variant.empire_module() {
-        plan.set_direct_market(super::plan::DirectCall::Empire(std::sync::Arc::new(
-            super::empire_wallet::Proof {
+    if step.entry.family.variant.empire_module() || step.entry.family.variant.ammalgam() {
+        let cash=std::sync::Arc::new(super::empire_wallet::Proof {
             chain: crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,
                 module: router,
                 pool,
@@ -70,8 +72,8 @@ pub(super) async fn plan(
                 amount: order.amount_in,
                 minimum: order.min_out,
                 deadline,
-            },
-        )));
+            });
+        plan.set_direct_market(if step.entry.family.variant.ammalgam(){super::plan::DirectCall::Ammalgam(cash)}else{super::plan::DirectCall::Empire(cash)});
         return Ok(plan);
     }
     if step.entry.family.variant.shiba_v2() {

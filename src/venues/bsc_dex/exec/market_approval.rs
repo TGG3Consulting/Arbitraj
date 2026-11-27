@@ -30,6 +30,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
             | BancorV3 {target,..}
             | UniswapV1 {target,..}
             | Llamma { target,v5:None,.. }
+            | MotoswapPath {target,..}
             | FluidHop {target,..}
             | WalletBounds { target, .. }
             | Dagrow { target, .. }
@@ -61,7 +62,8 @@ impl Market {
             },
             Market::BancorLegacy | Market::Mooniswap | Market::DefiPlaza | Market::YieldBasis | Market::BalancerV1 | Market::BancorV3 | Market::UniswapV1 | Market::Rubicon | Market::NativeFlat=>selected(mode),
             Market::Prop=>match mode {Some(VenueFallback{target,..})=>Spender::Selected(target),_=>Spender::Missing},
-            Market::Motoswap | Market::Aqua | Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
+            Market::Motoswap=>match mode{Some(MotoswapPath{target,..}|ProtectedWallet{target})=>Spender::Selected(target),_=>Spender::Missing},
+            Market::Aqua | Market::Ammalgam | Market::Aktionariat | Market::Ranges | Market::SafeSwap | Market::Pendle => match mode {
                 Some(ProtectedWallet { target }) => Spender::Selected(target),
                 _ => Spender::Missing,
             },

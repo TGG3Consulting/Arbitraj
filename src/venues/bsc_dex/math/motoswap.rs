@@ -159,6 +159,8 @@ mod tests {
             let num = |n: &serde_json::Value| n.as_str().unwrap().parse::<U256>().unwrap();
             let reserves = [num(&pool["reserves"][0]), num(&pool["reserves"][1])];
             let mut state = MotoswapState {
+                sides: None,
+                path_module:None,
                 fee_router_frozen: false,
                 reserves,
                 balances: reserves,

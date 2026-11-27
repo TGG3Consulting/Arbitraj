@@ -319,6 +319,11 @@ pub struct AmmalgamState {
 /// Ethereum MotoSwap FeeRouter charges protocol and creator cuts separately on one side.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MotoswapState {
+    /// Per side: active creator and optional quote rank, read at the reserve block.
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub sides: Option<[(bool,Option<U256>);2]>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub path_module: Option<Address>,
     pub fee_router_frozen: bool,
     pub reserves: [U256; 2],
     pub balances: [U256; 2],

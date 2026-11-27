@@ -366,10 +366,13 @@ pub(super) fn router_shape(
     native_asset:bool,cash:Address,
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
-    if leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::FluidHop{..}))) {
+    if leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::FluidHop{..}|crate::core::types::RouterFeeMode::MotoswapPath{..}))) {
         if let Some((target,_))=super::super::quote::fluid_hop_pricing::selected(&leg.hops)
           && direct && route.legs.len()==1 && !native_asset && !super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)
-          && leg.hops.iter().all(|h|q.reg.entry(&h.pool).is_some_and(|e|e.family.id==h.family && e.pool.kind==h.kind && super::super::pools::fluid_dex_lite::shape(&e).is_some() && q.ctx.dex_addr("dex.router",e.family.id).ok()==Some(target))){return Ok(());}
+          && leg.hops.iter().all(|h|q.reg.entry(&h.pool).is_some_and(|e|e.family.id==h.family && e.pool.kind==h.kind && match h.fee_mode{
+            Some(crate::core::types::RouterFeeMode::MotoswapPath{..})=>super::motoswap_plan::shape(&e).is_some() && [q.ctx.dex_addr("dex.router",e.family.id).ok(),q.ctx.dex_addr("dex.quoter",e.family.id).ok()].contains(&Some(target)),
+            _=>super::super::pools::fluid_dex_lite::shape(&e).is_some() && q.ctx.dex_addr("dex.router",e.family.id).ok()==Some(target)
+           })){return Ok(());}
         return Err(super::super::pools::fluid_dex_lite::bad(&q.ctx));
     }
     if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::EulerModuleV5{module,executor})=hop.fee_mode {

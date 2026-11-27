@@ -22,6 +22,7 @@ use super::registry::Entry;
 pub struct Pools {
     pub(super) ambient_clock: crate::core::types::ambient::Clock,
     pub(super) ambient_refs: Arc<HashSet<PoolRef>>,
+    pub(super) path_refs: HashSet<PoolRef>,
     /// Записи пулов. За `Arc`: снимок всех записей (граф маршрутов) не копирует их, запись меняется на месте
     /// (`Arc::make_mut` копирует запись, только если снимок с ней ещё жив).
     map: HashMap<PoolRef, Arc<Entry>>,
@@ -34,6 +35,13 @@ pub struct Pools {
 /// Ключи индексов записи: пара и монета.
 fn keys(e: &Entry) -> ((Address, Address), Address) {
     ((e.coin, e.usdt), e.coin)
+}
+
+fn path_market(e: &Entry) -> bool {
+    matches!(
+        e.pool.state,
+        crate::core::types::PoolState::FluidDexLite(_) | crate::core::types::PoolState::Motoswap(_)
+    )
 }
 
 impl Pools {
@@ -94,6 +102,7 @@ impl Pools {
             if keys(&old) == keys(&e)
                 && old.pool.state.singleton_stamp().is_some()
                 && e.pool.state.singleton_stamp().is_some()
+                && path_market(&old) == path_market(&e)
             {
                 self.map.insert(r, Arc::new(e));
                 return;
@@ -109,9 +118,18 @@ impl Pools {
     pub fn update<T>(&mut self, r: &PoolRef, f: impl FnOnce(&mut Entry) -> T) -> Option<T> {
         let slot = self.map.get_mut(r)?;
         let before = keys(slot);
+        let was_path = path_market(slot);
         let e = Arc::make_mut(slot);
         let out = f(e);
         let after = keys(e);
+        let now_path = path_market(e);
+        if was_path != now_path {
+            if now_path {
+                self.path_refs.insert(r.clone());
+            } else {
+                self.path_refs.remove(r);
+            }
+        }
         if after != before {
             let e = e.clone();
             self.unkeys(r, &before);
@@ -140,9 +158,10 @@ impl Pools {
 
     /// Ставит пул в индексы. Ошибок нет.
     fn index(&mut self, r: &PoolRef, e: &Entry) {
-        if e.pool.state.singleton_stamp().is_some()
-            && !self.ambient_refs.contains(r)
-        {
+        if path_market(e) {
+            self.path_refs.insert(r.clone());
+        }
+        if e.pool.state.singleton_stamp().is_some() && !self.ambient_refs.contains(r) {
             Arc::make_mut(&mut self.ambient_refs).insert(r.clone());
         }
         let (pair, coin) = keys(e);
@@ -152,6 +171,9 @@ impl Pools {
 
     /// Снимает пул из индексов по записи. Ошибок нет.
     fn unindex(&mut self, r: &PoolRef, e: &Entry) {
+        if path_market(e) {
+            self.path_refs.remove(r);
+        }
         if e.pool.state.singleton_stamp().is_some() {
             Arc::make_mut(&mut self.ambient_refs).remove(r);
         }

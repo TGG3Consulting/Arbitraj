@@ -156,3 +156,47 @@ async fn load(ctx: &Ctx, r: Roles, at: &Value) -> GatewayResult<Frame> {
         frozen: batch::decode(&frozen, IMoto::upgradesRenouncedCall {})?,
     })
 }
+
+type VersionCells = VecDeque<((B256, Address, Vec<B256>), Arc<OnceCell<bool>>)>;
+static VERSIONS: LazyLock<Mutex<VersionCells>> = LazyLock::new(Mutex::default);
+
+/// Keep the original single-swap module available when the optional method is absent.
+pub(super) async fn path_module(
+    ctx: &Ctx,
+    f: &super::Family,
+    module: Address,
+    at: &Value,
+) -> Option<Address> {
+    let hash = at["blockHash"].as_str()?.parse::<B256>().ok()?;
+    let allowed = crate::venues::bsc_dex::pools::direct_module::configured(ctx, f.id).ok()?;
+    let key = (hash, module, allowed);
+    let cell = {
+        let mut cache = VERSIONS.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some((_, c)) = cache.iter().find(|(k, _)| *k == key) {
+            c.clone()
+        } else {
+            if cache.len() >= 16 {
+                cache.pop_front();
+            }
+            let c = Arc::<OnceCell<bool>>::default();
+            cache.push_back((key, c.clone()));
+            c
+        }
+    };
+    let supported = cell
+        .get_or_try_init(|| async {
+            crate::venues::bsc_dex::pools::direct_module::verified_hash(ctx, f.id, module, at)
+                .await?;
+            crate::venues::bsc_dex::node::call::canonical(
+                ctx,
+                at,
+                module,
+                IMoto::pathVersionCall {},
+            )
+            .await
+            .map(|v| v == U256::ONE)
+        })
+        .await
+        .ok()?;
+    supported.then_some(module)
+}

@@ -15,6 +15,7 @@ use alloy_primitives::{Address, B256, U256, keccak256};
 use serde_json::{Value, json};
 
 alloy::sol! {interface IMoto {
+    function pathVersion() external view returns(uint256);
     function upgradesRenounced() external view returns(bool);
     function router() external view returns(address);
     function WETH() external view returns(address);
@@ -31,6 +32,7 @@ alloy::sol! {interface IMoto {
     function protocolFeeBps() external view returns(uint256);
     function creatorFeeBps() external view returns(uint256);
     function swapAllowed(address who) external view returns(bool);
+    function quoteRank(address token) external view returns(uint256);
     function isQuote(address token) external view returns(bool);
     function activeCreator(address token) external view returns(address);
     function feeOnOutput(address[] path) external view returns(bool);
@@ -163,6 +165,8 @@ pub(crate) async fn state(
         bb,
         qa,
         qb,
+        rank0,
+        rank1,
         coa,
         cob,
         fa,
@@ -181,6 +185,8 @@ pub(crate) async fn state(
             batch::view(at, b, IMoto::balanceOfCall { owner: pool }),
             q(a),
             q(b),
+            batch::view(at, registry.address, IMoto::quoteRankCall { token: a }),
+            batch::view(at, registry.address, IMoto::quoteRankCall { token: b }),
             abi(a),
             abi(b),
             output(a, b),
@@ -206,7 +212,27 @@ pub(crate) async fn state(
         return Err(bad(ctx));
     }
     let rr = batch::decode(&rr, IV2Pair::getReservesCall {})?;
+    let active = [
+        !batch::decode(&coa, IMoto::activeCreatorCall { token: a })?.is_zero(),
+        !batch::decode(&cob, IMoto::activeCreatorCall { token: b })?.is_zero(),
+    ];
+    let ranks = [
+        batch::decode(&qa, IMoto::isQuoteCall { token: a })?
+            .then_some(batch::decode(&rank0, IMoto::quoteRankCall { token: a })?),
+        batch::decode(&qb, IMoto::isQuoteCall { token: b })?
+            .then_some(batch::decode(&rank1, IMoto::quoteRankCall { token: b })?),
+    ];
+    let path_module = if let Ok(module) = ctx.dex_addr("dex.router", f.id) {
+        frame::path_module(ctx, f, module, at).await
+    } else {
+        None
+    };
+    if generation != ctx.settings.generation() {
+        return Err(bad(ctx));
+    }
     Ok(MotoswapState {
+        path_module,
+        sides: Some([(active[0], ranks[0]), (active[1], ranks[1])]),
         fee_router_frozen: frame.frozen,
         reserves: [U256::from(rr.reserve0), U256::from(rr.reserve1)],
         balances: [
@@ -216,8 +242,7 @@ pub(crate) async fn state(
         lp_bps: frame.lp,
         protocol_bps: frame.protocol,
         creator_bps: frame.creator,
-        creators: u8::from(!batch::decode(&coa, IMoto::activeCreatorCall { token: a })?.is_zero())
-            + u8::from(!batch::decode(&cob, IMoto::activeCreatorCall { token: b })?.is_zero()),
+        creators: u8::from(active[0]) + u8::from(active[1]),
         fee_on_output: [
             batch::decode(&fa, IMoto::feeOnOutputCall { path: vec![a, b] })?,
             batch::decode(&fbout, IMoto::feeOnOutputCall { path: vec![b, a] })?,

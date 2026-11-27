@@ -8,7 +8,7 @@ import {checkMotoModule} from '../src/lib/motoswapDeploy.js';
 const read=file=>readFileSync(new URL(file,import.meta.url));
 const profile=JSON.parse(read('../../config/first_run_dex.json')).find(p=>p.settings['dex.kind']==='motoswap_v2');
 const plan=JSON.parse(read('../src/assets/motoswap-ethereum.json'));
-const archive=JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz')));
+const archive=JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/motoswap_v2_ethereum_wallets.json.gz')));
 const active={kind:'motoswap_v2',chainId:profile.chain_id,market:profile.settings['dex.factory'],quoter:profile.settings['dex.quoter'],
   hashes:profile.settings['dex.module_runtime_hashes'],motoRoles:profile.settings['dex.motoswap_roles']};
 const word=address=>'0x'+address.slice(2).padStart(64,'0');

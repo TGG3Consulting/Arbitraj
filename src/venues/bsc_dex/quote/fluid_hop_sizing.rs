@@ -38,7 +38,23 @@ pub(super) async fn paid(
         .chain(legs.iter().map(|l| l.token_out))
         .collect();
     let at = h.selector();
-    let (t, route) = fluid_lite_plan::hop_terms(ctx, &entries, target, path, &at).await?;
+    let (wire, refreshed) =
+        if crate::venues::bsc_dex::exec::motoswap_plan::shape(&first.entry).is_some() {
+            let (wire, states) = crate::venues::bsc_dex::exec::motoswap_plan::path_wire(
+                ctx, &entries, target, path, &at,
+            )
+            .await?;
+            let mut updated = legs.to_vec();
+            for (leg, state) in updated.iter_mut().zip(states) {
+                leg.entry.pool.state = crate::core::types::PoolState::Motoswap(Box::new(state));
+            }
+            super::motoswap_path::fees(&mut updated).ok_or_else(|| lite::bad(ctx))?;
+            (wire, Some(updated))
+        } else {
+            let (t, route) = fluid_lite_plan::hop_terms(ctx, &entries, target, path, &at).await?;
+            (sim::Wire::FluidHop(t, Arc::new(route)), None)
+        };
+    let legs = refreshed.as_deref().unwrap_or(legs);
     let payer = signer::address(ctx)?;
     let wanted = direct::ceil_units(qty, v.coin_dec).ok_or_else(|| lite::bad(ctx))?;
     let buying = v.side == Side::Buy;
@@ -57,7 +73,25 @@ pub(super) async fn paid(
             .min(cash);
         let amount = match fixed {
             Some(a) => a,
+            None if matches!(&wire, sim::Wire::MotoswapPath(..)) => {
+                let p = super::route_calc::eval(
+                    ctx,
+                    legs,
+                    v.side,
+                    qty,
+                    super::pool_tax::coin_keep(legs, v.side, v.taxes),
+                )?;
+                p.hops
+                    .first()
+                    .ok_or_else(|| lite::bad(ctx))?
+                    .swapped
+                    .amount_in
+                    .min(max)
+            }
             None => {
+                let sim::Wire::FluidHop(t, route) = &wire else {
+                    return Err(lite::bad(ctx));
+                };
                 let resolver = lite::shape(&first.entry)
                     .ok_or_else(|| lite::bad(ctx))?
                     .resolver;
@@ -122,7 +156,7 @@ pub(super) async fn paid(
         output,
         amount: principal,
         minimum,
-        wire: sim::Wire::FluidHop(t, Arc::new(route)),
+        wire,
     };
     let fill = sim::measure(ctx, h, order, true).await?;
     let flows = fill

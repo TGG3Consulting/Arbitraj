@@ -204,6 +204,7 @@ pub enum RouterFeeMode {
     NativeSettlement {
         gross_minimum: bool,
     },
+    MotoswapPath {target:alloy_primitives::Address,principal:alloy_primitives::U256},
 }
 
 /// Один пул на пути доли.

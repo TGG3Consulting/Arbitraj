@@ -25,15 +25,16 @@ use rust_decimal::Decimal;
 use std::{collections::VecDeque, sync::Arc};
 
 pub(crate) fn selected(hops: &[RouteHop]) -> Option<(Address, U256)> {
-    let Some(RouterFeeMode::FluidHop { target, principal }) = hops.first()?.fee_mode else {
-        return None;
+    let mode = hops.first()?.fee_mode?;
+    let (target, principal) = match mode {
+        RouterFeeMode::FluidHop { target, principal }
+        | RouterFeeMode::MotoswapPath { target, principal } => (target, principal),
+        _ => return None,
     };
     (hops.len() >= 2
         && !target.is_zero()
         && !principal.is_zero()
-        && hops
-            .iter()
-            .all(|h| h.fee_mode == Some(RouterFeeMode::FluidHop { target, principal })))
+        && hops.iter().all(|h| h.fee_mode == Some(mode)))
     .then_some((target, principal))
 }
 pub(super) fn sides(v: &Via<'_>) -> (Address, Address) {
@@ -45,7 +46,7 @@ pub(super) fn sides(v: &Via<'_>) -> (Address, Address) {
 }
 
 fn routes(v: &Via<'_>, i: &Input) -> Vec<Vec<Arc<Entry>>> {
-    let edges = v.q.reg.fluid_edges();
+    let edges = v.q.reg.multi_market_edges();
     if edges.is_empty() {
         return vec![];
     }
@@ -71,25 +72,39 @@ fn routes(v: &Via<'_>, i: &Input) -> Vec<Vec<Arc<Entry>>> {
         }
         expanded += 1;
         for entry in &edges {
-            let Some(s) = lite::shape(entry) else {
-                continue;
-            };
-            let Some(side) = s.side(asset) else {
-                continue;
-            };
-            if s.hop_module.is_none()
-                || s.hop_module != ctx.dex_addr("dex.router", entry.family.id).ok()
-                || s.levels[side].is_empty()
-                || prefix
-                    .first()
-                    .is_some_and(|e| e.family.id != entry.family.id)
+            if prefix
+                .first()
+                .is_some_and(|e| e.family.id != entry.family.id)
             {
                 continue;
             }
-            let Some(tokens) = s.market.tokens(s.wrapped) else {
-                continue;
+            let next = if let Some(s) = lite::shape(entry) {
+                let Some(side) = s.side(asset) else { continue };
+                if s.hop_module.is_none()
+                    || s.hop_module != ctx.dex_addr("dex.router", entry.family.id).ok()
+                    || s.levels[side].is_empty()
+                {
+                    continue;
+                }
+                let Some(tokens) = s.market.tokens(s.wrapped) else {
+                    continue;
+                };
+                tokens[1 - side]
+            } else {
+                if prefix
+                    .iter()
+                    .any(|e| e.pool.reference == entry.pool.reference)
+                {
+                    continue;
+                }
+                if asset == entry.pool.token0 {
+                    entry.pool.token1
+                } else if asset == entry.pool.token1 {
+                    entry.pool.token0
+                } else {
+                    continue;
+                }
             };
-            let next = tokens[1 - side];
             let depth = prefix.len() + 1;
             let terminal = next == end;
             if !terminal
@@ -131,11 +146,22 @@ async fn legs(v: &Via<'_>, entries: &[Arc<Entry>]) -> GatewayResult<Vec<Leg>> {
     let mut legs = Vec::with_capacity(entries.len());
     let mids = v.q.mids.active(ctx);
     for (n, e) in entries.iter().enumerate() {
-        let s = lite::shape(e)
-            .filter(|s| e.valid && !e.asleep && s.stamp.current())
-            .ok_or_else(|| lite::bad(ctx))?;
-        let side = s.side(input).ok_or_else(|| lite::bad(ctx))?;
-        let output = s.market.tokens(s.wrapped).ok_or_else(|| lite::bad(ctx))?[1 - side];
+        if !e.valid || e.asleep {
+            return Err(lite::bad(ctx));
+        }
+        let output = if let Some(s) = lite::shape(e) {
+            if !s.stamp.current() {
+                return Err(lite::bad(ctx));
+            }
+            let side = s.side(input).ok_or_else(|| lite::bad(ctx))?;
+            s.market.tokens(s.wrapped).ok_or_else(|| lite::bad(ctx))?[1 - side]
+        } else if super::super::exec::motoswap_plan::shape(e).is_some() && input == e.pool.token0 {
+            e.pool.token1
+        } else if super::super::exec::motoswap_plan::shape(e).is_some() && input == e.pool.token1 {
+            e.pool.token0
+        } else {
+            return Err(lite::bad(ctx));
+        };
         if n + 1 < entries.len() {
             let m = mids
                 .iter()
@@ -163,6 +189,12 @@ async fn legs(v: &Via<'_>, entries: &[Arc<Entry>]) -> GatewayResult<Vec<Leg>> {
     if input != end {
         return Err(lite::bad(ctx));
     }
+    if entries
+        .first()
+        .is_some_and(|e| super::super::exec::motoswap_plan::shape(e).is_some())
+    {
+        super::motoswap_path::fees(&mut legs).ok_or_else(|| lite::bad(ctx))?;
+    }
     Ok(legs)
 }
 
@@ -188,7 +220,7 @@ pub(in crate::venues::bsc_dex) async fn reprice(
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, native: bool) -> Vec<OptionQuote> {
-    if native || !q.reg.watches_ambient() {
+    if native {
         return vec![];
     }
     let v = Via {
@@ -226,51 +258,77 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, native: bool) -> Vec<Opti
         let Ok(legs) = legs(&v, &entries).await else {
             continue;
         };
-        let Ok(target) = q.ctx.dex_addr("dex.router", entries[0].family.id) else {
-            continue;
-        };
-        let (path, approval, principal) = if let Some(h) = h {
-            let Ok((p, a, n)) = paid(&v, &legs, i.qty, h, (target, None)).await else {
-                continue;
-            };
-            (p, Some(a), n)
-        } else {
-            let Ok(p) = route_calc::eval(
+        let first = &entries[0];
+        let moto = super::super::exec::motoswap_plan::shape(first).is_some();
+        let mut targets = q
+            .ctx
+            .dex_addr("dex.router", first.family.id)
+            .ok()
+            .filter(|a| !a.is_zero())
+            .into_iter()
+            .collect::<Vec<_>>();
+        if let crate::core::types::PoolState::Motoswap(s) = &first.pool.state {
+            targets.retain(|a| Some(*a) == s.path_module);
+        }
+        if moto
+            && matches!(&first.pool.state,crate::core::types::PoolState::Motoswap(s) if s.fee_router_frozen)
+            && crate::venues::bsc_dex::pools::exact_wallet_tokens::eligible_input(
                 &q.ctx,
-                &legs,
+                first.family.id,
+                sides(&v).0,
+            )
+            && let Ok(fee) = q.ctx.dex_addr("dex.quoter", first.family.id)
+        {
+            targets.push(fee);
+        }
+        for target in targets {
+            let (path, approval, principal) = if let Some(h) = h {
+                let Ok((p, a, n)) = paid(&v, &legs, i.qty, h, (target, None)).await else {
+                    continue;
+                };
+                (p, Some(a), n)
+            } else {
+                let Ok(p) = route_calc::eval(
+                    &q.ctx,
+                    &legs,
+                    i.side,
+                    i.qty,
+                    pool_tax::coin_keep(&legs, i.side, &i.taxes),
+                ) else {
+                    continue;
+                };
+                let Some(first) = p.hops.first() else {
+                    continue;
+                };
+                let principal = first.swapped.amount_in;
+                (p, None, principal)
+            };
+            let Ok(mut quote) = costs::quote(
+                &q.ctx,
+                &i.asset,
                 i.side,
                 i.qty,
-                pool_tax::coin_keep(&legs, i.side, &i.taxes),
+                &[path],
+                RouteMode::Direct,
+                &i.taxes,
+                i.gas,
+                &names,
             ) else {
                 continue;
             };
-            let Some(first) = p.hops.first() else {
-                continue;
-            };
-            let principal = first.swapped.amount_in;
-            (p, None, principal)
-        };
-        let Ok(mut quote) = costs::quote(
-            &q.ctx,
-            &i.asset,
-            i.side,
-            i.qty,
-            &[path],
-            RouteMode::Direct,
-            &i.taxes,
-            i.gas,
-            &names,
-        ) else {
-            continue;
-        };
-        if let Some(route) = quote.route.as_mut() {
-            for leg in &mut route.legs {
-                for hop in &mut leg.hops {
-                    hop.fee_mode = Some(RouterFeeMode::FluidHop { target, principal });
+            if let Some(route) = quote.route.as_mut() {
+                for leg in &mut route.legs {
+                    for hop in &mut leg.hops {
+                        hop.fee_mode = Some(if moto {
+                            RouterFeeMode::MotoswapPath { target, principal }
+                        } else {
+                            RouterFeeMode::FluidHop { target, principal }
+                        });
+                    }
                 }
             }
+            out.push((quote, approval));
         }
-        out.push((quote, approval));
     }
     out
 }

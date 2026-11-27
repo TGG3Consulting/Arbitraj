@@ -75,6 +75,25 @@ def describe(network,source_id,adapter,configured,candidates):
     path = adapter.get("path")
     revision="be9967c3f0d3ccd06c871bab0d16beb3304de719"
     repository=f"https://github.com/DefiLlama/dimension-adapters/blob/{revision}/"
+    basin={
+        ("base","5458","dexs/pinto/index.ts"):("pinto-exchange-base","pinto_base"),
+        ("ethereum","4703","dexs/basin/index.ts"):("basin-wells-ethereum","basin_ethereum"),
+    }.get((network,source_id,path))
+    if basin:
+        profile,stem=basin
+        folder=Path("tests/data/first_run_dex_2026-11-26")
+        registry=json.loads(gzip.decompress((folder/f"{stem}_wells.json.gz").read_bytes()))
+        payments=json.loads(gzip.decompress((folder/f"{stem}_payments.json.gz").read_bytes()))
+        settings=configured[profile]["settings"]
+        wells=set(registry["wells"])
+        if set(settings["dex.stable_pools"])!=wells or any(
+                row["roles"]["aquifer"]["address"]!=settings["dex.factory"] for row in registry["wells"].values()):
+            raise ValueError(f"{profile} disagrees with its original Aquifer")
+        settled=[r for r in payments["cases"] if r.get("v5",{}).get("status")=="paid"]
+        return (f"Профиль {profile}, Aquifer {settings['dex.factory']}. На H={registry['block']} сверены "
+                f"{len(wells)} скважин, в {len({r['well'] for r in settled})} из них исходный контракт и V5 вернули "
+                f"одинаковые денежные дельты в {len(settled)} случаях. "
+                f"[Оплата, выходной минимум и срок](../{folder.as_posix()}/{stem}_payments.json.gz).")
     if network == "ethereum":
         observed = {
             "dexs/axiom.ts": "Терминал Axiom. Запрос Dune отбирает сделки DEX по плате Axiom и берёт наибольший шаг каждой транзакции. Физический пул принадлежит площадке исполнения.",
@@ -99,10 +118,20 @@ def describe(network,source_id,adapter,configured,candidates):
                     or directory["roles"]["fee_router"] != settings["dex.quoter"]
                     or protected["manifest"]["runtime"] not in settings["dex.module_runtime_hashes"]):
                 raise ValueError("Motoswap: profile differs from paid roles")
+            paths = json.loads(gzip.decompress((folder / "motoswap_ethereum_paths.json.gz").read_bytes()))
+            if paths["selector"] != original["selector"] or paths["runtime"] not in settings["dex.module_runtime_hashes"]:
+                raise ValueError("Motoswap: multi-pool settlement differs from profile")
+            usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7"
+            weth = "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+            case = {p["mode"]:p for p in paths["payments"] if p["path"][0]==usdt and p["path"][-1]==weth and p["spent"]=="1000000"}
+            paid, separate = case["guarded"], case["v5_steps"]
             return (f"Профиль `motoswap-ethereum`. Фабрика подтвердила {len(directory['pairs'])} пары. "
                     f"На высоте {original['block']} исходный FeeRouter выплатил {sum(r['paid']['ok'] for r in original['trials'])} обменов. "
                     f"Защищённый модуль и V5 выплатили ещё {len(protected['payments'])}. Для них владелец размещает MotoswapWallet. "
                     f"На этом блоке владелец FeeRouter ещё мог обновлять реализацию. "
+                    f"При разрешённом промежуточном MOTO (`dex.intermediate_tokens`) один вызов из 1 USDT выплатил "
+                    f"{paid['received']} wei WETH при {paid['gas']} gas. Две отдельные ноги V5 дали {separate['received']} wei при {separate['gas']} gas. "
+                    "[Расчёт через две пары](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_paths.json.gz) · "
                     "[Квитанции FeeRouter](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz) · "
                     "[Выплаты, газ и откаты защищённых путей](../tests/data/first_run_dex_2026-11-26/motoswap_ethereum_wallets.json.gz).")
     card = card_reference(network,adapter)

@@ -2,7 +2,7 @@
 use super::{
     chain::Step,
     motoswap_wallet::{Terms, abi::IModule},
-    plan::{DirectCall, Plan},
+    plan::Plan,
 };
 use crate::{
     core::types::{PoolRef, PoolState},
@@ -10,7 +10,7 @@ use crate::{
     venues::bsc_dex::{
         ctx::Ctx,
         node::call::canonical,
-        pools::{dagrow, direct_module, exact_wallet_tokens, motoswap, registry::Entry},
+        pools::{direct_module, exact_wallet_tokens, motoswap, registry::Entry},
         quote::{v2_wallet_sim as sim, white_state},
         wallet::approve,
     },
@@ -125,12 +125,6 @@ pub(super) async fn plan(
             &at
         )
     )?;
-    let deadline = U256::from(
-        head.timestamp
-            .to::<u64>()
-            .checked_add(ctx.int("dex.deadline_s")?)
-            .ok_or_else(|| bad(ctx))?,
-    );
     let o = sim::Order {
         payer,
         target,
@@ -140,24 +134,7 @@ pub(super) async fn plan(
         minimum: order.min_out,
         wire: sim::Wire::Motoswap(t),
     };
-    let proof = t.proof(&o, o.minimum, deadline);
-    sim::measure(ctx, head, o, true).await?;
-    let current = dagrow::allowance(ctx, order.token_in, payer, target, &at).await?;
-    let approvals =
-        approve::fork_exact(ctx, order.token_in, target, Some(current), order.amount_in)?;
-    if ctx.settings.generation() != generation {
-        return Err(bad(ctx));
-    }
-    let mut plan = Plan::new(
-        ctx,
-        (approvals, target, payer),
-        order.token_out,
-        vec![],
-        order.min_out,
-        deadline,
-    )?;
-    plan.set_direct_market(DirectCall::Motoswap(std::sync::Arc::new(proof)));
-    Ok(plan)
+    super::fluid_lite_plan::finish(ctx, generation, head, o).await
 }
 pub(crate) fn probe(
     ctx: &Ctx,
@@ -210,5 +187,57 @@ pub(crate) fn probe(
         approve::fork_exact(ctx, o.token_in, target, None, o.amount_in)?,
         target,
         proof.data(),
+    ))
+}
+
+pub(in crate::venues::bsc_dex) async fn path_wire(
+    ctx: &Ctx,
+    entries: &[&Entry],
+    target: Address,
+    path: Vec<Address>,
+    at: &Value,
+) -> GatewayResult<(sim::Wire, Vec<crate::core::types::MotoswapState>)> {
+    let first = *entries.first().ok_or_else(|| bad(ctx))?;
+    if entries.len() < 2 || entries.len() + 1 != path.len() || path.first() == path.last() {
+        return Err(bad(ctx));
+    }
+    let mut pools = Vec::with_capacity(entries.len());
+    for (e, pair) in entries.iter().zip(path.windows(2)) {
+        let pool = shape(e).ok_or_else(|| bad(ctx))?;
+        if e.family.id != first.family.id
+            || pools.contains(&pool)
+            || (e.pool.token0, e.pool.token1) != (pair[0].min(pair[1]), pair[0].max(pair[1]))
+        {
+            return Err(bad(ctx));
+        }
+        pools.push(pool);
+    }
+    let checks = entries
+        .iter()
+        .map(|e| {
+            (
+                e.family,
+                e.pool.reference.address(),
+                (e.pool.token0, e.pool.token1),
+            )
+        })
+        .collect::<Vec<_>>();
+    let checked = futures_util::future::try_join_all(
+        checks
+            .into_iter()
+            .map(|(family, pool, pair)| motoswap::state(ctx, family, pool, pair, at)),
+    );
+    let (t, states) = tokio::try_join!(terms(ctx, first, path[0], target, Some(at)), checked)?;
+    if t.module_hash.is_some()
+        && canonical(ctx, at, target, IModule::pathVersionCall {}).await? != U256::ONE
+    {
+        return Err(bad(ctx));
+    }
+    Ok((
+        sim::Wire::MotoswapPath(
+            t,
+            std::sync::Arc::new(super::motoswap_wallet::Route { pools, path }),
+        ),
+        states,
     ))
 }

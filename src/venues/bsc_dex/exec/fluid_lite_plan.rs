@@ -122,7 +122,7 @@ pub(super) async fn plan(
     };
     finish(ctx, before, h, order).await
 }
-async fn finish(
+pub(super) async fn finish(
     ctx: &Ctx,
     before: u64,
     h: white_state::Head,
@@ -136,8 +136,18 @@ async fn finish(
             .ok_or_else(|| bad(ctx))?,
     );
     let proof = match &order.wire {
-        sim::Wire::FluidDexLite(t) => t.proof(&order, order.minimum, end),
-        sim::Wire::FluidHop(t, r) => r.proof(*t, &order, order.minimum, end),
+        sim::Wire::FluidDexLite(t) => {
+            DirectCall::FluidDexLite(std::sync::Arc::new(t.proof(&order, order.minimum, end)))
+        }
+        sim::Wire::FluidHop(t, r) => {
+            DirectCall::FluidDexLite(std::sync::Arc::new(r.proof(*t, &order, order.minimum, end)))
+        }
+        sim::Wire::Motoswap(t) => {
+            DirectCall::Motoswap(std::sync::Arc::new(t.proof(&order, order.minimum, end)))
+        }
+        sim::Wire::MotoswapPath(t, r) => {
+            DirectCall::Motoswap(std::sync::Arc::new(r.proof(*t, &order, order.minimum, end)))
+        }
         _ => return Err(bad(ctx)),
     };
     let (input, output, amount, minimum, payer, target) = (
@@ -162,7 +172,7 @@ async fn finish(
         minimum,
         end,
     )?;
-    plan.set_direct_market(DirectCall::FluidDexLite(std::sync::Arc::new(proof)));
+    plan.set_direct_market(proof);
     Ok(plan)
 }
 
@@ -253,7 +263,15 @@ pub(super) async fn hop_plan(
     let path = std::iter::once(first.order.token_in)
         .chain(steps.iter().map(|s| s.order.token_out))
         .collect();
-    let (terms, route) = hop_terms(ctx, &entries, target, path, &head.selector()).await?;
+    let at = head.selector();
+    let wire = if super::motoswap_plan::shape(&first.entry).is_some() {
+        super::motoswap_plan::path_wire(ctx, &entries, target, path, &at)
+            .await?
+            .0
+    } else {
+        let (t, r) = hop_terms(ctx, &entries, target, path, &at).await?;
+        sim::Wire::FluidHop(t, std::sync::Arc::new(r))
+    };
     let order = sim::Order {
         payer,
         target,
@@ -261,7 +279,7 @@ pub(super) async fn hop_plan(
         output: last.order.token_out,
         amount: principal,
         minimum: last.order.min_out,
-        wire: sim::Wire::FluidHop(terms, std::sync::Arc::new(route)),
+        wire,
     };
     finish(ctx, before, head, order).await
 }

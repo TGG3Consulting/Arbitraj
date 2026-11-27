@@ -35,8 +35,14 @@ impl Proof {
             self.call.data(),
         )
         .await?;
-        code.at_transaction(ctx, self.call.controller, hash, r)
-            .await
+        code.at_transaction(
+            ctx,
+            self.call.controller,
+            hash,
+            r,
+            (self.call.module.is_none() && self.call.target == NATIVE).then_some(self.payer),
+        )
+        .await
     }
     pub(in crate::venues::bsc_dex) fn measured(&self, rows: &[SimLog]) -> Option<(U256, U256)> {
         self.amounts(

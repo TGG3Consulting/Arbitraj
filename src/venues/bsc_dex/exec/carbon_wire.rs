@@ -1,10 +1,7 @@
 //! Подписанные действия контроллера Carbon. Предел, режим и физическая валюта сохраняются вместе с идентификаторами стратегий.
 use super::super::{
     math::carbon_match,
-    pools::{
-        carbon::NATIVE,
-        carbon_quote,
-    },
+    pools::{carbon::NATIVE, carbon_quote},
 };
 use crate::core::types::CarbonState;
 use alloy::{sol, sol_types::SolCall};

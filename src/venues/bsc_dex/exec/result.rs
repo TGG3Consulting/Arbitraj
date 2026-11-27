@@ -181,13 +181,11 @@ pub(super) fn with_native_fact(
     };
     if crate::gateway::settlement_intent::capturing() {
         let quote_token = if req.side == Side::Buy { tin } else { tout };
-        crate::gateway::settlement_intent::note_gross(super::settlement_swap::amount(
-            &r,
-            wallet,
-            quote_token,
-            req.side,
-            usdt_dec,
-        ));
+        let cash=if carbon.is_some(){
+            // Подтверждённая сумма Carbon берётся из подписанного поручения и фактического расчёта, включая нативный ETH.
+            Some(usdt)
+        }else{super::settlement_swap::amount(&r,wallet,quote_token,req.side,usdt_dec)};
+        crate::gateway::settlement_intent::note_gross(cash);
     }
     let status = if coins.is_zero() {
         TradeStatus::NotFilled

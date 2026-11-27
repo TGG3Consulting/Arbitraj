@@ -52,6 +52,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
             });
             continue;
         }
+        if c.family.variant==super::family_variant::Variant::Temple {out.push(Box::pin(super::temple_directory::verify(ctx,c)).await);continue;}
         if c.family.variant==super::family_variant::Variant::Carbon {out.push(Box::pin(super::carbon_directory::verify(ctx,c)).await);continue;}
         out.push(match one(ctx, c, size).await {
             Ok(Ok(f)) => Verdict::Taken(Box::new(f)),

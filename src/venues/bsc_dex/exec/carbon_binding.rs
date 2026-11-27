@@ -45,6 +45,7 @@ impl Code {
         controller: Address,
         hash: B256,
         r: &Receipt,
+        native_recipient: Option<Address>,
     ) -> GatewayResult<()> {
         let fail = || {
             ctx.err(ErrorCode::OutcomeUnknown,"Carbon: не подтверждена реализация контроллера на позиции сделки в каноническом блоке")
@@ -77,6 +78,11 @@ impl Code {
         {
             return Err(fail());
         }
+        if let Some(payer) = native_recipient {
+            plain_wallet(ctx, payer, b.parent_hash, block)
+                .await
+                .map_err(|_| fail())?;
+        }
         solidly_classic_factory::bind(
             ctx,
             controller,
@@ -87,4 +93,47 @@ impl Code {
         .await
         .map_err(|_| fail())
     }
+}
+
+// Получатель обычного ETH не должен перенаправлять платёж собственным кодом. Успешная EIP-7702 авторизация
+// расходует отдельный nonce полномочного счёта. При нескольких его транзакциях в том же блоке считаем каждую.
+async fn plain_wallet(ctx: &Ctx, payer: Address, parent: B256, block: B256) -> GatewayResult<()> {
+    use alloy_primitives::{Bytes, U64};
+    let tag = |h| json!({"blockHash":h,"requireCanonical":true});
+    let bad = || {
+        ctx.err(
+            ErrorCode::OutcomeUnknown,
+            "Carbon: не подтверждён получатель нативной выплаты в момент операции",
+        )
+    };
+    let (code, before, after): (Bytes, U64, U64) = tokio::try_join!(
+        rpc::call(ctx, "eth_getCode", json!([payer, tag(parent)])),
+        rpc::call(ctx, "eth_getTransactionCount", json!([payer, tag(parent)])),
+        rpc::call(ctx, "eth_getTransactionCount", json!([payer, tag(block)]))
+    )?;
+    if !code.is_empty() {
+        return Err(bad());
+    }
+    let delta = after.to::<u64>().checked_sub(before.to()).ok_or_else(bad)?;
+    if delta == 1 {
+        return Ok(());
+    }
+    #[derive(Deserialize)]
+    struct Transaction {
+        from: Address,
+    }
+    #[derive(Deserialize)]
+    struct Block {
+        hash: B256,
+        transactions: Vec<Transaction>,
+    }
+    let observed: Option<Block> =
+        rpc::call(ctx, "eth_getBlockByHash", json!([block, true])).await?;
+    let confirmed = observed.is_some_and(|b| {
+        b.hash == block
+            && delta > 0
+            && u64::try_from(b.transactions.iter().filter(|t| t.from == payer).count()).ok()
+                == Some(delta)
+    });
+    if confirmed { Ok(()) } else { Err(bad()) }
 }

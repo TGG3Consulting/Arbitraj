@@ -66,10 +66,19 @@ pub async fn state(
 ) -> GatewayResult<Loaded> {
     let token1 = pair.1;
     let tag = block_tag(block);
+    if f.variant==Variant::DeliCl && let PoolRef::Singleton{manager,id}=reference {
+        return Box::pin(super::deli_cl::load(ctx,f,*manager,*id,pair,&tag)).await;
+    }
     if f.variant==Variant::DeliConstant && let PoolRef::Singleton{manager,id}=reference {
         let at=super::nami::block(ctx,&tag).await?;
         let (key,reserve0,reserve1)=Box::pin(super::deli::market(ctx,f,*manager,*id,pair,&at)).await?;
         return Ok(Loaded{state:PoolState::V2{reserve0,reserve1},ticks:None,bins:None,fee_pips:Some(key.fee())});
+    }
+    if f.variant==Variant::Temple {
+        let PoolRef::Multi{contract,..}=reference else{return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: нужна пара с указанным активом выплаты"));};
+        let at=super::nami::block(ctx,&tag).await?;
+        let state=Box::pin(super::temple::market(ctx,f,*contract,pair,&at)).await?;
+        return Ok(Loaded{state:PoolState::Temple(Box::new(state)),ticks:None,bins:None,fee_pips:Some(5000)});
     }
     if f.variant==Variant::Carbon && let PoolRef::Singleton{manager,id}=reference {
         let at=super::nami::block(ctx,&tag).await?;

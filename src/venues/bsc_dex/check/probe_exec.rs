@@ -139,7 +139,7 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
-    if matches!(&e.pool.state,PoolState::MintClub(_) | PoolState::Carbon(_)) || e.family.tradable
+    if matches!(&e.pool.state,PoolState::MintClub(_) | PoolState::Temple(_) | PoolState::Carbon(_)) || e.family.tradable
         || super::super::quote::frax_pricing::is_frax(e)
         || super::super::quote::oasis_pricing::is_oasis(e)
         || super::super::quote::vista_pricing::native_router(e)

@@ -63,6 +63,8 @@ pub enum Variant {
     OmniV2,
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
+    /// Концентрированная ликвидность Deli с комиссией в wBLT.
+    DeliCl,
     /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
     V2RouterCreate2,
     /// Каноническая пара допускает 4-аргументный swap V5 и собственный Router02.
@@ -94,6 +96,7 @@ pub enum Variant {
     Virtuals,
     MintClub,
     Carbon,
+    Temple,
     /// EIP-2535 с отдельной привязкой исполняемого селектора фабрики и Router02.
     DiamondV2,
     /// Пара проверяется по фабрике CREATE и коду исполнения; общий прокси с Router02.
@@ -163,6 +166,7 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
     pub fn factory_quoter(self)->bool { matches!(self,Self::BaseNativeV3|Self::RegisteredV3) }
     pub fn wallet_module(self)->bool { matches!(self,Self::Memebox|Self::RegisteredV3|Self::BunnySwap|Self::CandySwap) }
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator)}
@@ -232,11 +236,13 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
+        "deli_v4_cl" => Variant::DeliCl,
         "deli_v4_constant" => Variant::DeliConstant,
         "v2_omni_universal" => Variant::OmniV2,
         "v2_fork_executor_create2" => Variant::V2Create2,
         "v2_diamond_router" => Variant::DiamondV2,
         "v2_diamond_create" => Variant::KewlV2,
+        "temple" | "temple_v5" => Variant::Temple,
         "carbon_v1" => Variant::Carbon,
         "mint_club_v2" => Variant::MintClub,
         "virtuals_bonding" | "virtuals_bonding_module" | "virtuals_unicorn" | "virtuals_unicorn_module" => Variant::Virtuals,

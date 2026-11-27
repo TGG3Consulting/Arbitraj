@@ -205,13 +205,40 @@ pub(in crate::venues::bsc_dex) fn after_probe(
     input: Address,
     amount: U256,
     received: U256,
+    observed: (
+        Address,
+        Option<Protection>,
+        &[super::super::check::simulate::SimLog],
+    ),
 ) -> GatewayResult<Option<Box<Entry>>> {
     let PoolState::MintClub(s) = &e.pool.state else {
         return Ok(None);
     };
     let (fill, next) = math::after(s, input, amount).ok_or_else(|| fail(ctx))?;
     if fill.amount_out != received {
-        return Err(fail(ctx));
+        let (payer, protection, logs) = observed;
+        let Some(p) = protection.filter(|p| p.bond == s.bond) else {
+            return Err(fail(ctx));
+        };
+        if input != s.token || received.is_zero() || received > fill.amount_out {
+            return Err(fail(ctx));
+        }
+        let call = Call {
+            token: s.token,
+            reserve: s.reserve,
+            mint: false,
+            qty: amount,
+            limit: U256::ONE,
+            protection: Some(p),
+        };
+        let proof = super::mint_club_fact::Proof {
+            call,
+            bond: s.bond,
+            payer,
+        };
+        if proof.measured(logs) != Some((amount, received)) {
+            return Err(fail(ctx));
+        }
     }
     let mut e = Box::new(e.clone());
     e.pool.state = PoolState::MintClub(Box::new(next));
@@ -239,7 +266,13 @@ pub(super) async fn path_plan(
 
 pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -> Option<Address> {
     if let [h] = leg.hops.as_slice()
-        && let Some(crate::core::types::RouterFeeMode::ProtectedWallet { target }|crate::core::types::RouterFeeMode::CarbonWallet{module:Some(target),..}) = h.fee_mode
+        && let Some(
+            crate::core::types::RouterFeeMode::ProtectedWallet { target }
+            | crate::core::types::RouterFeeMode::CarbonWallet {
+                module: Some(target),
+                ..
+            },
+        ) = h.fee_mode
     {
         Some(target)
     } else {

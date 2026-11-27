@@ -301,7 +301,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         // src/Vault.sol L74-L86, L143-L175, src/pool-cl/CLPoolManager.sol L162-L212, src/pool-bin/BinPoolManager.sol
         // L133-L177). Infinity Stable — пул в крючке пула CL, обмен — тот же CL_SWAP с ключом пула (как у Universal
         // Router, решение «122 (Infinity Stable)»). EVM-тест с официальным кодом менеджеров — contracts/evmtest/singleton.mjs.
-        "uniswap_v4" | "deli_v4_constant" => ExecKind::UniV4,
+        "uniswap_v4" | "deli_v4_constant" | "deli_v4_cl" => ExecKind::UniV4,
         "pancakeswap_infinity_cl" | "pancake_infinity_stable" => ExecKind::InfCl,
         "pancakeswap_infinity_bin" => ExecKind::InfBin,
         // Решение 440: swapIn пула без белого списка вызывающих (poolT1 main.sol L51-L58, L689-L700: пауза и
@@ -315,7 +315,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
-        "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
+        "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
         // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
         // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
         // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
@@ -422,6 +422,7 @@ mod tests {
     #[test]
     fn every_kind_is_decided() {
         let none = [
+            "temple", // официальный view, без шага V5
             "carbon_v1", // официальный Controller, без шага в ArbExecutor
             "mint_club_v2", // native Bond mint/burn
             "ekubo_v2_router", // официальный multicall, ABI V2

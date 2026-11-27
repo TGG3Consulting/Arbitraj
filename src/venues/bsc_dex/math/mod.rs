@@ -6,6 +6,10 @@
 //! Настройки: нет.
 
 pub mod deli;
+pub mod deli_cl;
+#[cfg(test)]
+mod deli_cl_tests;
+pub mod temple;
 pub mod adaptive_fee;
 pub mod algebra_fee;
 pub mod balancer_linear;

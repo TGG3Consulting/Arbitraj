@@ -41,37 +41,75 @@ pub(in crate::venues::bsc_dex) async fn market(
     pair: (Address, Address),
     at: &Value,
 ) -> GatewayResult<(PoolKey, U256, U256)> {
-    let generation=ctx.settings.generation();
-    let pk=configured(ctx,f,id)?;
-    let PoolKey::Uniswap(k)=&pk else{return Err(invalid(ctx));};
-    if (k.currency0,k.currency1)!=pair {return Err(invalid(ctx));}
-    let enabled=IDeli::poolInitializedCall{id};
-    let reserves=IDeli::getReservesCall{id};
-    let calls=[batch::view(at,k.hooks,enabled.clone()),batch::view(at,k.hooks,reserves.clone())];
-    let ((),[e,r])=tokio::try_join!(checked_roles(ctx,f,manager,k.hooks,id,at),batch::read(ctx,calls))?;
-    if ctx.settings.generation()!=generation || !batch::decode(&e,enabled)? {return Err(invalid(ctx));}
+    let generation = ctx.settings.generation();
+    let pk = configured(ctx, f, id)?;
+    let PoolKey::Uniswap(k) = &pk else {
+        return Err(invalid(ctx));
+    };
+    if (k.currency0, k.currency1) != pair {
+        return Err(invalid(ctx));
+    }
+    let enabled = IDeli::poolInitializedCall { id };
+    let reserves = IDeli::getReservesCall { id };
+    let calls = [
+        batch::view(at, k.hooks, enabled.clone()),
+        batch::view(at, k.hooks, reserves.clone()),
+    ];
+    let ((), [e, r]) = tokio::try_join!(
+        checked_roles(ctx, f, manager, k.hooks, id, at),
+        batch::read(ctx, calls)
+    )?;
+    if ctx.settings.generation() != generation || !batch::decode(&e, enabled)? {
+        return Err(invalid(ctx));
+    }
     let state = batch::decode(&r, reserves)?;
     Ok((pk, U256::from(state.r0), U256::from(state.r1)))
 }
 
-pub(super) async fn checked_roles(ctx:&Ctx,f:&Family,manager:Address,hook:Address,id:B256,at:&Value)->GatewayResult<()> {
-    let generation=ctx.settings.generation();
-    let roles=bindings(ctx,f)?;
-    if roles[0].0!=hook || ctx.dex_addr("dex.pool_manager",f.id)?!=manager {return Err(invalid(ctx));}
-    let view=ctx.dex_addr("dex.state_view",f.id)?;
-    let mgr=IDeli::poolManagerCall{};
-    let slot=IStateView::getSlot0Call{poolId:id};
-    let processor=IDeli::feeProcessorCall{};
-    let incentive=IDeli::incentiveGaugeCall{};
-    let daily=IDeli::dailyEpochGaugeCall{};
-    let requests=[batch::view(at,hook,mgr.clone()),batch::view(at,view,slot.clone()),batch::view(at,view,mgr.clone()),
-        batch::view(at,hook,processor.clone()),batch::view(at,hook,incentive.clone()),batch::view(at,hook,daily.clone())];
-    let code_calls=roles.map(|(a,_)|("eth_getCode",json!([a,at])));
-    let ([m,s,vm,p,i,d],codes)=tokio::try_join!(batch::read(ctx,requests),batch::read(ctx,code_calls))?;
-    if generation!=ctx.settings.generation() || batch::decode(&m,mgr.clone())?!=manager || batch::decode(&vm,mgr)?!=manager
-        || batch::decode(&s,slot)?.sqrtPriceX96.is_zero() || batch::decode(&p,processor)?!=roles[1].0
-        || batch::decode(&i,incentive)?!=roles[2].0 || batch::decode(&d,daily)?!=roles[3].0
-        || !codes.iter().zip(roles).all(|(b,(_,hash))|!b.is_empty() && keccak256(b)==hash) {return Err(invalid(ctx));}
+pub(super) async fn checked_roles(
+    ctx: &Ctx,
+    f: &Family,
+    manager: Address,
+    hook: Address,
+    id: B256,
+    at: &Value,
+) -> GatewayResult<()> {
+    let generation = ctx.settings.generation();
+    let roles = bindings(ctx, f)?;
+    if roles[0].0 != hook || ctx.dex_addr("dex.pool_manager", f.id)? != manager {
+        return Err(invalid(ctx));
+    }
+    let view = ctx.dex_addr("dex.state_view", f.id)?;
+    let mgr = IDeli::poolManagerCall {};
+    let slot = IStateView::getSlot0Call { poolId: id };
+    let processor = IDeli::feeProcessorCall {};
+    let incentive = IDeli::incentiveGaugeCall {};
+    let daily = IDeli::dailyEpochGaugeCall {};
+    let requests = [
+        batch::view(at, hook, mgr.clone()),
+        batch::view(at, view, slot.clone()),
+        batch::view(at, view, mgr.clone()),
+        batch::view(at, hook, processor.clone()),
+        batch::view(at, hook, incentive.clone()),
+        batch::view(at, hook, daily.clone()),
+    ];
+    let code_calls = roles.map(|(a, _)| ("eth_getCode", json!([a, at])));
+    let ([m, s, vm, p, i, d], codes) =
+        tokio::try_join!(batch::read(ctx, requests), batch::read(ctx, code_calls))?;
+    if generation != ctx.settings.generation()
+        || batch::decode(&m, mgr.clone())? != manager
+        || batch::decode(&vm, mgr)? != manager
+        || batch::decode(&s, slot)?.sqrtPriceX96.is_zero()
+        || batch::decode(&p, processor)? != roles[1].0
+        || batch::decode(&i, incentive)? != roles[2].0
+        || batch::decode(&d, daily)? != roles[3].0
+        || !codes
+            .iter()
+            .zip(roles)
+            .all(|(b, (_, hash))| !b.is_empty() && keccak256(b) == hash)
+    {
+        return Err(invalid(ctx));
+    }
     Ok(())
 }
 

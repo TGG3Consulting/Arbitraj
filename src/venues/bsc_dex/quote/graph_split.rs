@@ -220,6 +220,7 @@ pub(super) fn ordinary(
     if legs.is_empty() {
         return Err(ctx.err(ErrorCode::NoRoute, "граф: ни один путь не принял объём"));
     }
+    super::temple_budget::check(ctx,&legs)?;
     Ok(legs)
 }
 
@@ -281,7 +282,7 @@ fn partners(cands: &[Cand], i: usize) -> bool {
             && c.legs.iter().any(|a| {
                 // Решение 295: по физическому пулу (site) — пары одного многомонетного пула тоже «общий пул».
                 mine.iter()
-                    .any(|b| a.entry.liquidity_site() == b.entry.liquidity_site())
+                    .any(|b| a.entry.liquidity_site() == b.entry.liquidity_site() || super::temple_budget::shared(a,b))
             })
     })
 }

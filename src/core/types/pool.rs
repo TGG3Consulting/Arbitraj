@@ -183,6 +183,21 @@ pub struct CarbonState {
     pub strategies: Vec<CarbonStrategy>,
 }
 
+/// TempleStableAMMRouter. Порядок резервов — TEMPLE, зарегистрированный стейбл.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TempleState {
+    pub pair: Address,
+    pub router: Address,
+    pub temple: Address,
+    pub stable: Address,
+    pub defend: Address,
+    pub reserves: [U256; 2],
+    pub balances: [U256; 2],
+    pub ratio: Option<[U256; 2]>,
+    pub defense_balance: U256,
+    pub amm_authorized: bool,
+}
+
 /// Один ERC20 Mint Club V2 и его собственное обеспечение в общем контракте Bond.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MintClubState {
@@ -408,6 +423,7 @@ pub enum PoolState {
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),
     Carbon(Box<CarbonState>),
+    Temple(Box<TempleState>),
     /// Сумма, списанная с CandySwap, включает независимое удержание из выплаты получателю.
     CandySwap(Box<CandySwapState>),
     Memebox(Box<MemeboxState>),

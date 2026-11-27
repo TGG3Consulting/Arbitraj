@@ -11,7 +11,7 @@ use crate::venues::bsc_dex::ctx::Ctx;
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, keccak256};
 
-pub(super) fn key(bytes: &[u8]) -> Option<PoolKey> {
+pub(super) fn key(bytes: &[u8], concentrated: bool) -> Option<PoolKey> {
     if bytes.len() != 160 {
         return None;
     }
@@ -20,7 +20,8 @@ pub(super) fn key(bytes: &[u8]) -> Option<PoolKey> {
     if k.currency0.is_zero()
         || k.currency0 >= k.currency1
         || k.hooks.is_zero()
-        || fee >= 1_000_000
+        || (concentrated && fee != 0x800000)
+        || (!concentrated && fee >= 1_000_000)
         || k.tickSpacing.as_i32() <= 0
     {
         return None;
@@ -47,7 +48,7 @@ pub(super) fn configured(ctx: &Ctx, f: &Family, id: B256) -> GatewayResult<PoolK
             if selected.is_some() {
                 return Err(invalid(ctx));
             }
-            selected = key(&raw);
+            selected = key(&raw, false);
             if selected.is_none() {
                 return Err(invalid(ctx));
             }
@@ -55,7 +56,7 @@ pub(super) fn configured(ctx: &Ctx, f: &Family, id: B256) -> GatewayResult<PoolK
     }
     // Здесь только прообраз хеша: право использовать рынок отдельно проверяет market на текущем блоке.
     selected
-        .or_else(|| OBSERVED.read().ok()?.get(&id).cloned())
+        .or_else(|| preimage(id))
         .ok_or_else(|| invalid(ctx))
 }
 
@@ -102,7 +103,7 @@ pub(super) fn claimed(ctx: &Ctx, hook: Address) -> bool {
         }
         let hooks: Vec<_> = super::families::all(ctx)
             .into_iter()
-            .filter(|f| f.variant == super::family_variant::Variant::DeliConstant)
+            .filter(|f| f.variant.deli())
             .filter_map(|f| bindings(ctx, f).ok().map(|roles| roles[0].0))
             .collect();
         let contains = hooks.contains(&hook);
@@ -121,6 +122,10 @@ pub(super) fn claimed(ctx: &Ctx, hook: Address) -> bool {
 static OBSERVED: std::sync::LazyLock<std::sync::RwLock<std::collections::HashMap<B256, PoolKey>>> =
     std::sync::LazyLock::new(Default::default);
 
+pub(super) fn preimage(id: B256) -> Option<PoolKey> {
+    OBSERVED.read().ok()?.get(&id).cloned()
+}
+
 pub(super) fn observed(
     ctx: &Ctx,
     f: &Family,
@@ -128,7 +133,12 @@ pub(super) fn observed(
     pk: &PoolKey,
 ) -> GatewayResult<bool> {
     let expected = ctx.dex_addr("dex.pool_manager", f.id)?;
-    let Some(valid) = observed_key((expected, bindings(ctx, f)?[0].0), manager, pk) else {
+    let Some(valid) = observed_key(
+        (expected, bindings(ctx, f)?[0].0),
+        manager,
+        pk,
+        f.variant == super::family_variant::Variant::DeliCl,
+    ) else {
         return Ok(false);
     };
     OBSERVED
@@ -139,9 +149,14 @@ pub(super) fn observed(
     Ok(true)
 }
 
-fn observed_key(expected: (Address, Address), manager: Address, pk: &PoolKey) -> Option<PoolKey> {
+fn observed_key(
+    expected: (Address, Address),
+    manager: Address,
+    pk: &PoolKey,
+    concentrated: bool,
+) -> Option<PoolKey> {
     (expected == (manager, pk.hooks()))
-        .then(|| key(&pk.abi()))
+        .then(|| key(&pk.abi(), concentrated))
         .flatten()
 }
 
@@ -161,11 +176,19 @@ mod tests {
             hooks: hook,
         });
         assert_eq!(
-            observed_key((manager, hook), manager, &pk),
+            observed_key((manager, hook), manager, &pk, false),
             Some(pk.clone())
         );
-        assert!(observed_key((manager, hook), Address::repeat_byte(9), &pk).is_none());
-        assert!(observed_key((manager, Address::repeat_byte(7)), manager, &pk).is_none());
-        assert_eq!(key(&pk.abi()).unwrap().id(), pk.id());
+        assert!(observed_key((manager, hook), Address::repeat_byte(9), &pk, false).is_none());
+        assert!(observed_key((manager, Address::repeat_byte(7)), manager, &pk, false).is_none());
+        assert_eq!(key(&pk.abi(), false).unwrap().id(), pk.id());
+        assert!(observed_key((manager, hook), manager, &pk, true).is_none());
+        let PoolKey::Uniswap(mut data) = pk else {
+            unreachable!()
+        };
+        data.fee = 0x800000;
+        let cl = PoolKey::Uniswap(data);
+        assert!(observed_key((manager, hook), manager, &cl, false).is_none());
+        assert_eq!(observed_key((manager, hook), manager, &cl, true), Some(cl));
     }
 }

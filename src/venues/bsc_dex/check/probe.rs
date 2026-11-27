@@ -109,6 +109,9 @@ pub async fn run(
     // симулированный блок — время головы + 1 с (решение 127, check/sim_base.rs): у пробы есть срок (deadline роутера),
     // с +12 с узла BSC проба падала бы при dex.deadline_s ≤ 12.
     let (at, now) = sim_base::head(ctx, heads).await?;
+    let temple=if matches!(&e.pool.state,crate::core::types::PoolState::Temple(_)){
+        Some(Box::pin(super::super::pools::temple::probe_state(ctx,e,at.number)).await?)
+    }else{None};
     let carbon=super::super::exec::carbon_direct::enabled(e);
     let vista = if carbon || super::super::quote::vista_pricing::native_router(e) || (super::super::quote::ekubo_v2_pricing::enabled(e) && matches!(&e.pool.state,crate::core::types::PoolState::Ekubo(d) if d.native.is_some())) {
         Box::pin(super::vista_probe::Probe::of(ctx, e, at.number, wallet))
@@ -136,7 +139,7 @@ pub async fn run(
         v.pool.block = at.number;
         v
     });
-    let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).unwrap_or(e);
+    let e = own_bond.as_ref().map(|(_,e,_)|e.as_ref()).or(verified.as_deref()).or_else(||temple.as_ref().map(|(_,e)|e.as_ref())).unwrap_or(e);
     let (buy_aps, buy_router, buy_data) = part(
         ctx,
         e,
@@ -186,7 +189,7 @@ pub async fn run(
             list[h.after] = b;
         }
     }
-    let hash = own_bond.as_ref().map(|(h,_,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash));
+    let hash = own_bond.as_ref().map(|(h,_,_)|h.hash).or_else(||vista.as_ref().map(|v| v.head.hash)).or_else(||temple.as_ref().map(|(h,_)|h.hash));
     let first = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     let (q, x) = (h.quote, h.buy);
     if let Some((i, r)) = first.iter().enumerate().find(|(_, r)| !r.ok()) {
@@ -226,7 +229,7 @@ pub async fn run(
     // как balanceOf − резерв). Остаток — тот же, что раньше, газ продажи сравним с прежними замерами.
     let (half, quarter) = (bought / U256::from(2u8), bought / U256::from(4u8));
     let rest = bought - half - quarter;
-    let post=if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought)?};
+    let post=if carbon{super::carbon_probe::after(ctx,e,usdt,usdt_amount,&first[x].logs)?}else if temple.is_some(){super::super::pools::temple::after_probe(ctx,e,usdt,usdt_amount,&first[x].logs)?}else{super::super::exec::mint_club_direct::after_probe(ctx,e,usdt,usdt_amount,bought,(wallet,own_bond.as_ref().and_then(|(_,_,p)|*p),&first[x].logs))?};
     let e=post.as_deref().unwrap_or(e);
     let (sell_aps, sell_router, sell_data) = part(
         ctx,
@@ -339,6 +342,9 @@ async fn part(
     // Slipstream, форки V3, StableSwap, Maverick) пробу не собрать ни через Universal Router (чужой пул он не найдёт), ни
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
+    if e.family.variant==super::super::pools::family_variant::Variant::Temple {
+        return Box::pin(probe_exec::part(ctx,e,order,wallet,now)).await;
+    }
     if super::super::exec::mint_club_direct::enabled(e){return super::super::exec::mint_club_direct::probe(ctx,e,&order,wallet,protection);}
     if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,&order,now);}
     if super::super::exec::vault_direct::enabled(e) && super::super::exec::executor::address(ctx)?.is_none() {

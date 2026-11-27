@@ -38,6 +38,9 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if let crate::core::types::PoolState::Temple(s)=&e.pool.state {
+        return log.address==s.pair && log.topics.first()==Some(&IV2Pair::Swap::SIGNATURE_HASH);
+    }
     if let crate::core::types::PoolState::Carbon(s)=&e.pool.state {return super::carbon_probe::emitted(s,&e.pool.reference,log);}
     if let crate::core::types::PoolState::MintClub(state)=&e.pool.state {
         return e.pool.reference==PoolRef::Contract(state.token) && super::super::pools::mint_club::emitted(state,log);
@@ -73,7 +76,7 @@ pub fn missing(entries: &[&Entry], logs: &[SimLog]) -> Vec<(usize, String)> {
     entries
         .iter()
         .enumerate()
-        .filter(|(_, e)| !logs.iter().any(|l| by_pool(e, l)))
+        .filter(|(_, e)| !logs.iter().any(|l| by_pool(e, l)) && !super::super::pools::temple::defended(e,entries,logs))
         .map(|(i, e)| {
             let from = if others.is_empty() {
                 "события обмена от пула нет".to_string()

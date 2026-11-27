@@ -177,6 +177,14 @@ pub fn shape(e: &Entry) -> Result<(ExecKind, Address, Address), String> {
 pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params, Address)> {
     let (k, pool) =
         supported(e.family, &e.pool.reference).map_err(|w| ctx.err(ErrorCode::NoRoute, w))?;
+    if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::Temple {
+        let PoolState::Temple(m)=&e.pool.state else{return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: состояние пары отсутствует"));};
+        if k!=ExecKind::Basin || m.pair!=pool || (token_in!=e.pool.token0 && token_in!=e.pool.token1) ||
+           (token_in!=m.temple && token_in!=m.stable) {
+            return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: для входа отсутствует зарегистрированный обмен"));
+        }
+        return Ok((Params::Basin,ctx.dex_addr("dex.router",e.family.id)?));
+    }
     if e.family.variant == crate::venues::bsc_dex::pools::family_variant::Variant::CandySwap {
         let PoolState::CandySwap(s)=&e.pool.state else {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: состояние пары не установлено"));};
         if token_in!=e.pool.token0 && token_in!=e.pool.token1 {return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: неизвестный вход"));}

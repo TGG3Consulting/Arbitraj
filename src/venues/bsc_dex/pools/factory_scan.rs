@@ -126,7 +126,10 @@ async fn pass(
     let carbon=super::carbon_directory::scan(ctx,coins,&quote_list).await;
     for (coin,rows) in carbon.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(carbon.notes);no_answer+=carbon.no_answer;
-    let n_calls = carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
+    let temple=Box::pin(super::temple_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in temple.found{found.entry(coin).or_default().extend(rows);}
+    notes.extend(temple.notes);no_answer+=temple.no_answer;
+    let n_calls = temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

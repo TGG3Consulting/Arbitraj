@@ -104,6 +104,7 @@ pub fn eval(
         advance(ctx, &cur, &p, &common, &mut after)?;
         out.push(p);
     }
+    super::temple_budget::check(ctx,&out)?;
     Ok(out)
 }
 
@@ -120,7 +121,7 @@ pub fn resequence(
     let refs: Vec<&[Leg]> = legs.iter().map(Vec::as_slice).collect();
     let common = shared(&refs);
     if common.is_empty() {
-        return Ok(());
+        return super::temple_budget::check(ctx,shares.iter().map(|s|&s.0));
     }
     // Только доли с общими пулами, в исходном порядке: прочие с ними не пересекаются и остаются как посчитаны (их расчёт
     // мог идти не через route_calc — exec/live.rs, один пул).
@@ -136,7 +137,7 @@ pub fn resequence(
     for (i, p) in idx.into_iter().zip(fresh) {
         shares[i].0 = p;
     }
-    Ok(())
+    super::temple_budget::check(ctx,shares.iter().map(|s|&s.0))
 }
 
 /// Ноги пути (пул, допуск, токены и decimals каждого хопа) — для пересчёта. Ошибок нет.

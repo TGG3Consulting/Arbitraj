@@ -444,9 +444,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "uniswap_v3" => (PoolKind::V3, Proto::UniswapV3, true, true, false),
         "pancakeswap_infinity_cl" => (PoolKind::Cl, Proto::InfinityCl, true, true, false),
         "pancakeswap_infinity_bin" => (PoolKind::Bin, Proto::InfinityBin, true, true, false),
-        "deli_v4_constant" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
+        "deli_v4_constant" | "deli_v4_cl" | "uniswap_v4" => (PoolKind::Cl, Proto::UniswapV4, true, true, false),
         // V2-форк (Biswap и пр.): в графе и ИСПОЛНИМ своим роутером бандлом (fork=true, tradable=true с 80.9b-ii).
-        "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
+        "temple" | "temple_v5" | "carbon_v1" | "mint_club_v2" | "virtuals_bonding" | "virtuals_unicorn" => (PoolKind::V2, Proto::V2, true, false, true),
         "candyswap_module" | "virtuals_bonding_module" | "virtuals_unicorn_module" | "memebox_v5" | "bunnyswap_module" => (PoolKind::V2, Proto::V2, true, true, true),
         "bunnyswap" | "memebox" | "ethervista_native" | "ethervista_v5" | "oasisswap_v2_router" | "oasisswap_v2_v5" | "fraxswap_twamm" | "fraxswap_twamm_v5" | "fraxswap_twamm_router" => {
             (PoolKind::V2, Proto::V2, true, false, true)
@@ -823,6 +823,10 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
                 list.extend(["dex.router", "dex.module_runtime_hashes"]);
             }
         }
+        Proto::V2 if f.variant == Variant::Temple => {
+            list.extend(["dex.quoter","dex.router_runtime_hash","dex.pair_runtime_hash"]);
+            if f.executor_kind.is_some(){list.extend(["dex.router","dex.module_runtime_hashes"]);}
+        }
         Proto::V2 if matches!(f.variant,Variant::MintClub | Variant::Carbon) => {
             list.extend(["dex.factory","dex.factory_runtime_hash","dex.proxy_implementations","dex.proxy_runtime_hashes"]);
         }
@@ -906,6 +910,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::InfinityCl | Proto::InfinityBin => {
             list.extend(["dex.pool_manager", "dex.vault", "dex.quoter"])
         }
+        Proto::UniswapV4 if f.variant == Variant::DeliCl => list.extend([
+            "dex.pool_manager","dex.state_view","dex.position_manager","dex.quoter","dex.deli_role_bindings","dex.deli_fee_currency",
+        ]),
         Proto::UniswapV4 if f.variant == Variant::DeliConstant => list.extend([
             "dex.pool_manager","dex.state_view","dex.quoter","dex.deli_role_bindings",
         ]),

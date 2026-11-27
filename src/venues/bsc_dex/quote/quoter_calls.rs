@@ -44,6 +44,7 @@ pub fn request(
     token_in: Address,
     amount: U256,
 ) -> GatewayResult<(Address, Bytes)> {
+    if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::request(ctx,e,token_in,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
         return super::super::pools::carbon_quote::request(ctx,e,token_in,amount);
     }
@@ -528,6 +529,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::Temple {return super::super::pools::temple::payout(e,token_in,amount,out);}
     if e.family.variant==super::super::pools::family_variant::Variant::Carbon {
         return super::super::pools::carbon_quote::payout(e,token_in,amount,out);
     }

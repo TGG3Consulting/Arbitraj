@@ -33,6 +33,7 @@ use super::pool_quote;
 /// Считается ли состояние пула после обмена (V2 и V3, см. шапку). Ошибок нет.
 pub fn appliable(e: &Entry) -> bool {
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Temple(_), PoolKind::V2) => true,
         (PoolState::Oasis { repeatable, .. }, PoolKind::V2) => *repeatable,
         (PoolState::V2 { .. } | PoolState::DeltaSwap { .. } | PoolState::Memebox(_) | PoolState::CandySwap(_) | PoolState::EtherVista(_), PoolKind::V2) => true,
         (PoolState::V3 { .. }, PoolKind::V3) => e.ticks.is_some() && e.pool.fee_pips.is_some(),
@@ -58,6 +59,12 @@ pub fn apply(
     };
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Temple(s), PoolKind::V2) => {
+            let output=if zero_for_one {e.pool.token1} else {e.pool.token0};
+            super::super::math::temple::paid(s,token_in,output,amount)
+                .map(|(fill,next)|(fill,PoolState::Temple(Box::new(next))))
+                .ok_or_else(||no("TempleDAO: нет выплаты в указанной валюте"))
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let p=u128::try_from(amount).ok().and_then(|x|super::super::math::carbon_match::plan(s,token_in,false,x))
                 .ok_or_else(||no("Carbon: нет покрытия полного входа"))?;

@@ -1,0 +1,391 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "state_view": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+  "markets": [
+    {
+      "id": "0x02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4e",
+      "sqrt": "48254497053639269096259",
+      "tick": -286242,
+      "protocol": 0,
+      "fee": 3000,
+      "liquidity": "3525357330853503",
+      "spacing": 40,
+      "words": [
+        -30,
+        -26
+      ],
+      "ticks": [
+        [
+          -280120,
+          "34819867025371",
+          "34819867025371"
+        ],
+        [
+          -277120,
+          "1013670224635",
+          "1013670224635"
+        ],
+        [
+          -276880,
+          "15163753665612",
+          "15163753665612"
+        ],
+        [
+          -276720,
+          "102528950963326",
+          "102528950963326"
+        ],
+        [
+          -275920,
+          "15163753665612",
+          "-15163753665612"
+        ],
+        [
+          -275200,
+          "102528950963326",
+          "-102528950963326"
+        ],
+        [
+          -275160,
+          "1013670224635",
+          "-1013670224635"
+        ],
+        [
+          -271320,
+          "34819867025371",
+          "-34819867025371"
+        ]
+      ]
+    },
+    {
+      "id": "0x301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521",
+      "sqrt": "1966183468989324734371",
+      "tick": -350253,
+      "protocol": 0,
+      "fee": 3000,
+      "liquidity": "125338428224118",
+      "spacing": 100,
+      "words": [
+        -16,
+        -12
+      ],
+      "ticks": []
+    },
+    {
+      "id": "0xa57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea7",
+      "sqrt": "190392692626094275501118244157",
+      "tick": 17536,
+      "protocol": 0,
+      "fee": 3000,
+      "liquidity": "24552984519460634834",
+      "spacing": 60,
+      "words": [
+        -1,
+        3
+      ],
+      "ticks": []
+    },
+    {
+      "id": "0x45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02a",
+      "sqrt": "78848927524876529048440",
+      "tick": -276420,
+      "protocol": 0,
+      "fee": 3000,
+      "liquidity": "1018805807086",
+      "spacing": 60,
+      "words": [
+        -20,
+        -16
+      ],
+      "ticks": [
+        [
+          -286560,
+          "785000989669",
+          "785000989669"
+        ],
+        [
+          -283560,
+          "1730380451",
+          "1730380451"
+        ],
+        [
+          -276300,
+          "1808829837512461",
+          "1808829837512461"
+        ],
+        [
+          -274500,
+          "1808829837512461",
+          "-1808829837512461"
+        ],
+        [
+          -270960,
+          "785000989669",
+          "-785000989669"
+        ],
+        [
+          -269220,
+          "1730380451",
+          "-1730380451"
+        ]
+      ]
+    }
+  ],
+  "calls": [
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getSlot0(bytes32)",
+      "data": "0xc815641c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4e",
+      "response": "0x000000000000000000000000000000000000000000000a37e1abbf00962b1b43fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffba1de00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bb8"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getLiquidity(bytes32)",
+      "data": "0xfa6793d502aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4e",
+      "response": "0x000000000000000000000000000000000000000000000000000c864b37696e7f"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe2",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe3",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe4",
+      "response": "0x0441000000000000000000200000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe5",
+      "response": "0x0000000000000000000000000000000200000000000000000000000300004000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c02aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4effffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe6",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbb9c8",
+      "response": "0x00000000000000000000000000000000000000000000000000001fab21ce1fdb00000000000000000000000000000000000000000000000000001fab21ce1fdb"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbc580",
+      "response": "0x000000000000000000000000000000000000000000000000000000ec037422fb000000000000000000000000000000000000000000000000000000ec037422fb"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbc670",
+      "response": "0x00000000000000000000000000000000000000000000000000000dca9626944c00000000000000000000000000000000000000000000000000000dca9626944c"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbc710",
+      "response": "0x00000000000000000000000000000000000000000000000000005d3fe1b38c7e00000000000000000000000000000000000000000000000000005d3fe1b38c7e"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbca30",
+      "response": "0x00000000000000000000000000000000000000000000000000000dca9626944cfffffffffffffffffffffffffffffffffffffffffffffffffffff23569d96bb4"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbcd00",
+      "response": "0x00000000000000000000000000000000000000000000000000005d3fe1b38c7effffffffffffffffffffffffffffffffffffffffffffffffffffa2c01e4c7382"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbcd28",
+      "response": "0x000000000000000000000000000000000000000000000000000000ec037422fbffffffffffffffffffffffffffffffffffffffffffffffffffffff13fc8bdd05"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5402aaacb8bf6a4c3c3a99d8de43fad01348e68e314b7773fb2df3edac065e0c4efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbdc28",
+      "response": "0x00000000000000000000000000000000000000000000000000001fab21ce1fdbffffffffffffffffffffffffffffffffffffffffffffffffffffe054de31e025"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getSlot0(bytes32)",
+      "data": "0xc815641c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521",
+      "response": "0x00000000000000000000000000000000000000000000006a9646e7c261f82fa3fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffaa7d300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bb8"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getLiquidity(bytes32)",
+      "data": "0xfa6793d5301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521",
+      "response": "0x000000000000000000000000000000000000000000000000000071fea07db276"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff1",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff2",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff3",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c301ea2b40e5022d96f9fb96456a3c7ee8a4f65117c35cab17575c1a9fe5a7521fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff4",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getSlot0(bytes32)",
+      "data": "0xc815641ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea7",
+      "response": "0x0000000000000000000000000000000000000002673124e4876066516e34c53d000000000000000000000000000000000000000000000000000000000000448000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bb8"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getLiquidity(bytes32)",
+      "data": "0xfa6793d5a57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea7",
+      "response": "0x00000000000000000000000000000000000000000000000154bdb9554a1dc0d2"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea7ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea70000000000000000000000000000000000000000000000000000000000000000",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea70000000000000000000000000000000000000000000000000000000000000001",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea70000000000000000000000000000000000000000000000000000000000000002",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4ca57be3ab90a595af3b1b419f409e062db129a1676527d56c384443e6a3974ea70000000000000000000000000000000000000000000000000000000000000003",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getSlot0(bytes32)",
+      "data": "0xc815641c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02a",
+      "response": "0x0000000000000000000000000000000000000000000010b268af605a51da1b78fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbc83c00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000bb8"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getLiquidity(bytes32)",
+      "data": "0xfa6793d545e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02a",
+      "response": "0x000000000000000000000000000000000000000000000000000000ed358ee7ee"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffec",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffed",
+      "response": "0x0000000000000000000000000000040000000000010000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffee",
+      "response": "0x0000000000000000000000000000000002000000100000000000000200000008"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02affffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffef",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickBitmap(bytes32,int16)",
+      "data": "0x1c7ccb4c45e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0",
+      "response": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffba0a0",
+      "response": "0x000000000000000000000000000000000000000000000000000000b6c5b483e5000000000000000000000000000000000000000000000000000000b6c5b483e5"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbac58",
+      "response": "0x00000000000000000000000000000000000000000000000000000000672382a300000000000000000000000000000000000000000000000000000000672382a3"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbc8b4",
+      "response": "0x00000000000000000000000000000000000000000000000000066d1f03ec8f0d00000000000000000000000000000000000000000000000000066d1f03ec8f0d"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbcfbc",
+      "response": "0x00000000000000000000000000000000000000000000000000066d1f03ec8f0dfffffffffffffffffffffffffffffffffffffffffffffffffff992e0fc1370f3"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbdd90",
+      "response": "0x000000000000000000000000000000000000000000000000000000b6c5b483e5ffffffffffffffffffffffffffffffffffffffffffffffffffffff493a4b7c1b"
+    },
+    {
+      "to": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "signature": "getTickLiquidity(bytes32,int24)",
+      "data": "0xcaedab5445e67b5702a342b7754884bb024d90817c663725c43e7fa353edd711468be02afffffffffffffffffffffffffffffffffffffffffffffffffffffffffffbe45c",
+      "response": "0x00000000000000000000000000000000000000000000000000000000672382a3ffffffffffffffffffffffffffffffffffffffffffffffffffffffff98dc7d5d"
+    }
+  ]
+}

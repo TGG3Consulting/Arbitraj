@@ -36,6 +36,10 @@
     "id": "uniswap-v4-base",
     "source": "https://developers.uniswap.org/deployments.json (Uniswap/contracts@3b872969fff4f5d807db916564f79843d722af36)",
     "settings": {
+      "dex.sub_dex": [
+        "deli-swap",
+        "deli-swap-cl"
+      ],
       "dex.kind": "uniswap_v4",
       "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
       "dex.universal_router_version": "2.1.2",
@@ -3710,6 +3714,9 @@
     "source": "https://github.com/bancorprotocol/carbon-contracts/tree/4a1888643eb094310c9ac6ae93f1ba8eaaa9822c · tests/data/first_run_dex_2026-11-26/carbon_registry_ethereum.json",
     "settings": {
       "dex.kind": "carbon_v1",
+      "dex.module_runtime_hashes": [
+        "0x93da67b1bc0f479e0821f8742609986bc26bb6aef75dd626cbef48ef83f22d7f"
+      ],
       "dex.factory": "0xc537e898cd774e2dcba3b14ea6f34c93d5ea45e1",
       "dex.factory_runtime_hash": "0x928e1f741e909019fa85db08bc2479fdbfdfdab1f16965c44a672fbde5e0ad80",
       "dex.proxy_implementations": [
@@ -3726,6 +3733,9 @@
     "id": "deli-swap",
     "source": "https://github.com/useboardwalk/deli-swap-contracts · https://sourcify.dev/server/v2/contract/8453/0x95afbc0fccf974b41380f24e562f15b6dd90fac8?fields=all · tests/data/first_run_dex_2026-11-26/deli_base_wallets.json.gz",
     "settings": {
+      "dex.sub_dex": [
+        "deli-swap-cl"
+      ],
       "dex.kind": "deli_v4_constant",
       "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
       "dex.universal_router_version": "2.1.2",
@@ -3747,6 +3757,47 @@
         "0x00000000000000000000000022af33fe49fd1fa80c7149773dde5890d3c76f3b0000000000000000000000004e74d4db6c0726ccded4656d0bce448876bb4c7a0000000000000000000000000000000000000000000000000000000000001388000000000000000000000000000000000000000000000000000000000000000100000000000000000000000095afbc0fccf974b41380f24e562f15b6dd90fac8",
         "0x0000000000000000000000004e74d4db6c0726ccded4656d0bce448876bb4c7a000000000000000000000000981fa1629955cd6f98be4ee26f36342685f9e9330000000000000000000000000000000000000000000000000000000000001770000000000000000000000000000000000000000000000000000000000000000100000000000000000000000095afbc0fccf974b41380f24e562f15b6dd90fac8",
         "0x0000000000000000000000004e74d4db6c0726ccded4656d0bce448876bb4c7a000000000000000000000000baa5cc21fd487b8fcc2f632f3f4e8d37262a084200000000000000000000000000000000000000000000000000000000000007d0000000000000000000000000000000000000000000000000000000000000000100000000000000000000000095afbc0fccf974b41380f24e562f15b6dd90fac8"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "templedao",
+    "source": "https://sourcify.dev/server/v2/contract/1/0x98257c876ace5009e7b97843f8c71b3ae795c71e · tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json",
+    "settings": {
+      "dex.kind": "temple",
+      "dex.quoter": "0x98257c876ace5009e7b97843f8c71b3ae795c71e",
+      "dex.router_runtime_hash": "0x9511f0e6f1217ed7fbcaa12be3b9200e53f586e166b0a2f1c21beec749783f40",
+      "dex.pair_runtime_hash": "0x6835354c7f234e42bdbb9d7ffd2456021458821828bcd2d1311f56f7a15725df",
+      "dex.stable_pools": [
+        "0x6021444f1706f15465bee85463bcc7d7cc17fc03"
+      ],
+      "dex.module_runtime_hashes": [
+        "0x51496928c359aac91905c5787e5917507817bac1dcc590f07bd78e6013d57ccb"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "deli-swap-cl",
+    "source": "https://sourcify.dev/server/v2/contract/8453/0x570a48f96035c2874de1c0f13c5075a05683b0cc?fields=all · tests/data/first_run_dex_2026-11-26/deli_base_cl_wallets.json.gz · deli_base_cl_ticks.json",
+    "settings": {
+      "dex.universal_router": "0xd6145b2D3F379919E8CdEda7B97e37c4b2Ca9c40",
+      "dex.universal_router_version": "2.1.2",
+      "dex.permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "dex.pool_manager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+      "dex.position_manager": "0x7C5f5A4bBd8fD63184577525326123B519429bDc",
+      "dex.state_view": "0xA3c0c9b65baD0b08107Aa264b0f3dB444b867A71",
+      "dex.quoter": "0xE1A6C5803e3c44368b171BD680c7D32dfc92CA47",
+      "dex.kind": "deli_v4_cl",
+      "dex.deli_fee_currency": "0x4e74d4db6c0726ccded4656d0bce448876bb4c7a",
+      "dex.deli_role_bindings": [
+        "0x570a48f96035c2874de1c0f13c5075a05683b0cc@0x6b441bc2ddf8bceb8bd3d30d9e100fba1d5ee83df01eec58ad6f9ff9f20b6da6",
+        "0x6506477df1d3f7c273e442fe87df50f4930b41c2@0x28272f60a07eebc97d7db4bd463014954ff053e569bcc5176403c720c80beff7",
+        "0x59d7bff1934939a7cd11e029c051ba9872469213@0x7396e8eda17ee60bfa67563e59e2f6675cd2feafce8aeaef330f53bb47b0408f",
+        "0xd8df4f5a4ae2db7ea724d1ee451806167f01f0dc@0xe3f49d688868354689da7cfe42791dab03a8a585af04008aecf02f68c6a9ee85"
       ]
     }
   }

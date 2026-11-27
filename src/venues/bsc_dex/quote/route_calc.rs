@@ -235,7 +235,9 @@ fn build(
             )
         })
         .collect::<GatewayResult<_>>()?;
-    Ok(Path { hops, coins, usdt })
+    let p=Path {hops,coins,usdt};
+    super::temple_budget::check(ctx,std::iter::once(&p))?;
+    Ok(p)
 }
 
 /// Ошибка перевода суммы в единицы токена. Ошибок нет.

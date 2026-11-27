@@ -65,6 +65,11 @@ pub fn swap(
         )
     };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Temple(s),PoolKind::V2) => {
+            let out=if zero_for_one {e.pool.token1} else {e.pool.token0};
+            super::super::math::temple::quote(s,token_in,out,exact_in,amount)
+                .ok_or_else(||why("TempleDAO: объём, фактическая валюта выплаты или обеспечение не подходят для этой стороны"))
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let size=u128::try_from(amount).map_err(|_|why("Carbon: размер превышает uint128"))?;
             let p=super::super::math::carbon_match::plan(s,token_in,!exact_in,size).ok_or_else(none)?;
@@ -157,7 +162,8 @@ pub fn swap(
             PoolKind::Cl,
         ) => {
             let ticks = e.ticks.as_ref().ok_or_else(none)?;
-            let fee = swap_fee(*protocol_fee, *lp_fee, zero_for_one);
+            let deli=e.family.variant==super::super::pools::family_variant::Variant::DeliCl;
+            let fee = swap_fee(*protocol_fee, if deli {0} else {*lp_fee}, zero_for_one);
             let s = ClState {
                 sqrt_price: *sqrt_price_x96,
                 tick: *tick,
@@ -166,6 +172,10 @@ pub fn swap(
                 ticks,
                 version: Version::V4,
             };
+            if deli {
+                let wblt=ctx.dex_addr("dex.deli_fee_currency",e.family.id)?;
+                return super::super::math::deli_cl::quote(&s,zero_for_one,token_in==wblt,*lp_fee,exact_in,amount).ok_or_else(none);
+            }
             swap_cl::swap(&s, zero_for_one, exact_in, amount).map_err(why)
         }
         // KyberSwap Elastic (решение 81): L = baseL + reinvestL, своя математика (math/swap_elastic, 81a).

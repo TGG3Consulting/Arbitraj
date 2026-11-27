@@ -65,7 +65,9 @@ pub async fn share(
         })
         .collect::<GatewayResult<Vec<Entry>>>()?;
     let mut p=eval(v, &found, qty, direct_mode, th).await?;
-    super::carbon_direct::adjust(ctx,&mut p,hops,v.side==crate::core::types::Side::Buy)?;
+    if let [e]=found.as_slice() && super::carbon_direct::enabled(e){
+        Box::pin(super::carbon_direct::adjust(ctx,&mut p,hops,v.side==crate::core::types::Side::Buy)).await?;
+    }
     Ok(p)
 }
 

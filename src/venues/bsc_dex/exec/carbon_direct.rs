@@ -93,9 +93,10 @@ pub(in crate::venues::bsc_dex) async fn bound(
     }
     c.code = Some(super::carbon_binding::Code::profile(ctx, id)?);
     if !protected {
-        let payer=super::super::wallet::signer::address(ctx)?;
-        let wallet_code:Bytes=rpc::call(ctx,"eth_getCode",json!([payer,h.selector()])).await?;
-        return if c.target == carbon::NATIVE && c.module.is_none() && wallet_code.is_empty(){
+        let payer = super::super::wallet::signer::address(ctx)?;
+        let wallet_code: Bytes =
+            rpc::call(ctx, "eth_getCode", json!([payer, h.selector()])).await?;
+        return if c.target == carbon::NATIVE && c.module.is_none() && wallet_code.is_empty() {
             Ok(())
         } else {
             Err(fail(ctx))
@@ -219,7 +220,7 @@ fn select(
             })
         })
 }
-pub(super) fn adjust(
+pub(super) async fn adjust(
     ctx: &Ctx,
     path: &mut super::super::quote::path::Path,
     route: &[crate::core::types::RouteHop],
@@ -231,7 +232,9 @@ pub(super) fn adjust(
     let PoolState::Carbon(s) = &h.entry.pool.state else {
         return Ok(());
     };
-    let Some(crate::core::types::RouterFeeMode::CarbonWallet { allocation, .. }) = r.fee_mode
+    let Some(crate::core::types::RouterFeeMode::CarbonWallet {
+        module, allocation, ..
+    }) = r.fee_mode
     else {
         return Err(fail(ctx));
     };
@@ -247,6 +250,43 @@ pub(super) fn adjust(
         super::super::num::to_decimal(h.swapped.amount_in, h.dec_in).ok_or_else(|| fail(ctx))?;
     h.pool_out =
         super::super::num::to_decimal(h.swapped.amount_out, h.dec_out).ok_or_else(|| fail(ctx))?;
-    path.usdt = if buy { h.pool_in } else { h.pool_out };
+    path.usdt = if buy {
+        h.pool_in
+    } else if let Some(module) = module {
+        // На продаже через модуль фактический ERC20-кредит может отличаться от номинала контроллера.
+        // От него считаются предел цены и проскальзывание при следующем пересчёте после approve.
+        let head = white_state::head(ctx, "latest").await?;
+        let fresh = state(ctx, &h.entry, head).await?;
+        let plan = select(&fresh, h.token_in, buy, full, allocation).ok_or_else(|| fail(ctx))?;
+        let deadline = U256::from(
+            head.timestamp
+                .to::<u64>()
+                .saturating_add(ctx.int("dex.deadline_s")?),
+        );
+        let mut c = Call::new(&fresh, h.token_in, &plan, 1, deadline).ok_or_else(|| fail(ctx))?;
+        bound(ctx, &h.entry, &mut c, head, true).await?;
+        if c.module != Some(module) {
+            return Err(fail(ctx));
+        }
+        let payer = super::super::wallet::signer::address(ctx)?;
+        let actual = v2_wallet_sim::measure(
+            ctx,
+            head,
+            v2_wallet_sim::Order {
+                payer,
+                target: module,
+                input: c.input,
+                output: c.output,
+                amount: U256::from(plan.spent),
+                minimum: U256::ONE,
+                wire: v2_wallet_sim::Wire::Carbon(Arc::new(c)),
+            },
+            false,
+        )
+        .await?;
+        super::super::num::to_decimal(actual.received, h.dec_out).ok_or_else(|| fail(ctx))?
+    } else {
+        h.pool_out
+    };
     Ok(())
 }

@@ -72,6 +72,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             Box::pin(super::super::pools::synth_farming::check(ctx,f,e.pool.reference.address(),at)).await?;
             continue;
         }
+        if f.variant==Variant::DeliCl && let PoolRef::Singleton{manager,id}=e.pool.reference {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::deli_cl::check(ctx,f,manager,id,(e.pool.token0,e.pool.token1),at)).await?;
+            continue;
+        }
         if f.variant==Variant::DeliConstant && let PoolRef::Singleton{manager,id}=e.pool.reference {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::deli::market(ctx,f,manager,id,(e.pool.token0,e.pool.token1),at)).await?;
@@ -98,6 +103,11 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
             };
             let gate = super::super::pools::solidly_classic::fresh(ctx,e,at).await?;
             cap = merged_cap(ctx, f.id, gate, cap)?;
+            continue;
+        }
+        if f.variant==Variant::Temple {
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::temple::market(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
             continue;
         }
         if f.variant == Variant::RegisteredV3 {

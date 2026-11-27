@@ -74,7 +74,7 @@ def capture(endpoint, concentrated=False):
         block, = rpc(endpoint,"eth_simulateV1",[{"blockStateCalls":[frame],"validation":False},c.selector])
         if block["parentHash"] != c.selector["blockHash"]: raise ValueError("смена родительского блока")
         return block["calls"]
-    def leg(prefix,key,mode,x,y,size):
+    def leg(prefix,key,mode,x,y,size,probe=False):
         zero = key[0] == x
         if mode == "v5":
             approvals = [tx(x,"approve(address,uint256)",["address","uint256"],[EXEC,size])]
@@ -104,6 +104,14 @@ def capture(endpoint, concentrated=False):
         front = simulate(pre,mode)
         if any(r["status"]!="0x1" for r in front): raise ValueError(("setup",[(i,r.get("error",{}).get("message")) for i,r in enumerate(front) if r["status"]!="0x1"]))
         out = int(front[-1]["returnData"][2:66],16)
+        if probe:
+            # Положительная uint128-котировка у wBLT может оборачиваться при знаковой дельте.
+            # Реальный min=1 и дельты публичного владельца решают допуск.
+            calls = pre + [order(1,deadline)] + bal
+            records = simulate(calls,mode)
+            return dict(input=str(size),quoted=str(out),min_out="1",calls=calls,results=records,
+                        paid_input=str(quantity(front[-4])-quantity(records[-2])),
+                        received=str(quantity(records[-1])-quantity(front[-3])))
         if not out: raise ValueError("выход ниже одного атома")
         if not concentrated:
             rin,rout = decode(["uint128","uint128"],bytes.fromhex(front[-2]["returnData"][2:]))
@@ -145,7 +153,20 @@ def capture(endpoint, concentrated=False):
                 except ValueError as e:
                     case["rejected"]=str(e)[:450]
                 cases.append(case)
-        markets.append(dict(pool_id=pid,key=key,opening_state=list(map(str,balances)),cases=cases))
+        row=dict(pool_id=pid,key=key,opening_state=list(map(str,balances)),cases=cases)
+        if concentrated and other == USDC and not any("buy" in case for case in cases):
+            # Начальный USDC принадлежит самому sender; отсутствие первой ноги из wBLT не закрывает обратный вход.
+            independent=[]
+            for mode in ("router","v5"):
+                small=leg([],key,mode,USDC,WBLT,1,probe=True)
+                if small["results"][-3]["status"]!="0x0" or small["received"]!="0" or small["paid_input"]!="0":
+                    raise ValueError("контроль на 1 raw USDC требует проверки фактической выплаты")
+                for size in (2,100000):
+                    _,_,paid=leg([],key,mode,USDC,WBLT,size)
+                    independent.append(dict(mode=mode,sell=paid))
+                row.setdefault("one_atom_controls",[]).append(small)
+            row["independent_usdc"]=independent
+        markets.append(row)
     if not any(all("sell" in case for case in row["cases"]) for row in markets):
         raise ValueError(str([m["cases"][0].get("rejected") for m in markets])[:900])
     return dict(selector=c.selector,owner=PAYER,initial_usdc=str(initial),funding=funding,hook=hook_code,roles=roles,

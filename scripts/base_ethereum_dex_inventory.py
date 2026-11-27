@@ -989,6 +989,20 @@ def tables(network, snapshots, profiles):
                    "Ставка читается для конкретного пула через factory.getFee(pool,stable). "
                    "[Реестр и ставки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_registry_supernova-amm.json.gz) · "
                    "[Суммы и остатки](../tests/data/first_run_dex_2026-11-26/ethereum_classic_wallets_supernova-amm.json.gz).")
+        temple_registry_path=Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json")
+        tr=read(temple_registry_path)
+        temple_wallet_path=temple_registry_path.with_name("temple_ethereum_wallets.json.gz")
+        with gzip.open(temple_wallet_path,"rt",encoding="utf8") as stream:
+            tw=json.load(stream)
+        gas_by_mode={case["mode"]:[int(case[leg]["gas"],16) for leg in ["buy","sell"]] for case in tw["cases"]}
+        out.append(f"**TempleDAO.** Официальный роутер принимает FRAX для покупки TEMPLE. На продаже TEMPLE он сравнивает две округлённые выплаты. "
+                   f"При равенстве платит пул в FRAX. Когда выше ставка казначейства, роутер сжигает TEMPLE и платит DAI со своего баланса. "
+                   f"На блоке {tr['height']} остаток DAI равен {tr['defense_balance']}. Размер 1 минимальная единица TEMPLE котируется в 2 минимальные единицы FRAX, а 10 000 TEMPLE требуют 8 000 DAI. "
+                   f"В изолированном исполнении покупки на 1 и 10 FRAX и продажи купленного TEMPLE дали одинаковые выплаты тремя способами. "
+                   f"Газ покупки/продажи составил {gas_by_mode['router'][0]}/{gas_by_mode['router'][1]} у официального роутера, "
+                   f"{gas_by_mode['protected'][0]}/{gas_by_mode['protected'][1]} у защитного модуля и {gas_by_mode['v5'][0]}/{gas_by_mode['v5'][1]} у V5. Учтён только газ самого обмена. "
+                   f"Для включения V5 владелец указывает адрес развёрнутого модуля для данной пары. "
+                   f"[Реестр, резервы и порог](../{temple_registry_path.as_posix()}) · [Кошелёк, газ, минимум и срок](../{temple_wallet_path.as_posix()}).")
         carbon_path=Path("tests/data/first_run_dex_2026-11-26/carbon_ethereum.json.gz")
         with gzip.open(carbon_path,"rt",encoding="utf8") as stream:
             carbon=json.load(stream)
@@ -1001,6 +1015,8 @@ def tables(network, snapshots, profiles):
                    f"У {sum(p['count']==0 for p in carbon_pairs)} пар на блоке снимка не осталось стратегий. USDC/ETH и USDC/WETH имеют разные книги и разные идентификаторы, 5 и 602. "
                    f"За блоки {carbon_events['event_window'][0]}–{carbon_events['event_window'][1]} контроллер зарегистрировал {sum(m['swaps'] for m in carbon_events['markets'])} обменов в {carbon_events['trade_txs']} транзакциях на {len(carbon_events['markets'])} парах. Учитывая только сторону USDT, по журналу прошло {stable_raw/1e6:.6f} USDT. "
                    f"Архивное исполнение подтвердило {len(carbon['controls'])} выплат кошельку в USDC↔ETH и USDT→ETH с откатами при более строгом пределе и истёкшем сроке. "
+                   "В 16 контрольных задачах 35 вариантов оплачены на одном состоянии кошелька. При цене газа блока лучший до газа вариант сменился в 5 случаях, при добавлении 1 gwei за единицу газа — в 8. В стоимость включён требуемый approve. [Котировки, выплаты и сравнение по газу](../tests/data/first_run_dex_2026-11-26/carbon_allocations_ethereum.json.gz). "
+                   "Для прямого выхода в ETH проверяются контроллер, операции кошелька и выплата по TokensTraded. Для выхода в ERC20 требуется указанный оператором CarbonWallet с проверенными runtime и контроллером. Он возвращает неиспользованный аванс и проверяет приток в контроллер и чистое поступление отправителю в той же транзакции. В 12 архивных исполнениях модуль затратил 170138–188136 единиц газа на вызов обмена. [Суммы и газ модуля](../tests/data/first_run_dex_2026-11-26/carbon_ethereum_protected.json.gz). "
                    f"[Реестр, комиссия и события](../{registry_path.as_posix()}) · [Стратегии и движения кошелька](../{carbon_path.as_posix()}).")
         ep=Path("tests/data/first_run_dex_2026-11-26/ekubo_v2_ethereum_activity.json.gz")
         with gzip.open(ep,"rt",encoding="utf8") as stream:
@@ -1049,6 +1065,7 @@ def tables(network, snapshots, profiles):
     out.append(f"**Mint Club V2.** Bond зарегистрировал {mint['total']} выпусков ERC20 и ERC1155 с {reserves} видами обеспечения. "
                f"На блоке {mint['height']} три проверенных ERC20 с резервом WETH прошли {trials} циклов выпуска и погашения. "
                "Уменьшение максимальной суммы покупки и увеличение минимальной суммы погашения на одну минимальную единицу дали откат. "
+               f"Защитный модуль принимает собственные средства подписанта. В архиве дополнительно проверены два выпуска и два погашения в расчётной валюте {'USDC' if network=='base' else 'USDT'}, с проверкой исходного и конечного остатка. "
                "Для отслеживаемого токена проверяются tokenBond, байткод клона и его реализации, ступени цены и текущий выпуск. "
                "Для погашения используются остаток собственного обеспечения рынка и фактический баланс резервного ERC20 общего Bond. "
                f"С блока {registry['window']['from']} по {registry['window']['to']} Bond выпустил {sum(registry['window']['counts'])} событий Mint и Burn. "
@@ -1078,6 +1095,10 @@ def tables(network, snapshots, profiles):
             factory, roundtrip = q2["factory"], "getPair(address,address)"
         if base and id == "quickswap-v4-base" and quickswap.exists() and pool and any(m["pool"] == pool.lower() for m in qs["markets"]):
             factory, roundtrip = qs["addresses"]["AlgebraFactory"], "poolByPair(address,address)"
+        if not base and id=="templedao" and pool:
+            tr=read(Path("tests/data/first_run_dex_2026-11-26/temple_registry_ethereum.json"))
+            if pool.lower()==tr["pair"]:
+                factory,roundtrip=tr["router"],"tokenPair(FRAX) → пара, pair.router() → роутер"
         if not base and id=="carbon-defi-ethereum" and pool and pool.split("-")[0].lower()==carbon["roles"][0]:
             factory=carbon["roles"][0]
             roundtrip="адрес контроллера совпал. Суффикс индекса не задаёт ID пары в Controller.pair"

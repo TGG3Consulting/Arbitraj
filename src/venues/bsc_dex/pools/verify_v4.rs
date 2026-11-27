@@ -98,6 +98,10 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                         f.key.as_ref().map_or_else(Default::default, |k| k.hooks()),
                     ))
                 }
+                Ok(f) if c.family.variant==super::family_variant::Variant::DeliCl =>
+                    if super::deli_keys::bindings(ctx,c.family).is_ok_and(|r|f.key.as_ref().is_some_and(|k|k.hooks()==r[0].0 && k.fee()==0x800000)){
+                        Verdict::Taken(Box::new(f))
+                    }else{Verdict::Rejected("Deli CL: иной хук или статический PoolKey".into())},
                 Ok(f) if c.family.proto==Proto::UniswapV4 && f.key.as_ref().is_some_and(|k|super::deli_keys::claimed(ctx,k.hooks())) =>
                     Verdict::Rejected("Deli: резервы принадлежат constant-product хуку".into()),
                 Ok(f) => Verdict::Taken(Box::new(f)),

@@ -49,6 +49,22 @@ pub fn rate(ctx: &Ctx, e: &Entry, token_in: Address) -> Result<Ratio, String> {
         return Err(format!("{}: пул с крючком", e.family.title));
     }
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Temple(s),PoolKind::V2) => {
+            let output=if zfo {e.pool.token1} else {e.pool.token0};
+            if token_in==s.stable && output==s.temple && s.amm_authorized {
+                return pair(s.reserves[0],U256::ONE,s.reserves[1],U256::ONE);
+            }
+            if token_in!=s.temple {return Err("TempleDAO: направление не существует".into());}
+            let mut ratio=None;
+            if output==s.stable && s.amm_authorized{
+                ratio=Some(pair(s.reserves[1],U256::ONE,s.reserves[0],U256::ONE)?);
+            }
+            if output==s.defend && !s.defense_balance.is_zero() && let Some([n,d])=s.ratio && !n.is_zero() && !d.is_zero()
+                && ratio.as_ref().is_none_or(|r|alloy_primitives::U512::from(n)*alloy_primitives::U512::from(r.den)>alloy_primitives::U512::from(r.num)*alloy_primitives::U512::from(d)){
+                ratio=Some(pair(n,U256::ONE,d,U256::ONE)?);
+            }
+            ratio.ok_or_else(||"TempleDAO: нет обеспеченного курса для выбранной валюты".into())
+        }
         (PoolState::Carbon(s),PoolKind::V2) => {
             let r=super::super::math::carbon_depth::best(s,token_in).ok_or("Carbon: нет обеспеченной заявки")?;
             pair(r,r,U256::from(1u64<<48),U256::from(1u64<<48))

@@ -32,6 +32,15 @@ fn q96() -> U256 {
 pub fn coins_for(e: &Entry, amount: U256) -> Option<U256> {
     let coin0 = e.coin == e.pool.token0;
     match &e.pool.state {
+        PoolState::Temple(s) => {
+            if e.coin==s.stable || e.usdt==s.stable {
+                let i=usize::from(e.coin==s.stable);
+                mul_div(amount,s.reserves[i],s.reserves[1-i])
+            } else {
+                let [n,d]=s.ratio?;
+                if e.coin==s.temple {mul_div(amount,d,n)} else {mul_div(amount,n,d)}
+            }
+        }
         PoolState::Carbon(s) => super::super::math::carbon_depth::coins(s,e.coin,amount),
         PoolState::MintClub(s) => super::super::math::mint_club_depth::spot(s,e.coin,amount),
         PoolState::Virtuals(s) => {let c=usize::from(e.coin==s.asset); mul_div(amount,s.reserves[c],s.reserves[1-c])}

@@ -50,8 +50,8 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
 #[derive(Clone, Copy)]
 pub(super) enum Saved<'a> {
     Gladius(&'a super::super::gladius::settlement::Saved),
-    SolidlyRouter(&'a super::solidly_router_wallet::Proof),
     Raindex(&'a super::super::raindex::settlement::Saved),
+    SolidlyRouter(&'a super::solidly_router_wallet::Proof),
     Ranges(&'a super::ranges_wallet::Proof),
     RegisteredV3(&'a super::registered_v3_wallet::Proof),
     AntfarmOutput(&'a super::antfarm_output_wallet::Proof),
@@ -78,9 +78,9 @@ pub(super) enum Saved<'a> {
 fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
         c.gladius.as_deref().map(Saved::Gladius),
+        c.raindex.as_deref().map(Saved::Raindex),
         c.solidly_router.as_deref().map(Saved::SolidlyRouter),
         c.ranges.as_deref().map(Saved::Ranges),
-        c.raindex.as_deref().map(Saved::Raindex),
         c.registered_v3.as_deref().map(Saved::RegisteredV3),
         c.antfarm_output.as_deref().map(Saved::AntfarmOutput),
         c.antfarm.as_deref().map(Saved::Antfarm),
@@ -124,13 +124,13 @@ pub(in crate::venues::bsc_dex) async fn included(
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Gladius"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
     }
-    if let Some(n)=&c.native_rfq{
-        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Native RFQ"))?.nonce;
-        n.included(ctx,hash,nonce,receipt).await?;
     if let Some(g)=&c.raindex{
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Raindex"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
     }
+    if let Some(n)=&c.native_rfq{
+        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Native RFQ"))?.nonce;
+        n.included(ctx,hash,nonce,receipt).await?;
     }
     if receipt.status.to::<u64>() != 1 {
         return Ok(());
@@ -138,10 +138,10 @@ pub(in crate::venues::bsc_dex) async fn included(
     for saved in entries(c) {
         match saved {
             Saved::Gladius(_) => {}, // в том числе проверено для revert выше
+            Saved::Raindex(_) => {}, // в том числе проверено для revert выше
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::Ranges(p)=>p.included(ctx,hash,receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
-            Saved::Raindex(_) => {}, // в том числе проверено для revert выше
             Saved::AntfarmOutput(p) => p.included(ctx, hash, receipt).await?,
             Saved::Antfarm(p) => p.included(ctx, hash, receipt).await?,
             Saved::FluxEth(p)=>p.included(ctx,hash,receipt).await?,
@@ -176,11 +176,11 @@ impl Saved<'_> {
     ) -> Result<(U256, U256), &'static str> {
         match self {
             Self::Gladius(p) => p.amounts(&r.logs).ok_or("Gladius: фактические движения и выплата не подтверждены"),
+            Self::Raindex(p) => p.amounts(&r.logs).ok_or("Raindex: фактические движения и выплата не подтверждены"),
             Self::SolidlyRouter(p) => p.amounts(&r.logs,wallet,input,output).ok_or("Solidly Router01: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::Ranges(p)=>p.amounts(&r.logs,wallet,input,output).ok_or("Ranges: событие Vault и чистые движения кошелька расходятся с подписанным поручением"),
             Self::RegisteredV3(p) => p.amounts(&r.logs,wallet,input,output).ok_or("V3 Router: не подтверждены расходы, получатель или выплата по исходному поручению"),
             Self::AntfarmOutput(p) => p
-            Self::Raindex(p) => p.amounts(&r.logs).ok_or("Raindex: фактические движения и выплата не подтверждены"),
                 .amounts(&r.logs, wallet, input, output)
                 .ok_or("Antfarm: комиссия из выплаты, выплата или списание по исходному поручению не подтверждены"),
             Self::Antfarm(p) => p

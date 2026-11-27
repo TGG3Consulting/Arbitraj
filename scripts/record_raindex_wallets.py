@@ -122,6 +122,16 @@ def capture(network,url,artifact):
             for buy_output in ([False,True] if both else [True]):
                 size=fixed_size if buy_output else budget
                 funded,buy=money(seed,b,o,l,budget,size,buy_output,df,dt);key="by_output" if buy_output else "by_debit";case[key]=buy
+                if not funded and artifact and b["version"]==4 and buy_output:
+                    # The module pulls the whole signed cap. A broad price budget can exceed the wallet,
+                    # even though the canonical cost of the requested output is affordable.
+                    n=size*int(l["ratio"],16)*10**df
+                    d=10**(18+dt)
+                    quoted=(n+d-1)//d
+                    if 0<quoted<budget:
+                        case[key+"_wide_cap"]=buy
+                        funded,buy=money(seed,b,o,l,quoted,size,True,df,dt)
+                        case[key]=buy
                 if not funded:continue
                 reverses=[v for v in legs if v[2]["pay"]==out and v[2]["receive"]==pay]
                 for rb,ro,rl in reverses:

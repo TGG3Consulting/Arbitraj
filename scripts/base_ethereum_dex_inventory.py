@@ -1936,6 +1936,8 @@ def main():
     for network in ["base", "ethereum"]:
         lines.extend(tables(network, args.snapshots, profiles))
         lines.append("")
+    from base_raindex_markets import raindex_markets
+    lines.extend(raindex_markets())
     lines.extend(stabull_markets())
     lines.extend(hashflow_market_observation())
     doc.write_text(front + start + "\n\n" + "\n".join(lines) + "\n" + end + tail, encoding="utf8", newline="\n")
@@ -1943,5 +1945,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    from base_raindex_markets import raindex_markets
-    lines.extend(raindex_markets())

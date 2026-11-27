@@ -22,6 +22,7 @@ pub mod hooks_head;
 pub mod hooks_judge;
 pub mod hooks_probe;
 pub mod hooks_refine;
+mod market_probe;
 pub mod memory_proof;
 pub mod memory_proof_rules;
 pub mod native_probe;

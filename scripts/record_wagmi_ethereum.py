@@ -1,4 +1,4 @@
-"""WAGMI Ethereum. Регистрация CREATE2 и выплата из собственного входа через SwapRouter, Router02 и V5."""
+"""WAGMI и Lif3 Ethereum. Регистрация CREATE2 и расчёт собственного кошелька через штатные роутеры и V5."""
 import argparse
 import json
 from pathlib import Path
@@ -10,7 +10,7 @@ from record_bitswap_ethereum import ENDPOINTS, EXEC, FUNDING, OWNER, ROOT, RUNTI
 from record_base_slipstream_executor import STEP
 from record_concave_ethereum import approval
 
-REGISTRY=ROOT/"tests/data/first_run_dex_2026-11-26/wagmi_ethereum_registry.json"
+DATA=ROOT/"tests/data/first_run_dex_2026-11-26"
 STABLE="0xdac17f958d2ee523a2206206994597c13d831ec7"
 CREATED="0x"+keccak(text="PoolCreated(address,address,uint24,int24,address)").hex()
 SWAP="0x"+keccak(text="Swap(address,address,int256,int256,uint160,uint128,int24)").hex()
@@ -37,7 +37,7 @@ def registry(url,d,tag):
         return values
     def address(data):
         return decode(["address"],data)[0]
-    for role in ("router","router02","quoter"):
+    for role in (role for role in ("router","router02","quoter") if role in roles):
         target=roles[role]["address"]
         if [address(b) for b in views([tx(target,"factory()"),tx(target,"WETH9()")])]!=[f,WETH]:
             raise ValueError(("назначение роли",role))
@@ -63,9 +63,29 @@ def registry(url,d,tag):
         if [address(v[j]) for j in (0,1,2,7,8)]!=[a,b,f,p,p] or [int.from_bytes(v[j],"big") for j in (3,4)]!=[m["fee"],m["spacing"]]:
             raise ValueError(("поля рынка",p))
         m.update(liquidity=str(int.from_bytes(v[5],"big")),slot0="0x"+v[6].hex(),balances=[str(int.from_bytes(w,"big")) for w in v[9:]])
+    checks=[]
+    for m in markets:
+        tick=decode(["uint160","int24","uint16","uint16","uint16","uint8","bool"],bytes.fromhex(m["slot0"][2:]))[1]
+        word=(tick//m["spacing"])//256
+        for index in range(max(-32768,word-1),min(32767,word+1)+1):
+            checks.append((m,index))
+    reads=views([call for m,index in checks for call in (tx(m["pool"],"tickBitmap(int16)",["int16"],[index]),
+                  tx(roles["lens"]["address"],"getPopulatedTicksInWord(address,int16)",["address","int16"],[m["pool"],index]))])
+    ticks=[]
+    for idx,(m,word) in enumerate(checks):
+        bitmap=int.from_bytes(reads[2*idx],"big")
+        rows,=decode(["(int24,int128,uint128)[]"],reads[2*idx+1])
+        indexes={(word*256+bit)*m["spacing"] for bit in range(256) if bitmap&(1<<bit)}
+        if indexes!={t for t,_,_ in rows} or len(indexes)!=len(rows):raise ValueError(("TickLens bitmap",m["pool"],word))
+        ticks.extend((m,t,net,gross) for t,net,gross in rows)
+        m.setdefault("tick_words",[]).append(dict(word=word,bitmap=hex(bitmap),rows=[[t,str(net),str(gross)] for t,net,gross in rows]))
+    raw=views([tx(m["pool"],"ticks(int24)",["int24"],[t]) for m,t,_,_ in ticks])
+    for (m,t,net,gross),v in zip(ticks,raw,strict=True):
+        if decode(["uint128","int128"],v[:64])!=(gross,net):raise ValueError(("TickLens gross/net",m["pool"],t))
 
-def capture(url):
-    d=json.loads(REGISTRY.read_bytes());tag=d["selector"];head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]);end=int(head["timestamp"],16)+300
+
+def capture(url,venue):
+    d=json.loads((DATA/f"{venue}_ethereum_registry.json").read_bytes());tag=d["selector"];head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False]);end=int(head["timestamp"],16)+300
     if int(head["number"],16)!=d["height"] or rpc(url,"eth_chainId",[])!="0x1":raise ValueError("неверный блок Ethereum")
     registry(url,d,tag)
     if read_batch(url,[("eth_getCode",[a,tag]) for a in (OWNER,EXEC)])!=["0x","0x"]:raise ValueError("тестовый адрес занят")
@@ -80,7 +100,7 @@ def capture(url):
         other=next(t for t in m["tokens"] if t!=cash)
         for seed in ([10**12,10**14] if cash==WETH else [1000,100000]):
             fund=tx(WETH,"deposit()",value=seed) if cash==WETH else tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[seed,[WETH,cash],OWNER,end],10**16)
-            for wire in ("router","router02","v5"):
+            for wire in ("router", "router02", "v5") if "router02" in roles else ("router", "v5"):
                 spender=EXEC if wire=="v5" else roles[wire];prefix=[fund];amount=seed
                 for a,b in [(cash,other),(other,cash)]:
                     permit=approval(a,spender,amount)
@@ -121,11 +141,11 @@ def capture(url):
     return d
 
 if __name__=="__main__":
-    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);args=cli.parse_args()
+    cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("output",type=Path);cli.add_argument("--venue",choices=["wagmi","lif3"],default="wagmi");args=cli.parse_args()
     errors=[]
     for url in ENDPOINTS:
         try:
-            args.output.write_text(json.dumps(capture(url),separators=(",",":")),encoding="utf8");break
+            args.output.write_text(json.dumps(capture(url,args.venue),separators=(",",":")),encoding="utf8");break
         except (ValueError,KeyError,RuntimeError,requests.RequestException) as err:
             errors.append((url,str(err)[:650]))
     else:raise RuntimeError(errors)

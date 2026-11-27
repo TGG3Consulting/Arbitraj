@@ -1,0 +1,115 @@
+{
+  "height": 26494988,
+  "selector": {
+    "blockHash": "0x2372196a2961b307333be48d3dad74a2e723fd459c2cb01e225a0a97f50e7a7a",
+    "requireCanonical": true
+  },
+  "source": "https://docs.lif3.com/liquidity/v3/contracts-swap-v3",
+  "roles": {
+    "factory": {
+      "address": "0x129538ee65a692fa041e107921d716c31d186803",
+      "runtime": "0x0bcd06e30fbc3b43136cb80589cb7ce67b3d74e5252afb6d825acf19a94ca3fe",
+      "bytes": 24067,
+      "verified": "https://eth.blockscout.com/api/v2/smart-contracts/0x129538ee65a692fa041e107921d716c31d186803"
+    },
+    "quoter": {
+      "address": "0x8973670cc2dcbc5a03c8ae373d9d3754b13faf69",
+      "runtime": "0x1498bb6cec8df779dc4f576ab26561a2f958d45bab5eaff48918e5d9a2885ed4",
+      "bytes": 8273,
+      "verified": "https://eth.blockscout.com/api/v2/smart-contracts/0x8973670cc2dcbc5a03c8ae373d9d3754b13faf69"
+    },
+    "router": {
+      "address": "0x4638b34955c66e28c8261b23d38bc125d24a4e1b",
+      "runtime": "0x2489c2152dcb922cbf8d0647618d70f8ce634e2b658838d498a0e83b4b0929e9",
+      "bytes": 12070,
+      "verified": "https://eth.blockscout.com/api/v2/smart-contracts/0x4638b34955c66e28c8261b23d38bc125d24a4e1b"
+    },
+    "lens": {
+      "address": "0xbfd8137f7d1516d3ea5ca83523914859ec47f573",
+      "runtime": "0xbf1bb07babb013f146395ed6e1127f8f48d598f1765bc660a91d7b164cf93ff8",
+      "bytes": 1385,
+      "verified": "https://eth.blockscout.com/api/v2/smart-contracts/0xbfd8137f7d1516d3ea5ca83523914859ec47f573"
+    }
+  },
+  "init": "0x88ea7049e70592b519fc358b446165d4dbedb71ff7c3749add6dc16731e6cd5a",
+  "markets": [
+    {
+      "pool": "0xa70e93c5eb55a88b191a732e14189ad3d2df38f2",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "tx": "0x92a263bd5d192bc4a280d2bfb4c5aa5fc9533e82cae7470a391d1f1962066357",
+      "hash": "0x086d8631b6059cb26610a36bcf6d8c8d054a58ce2f872a2e94a8db5f4eea5125",
+      "height": 18498359,
+      "index": 316
+    },
+    {
+      "pool": "0xb5761dbce0b6dad590c46b6e95839d60f0b888e8",
+      "tokens": [
+        "0x7138eb0d563f3f6722500936a11dcae99d738a2c",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "tx": "0x5e1f6c60aa49c019df8164e0ed0ee3ae1ab7ca1a78fb4568d1fcf63ee1f1a368",
+      "hash": "0x60fc4c10a2550110fc8acc85f4643e4bd9b17fcd899cad08c93f42741c12e29d",
+      "height": 18699088,
+      "index": 202
+    },
+    {
+      "pool": "0xd6897889d5d7e4327da8d1c315fc98f3b40dca4c",
+      "tokens": [
+        "0x8e01397163b21f64cec1f06ca6cc7d9aa8f718e9",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "tx": "0x621c66aacf65abaf8d367f0033a3eba0c2fd3e98e0229b89f2987ec42c69a95a",
+      "hash": "0x8e519f1e1cc2df80b67ed4cc9dc6903ee269591587c9d9a24417071c2d9bf48a",
+      "height": 18699110,
+      "index": 177
+    },
+    {
+      "pool": "0x458aefc59c74c4cdb73a2c043600dd0a272dc53d",
+      "tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "tx": "0x1e75ddd9ff314cad72048faa9e45dc93d062082ee2fed7ee8655e2d85f0fff12",
+      "hash": "0xbfb947254e06ae30e89cf2fd9f24b99a942576632e7c501d19f2df94731021ca",
+      "height": 18883948,
+      "index": 195
+    },
+    {
+      "pool": "0x12023bf4a73ae0ba4a91a3d70ec8dc6e1913bbc4",
+      "tokens": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "fee": 500,
+      "spacing": 10,
+      "tx": "0xa19caa0694c51e4f13455bab187ff556db05deb25ec6f038a654be5db1e6a2b1",
+      "hash": "0x6492e65131869ef201085d5c6abf7834453767a86c6a03004649664468945985",
+      "height": 18884548,
+      "index": 251
+    },
+    {
+      "pool": "0x84348b059fb42f4fad3fec70db82629b9ce495c4",
+      "tokens": [
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+      ],
+      "fee": 3000,
+      "spacing": 60,
+      "tx": "0xcbb21de3cb0b6339ef054f4d33f4a18acab1f3c5fffb4db812b65ec8d9583caa",
+      "hash": "0x1228a84189c638fc7eee69cec3802fa3d13d7565ee7c20cf0a779e250b97cbe5",
+      "height": 18884850,
+      "index": 372
+    }
+  ]
+}

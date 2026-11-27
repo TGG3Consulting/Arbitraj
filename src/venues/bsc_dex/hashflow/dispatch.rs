@@ -21,12 +21,14 @@ pub(super) enum Gate {
     Hashflow(String),
     Native(u64),
     Gladius(u64),
+    Raindex(u64),
 }
 impl Dispatch {
     fn cap(&self, ctx: &Ctx) -> GatewayResult<U256> {
         let k = match self.gate {
             Gate::Hashflow(_) => "hashflow.gas_budget_native",
             Gate::Native(_) => "native_rfq.gas_budget_native",
+            Gate::Raindex(_) => "raindex.gas_budget_native",
             Gate::Gladius(_) => "gladius.gas_budget_native",
         };
         super::super::num::to_units(ctx.dec(k)?, 18)
@@ -41,6 +43,7 @@ impl Dispatch {
                         .int("hashflow.min_validity_ms")
                         .is_ok_and(|m| routing::expiry_ok(self.expiry, m))
             }
+            Gate::Raindex(g) => super::super::raindex::enabled(ctx) && ctx.settings.generation()==*g && super::super::raindex::timely(self.expiry),
             Gate::Gladius(g) => super::super::gladius::enabled(ctx) && ctx.settings.generation()==*g && super::super::gladius::timely(ctx,self.expiry),
             Gate::Native(g) => {
                 super::super::native_rfq::enabled(ctx)
@@ -103,7 +106,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
     marker: &PendingRef,
 ) -> GatewayResult<()> {
     let Some(parse) =
-        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some() || c.gladius.is_some())
+        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some())
     else {
         return Ok(());
     };
@@ -214,7 +217,7 @@ where
     let dispatch = Dispatch {
         key: super::execute::key(p, req)?,
         expiry,
-        gate: if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
+        gate: if parse.raindex.is_some(){Gate::Raindex(generation)}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

@@ -12,7 +12,6 @@ use alloy::{
 };
 use alloy_primitives::{U64, keccak256};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Saved {
     pub(super) call: Erc20Call,
@@ -184,61 +183,22 @@ impl Payment {
         head: white_state::Head,
         expiry: u64,
     ) -> GatewayResult<(U256, U256, u64)> {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Child {
-            parent_hash: B256,
-            timestamp: U64,
-            calls: Vec<Call>,
-        }
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase")]
-        struct Call {
-            status: U64,
-            return_data: Bytes,
-            gas_used: U64,
-            logs: Vec<Log>,
-        }
-        let bad = || {
-            no(
-                ctx,
-                "Gladius: собственный кошелёк не подтвердил оплату и чистую выплату",
-            )
-        };
         let p = &self.saved;
-        let who = p.call.payer;
-        let balance = |to| json!({"from":who,"to":to,"input":Bytes::from(IERC20::balanceOfCall{owner:who}.abi_encode())});
-        let a = balance(p.input);
-        let b = balance(p.output);
-        let swap = json!({"from":who,"to":p.call.module,"input":self.data});
-        let blocks: Vec<Child> = rpc::call(
+        let (debit, credit, gas, logs) = crate::venues::bsc_dex::exec::erc20_measure::run(
             ctx,
-            "eth_simulateV1",
-            json!([{"blockStateCalls":[{"calls":[a,b,swap,a,b]}]},head.selector()]),
+            head,
+            expiry,
+            &p.call,
+            (p.input, p.output),
+            &self.data,
         )
         .await?;
-        let [c] = blocks.as_slice() else {
-            return Err(bad());
-        };
-        let [a, b, op, d, e] = c.calls.as_slice() else {
-            return Err(bad());
-        };
-        if c.parent_hash != head.hash
-            || c.timestamp.to::<u64>() > expiry
-            || c.calls.iter().any(|v| v.status != U64::from(1))
-        {
-            return Err(bad());
+        if p.amounts(&logs) != Some((debit, credit)) {
+            return Err(no(
+                ctx,
+                "Gladius: фактическая оплата расходится с событиями",
+            ));
         }
-        let value = |v: &Call| {
-            (v.return_data.len() == 32)
-                .then(|| U256::from_be_slice(&v.return_data))
-                .ok_or_else(bad)
-        };
-        let debit = value(a)?.checked_sub(value(d)?).ok_or_else(bad)?;
-        let credit = value(e)?.checked_sub(value(b)?).ok_or_else(bad)?;
-        if p.amounts(&op.logs) != Some((debit, credit)) {
-            return Err(bad());
-        }
-        Ok((debit, credit, op.gas_used.to()))
+        Ok((debit, credit, gas))
     }
 }

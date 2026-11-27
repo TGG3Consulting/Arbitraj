@@ -1929,3 +1929,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    from base_raindex_markets import raindex_markets
+    lines.extend(raindex_markets())

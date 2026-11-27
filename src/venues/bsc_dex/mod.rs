@@ -18,6 +18,7 @@ pub mod hashflow;
 pub mod ryze;
 mod native_rfq;
 mod gladius;
+mod raindex;
 pub mod hanji;
 mod source_quote;
 mod keyed_price;

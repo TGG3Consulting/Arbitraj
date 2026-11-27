@@ -40,6 +40,8 @@ pub struct SwapCtx {
     pub native_rfq: Option<Box<super::super::native_rfq::settlement::Saved>>,
     #[serde(default, skip_serializing_if="Option::is_none")]
     pub gladius: Option<Box<super::super::gladius::settlement::Saved>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub raindex: Option<Box<super::super::raindex::settlement::Saved>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vista: Option<super::vista_fact::Proof>,
     #[serde(default,skip_serializing_if="Option::is_none")]

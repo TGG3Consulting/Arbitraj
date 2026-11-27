@@ -26,6 +26,7 @@ pub struct Config {
     pub tokens: Vec<super::tokens::Token>,
     pub pools: Vec<Address>,
     pub api: String,
+    pub router_origin: String,
     pub relayer: String,
     pub max_age_ms: u64,
     pub validity: u64,
@@ -64,7 +65,7 @@ impl Config {
             .collect::<Option<Vec<_>>>()?;
         let api = ctx.text("ryze.quote_url").ok()?;
         let relayer = ctx.text("ryze.relayer_url").ok()?;
-        http::endpoint(&api, "quote")?;
+        let router_origin = http::endpoint(&api, "quote")?.origin().ascii_serialization();
         http::endpoint(&relayer, "intents/submit")?;
         let c = Self {
             router: addr("ryze.router")?,
@@ -75,6 +76,7 @@ impl Config {
             tokens,
             pools,
             api,
+            router_origin,
             relayer,
             max_age_ms: ctx.int("ryze.quote_age_ms").ok()?,
             validity: ctx.int("ryze.validity_sec").ok()?,

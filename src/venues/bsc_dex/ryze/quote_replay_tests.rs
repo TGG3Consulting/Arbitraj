@@ -11,13 +11,15 @@ fn archive() -> Value {
     )).unwrap()
 }
 
-async fn replay(source: &Value, calls: &[Value], buy: bool, buy_cap: U256) -> Option<Quoted> {
+async fn replay(source: &Value, calls: &[Value], buy: bool, buy_cap: U256, requests: u64) -> Option<Quoted> {
     let req = &calls[0]["request"];
     let body = &calls[0]["body"];
     let address = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
     let pools: Vec<_> = source["settings_pools"].as_array().unwrap().iter()
         .map(|v| (address(&v[0]), address(&v[1]), address(&v[2]))).collect();
+    let parts = super::router_budget_tests::parts("ryze-quote-replay", address(&req["userAddress"]), requests).await;
     let market = Market {
+        ctx: &parts.ctx,
         wallet: address(&req["userAddress"]),
         input: address(&req["tokenIn"]),
         output: address(&req["tokenOut"]),
@@ -53,7 +55,7 @@ async fn replay(source: &Value, calls: &[Value], buy: bool, buy_cap: U256) -> Op
 async fn recorded_sell_uses_whole_wallet_debit_once() {
     let source = archive();
     let sale = source["router_quotes"].as_array().unwrap().iter().find(|r| r["buy"].as_bool() == Some(false)).unwrap();
-    let quote = replay(&source, &sale["calls"].as_array().unwrap()[..1], false, U256::MAX).await.unwrap();
+    let quote = replay(&source, &sale["calls"].as_array().unwrap()[..1], false, U256::MAX, 100).await.unwrap();
     assert_eq!((quote.gross, quote.net, quote.expected), (
         U256::from(1_000_000_000_000_000u64), U256::from(994_021_230_610_103u64), U256::from(1_660_790)
     ));
@@ -63,7 +65,7 @@ async fn recorded_sell_uses_whole_wallet_debit_once() {
 async fn measured_buy_rejects_older_shortfall_and_finds_later_funded_size() {
     let source = archive();
     let original = source["router_quotes"].as_array().unwrap().iter().find(|r| r["buy"].as_bool() == Some(true)).unwrap();
-    let old = replay(&source, std::slice::from_ref(&original["gross_input_control"]), false, U256::MAX).await.unwrap();
+    let old = replay(&source, std::slice::from_ref(&original["gross_input_control"]), false, U256::MAX, 100).await.unwrap();
     let target = original["calls"][0]["request"]["amountOut"].as_str().unwrap().parse::<U256>().unwrap();
     assert_eq!((old.gross, old.expected), (U256::from(1_684_341), U256::from(999_844_560_250_825u64)));
     assert!(!old.covers(target));
@@ -73,8 +75,10 @@ async fn measured_buy_rejects_older_shortfall_and_finds_later_funded_size() {
     )).unwrap();
     let calls = newer["calls"].as_array().unwrap();
     // Первые три чтения достигают исходного потолка в 1,668727 USDC с недобором.
-    assert!(replay(&source, &calls[..3], true, U256::from(1_668_727)).await.is_none());
-    let final_quote = replay(&source, calls, true, U256::MAX).await.unwrap();
+    assert!(replay(&source, &calls[..3], true, U256::from(1_668_727), 100).await.is_none());
+    // Четвёртый запрос нужен для покупки, но у общего окна осталось ровно два запроса.
+    assert!(replay(&source, &calls[..2], true, U256::MAX, 2).await.is_none());
+    let final_quote = replay(&source, calls, true, U256::MAX, 100).await.unwrap();
     assert_eq!((final_quote.gross, final_quote.net, final_quote.expected), (
         U256::from(1_673_732), U256::from(1_663_732), U256::from(1_002_996_653_943_068u64)
     ));

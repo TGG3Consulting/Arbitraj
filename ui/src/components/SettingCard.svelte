@@ -143,10 +143,10 @@
         {@const rows = store.values[valueKey('ryze.quote_sizes', scope)]}
         {@const interval = store.values[valueKey('ryze.books_interval_ms', scope)]}
         {#if Array.isArray(rows) && rows.length && interval > 0}
-          <p class="muted">Router /quote: до {4 * rows.length} запросов за проход по {rows.length} строкам размеров,
-            до {(4 * rows.length * 60000 / interval).toLocaleString('ru-RU', {maximumFractionDigits: 1})} запросов/мин
-            в среднем при заданной паузе. При раннем отказе запросов меньше. На размер до двух запросов покупки и двух продажи.
-            Финальная цена и сверка перед подписью добавляют до двух запросов каждая.</p>
+          <p class="muted">Router /quote: до {5 * rows.length} запросов за проход по {rows.length} строкам размеров,
+            до {(5 * rows.length * 60000 / interval).toLocaleString('ru-RU', {maximumFractionDigits: 1})} запросов/мин
+            в среднем при заданной паузе. При раннем отказе запросов меньше. На размер до четырёх запросов покупки и одного продажи.
+            Финальная цена и сверка перед подписью используют то же окно Router.</p>
         {:else}
           <p class="muted">Для опроса Router /quote задайте размеры и паузу между проходами.</p>
         {/if}

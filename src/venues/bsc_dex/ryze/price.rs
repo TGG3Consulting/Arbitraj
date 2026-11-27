@@ -12,6 +12,7 @@ mod reply;
 use reply::Leg;
 
 pub struct Market<'a> {
+    pub ctx: &'a super::super::ctx::Ctx,
     pub wallet: Address,
     pub input: Address,
     pub output: Address,
@@ -56,7 +57,7 @@ impl Market<'_> {
         let mut body = json!({"userAddress":self.wallet,"tokenIn":self.input,"tokenOut":self.output,
             "slippageTolerance":self.slippage_bps,"maxHops":self.pools.len().min(3)});
         body[if exact_input { "amountIn" } else { "amountOut" }] = json!(n.to_string());
-        let raw = http::quote(url.clone(), &body, limits).await?;
+        let raw = http::quote(self.ctx, url, &body, limits).await?;
         let leg = self.validate(raw, Utc::now())?;
         let fixed = if exact_input { leg.input } else { leg.output };
         (fixed == n).then_some(leg)

@@ -39,15 +39,19 @@ fn limited(mut limits: Limits, cap: usize) -> Limits {
     limits
 }
 
-pub async fn quote(url: Url, body: &Value, limits: Limits) -> Option<Value> {
-    let (status, response) =
-        http::exchange(client()?.post(url).json(body), limited(limits, 131_072))
-            .await
-            .ok()?;
-    if !status.is_success() {
+/// Каждый реальный POST занимает одно место окна Router до HTTP, включая уточнение размера BUY.
+pub async fn quote(ctx: &super::super::ctx::Ctx, url: &Url, body: &Value, limits: Limits) -> Option<Value> {
+    let request = client()?.post(url.clone()).json(body);
+    super::budget::take_router(ctx, url).await?;
+    let reply = http::exchange_status::<true>(request, limited(limits, 131_072)).await.ok()?;
+    if reply.status == StatusCode::TOO_MANY_REQUESTS {
+        super::budget::pause_router(ctx, url, reply.retry_after_s).await.ok()?;
         return None;
     }
-    serde_json::from_str(&response).ok()
+    if !reply.status.is_success() {
+        return None;
+    }
+    serde_json::from_str(&reply.text).ok()
 }
 
 #[derive(Debug, PartialEq, Eq)]

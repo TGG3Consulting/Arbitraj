@@ -49,6 +49,9 @@ pub struct Snapshot {
 }
 impl Snapshot {
     pub async fn read(p: &Parts, config: Config) -> Option<Self> {
+        if !super::budget::router_ready(&p.ctx, &config.router_origin) {
+            return None;
+        }
         let wallet = signer::address(&p.ctx).ok()?;
         let cash = p.tokens.usdt(&p.ctx).ok()?;
         let h = white_state::head(&p.ctx, "latest").await.ok()?;
@@ -71,6 +74,9 @@ impl Snapshot {
         previous_cap: Option<U256>,
     ) -> Option<(Ticket, Decimal)> {
         let c = &self.config;
+        if !super::budget::router_ready(&p.ctx, &c.router_origin) {
+            return None;
+        }
         let buy = side == Side::Buy;
         let (input, output) = if buy {
             (self.cash, asset)
@@ -128,6 +134,7 @@ impl Snapshot {
             }
         }
         let m = price::Market {
+            ctx,
             wallet: self.wallet,
             input,
             output,

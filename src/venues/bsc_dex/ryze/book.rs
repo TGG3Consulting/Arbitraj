@@ -49,6 +49,9 @@ impl Cache {
         let Some(c) = Config::read(&p.ctx) else {
             return vec![];
         };
+        if !super::budget::router_ready(&p.ctx, &c.router_origin) {
+            return vec![];
+        }
         let b = self.0.lock().unwrap_or_else(|e| e.into_inner());
         b.levels
             .iter()

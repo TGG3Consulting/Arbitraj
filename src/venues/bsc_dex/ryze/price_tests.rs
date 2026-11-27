@@ -77,7 +77,9 @@ async fn nonlinear_pool_receives_net_and_wallet_is_quoted_once_at_gross() {
     let addr = socket.local_addr().unwrap();
     let task = tokio::spawn(async move { axum::serve(socket, mock).await.unwrap() });
     let pools = [(p, a, b)];
+    let parts = super::router_budget_tests::parts("ryze-price", owner, 100).await;
     let m = Market {
+        ctx: &parts.ctx,
         wallet: owner,
         input: a,
         output: b,

@@ -5,6 +5,7 @@ const CHAIN_ID: u64 = 8453;
 
 pub(crate) mod book;
 mod budget;
+mod budget_window;
 mod declined;
 pub(crate) mod chain;
 pub(crate) mod deployment;
@@ -29,5 +30,7 @@ mod price_tests;
 mod service_tests;
 #[cfg(test)]
 mod quote_replay_tests;
+#[cfg(test)]
+mod router_budget_tests;
 pub(crate) mod tokens;
 pub mod wire;

@@ -3837,6 +3837,15 @@ source = "https://documentation.ryze.pro/relayer/overview"
 rationale = "Общий бюджет отправок и чтений статуса по всем кошелькам. Для выделенного IP — не более 100 за минуту. При совместном IP вычтите запросы других процессов."
 prefill = { kind = "Global" }
 
+[[section.rec]]
+name = "ryze.router_requests_per_minute"
+area = "вся система"
+unit = "запросов/мин"
+value = "100"
+source = "https://documentation.ryze.pro/guide/get-swap-quotes"
+rationale = "Рекомендация владельца по аналогии с Relayer. Router не публикует собственный предел. Общий бюджет одного сервера для фоновых, финальных и повторных котировок всех кошельков."
+prefill = { kind = "Global" }
+
 [[section]]
 title = "Ручная котировка Fynd · base"
 intro = "Настройки источника для base_dex."

@@ -42,7 +42,8 @@ pub(in crate::venues::bsc_dex) async fn consider(
             let s = Snapshot::read(p, c.clone()).await?;
             s.measure(p, coin, side, qty, None).await
         } else {
-            p.ryze.indicative(&c, coin, side, qty)
+            let cached = p.ryze.indicative(&c, coin, side, qty)?;
+            super::budget::router_ready(&p.ctx, &c.router_origin).then_some(cached)
         }
     };
     let Some(ms) = p.ctx.int("ryze.quote_budget_ms").ok().filter(|v| *v > 0) else {

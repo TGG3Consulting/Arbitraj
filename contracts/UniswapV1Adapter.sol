@@ -54,7 +54,14 @@ contract UniswapV1Adapter {
                   uint256 minimum, uint256 deadline) external returns (uint256) {
         require(order.kind == 0 && uint256(order.poolId) >> 160 == 0 && order.userData.length == 0 &&
                 funds.sender == msg.sender && !funds.fromInternalBalance && !funds.toInternalBalance, "order");
-        return settle(address(uint160(uint256(order.poolId))), order.assetIn, order.assetOut, order.amount, minimum, deadline, funds.recipient, address(0));
+        address market = address(uint160(uint256(order.poolId)));
+        address second;
+        if (market == address(factory)) {
+            market = factory.getExchange(order.assetIn);
+            second = factory.getExchange(order.assetOut);
+            require(market != address(0) && second != address(0), "unknown market");
+        }
+        return settle(market, order.assetIn, order.assetOut, order.amount, minimum, deadline, funds.recipient, second);
     }
 
     function callToken(IUniV1Asset asset, bytes memory data) private {

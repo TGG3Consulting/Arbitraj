@@ -59,7 +59,7 @@ def capture(url,artifact):
                             erc20=str(view(token,"balanceOf(address)","uint256",["address"],[exchange])))
     cases=[]
     def capture_leg(source,target,n,reference,mode):
-        multi=mode in ("direct_pair","wallet_pair")
+        multi=mode in ("direct_pair","wallet_pair","v5_pair")
         pool=markets[source if multi or source not in (ETH,WETH) else target]["address"]
         target_pool=markets[target]["address"] if multi else None
         def fund():
@@ -68,8 +68,8 @@ def capture(url,artifact):
             return [tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",
                        ["uint256","address[]","address","uint256"],[n,[WETH,source],OWNER,deadline],value=10**18)]
         prefix=fund()
-        if mode in ("wallet","wallet_pair","v5") or source!=ETH:
-            prefix.append(approve(source,EXEC if mode=="v5" else MODULE if mode in ("wallet","wallet_pair") else pool,n))
+        if mode in ("wallet","wallet_pair","v5","v5_pair") or source!=ETH:
+            prefix.append(approve(source,EXEC if mode in ("v5","v5_pair") else MODULE if mode in ("wallet","wallet_pair") else pool,n))
         def order(out,end):
             if mode=="direct" and source==ETH:
                 return tx(pool,"ethToTokenSwapInput(uint256,uint256)",["uint256"]*2,[out,end],value=n)
@@ -81,7 +81,7 @@ def capture(url,artifact):
                 return tx(MODULE,"executePair(address,address,address,address,uint256,uint256,uint256)",["address"]*4+["uint256"]*3,[pool,target_pool,source,target,n,out,end])
             if mode=="wallet":
                 return tx(MODULE,"execute(address,address,address,uint256,uint256,uint256)",["address"]*3+["uint256"]*3,[pool,source,target,n,out,end])
-            step=(17,MODULE,source,target,10000,encode(["address"],[pool]))
+            step=(17,MODULE,source,target,10000,encode(["address"],[FACTORY if mode=="v5_pair" else pool]))
             return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",["address","uint256","address","uint256","uint256",STEP+"[]"],[source,n,target,out,end,[step]])
         cash=[holdings(a,t) for a in (OWNER,MODULE,EXEC) for t in (source,target)]
         rows=run(prefix+cash+[order(reference+1,deadline),order(reference,0),order(reference,deadline)]+cash)
@@ -119,9 +119,9 @@ def capture(url,artifact):
         via=minimum(n,int(first["erc20"]),int(first["native"]),3000)
         out=minimum(via,int(last["native"]),int(last["erc20"]),3000)
         if not out:continue
-        for mode in ("direct_pair","wallet_pair"):
+        for mode in ("direct_pair","wallet_pair","v5_pair"):
             capture_leg(source,target,n,out,mode)
-    if not all(any(i["mode"]==m and "spent" in i for i in cases) for m in ("direct","wallet","v5","direct_pair","wallet_pair")):
+    if not all(any(i["mode"]==m and "spent" in i for i in cases) for m in ("direct","wallet","v5","direct_pair","wallet_pair","v5_pair")):
         raise ValueError("uncovered payment form")
     return dict(selector=at,block=snap["block"],factory=role(FACTORY),template=role(template),count=count,markets=markets,module=MODULE,
                 module_hash="0x"+keccak(hexstr=deployed).hex(),cases=cases)
@@ -132,11 +132,11 @@ if __name__=="__main__":
     cli.add_argument("artifact",type=Path)
     cli.add_argument("output",type=Path)
     args=cli.parse_args()
-    for url in ["https://ethereum.gateway.tenderly.co","https://ethereum-rpc.publicnode.com","https://eth.drpc.org","https://eth-mainnet.public.blastapi.io"]:
+    for url in ["https://eth.drpc.org","https://rpc.mevblocker.io","https://ethereum-rpc.publicnode.com","https://ethereum.gateway.tenderly.co","https://eth-mainnet.public.blastapi.io"]:
         try:
             evidence=capture(url,json.loads(args.artifact.read_bytes()))
             break
-        except (requests.RequestException,RuntimeError,KeyError) as exc:
+        except (requests.RequestException,RuntimeError,ValueError,KeyError) as exc:
             print(url,str(exc)[:180],flush=True)
     else:
         raise RuntimeError("original Ethereum state unavailable")

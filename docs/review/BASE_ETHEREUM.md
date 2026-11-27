@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `e025870b` (27.11.2026).
+Последний просмотренный коммит: `7819c4e8` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -1860,3 +1860,18 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 
   ✅
   - 💡 Как было в первой версии PropVenueAdapter: код рынка Rubicon не закреплён хэшем. Риск ограничен минимумом выхода (разрешение — на `maximum`), но для единообразия можно хранить и проверять `codehash` рынка.
+
+### 7819c4e8 — проверено
+
+- 💡 из e025870b закрыт: `RubiconClassicWallet` запоминает `codehash` рынка в конструкторе и сверяет его при каждом `execute`. ✅
+- Ранний Slipstream (Base) через собственный UniversalRouter — новый вариант `SlipstreamUniversal` на пути `RegisteredV3`. Все ветки в общих файлах закрыты этим вариантом или `market.slipstream.is_some()` (новое поле с `serde(default)`):
+  - `registered_v3_wallet`;
+  - `market_plan` / `solidly_gate`;
+  - `registered_router` (ключ `dex.universal_router`);
+  - `direct_allowance::permit_router`;
+  - `v2_wallet_sim`;
+  - `load` / `per_block` / `check/registered_v3`.
+
+  Для BSC `RegisteredUniV3` / `VvsV3` — прежний путь (`approve::fork_all`, `white_direct::build`). ✅
+- Разрешения через Permit2 выдаются общим `approve::all`, то есть по настройкам владельца `dex.approve_unlimited` и `dex.permit2_expiration_s` — как у остальных UniversalRouter. ✅
+- Скрипты записи без секретов, новая настройка с записью в SETTINGS_CASES.

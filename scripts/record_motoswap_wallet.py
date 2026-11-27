@@ -16,7 +16,7 @@ MODULE="0x"+keccak(text="MotoswapWallet archive simulation").hex()[-40:]
 DIRECT="execute(address,address,address,uint256,uint256,uint256)"
 
 
-def capture(artifact):
+def capture(artifact, paths=False):
     folder=ROOT/"tests/data/first_run_dex_2026-11-26"
     original=json.loads(gzip.decompress((folder/"motoswap_ethereum.json.gz").read_bytes()))
     reader=Reader("ethereum",json.loads((folder/"ethereum.json").read_bytes()))
@@ -43,6 +43,10 @@ def capture(artifact):
         raise ValueError("occupied simulation role")
     deadline=int(reader.header["timestamp"],16)+300
     book={v["pool"]:v["tokens"] for v in original["directory"]["pairs"]}
+    if paths:
+        from motoswap_paths import compare
+        return dict(selector=reader.tag,root=reader.header["stateRoot"],owner=OWNER,module=MODULE,executor=EXEC,
+                    runtime="0x"+keccak(hexstr=runtime).hex(),payments=compare(reader,original["directory"],MODULE,states,deadline))
     payments=[]
     for i,row in enumerate(original["trials"]):
         leg=row["paid"]
@@ -92,6 +96,7 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("artifact",type=Path)
     parser.add_argument("output",type=Path)
+    parser.add_argument("--paths",action="store_true")
     args=parser.parse_args()
-    args.output.write_text(json.dumps(capture(json.loads(args.artifact.read_bytes())),separators=(",",":")),encoding="utf8")
+    args.output.write_text(json.dumps(capture(json.loads(args.artifact.read_bytes()),args.paths),separators=(",",":")),encoding="utf8")
 

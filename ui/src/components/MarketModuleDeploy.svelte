@@ -6,10 +6,12 @@
   let {id, kind, venue} = $props();
   const v1 = $derived(kind === "uniswap_v1");
   const bancor = $derived(kind === "bancor_v3");
-  const file = $derived(bancor ? "bancor-v3-ethereum" : v1 ? "uniswap-v1-ethereum" : "rubicon-classic-base");
+  const stabull = $derived(kind === 'stabull' || kind === 'stabull_module');
+  const recoverable = $derived(v1 || bancor || stabull);
+  const file = $derived(stabull ? 'stabull-base' : bancor ? "bancor-v3-ethereum" : v1 ? "uniswap-v1-ethereum" : "rubicon-classic-base");
   let manifest = $state(null), estimateSeen = $state(null), pending = $state(null), txHash = $state('');
   let result = $state(''), error = $state(''), busy = $state(false), readyAddress = $state('');
-  const key = $derived(bancor ? "bancor-v3-create:1" : v1 ? 'uniswap-v1-create:1' : 'rubicon-classic-create:8453');
+  const key = $derived(stabull ? 'stabull-create:8453' : bancor ? "bancor-v3-create:1" : v1 ? 'uniswap-v1-create:1' : 'rubicon-classic-create:8453');
   const value = (name) => store.values[name+'|Dex|'+id];
   const atVenue = (name) => store.values[name+'|Venue|'+venue];
   const current = () => ({chainId:atVenue('dex.evm_chain_id'), wrapped:atVenue('dex.native_wrapped'),
@@ -37,8 +39,8 @@
   }
   async function prepare() {
     refreshPending();
-    if (v1 || bancor) {
-      const artifact = bancor ? await import('../assets/bancor-v3-ethereum.json') : await import('../assets/uniswap-v1-ethereum.json');
+    if (recoverable) {
+      const artifact = stabull ? await import('../assets/stabull-base.json') : bancor ? await import('../assets/bancor-v3-ethereum.json') : await import('../assets/uniswap-v1-ethereum.json');
       manifest = await loadPlan(current(),artifact.default);
     } else {
       const response = await fetch(import.meta.env.BASE_URL+file+'.json');
@@ -71,7 +73,7 @@
     return a.from===b.from && a.chain===b.chain && a.nonce===b.nonce && a.creation===b.creation;
   }
   async function reconcile(expected,act) {
-    if (!v1 && !bancor) return act();
+    if (!recoverable) return act();
     const compare=async()=>{
       refreshPending();
       if (!sameIntent(pending,expected)) throw Error('Исходное поручение изменилось в другой вкладке. Повторите проверку.');
@@ -114,17 +116,19 @@
       if (value('dex.router')) throw new Error('Адрес модуля уже настроен.');
       await setValue('dex.router', {kind:'Dex', id}, readyAddress);
       save(null);
-      result='Подтверждённый адрес сохранён в dex.router.';
+      result=stabull && kind === 'stabull' ? 'Адрес сохранён. Для защищённых обменов выберите вид stabull_module и сохраните настройки DEX.' : 'Подтверждённый адрес сохранён в dex.router.';
     });
   }
 
 </script>
 
 <details>
-  <summary>Разместить {bancor ? 'BancorV3Adapter в Ethereum' : v1 ? 'UniswapV1Adapter в Ethereum' : 'RubiconClassicWallet на Base'}</summary>
+  <summary>Разместить {stabull ? 'StabullAdapter на Base' : bancor ? 'BancorV3Adapter в Ethereum' : v1 ? 'UniswapV1Adapter в Ethereum' : 'RubiconClassicWallet на Base'}</summary>
   <button class="quiet" disabled={busy} onclick={() => run(prepare)}>Открыть параметры размещения</button>
   {#if manifest}
-    {#if bancor}
+    {#if stabull}
+      <p>Конструктор принимает адрес фабрики <code>{manifest.market}</code>. Сумма перевода при создании — 0 ETH.</p>
+    {:else if bancor}
       <p>Конструктор Bancor V3 в Ethereum. Перевод ETH при создании — 0.</p>
       {#each ['BancorNetwork','BancorNetworkInfo','MasterVault','WETH','Нативный ETH'] as label, i}
         <div>{label} <code>{manifest.arguments[i]}</code></div>
@@ -143,8 +147,8 @@
         <button disabled={busy} onclick={() => run(submit)}>Подтвердить создание контракта в кошельке</button>
       {/if}
     {/if}
-    {#if pending}<p>Отправка начата с <code>{pending.from}</code>, nonce {pending.nonce}. {v1 || bancor ? "Проверьте исходную транзакцию или замену с тем же nonce." : "Проверьте исходную транзакцию."}</p>{/if}
-    <label>{pending && (v1 || bancor) ? "Хеш CREATE или его замены" : "Хеш CREATE"} <input bind:value={txHash} placeholder="0x…" /></label>
+    {#if pending}<p>Отправка начата с <code>{pending.from}</code>, nonce {pending.nonce}. {recoverable ? "Проверьте исходную транзакцию или замену с тем же nonce." : "Проверьте исходную транзакцию."}</p>{/if}
+    <label>{pending && recoverable ? "Хеш CREATE или его замены" : "Хеш CREATE"} <input bind:value={txHash} placeholder="0x…" /></label>
     <button class="quiet" disabled={busy || !txHash.trim()} onclick={() => run(verify)}>Проверить размещение</button>
     {#if readyAddress}
       <p>Адрес модуля <code>{readyAddress}</code></p>

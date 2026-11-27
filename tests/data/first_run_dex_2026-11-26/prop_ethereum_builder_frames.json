@@ -1,0 +1,93 @@
+{
+  "chain": 1,
+  "number": 26507885,
+  "slot": 15747884,
+  "parent": "0x12aef1288033abf5ceee17ea80931d05e91c60f99e38095d6bffcc2be872ce4d",
+  "timestamp": 1795798631,
+  "sources": {
+    "Titan": "https://eu.data.titanbuilder.xyz/data",
+    "BuilderNet": "https://rpc.buildernet.org/pamm/rpc"
+  },
+  "frames": [
+    {
+      "name": "kaliber",
+      "builder": "Titan",
+      "market": "0xb8d4e06e3038b07b4376ba3020eabce69f673463",
+      "oracle": "0xf639cf213b63f7e77d699ff686d591c0ba55fc63",
+      "pairs": [
+        [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
+        ],
+        [
+          "0x5afe3855358e112b5647b952709e6165e1c1eeee",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ]
+      ],
+      "storage": {
+        "0xc74279eda89f55f0dc3a515ecfe03ff694b9b48c1694f99d0ebc659c038b4e30": "0x000000000000000000000000000000006b09b667000005dd0000000004c5ae94",
+        "0x5f6f40f9f9889cf7f6ddcc76f464a1becf3be79a0abee0e17d2f489ec2860d47": "0x000000000000000000000000000000006b09b6670000004f000000000009233b"
+      }
+    },
+    {
+      "name": "taurus",
+      "builder": "Titan",
+      "market": "0x20861433d9119b866eeb398cb1ad46652a3cf953",
+      "oracle": "0xda7afeed021eafc1c1af9c362de477dad0396b81",
+      "pairs": [
+        [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        [
+          "0xabec6aeab037b77c09a2a99264f9c81a35b02649",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ]
+      ],
+      "storage": {
+        "0x4129fd74ec25df4d7f38153db5ee689c566d2391ced2e841c25f44ee63e6e626": "0x6b09b66701010000005401a21df06182000cc0b3000000860000000000198166",
+        "0xdf6a5fb7053edfdb25b7d225d54c54b7cc0d2f55eccbfcdf5470775a1573965f": "0x6b09b6670101cc00014e01a21df061ba000cbbf50000014e00000000001977eb",
+        "0x7c500e00776e80b25202b6c67646ccc6c8ba3d61992218e6477289b54966263b": "0x6b09b66701010000000301a21df05af50007a2f50000000300000000000f45eb",
+        "0x808312112ea2b14e7c789491bec1e59495787f8dd42014973d78a3cd0e844476": "0x6b09b6670165300001b301a21df06182000000180000001700000000000165a5"
+      }
+    },
+    {
+      "name": "taurus",
+      "builder": "BuilderNet",
+      "market": "0x20861433d9119b866eeb398cb1ad46652a3cf953",
+      "oracle": "0xda7afeed021eafc1c1af9c362de477dad0396b81",
+      "pairs": [
+        [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        [
+          "0xabec6aeab037b77c09a2a99264f9c81a35b02649",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ],
+        [
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+          "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        ],
+        [
+          "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+          "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ]
+      ],
+      "storage": {
+        "0x4129fd74ec25df4d7f38153db5ee689c566d2391ced2e841c25f44ee63e6e626": "0x6b09b66701010000005401a21df06182000cc0b3000000860000000000198166",
+        "0x7c500e00776e80b25202b6c67646ccc6c8ba3d61992218e6477289b54966263b": "0x6b09b66701010000000301a21df05af50007a2f50000000300000000000f45eb",
+        "0x808312112ea2b14e7c789491bec1e59495787f8dd42014973d78a3cd0e844476": "0x6b09b6670165300001b301a21df06182000000180000001700000000000165a5",
+        "0xdf6a5fb7053edfdb25b7d225d54c54b7cc0d2f55eccbfcdf5470775a1573965f": "0x6b09b6670101cc00014e01a21df061ed000cbbf60000014e00000000001977ed"
+      }
+    }
+  ]
+}

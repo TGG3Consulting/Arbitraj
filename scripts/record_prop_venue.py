@@ -31,7 +31,7 @@ def rpc(c,method,params):
 def tx(to,sig,types=(),values=(),value=0):
     return {"from":OWNER,"to":to,"value":hex(value),"gas":hex(3_000_000),"data":"0x"+(keccak(text=sig)[:4]+encode(types,values)).hex()}
 
-def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None):
+def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None,oracle_state=None):
     dst=MODULE if strict else ROUTER
     apps=[tx(inp,"approve(address,uint256)",["address","uint256"],[dst,n])]
     bal=lambda token:tx(token,"balanceOf(address)",["address"],[OWNER])
@@ -46,6 +46,9 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix,fallback,block=None):
                  ["address","address","address","uint256","uint256","address","uint256"],[venue,inp,out,n,floor,OWNER,t])
     calls=prefix+apps+[bal(inp),bal(out),order,bal(inp),bal(out)]
     frame={"stateOverrides":{OWNER:{"balance":hex(2*10**18)},MODULE:{"code":code}},"calls":calls}
+    if oracle_state:
+        if oracle_state.keys() & frame["stateOverrides"].keys():raise ValueError("oracle overlaps funded account")
+        frame["stateOverrides"].update(oracle_state)
     if block is not None:frame["blockOverrides"]=block
     info=rpc(c,"eth_simulateV1",[{"blockStateCalls":[frame]},c.selector])
     raw=info["result"][0]

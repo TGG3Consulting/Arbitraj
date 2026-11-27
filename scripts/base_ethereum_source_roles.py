@@ -100,9 +100,17 @@ def describe(network,source_id,adapter,configured,candidates):
         assert paid["roles"]["venue"]["address"]==configured[profile]["settings"]["dex.factory"]
         strict=[r for r in proof["rows"] if r["strict"]]
         assert strict and all(r["status"]=="reverted" for r in strict)
+        within_block=archive.with_name(name+"_ethereum_price_slot.json.gz")
+        slots=json.loads(gzip.decompress(within_block.read_bytes()))["rows"]
+        protected=[r for r in slots if r["strict"]]
+        own=[r for r in protected if r["status"]=="paid" and r["actual"]==paid["roles"]["venue"]["address"]]
+        assert all(r["withoutUpdate"]["status"]=="reverted" for r in protected)
+        assert len(own)==(4 if name=="kaliber" else 9)
         return (f"Профиль `{profile}`, фактическая выплата {paid['received']/1_000_000:.6f} USDC в блоке {paid['height']}. "
                 f"При проверке после блока все {len(strict)} требований выплаты исходным DEX отклонены. "
-                f"Разрешённая замена рассчиталась через Uniswap V3. [Квитанция и проверки](../{archive.as_posix()}).")
+                f"Разрешённая замена рассчиталась через Uniswap V3. На том же родителе, после подписанного обновления цены "
+                f"внутри целевого блока исходная площадка оплатила {len(own)} из {len(protected)} проверок. Без обновления — 0. "
+                f"[Квитанция и проверки](../{archive.as_posix()}) · [Сравнение в слоте](../{within_block.as_posix()}).")
     if network=="ethereum" and source_id=="2121" and path=="dexs/frax-swap/index.ts":
         factory=configured["fraxswap_ethereum"]["settings"]["dex.factory"]
         return (f"Fraxswap. Профиль `fraxswap_ethereum`, реестр `{factory}`, проверено 30 пар. "

@@ -136,6 +136,14 @@ def capture(endpoint,art,kipseli=False,market_name=None,price_slot=False):
     if market_name:
         from record_prop_cash_receipts import receipt_evidence
         evidence["historicalSettlement"]=receipt_evidence(c,market_name,rpc)
+    if price_slot:
+        strict=[r for r in result if r["strict"]]
+        paid=[r for r in strict if r["status"]=="paid" and r["actual"]==venue]
+        expected={"kaliber":(4,4),"taurus":(12,9)}
+        if (len(strict),len(paid))!=expected[market_name] or any(r["withoutUpdate"]["status"]!="reverted" for r in strict):
+            raise ValueError("changed native settlement with or without canonical price")
+        if any(r["tighter"]["status"]!="reverted" or r["expired"]["status"]!="reverted" for r in paid):
+            raise ValueError("original venue accepted a tighter cash floor or expired order")
     return evidence
 
 if __name__=="__main__":

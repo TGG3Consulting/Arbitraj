@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 // Файл: EulerSwapWallet.sol. Кошелёк плательщика и шаг 17 ArbExecutor V5.
-// Фабрики закреплены конструктором. Каждый обмен проверяет расход, фактический вход пула
-// и изменение баланса получателя. Рыночный оператор остаётся владельцем своего счёта Euler.
+// У официальных фабрик Ethereum и Base собственный код без DELEGATECALL, CALLCODE и SELFDESTRUCT.
+// V1 хранит заменяемую регистрацию poolByEulerAccount, V2 отмечает созданные пулы в deployedPools.
+// Адреса и хеши eth_getCode: tests/data/first_run_dex_2026-11-26/eulerswap_roles.json.
+// Исходник и байткод каждой фабрики: https://sourcify.dev/server/v2/contract/{chainId}/{address}?fields=all
+// При каждом обмене settle заново проверяет регистрацию и активы. Расход плательщика равен paid ≤ maximum,
+// фактический прирост баланса получателя ≥ minimum. Для exact-in цена считается по зачисленному пулу входу,
+// для exact-out пул должен получить весь paid. Оператор сохраняет контроль над своим счётом Euler.
 pragma solidity 0.8.37;
 
 import {IBalancerVault} from "./IPools.sol";

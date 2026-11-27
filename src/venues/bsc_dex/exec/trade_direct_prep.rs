@@ -78,6 +78,13 @@ async fn once(
 ) -> GatewayResult<Prep> {
     let ctx = &v.q.ctx;
     // Тот же расчёт, что у котировки, но только по пулам маршрута и по состоянию на сейчас (с допуском пулов).
+    if super::super::quote::fluid_hop_pricing::selected(&leg.hops).is_some(){
+        if is_native{return Err(super::super::pools::fluid_dex_lite::bad(ctx));}
+        let path=Box::pin(super::super::quote::fluid_hop_pricing::reprice(v,&leg.hops,req.qty)).await?;
+        check_price(ctx,req,path.coins,path.usdt)?;
+        let (steps,wrap)=legs(ctx,req,&path,mins,decs,false)?;
+        return Ok(Prep{path,steps,wrap,note:None,favour:None});
+    }
     let (mut path, th) = live::path(v, &leg.hops, req.qty, true).await?;
     check_price(ctx, req, path.coins, path.usdt)?;
     // Решение 382, ревью Н1: по перечитанным пулам цена не хуже плана больше допуска сверки.

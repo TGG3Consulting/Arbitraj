@@ -23,6 +23,9 @@ pub(in crate::venues::bsc_dex) mod abi {
 
             function wrapped() external view returns(address);
             function venueHash() external view returns(bytes32);
+            function hopVersion() external pure returns(uint256);
+            function executeHop(bytes32[] markets,address[] path,uint256 amountIn,uint256 minimum,uint256 deadline) external returns(uint256 spent,uint256 received);
+            event HopFilled(bytes32 indexed route,address indexed payer,address indexed recipient,address input,address output,uint256 spent,uint256 received);
             function resolve(bytes32 id) external view returns(FluidKey);
             function execute(bytes32 market,address input,address output,uint256 budget,uint256 minimum,bool exactOut,uint256 deadline) external returns(uint256 spent,uint256 received);
             event LogSwap(uint256 swapData,uint256 dexVariables);
@@ -42,6 +45,8 @@ pub(crate) struct Terms {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Proof {
     pub terms: Terms,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route: Option<super::fluid_lite_hop::Route>,
     pub payer: Address,
     pub input: Address,
     pub output: Address,
@@ -58,6 +63,7 @@ impl Terms {
     ) -> Proof {
         Proof {
             terms: self,
+            route: None,
             payer: o.payer,
             input: o.input,
             output: o.output,
@@ -67,7 +73,7 @@ impl Terms {
         }
     }
 }
-fn scale(amount: U256, from: u8, to: u8) -> Option<U256> {
+pub(super) fn scale(amount: U256, from: u8, to: u8) -> Option<U256> {
     let factor = U256::from(10).checked_pow(U256::from(from.abs_diff(to)))?;
     if from <= to {
         amount.checked_mul(factor)
@@ -77,6 +83,9 @@ fn scale(amount: U256, from: u8, to: u8) -> Option<U256> {
 }
 impl Proof {
     pub(in crate::venues::bsc_dex) fn data(&self) -> Bytes {
+        if let Some(route) = &self.route {
+            return route.data(self).unwrap_or_default();
+        }
         let Some(market) = self.terms.market.id() else {
             return Bytes::new();
         };
@@ -131,7 +140,7 @@ impl Proof {
             self.output,
         )
     }
-    pub(super) fn amounts(
+    pub(in crate::venues::bsc_dex) fn amounts(
         &self,
         logs: &[Log],
         payer: Address,
@@ -143,6 +152,9 @@ impl Proof {
             || input == output
         {
             return None;
+        }
+        if let Some(route) = &self.route {
+            return route.amounts(self, logs);
         }
         let mut rows = logs.iter().filter(|v| {
             v.address() == self.terms.target

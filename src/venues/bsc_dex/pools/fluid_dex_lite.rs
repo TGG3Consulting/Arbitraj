@@ -27,6 +27,7 @@ sol! {
     struct DexKey {address token0;address token1;bytes32 salt;}
     interface IFluidLite{
         function readFromStorage(bytes32 slot) external view returns(uint256);
+        function estimateSwapHop(address[] path,DexKey[] keys,int256 specified) external returns(uint256);
         function estimateSwapSingle(DexKey pool,bool forward,int256 specified) external returns(uint256);
     }
 }
@@ -290,28 +291,60 @@ pub(super) async fn load(
         .iter()
         .position(|v| *v == counter)
         .ok_or_else(|| bad(c))?;
-    let (mut a, mut b,di,dout) = tokio::try_join!(
+    let (mut a, mut b, di, dout) = tokio::try_join!(
         ladder_counter::amounts(c, t, reg, f.id, counter),
         ladder_counter::amounts(c, t, reg, f.id, coins[1 - idx]),
-        t.decimals(c,counter),t.decimals(c,coins[1-idx])
+        t.decimals(c, counter),
+        t.decimals(c, coins[1 - idx])
     )?;
     // The original math rejects fixed amounts under 10_000 at its nine-decimal precision.
     // Sample that boundary explicitly; a shallow genuine pool may reject every configured level.
-    let minimum=|dec:u8|U256::from(10).checked_pow(U256::from(dec.saturating_sub(5))).ok_or_else(||bad(c));
-    a.push(minimum(di)?);a.sort_unstable();a.dedup();
+    let minimum = |dec: u8| {
+        U256::from(10)
+            .checked_pow(U256::from(dec.saturating_sub(5)))
+            .ok_or_else(|| bad(c))
+    };
+    a.push(minimum(di)?);
+    a.sort_unstable();
+    a.dedup();
     b.push(minimum(dout)?);
     let buys = levels(c, r, market, idx == 0, &a, &at).await?;
     b.extend(buys.iter().map(|p| p.amount_out));
     b.sort();
     b.dedup();
     let sells = levels(c, r, market, idx != 0, &b, &at).await?;
+    let module = c.dex_addr("dex.router", f.id).ok().filter(|v| !v.is_zero());
+    let hop_module = if let Some(target) = module
+        && (!buys.is_empty() || !sells.is_empty())
+    {
+        type VersionKey = (B256, Address, Address, Address, B256, Vec<B256>, u64);
+        static VERSION: LazyLock<Cache<bool, VersionKey>> = LazyLock::new(Default::default);
+        let pins = super::direct_module::configured(c, f.id).unwrap_or_default();
+        let cell = VERSION.at((
+            h.hash,
+            target,
+            wrapped,
+            r.core,
+            r.hash,
+            pins,
+            c.settings.generation(),
+        ));
+        let valid=cell.get_or_init(||async{
+            use crate::venues::bsc_dex::exec::fluid_lite_wallet::abi::IWallet;
+            matches!(tokio::try_join!(super::direct_module::verify_code(c,f.id,target,&at),call::canonical(c,&at,target,IWallet::hopVersionCall{}),call::canonical(c,&at,target,IWallet::dexCall{}),call::canonical(c,&at,target,IWallet::wrappedCall{}),call::canonical(c,&at,target,IWallet::venueHashCall{})),Ok(((),v,d,w,ch)) if v==U256::ONE && (d,w,ch)==(r.core,wrapped,r.hash))
+        }).await;
+        valid.then_some(target)
+    } else {
+        None
+    };
     Ok(PoolState::FluidDexLite(Box::new(State {
         stamp: reg.ambient_stamp(h.number.to(), h.hash),
         dex: r.core,
         resolver: r.resolver,
         market,
         wrapped,
-        module: c.dex_addr("dex.router", f.id).ok().filter(|v| !v.is_zero()),
+        module,
+        hop_module,
         levels: if idx == 0 {
             [buys, sells]
         } else {
@@ -345,4 +378,66 @@ pub(crate) fn payout(e: &Entry, input: Address, amount: U256, raw: &[u8]) -> Opt
     IFluidLite::estimateSwapSingleCall::abi_decode_returns_validate(raw)
         .ok()
         .filter(|v| !v.is_zero())
+}
+
+pub(crate) async fn hop_quote(
+    ctx: &Ctx,
+    resolver: Address,
+    path: Vec<Address>,
+    markets: &[Market],
+    amount: U256,
+    exact_in: bool,
+    at: &Value,
+) -> GatewayResult<U256> {
+    let keys = markets
+        .iter()
+        .map(|m| DexKey {
+            token0: m.token0,
+            token1: m.token1,
+            salt: m.salt,
+        })
+        .collect();
+    let qty = I256::try_from(amount).map_err(|_| bad(ctx))?;
+    let specified = if exact_in {
+        qty
+    } else {
+        qty.checked_neg().ok_or_else(|| bad(ctx))?
+    };
+    call::canonical(
+        ctx,
+        at,
+        resolver,
+        IFluidLite::estimateSwapHopCall {
+            path,
+            keys,
+            specified,
+        },
+    )
+    .await
+}
+
+impl Registry {
+    pub(in crate::venues::bsc_dex) fn fluid_edges(&self) -> Vec<std::sync::Arc<Entry>> {
+        if !self.watches_ambient() {
+            return vec![];
+        }
+        let inner = self.inner.read().unwrap_or_else(|e| e.into_inner());
+        let mut edges: Vec<_> = inner
+            .ambient_refs
+            .iter()
+            .filter_map(|r| inner.get(r))
+            .filter(|e| {
+                e.valid
+                    && !e.asleep
+                    && shape(e).is_some_and(|s| {
+                        s.stamp.current()
+                            && s.hop_module.is_some()
+                            && s.levels.iter().any(|l| !l.is_empty())
+                    })
+            })
+            .cloned()
+            .collect();
+        edges.sort_by_key(|e| shape(e).and_then(|s| s.market.id()));
+        edges
+    }
 }

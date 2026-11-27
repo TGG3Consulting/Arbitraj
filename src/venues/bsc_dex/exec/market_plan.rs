@@ -65,6 +65,7 @@ pub(super) struct Selection {
     bancor_v3:Option<(Address,super::bancor_v3_plan::Form)>,
     uniswap_v1:Option<(Address,bool,bool)>,
     flux_eth:bool,
+    pub(super) fluid_hop: Option<(Address,alloy_primitives::U256)>,
     pub(super) native_flat:Option<(Address,alloy_primitives::U256)>,
     venue_fallback:Option<(Address,bool)>,
 }
@@ -87,6 +88,7 @@ impl Selection {
                 bancor_v3:None,
                 uniswap_v1:None,
                 flux_eth:false,
+                fluid_hop:None,
                 native_flat:None,
                 venue_fallback:None,
             };
@@ -96,6 +98,7 @@ impl Selection {
             carbon: super::carbon_direct::selected(leg).1,
             bounds:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::Llamma{target,desired,v5:None,..}|crate::core::types::RouterFeeMode::WalletBounds{target,desired}|crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
             proceeds: None,
+            fluid_hop:super::super::quote::fluid_hop_pricing::selected(&leg.hops),
             native_flat:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=>Some((target,wei)),_=>None},_=>None},
             venue_fallback:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::VenueFallback{target,allowed})=>Some((target,allowed)),_=>None},_=>None},
             bancor_legacy:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::BancorLegacy{target,native,..})=>Some((target,native)),_=>None},_=>None},
@@ -358,6 +361,12 @@ pub(super) fn router_shape(
     native_asset:bool,cash:Address,
 ) -> GatewayResult<()> {
     let direct=route.mode==crate::core::types::RouteMode::Direct;
+    if leg.hops.iter().any(|h|matches!(h.fee_mode,Some(crate::core::types::RouterFeeMode::FluidHop{..}))) {
+        if let Some((target,_))=super::super::quote::fluid_hop_pricing::selected(&leg.hops)
+          && direct && route.legs.len()==1 && !native_asset && !super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)
+          && leg.hops.iter().all(|h|q.reg.entry(&h.pool).is_some_and(|e|e.family.id==h.family && e.pool.kind==h.kind && super::super::pools::fluid_dex_lite::shape(&e).is_some() && q.ctx.dex_addr("dex.router",e.family.id).ok()==Some(target))){return Ok(());}
+        return Err(super::super::pools::fluid_dex_lite::bad(&q.ctx));
+    }
     if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::EulerModuleV5{module,executor})=hop.fee_mode {
         if !direct && !native_asset && route.legs.len()==1 && route.mode==crate::core::types::RouteMode::Graph
             && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant.euler() && q.ctx.dex_addr("dex.router",e.family.id).ok()==Some(module))

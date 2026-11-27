@@ -29,7 +29,7 @@ pub(crate) fn terms(
 ) -> GatewayResult<Terms> {
     let s = lite::shape(e).ok_or_else(|| bad(ctx))?;
     let pins = direct_module::configured(ctx, e.family.id)?;
-    let [module_hash] = pins.as_slice() else {
+    let Some(module_hash) = pins.first() else {
         return Err(bad(ctx));
     };
     if target.is_zero()
@@ -47,11 +47,16 @@ pub(crate) fn terms(
         desired,
     })
 }
-pub(crate) async fn check_module(ctx: &Ctx, e: &Entry, t: Terms, at: &Value) -> GatewayResult<()> {
+pub(crate) async fn check_module(
+    ctx: &Ctx,
+    e: &Entry,
+    t: Terms,
+    at: &Value,
+) -> GatewayResult<Terms> {
     let r = lite::check(ctx, e, at).await?;
     let target = t.target;
-    let ((), dex, wrapped, hash, market) = tokio::try_join!(
-        direct_module::verify_code(ctx, e.family.id, target, at),
+    let (module_hash, dex, wrapped, hash, market) = tokio::try_join!(
+        direct_module::verified_hash(ctx, e.family.id, target, at),
         canonical(ctx, at, target, IWallet::dexCall {}),
         canonical(ctx, at, target, IWallet::wrappedCall {}),
         canonical(ctx, at, target, IWallet::venueHashCall {}),
@@ -70,7 +75,7 @@ pub(crate) async fn check_module(ctx: &Ctx, e: &Entry, t: Terms, at: &Value) -> 
     {
         return Err(bad(ctx));
     }
-    Ok(())
+    Ok(Terms { module_hash, ..t })
 }
 pub(crate) async fn graph(ctx: &Ctx, e: &Entry, input: Address, at: &Value) -> GatewayResult<()> {
     let target = ctx.dex_addr("dex.router", e.family.id)?;
@@ -105,7 +110,7 @@ pub(super) async fn plan(
     let terms = terms(ctx, e, target, desired)?;
     let h = white_state::head(ctx, &format!("{height:#x}")).await?;
     let at = h.selector();
-    check_module(ctx, e, terms, &at).await?;
+    let terms = check_module(ctx, e, terms, &at).await?;
     let order = sim::Order {
         payer,
         target,
@@ -115,25 +120,46 @@ pub(super) async fn plan(
         minimum: o.min_out,
         wire: sim::Wire::FluidDexLite(terms),
     };
+    finish(ctx, before, h, order).await
+}
+async fn finish(
+    ctx: &Ctx,
+    before: u64,
+    h: white_state::Head,
+    order: sim::Order,
+) -> GatewayResult<Plan> {
+    let at = h.selector();
     let end = U256::from(
         h.timestamp
             .to::<u64>()
             .checked_add(ctx.int("dex.deadline_s")?)
             .ok_or_else(|| bad(ctx))?,
     );
-    let proof = terms.proof(&order, o.min_out, end);
+    let proof = match &order.wire {
+        sim::Wire::FluidDexLite(t) => t.proof(&order, order.minimum, end),
+        sim::Wire::FluidHop(t, r) => r.proof(*t, &order, order.minimum, end),
+        _ => return Err(bad(ctx)),
+    };
+    let (input, output, amount, minimum, payer, target) = (
+        order.input,
+        order.output,
+        order.amount,
+        order.minimum,
+        order.payer,
+        order.target,
+    );
     sim::measure(ctx, h, order, true).await?;
-    let grant = dagrow::allowance(ctx, o.token_in, payer, target, &at).await?;
-    let approvals = approve::fork_exact(ctx, o.token_in, target, Some(grant), o.amount_in)?;
+    let grant = dagrow::allowance(ctx, input, payer, target, &at).await?;
+    let approvals = approve::fork_exact(ctx, input, target, Some(grant), amount)?;
     if ctx.settings.generation() != before {
         return Err(bad(ctx));
     }
     let mut plan = Plan::new(
         ctx,
         (approvals, target, payer),
-        o.token_out,
+        output,
         vec![],
-        o.min_out,
+        minimum,
         end,
     )?;
     plan.set_direct_market(DirectCall::FluidDexLite(std::sync::Arc::new(proof)));
@@ -167,4 +193,75 @@ pub(in crate::venues::bsc_dex) fn probe(
         target,
         terms.proof(&wire, order.min_out, end).data(),
     ))
+}
+
+pub(crate) async fn hop_terms(
+    ctx: &Ctx,
+    entries: &[&Entry],
+    target: Address,
+    path: Vec<Address>,
+    at: &Value,
+) -> GatewayResult<(Terms, super::fluid_lite_hop::Route)> {
+    let first = *entries.first().ok_or_else(|| bad(ctx))?;
+    let seed = terms(ctx, first, target, None)?;
+    let (base, version) = tokio::try_join!(
+        check_module(ctx, first, seed, at),
+        canonical(ctx, at, target, IWallet::hopVersionCall {})
+    )?;
+    if version != U256::ONE {
+        return Err(bad(ctx));
+    }
+    let mut markets = vec![base.market];
+    for &e in &entries[1..] {
+        let state = lite::shape(e)
+            .filter(|s| {
+                e.family.id == first.family.id && s.dex == base.dex && s.wrapped == base.wrapped
+            })
+            .ok_or_else(|| bad(ctx))?;
+        if !markets.contains(&state.market) {
+            lite::check(ctx, e, at).await?;
+        }
+        markets.push(state.market);
+    }
+    let route = super::fluid_lite_hop::Route { markets, path };
+    route.physical(base.wrapped).ok_or_else(|| bad(ctx))?;
+    Ok((base, route))
+}
+
+pub(super) async fn hop_plan(
+    ctx: &Ctx,
+    steps: &[Step],
+    payer: Address,
+    height: u64,
+    (target, principal): (Address, U256),
+) -> GatewayResult<Plan> {
+    let before = ctx.settings.generation();
+    let first = steps.first().ok_or_else(|| bad(ctx))?;
+    let last = steps.last().ok_or_else(|| bad(ctx))?;
+    if !first.from_wallet
+        || !last.to_wallet
+        || principal.is_zero()
+        || principal > first.order.amount_in
+        || steps
+            .windows(2)
+            .any(|s| s[0].order.token_out != s[1].order.token_in)
+    {
+        return Err(bad(ctx));
+    }
+    let head = white_state::head(ctx, &format!("{height:#x}")).await?;
+    let entries = steps.iter().map(|s| &s.entry).collect::<Vec<_>>();
+    let path = std::iter::once(first.order.token_in)
+        .chain(steps.iter().map(|s| s.order.token_out))
+        .collect();
+    let (terms, route) = hop_terms(ctx, &entries, target, path, &head.selector()).await?;
+    let order = sim::Order {
+        payer,
+        target,
+        input: first.order.token_in,
+        output: last.order.token_out,
+        amount: principal,
+        minimum: last.order.min_out,
+        wire: sim::Wire::FluidHop(terms, std::sync::Arc::new(route)),
+    };
+    finish(ctx, before, head, order).await
 }

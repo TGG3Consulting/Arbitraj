@@ -91,6 +91,7 @@ impl Quoting {
             native || native_cash,
         ))
         .await;
+        alternatives.extend(Box::pin(super::fluid_hop_pricing::candidates(&pick,&input,native||native_cash)).await);
         if compare_single && !native_cash && !alternatives.is_empty() {
             v2_fallback::private(&pick, &input, &mut alternatives);
         }

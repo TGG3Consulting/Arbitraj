@@ -56,6 +56,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     Pendle(Address),
     Aktionariat(super::super::exec::aktionariat_wallet::Market),
     BancorLegacy(Box<super::super::exec::bancor_legacy_wallet::Terms>),
+    FluidHop(super::super::exec::fluid_lite_wallet::Terms,std::sync::Arc<super::super::exec::fluid_lite_hop::Route>),
     FluidDexLite(super::super::exec::fluid_lite_wallet::Terms),
     Ambient(super::super::exec::ambient_wallet::Terms),
     Llamma(super::super::exec::llamma_wallet::Terms),
@@ -111,6 +112,7 @@ pub(in crate::venues::bsc_dex) struct Order {
 }
 
 pub(in crate::venues::bsc_dex) struct Fill {
+    pub fluid_legs: Option<Vec<(U256,U256)>>,
     pub charged: U256,
     pub received: U256,
     pub swap_gas: u64,
@@ -181,7 +183,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire,Wire::FluidDexLite(_)|Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire,Wire::FluidHop(..)|Wire::FluidDexLite(_)|Wire::Ambient(_)|Wire::Llamma(_)|Wire::Stabull(_)|Wire::Aqua(_)|Wire::Angstrom(_))||matches!(&o.wire,Wire::Aktionariat(_)|Wire::NativeFlat(_)|Wire::BancorLegacy(_)|Wire::Mooniswap(_)|Wire::DefiPlaza(_)|Wire::YieldBasis(_)|Wire::BalancerV1(_)|Wire::BancorV3(_)|Wire::UniswapV1(_)|Wire::Rubicon(_))||matches!(&o.wire,Wire::Prop(t) if t.target==t.router)||matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -240,6 +242,12 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if let Wire::Aktionariat(m)=&o.wire && m.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::BancorLegacy(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::LlammaV5(step,zero)=&o.wire && super::super::exec::llamma_wallet::measured_v5(&o,step.pool,*zero,&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
+    let fluid_legs=if let Wire::FluidHop(t,route)=&o.wire {
+        let p=route.proof(*t,&o,o.minimum,deadline);
+        let log=super::super::exec::signed_call::logs(&r[n+2].logs).ok_or_else(fail)?;
+        if p.amounts(&log,o.payer,o.input,o.output)!=Some((charged,received)){return Err(fail());}
+        Some(route.flows(&p,&log).ok_or_else(fail)?)
+    }else{None};
     if let Wire::FluidDexLite(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Ambient(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
     if let Wire::Llamma(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail());}
@@ -339,6 +347,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     }
     let approve_gas = r[2..2 + n].iter().map(|x| x.gas_used.to::<u64>()).sum();
     Ok(Fill {
+        fluid_legs,
         charged,
         received,
         swap_gas: r[n + 2].gas_used.to(),
@@ -355,6 +364,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Aktionariat(m)=>m.proof(o,minimum,deadline).data(),
         Wire::BancorLegacy(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::FluidHop(t,route)=>route.proof(*t,o,minimum,deadline).data(),
         Wire::FluidDexLite(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Ambient(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Llamma(t)=>t.proof(o,minimum,deadline).data(),

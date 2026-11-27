@@ -30,6 +30,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
             | BancorV3 {target,..}
             | UniswapV1 {target,..}
             | Llamma { target,v5:None,.. }
+            | FluidHop {target,..}
             | WalletBounds { target, .. }
             | Dagrow { target, .. }
             | AntfarmProceeds { target, .. },
@@ -43,6 +44,7 @@ impl Market {
         use RouterFeeMode::*;
         match self {
             Market::Ambient | Market::FluidDexLite => match mode {
+                Some(FluidHop{target,..}) if matches!(self, Market::FluidDexLite)=>Spender::Selected(target),
                 Some(WalletBounds {target,..}) => Spender::Selected(target),
                 _ => Spender::Missing,
             },

@@ -78,6 +78,10 @@ pub fn matching_hash(hashes: &[B256], code: &[u8]) -> Option<B256> {
 }
 
 pub async fn verify_code(ctx: &Ctx, id: &str, addr: Address, tag: &Value) -> GatewayResult<()> {
+    verified_hash(ctx,id,addr,tag).await.map(|_| ())
+}
+
+pub(crate) async fn verified_hash(ctx:&Ctx,id:&str,addr:Address,tag:&Value)->GatewayResult<B256> {
     let generation = ctx.settings.generation();
     let expected = configured(ctx, id)?;
     if ctx.dex_addr("dex.router", id)? != addr {
@@ -100,7 +104,7 @@ pub async fn verify_code(ctx: &Ctx, id: &str, addr: Address, tag: &Value) -> Gat
             format!("DEX {id}: настройки изменились во время проверки модуля"),
         ));
     }
-    Ok(())
+    Ok(hash)
 }
 
 /// Вход проверки V5 с уже выбранным каноническим блоком. Прямой кошелёк проходит сюда через verify().

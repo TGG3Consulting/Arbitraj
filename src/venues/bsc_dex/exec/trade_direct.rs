@@ -208,6 +208,9 @@ async fn build(
     selected:super::market_plan::Selection,
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
+    if let Some(selected)=selected.fluid_hop{
+        return Ok((Box::pin(super::fluid_lite_plan::hop_plan(&q.ctx,&prep.steps,wallet,at.number,selected)).await?,at));
+    }
     if let ([s],[h])=(prep.steps.as_slice(),prep.path.hops.as_slice())
         && let Some(market)=selected.native_flat.map(|_|super::market_plan::Market::NativeFlat).or_else(||super::market_plan::Market::of(&s.entry)) {
         let p=Box::pin(market.plan(&q.ctx,s,h,(wallet,at.number),s.order.token_in==s.entry.usdt,selected)).await?;

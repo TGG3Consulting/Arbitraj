@@ -44,6 +44,8 @@ pub struct State {
     pub market: Market,
     pub wrapped: Address,
     pub module: Option<Address>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hop_module: Option<Address>,
     pub levels: [Vec<LadderPoint>; 2],
 }
 impl State {

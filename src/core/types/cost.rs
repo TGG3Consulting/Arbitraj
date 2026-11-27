@@ -193,6 +193,7 @@ pub enum RouterFeeMode {
     /// Полная отдельная плата нативной монетой за подписанное поручение между ERC20.
     NativeFlat {target:alloy_primitives::Address,wei:alloy_primitives::U256},
     VenueFallback {target:alloy_primitives::Address,allowed:bool},
+    FluidHop {target:alloy_primitives::Address,principal:alloy_primitives::U256},
     WalletBounds {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},
     Dagrow {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},
     /// Ethereum Antfarm reimburses physical ATF from this trade's output, in the same call.

@@ -78,6 +78,8 @@ mod aktionariat_pricing;
 mod bancor_legacy_pricing;
 mod ambient_pricing;
 mod fluid_lite_pricing;
+pub(in crate::venues::bsc_dex) mod fluid_hop_pricing;
+mod fluid_hop_sizing;
 mod llamma_pricing;
 mod aqua_sizing;
 mod aqua_pricing;

@@ -220,6 +220,7 @@ mod tests {
         let cap = U256::from(1560u64);
         let measure = |amount| {
             std::future::ready(Ok(Fill {
+                fluid_legs:None,
                 charged: amount,
                 received: amount * U256::from(40u64) / (U256::from(40u64) + amount),
                 swap_gas: 1,

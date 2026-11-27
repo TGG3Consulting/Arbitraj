@@ -5,6 +5,7 @@ Nonce отдельного AlgebraPoolDeployer считает успешные �
 import argparse
 import gzip
 import json
+import os
 import time
 from pathlib import Path
 
@@ -71,26 +72,40 @@ def registry(session, tag, head, spec):
     if factory not in manifest.text.lower() or f"startBlock: {first}" not in manifest.text:
         raise ValueError("не совпала привязка опубликованного подграфа")
     deployer=address(views(session,tag,[(factory,call("poolDeployer()"))])[0])
-    bounds=[first-1,*range(first+500000,head,500000),head]
     def counts(heights):
         nums=batch(session,"eth_getTransactionCount",[[deployer,tag if h==head else hex(h)] for h in heights])
         return [max(0,int(n,16)-1) for n in nums]
-    at=dict(zip(bounds,counts(bounds),strict=True))
-    if at[first-1]:raise ValueError("до первого события уже есть рынки")
-    pending=[(a,b) for a,b in zip(bounds,bounds[1:]) if at[a]!=at[b]]
-    pages=[]
-    while pending:
-        long=[]
-        for a,b in pending:
-            if b-a<=PAGE: pages.append((a,b))
-            else:long.append((a,b))
-        mid=[(a+b)//2 for a,b in long]
-        at.update(zip(mid,counts(mid),strict=True))
-        pending=[(a,b) for (lo,hi),m in zip(long,mid,strict=True) for a,b in [(lo,m),(m,hi)] if at[a]!=at[b]]
+    [head_count]=counts([head])
+    key=os.environ.get("TREBLE_GRAPH_API_KEY")
+    hints=None
+    if key:
+        from treble_index import placements
+        hints=placements(session,graph,key,tag["blockHash"])
+        if len(hints)!=head_count or any(not first<=h[0]<=head for h in hints.values()):
+            raise ValueError("Число размещений подграфа отличается от канонического CREATE")
+        created={}
+        for h,_,_ in hints.values():created[h]=created.get(h,0)+1
+        pages=[(h-1,h) for h in sorted(created)]
+        expected={(h-1,h):n for h,n in created.items()}
+    else:
+        bounds=[first-1,*range(first+500000,head,500000),head]
+        at=dict(zip(bounds,counts(bounds),strict=True))
+        if at[first-1]:raise ValueError("до первого события уже есть рынки")
+        pending=[(a,b) for a,b in zip(bounds,bounds[1:]) if at[a]!=at[b]]
+        pages=[]
+        while pending:
+            long=[]
+            for a,b in pending:
+                if b-a<=PAGE: pages.append((a,b))
+                else:long.append((a,b))
+            mid=[(a+b)//2 for a,b in long]
+            at.update(zip(mid,counts(mid),strict=True))
+            pending=[(a,b) for (lo,hi),m in zip(long,mid,strict=True) for a,b in [(lo,m),(m,hi)] if at[a]!=at[b]]
+        expected={(a,b):at[b]-at[a] for a,b in pages}
     filters=[[dict(fromBlock=hex(a+1),toBlock=hex(b),address=factory,topics=[TOPICS])] for a,b in pages]
     records=[]
     for (a,b),logs in zip(pages,batch(session,"eth_getLogs",filters),strict=True):
-        if len(logs)!=at[b]-at[a]:raise ValueError(("CREATE2 / события",a,b,at[b]-at[a],len(logs)))
+        if len(logs)!=expected[(a,b)]:raise ValueError(("CREATE2 / события",a,b,expected[(a,b)],len(logs)))
         for log in logs:
             ts=log["topics"];custom=ts[0]==TOPICS[1]
             if len(ts)!=3+int(custom) or log["address"].lower()!=factory or log.get("removed"):
@@ -99,7 +114,9 @@ def registry(session, tag, head, spec):
             records.append(dict(pool=address(bytes.fromhex(log["data"][2:])),tokens=[x,y],
                                 deployer="0x"+ts[1][-40:] if custom else ZERO,block=int(log["blockNumber"],16),
                                 hash=log["blockHash"],tx=log["transactionHash"],log=int(log["logIndex"],16)))
-    if len({r["pool"] for r in records})!=at[head]:raise ValueError("неполный реестр размещений")
+    if hints is not None and any(hints.get(r["pool"])!=(r["block"],r["deployer"],r["tokens"]) for r in records):
+        raise ValueError("Размещение подграфа не совпало с исходным событием фабрики")
+    if len({r["pool"] for r in records})!=head_count:raise ValueError("неполный реестр размещений")
     requests_=[]
     for r in records:
         x,y=r["tokens"];d=r["deployer"];p=r["pool"]
@@ -113,7 +130,7 @@ def registry(session, tag, head, spec):
         r["plugin"]=plugin;r["liquidity"]=str(decode(["uint128"],next(checked))[0])
         r["state"]=list(decode(["uint160","int24","uint16","uint8","uint16","bool"],next(checked)))
     return dict(factory=factory,pool_deployer=deployer,subgraph=graph,manifest=cid,
-                from_block=first,creations=at[head],rows=sorted(records,key=lambda r:(r["block"],r["log"])))
+                from_block=first,creations=head_count,rows=sorted(records,key=lambda r:(r["block"],r["log"])))
 
 def collect():
     snapshot=json.loads((ROOT/"tests/data/first_run_dex_2026-11-26/base.json").read_bytes())

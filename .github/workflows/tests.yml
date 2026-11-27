@@ -788,6 +788,8 @@ jobs:
       - if: matrix.market == 'treble-wallets-base'
         run: python scripts/record_base_recovered_wallets.py treble-limit "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'treble-spot-registry'
+        env:
+          TREBLE_GRAPH_API_KEY: ${{ secrets.TREBLE_GRAPH_API_KEY }}
         run: python scripts/record_treble_spot_registry.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'treble-spot-base'
         run: python scripts/record_base_algebra_markets.py treble-spot "$RUNNER_TEMP/market.json"

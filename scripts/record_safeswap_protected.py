@@ -25,7 +25,10 @@ FILLED="0x"+keccak(text="Filled(address,address,address,address,uint256,uint256,
 
 
 def runtime(c, artifact, roles):
-    constructor=artifact["creation"]+encode(["address"]*len(roles),roles).hex()
+    return runtime_with_args(c,artifact,["address"]*len(roles),roles)
+
+def runtime_with_args(c,artifact,types,roles):
+    constructor=artifact["creation"]+encode(types,roles).hex()
     reply=c.session.post(c.endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_call",
                          "params":[{"from":OWNER,"data":"0x"+constructor},c.selector]},timeout=35)
     reply.raise_for_status()
@@ -38,7 +41,7 @@ def runtime(c, artifact, roles):
         if len(values)!=1 or any(r["length"]!=32 for r in refs):raise ValueError("invalid immutable reference")
         stored.update(values)
         for r in refs:normalized[r["start"]:r["start"]+32]=bytes(32)
-    if normalized!=template or stored!={encode(["address"],[a]) for a in roles}:raise ValueError("unbound immutable")
+    if normalized!=template or stored!={encode([t],[a]) for t,a in zip(types,roles,strict=True)}:raise ValueError("unbound immutable")
     return data
 
 

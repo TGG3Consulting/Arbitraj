@@ -14,6 +14,9 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
     if source == "native_rfq" {
         return super::native_rfq::preview(ctx, req).await;
     }
+    if source == "fynd" {
+        return super::fynd::preview(ctx, req).await;
+    }
     if source == "fermi" {
         return super::fermi::source_preview(ctx, req).await;
     }

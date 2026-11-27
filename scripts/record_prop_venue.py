@@ -6,7 +6,7 @@ from eth_abi import decode, encode
 from eth_utils import keccak
 from record_balancer_markets import Capture
 from record_ethereum_x7 import ENDPOINTS
-from record_safeswap_protected import runtime
+from record_safeswap_protected import runtime_with_args
 
 ROUTER="0x4ddf368080cd7946db5b459ad591c350158175e1"
 WETH="0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
@@ -55,6 +55,8 @@ def leg(c,code,venue,inp,out,n,t,strict,floor,prefix):
     events=[e for e in swap["logs"] if e["address"].lower()==ROUTER and e["topics"][0]==SWAPPED]
     if len(events)!=1:raise ValueError("ambiguous source")
     sold,received,to,actual=decode(["uint256","uint256","address","address"],bytes.fromhex(events[0]["data"][2:]))
+    expected=[MODULE if strict else OWNER,inp,out]
+    if [str(x)[-40:].lower() for x in events[0]["topics"][1:]]!=[x[2:] for x in expected]:raise ValueError("wrong indexed wallet or currencies")
     if (sold,received,to)!=(n,net,OWNER) or paid!=n or net<floor or (strict and actual!=venue):raise ValueError("wallet settlement mismatch")
     return {"status":"paid","paid":paid,"net":net,"actual":actual,"gas":int(swap["gasUsed"],16),"logs":swap["logs"],"order":order,"approvalGas":int(results[len(prefix)]["gasUsed"],16)}
 
@@ -66,7 +68,11 @@ def capture(endpoint,art):
         if header["hash"]!=ANCHORS[height] or rpc(c,"eth_chainId",[])["result"]!="0x1":raise ValueError("unexpected chain or head")
         for a in [OWNER,MODULE]:
             if rpc(c,"eth_getCode",[a,c.selector])["result"]!="0x":raise ValueError("test address in use")
-        code=runtime(c,art,[ROUTER]);deadline=int(header["timestamp"],16)+180
+        vault={GOLIATH:"0x93bf01ce743579f928d30d05695824886bd5f37a",TEMPEST:"0xc9d748e601d9984a43da0b80e5b91dc28d31d9fb"}[venue]
+        roles=[ROUTER,venue,vault]
+        hashes=[keccak(bytes.fromhex(rpc(c,"eth_getCode",[role,c.selector])["result"][2:])) for role in roles]
+        code=runtime_with_args(c,art,["address"]*3+["bytes32"]*3,roles+hashes)
+        deadline=int(header["timestamp"],16)+180
         rhs=tx(ROUTER,"fallbackSwapRouter()")
         fallback=decode(["address"],bytes.fromhex(rpc(c,"eth_call",[rhs,c.selector])["result"][2:]))[0]
         for inp,out,n in [(WETH,stable,10**16),(WETH,stable,2*10**16),(stable,WETH,5_000_000),(stable,WETH,10_000_000)]:

@@ -89,8 +89,19 @@ impl Marker {
     pub async fn reserve(&self, db: &Db) -> Result<bool, String> {
         let k = self.slot();
         let id = self.claim();
-        db.ledger().write(move|c|c.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('ryze_swap_nonce',?1,?2,?3) ON CONFLICT(kind,id) DO NOTHING",
-            params![k,id,chrono::Utc::now().to_rfc3339()])).await.map(|n|n==1).map_err(|e|e.to_string())
+        let key = self.key.clone();
+        db.ledger().write(move|c|{
+            let tx=c.transaction()?;
+            let now=chrono::Utc::now().to_rfc3339();
+            let n=tx.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('ryze_swap_nonce',?1,?2,?3) ON CONFLICT(kind,id) DO NOTHING",params![k,id,now])?;
+            if n==1{tx.execute("INSERT INTO core_state(kind,id,body,updated_at) VALUES('ryze_dispatch',?1,?2,?3)",params![key,id,now])?;}
+            tx.commit()?;Ok(n==1)
+        }).await.map_err(|e|e.to_string())
+    }
+    pub async fn was_reserved(&self, db: &Db) -> Result<bool, String> {
+        let key = self.key.clone();
+        let claim = self.claim();
+        db.ledger().read(move|c|c.query_row("SELECT EXISTS(SELECT 1 FROM core_state WHERE kind='ryze_dispatch' AND id=?1 AND body=?2)",params![key,claim],|r|r.get(0))).await.map_err(|e|e.to_string())
     }
     pub async fn holder(&self, db: &Db) -> Result<Option<String>, String> {
         let k = self.slot();
@@ -107,8 +118,8 @@ impl Marker {
             .map_err(|e| e.to_string())
     }
     /// Сохраняет раздельные суммы исходного подписанного входа, возврата по пути и сторонних поступлений.
-    pub async fn save_fill(&self,db:&Db,f:&super::chain::Mined)->Result<bool,String>{
-        let key=self.digest.to_string();
+    pub async fn save_fill(&self, db: &Db, f: &super::chain::Mined) -> Result<bool, String> {
+        let key = json!([self.digest, f.hash, f.receipt.block_hash]).to_string();
         let row=json!({"transaction":f.hash,"block":f.receipt.block_hash,"input":self.order.tokenIn,"output":self.order.tokenOut,
             "user_to_router":f.fill.input_to_router,"input_from_path":f.fill.input_from_path,"other_input_credit":f.fill.other_input_credit,
             "router_to_user":f.fill.output_from_router,"other_output_credit":f.fill.other_output_credit,"fee_in_input":f.fill.fee_in_input,

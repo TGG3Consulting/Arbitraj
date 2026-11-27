@@ -1,20 +1,18 @@
 //! Повтор денежного шага работает с исходным digest и его квитанцией, включая потерю ответа и перезапуск процесса.
-use super::super::{exec, num, parts::Parts, quote::white_state, send};
+use super::super::{parts::Parts, quote::white_state};
+use super::result::{empty, filled};
 use super::{
     chain, http,
     ledger::{self, Marker},
 };
 use crate::{
-    core::types::{SendMethod, Side, TradeRequest, TradeResult, TradeStatus, TxOutcome},
+    core::types::{TradeRequest, TradeResult, TradeStatus},
     gateway::{
         errors::{ErrorCode, GatewayResult},
         pending::PendingRef,
         settlement_intent as intent,
     },
 };
-use alloy::primitives::B256;
-use chrono::Utc;
-use rust_decimal::Decimal;
 
 fn same(r: &TradeRequest, s: &TradeRequest) -> bool {
     s.deal_id == r.deal_id
@@ -22,80 +20,6 @@ fn same(r: &TradeRequest, s: &TradeRequest) -> bool {
         && s.asset == r.asset
         && s.side == r.side
         && s.qty == r.qty
-}
-fn filled(
-    p: &Parts,
-    r: TradeRequest,
-    m: &Marker,
-    t: chain::Mined,
-) -> GatewayResult<intent::SpotFill> {
-    let bad = || {
-        p.ctx.err(
-            ErrorCode::OutcomeUnknown,
-            "Ryze: не удалось выразить суммы выплаты",
-        )
-    };
-    // Возврат того же входного актива от выбранного пула сохранён в фактах отдельно. Чужие платежи не улучшают результат.
-    let net_input = t
-        .fill
-        .input_to_router
-        .checked_sub(t.fill.input_from_path)
-        .ok_or_else(bad)?;
-    let (amount, cash) = if r.side == Side::Buy {
-        (t.fill.output_from_router, net_input)
-    } else {
-        (net_input, t.fill.output_from_router)
-    };
-    let coins = num::to_decimal(amount, m.decimals.0)
-        .filter(|v| *v > Decimal::ZERO)
-        .ok_or_else(bad)?;
-    let gross = num::to_decimal(cash, m.decimals.1).ok_or_else(bad)?;
-    let tracked = send::track::Tracked {
-        outcome: TxOutcome::Included,
-        receipt: Some(t.receipt),
-        cancel: None,
-        unresolved: None,
-    };
-    let mut tx = exec::chain_tx::chain_tx(
-        t.hash,
-        t.tx_nonce,
-        vec!["Ryze Relayer".into()],
-        SendMethod::Single,
-        &tracked,
-        None,
-    );
-    // gas_used относится к целой транзакции релея. Чистый расход ETH кошелька на её включение равен нулю.
-    tx.gas_bnb = Some(Decimal::ZERO);
-    Ok(intent::SpotFill {
-        trade: TradeResult {
-            status: TradeStatus::Filled,
-            filled_qty: coins,
-            avg_price: gross.checked_div(coins).ok_or_else(bad)?,
-            fees: vec![],
-            venue_ref: t.hash.to_string(),
-            chain: Some(tx),
-            finished_at: Utc::now(),
-            executor: Some("Ryze Relayer".into()),
-            request: r,
-        },
-        gross_quote: gross,
-    })
-}
-pub(super) fn empty(r: TradeRequest, id: B256) -> intent::SpotFill {
-    intent::SpotFill {
-        trade: TradeResult {
-            request: r,
-            status: TradeStatus::NotFilled,
-            filled_qty: Decimal::ZERO,
-            avg_price: Decimal::ZERO,
-            fees: vec![],
-            venue_ref: id.to_string(),
-            chain: None,
-            finished_at: Utc::now(),
-            executor: Some("Ryze Relayer".into()),
-        },
-        gross_quote: Decimal::ZERO,
-    }
 }
 pub(in crate::venues::bsc_dex) async fn reconcile(
     p: &Parts,
@@ -134,56 +58,80 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         intent::note_gross(Some(f.gross_quote));
         Some(f.trade.clone())
     };
-    let result = if let Some(f) = saved {
-        if f.trade.status == TradeStatus::NotFilled {
-            m.release(db).await.map_err(|_| unknown())?;
-            return Ok(finished(f));
-        }
-        let hash = f.trade.venue_ref.parse().map_err(|_| unknown())?;
-        let t = chain::lookup(ctx, &m, hash)
-            .await
-            .map_err(|_| unknown())?
-            .ok_or_else(unknown)?;
-        if !m.save_fill(db,&t).await.map_err(|_|unknown())? {return Err(unknown());}
-        let fresh = filled(p, r, &m, t).map_err(|_| unknown())?;
-        if fresh.trade.filled_qty != f.trade.filled_qty || fresh.gross_quote != f.gross_quote {
-            return Err(unknown());
-        }
+    if let Some(f) = saved
+        && f.trade.status == TradeStatus::NotFilled
+    {
         m.release(db).await.map_err(|_| unknown())?;
         return Ok(finished(f));
-    } else {
-        let owned = m.holder(db).await.map_err(|_| unknown())? == Some(m.claim());
-        let mut found = None;
-        if owned {
+    }
+    let owned = m.holder(db).await.map_err(|_| unknown())? == Some(m.claim());
+    let mut found = None;
+    if owned || saved.is_some() {
+        if let Some(f) = saved {
+            let old = f.trade.venue_ref.parse().map_err(|_| unknown())?;
+            found = chain::lookup(ctx, &m, old).await.map_err(|_| unknown())?;
+        }
+        if found.is_none() {
             let url =
                 http::endpoint(&m.relayer, &format!("intents/{}", m.digest)).ok_or_else(unknown)?;
             if let Some(id) = http::transaction(url, m.digest, ctx.limits()?).await {
                 found = chain::lookup(ctx, &m, id).await.map_err(|_| unknown())?;
             }
-            if found.is_none() {
-                let tip = white_state::head(ctx, "latest")
-                    .await
-                    .map_err(|_| unknown())?;
-                for id in chain::hashes(ctx, &m, tip).await.map_err(|_| unknown())? {
-                    if let Some(t) = chain::lookup(ctx, &m, id).await.map_err(|_| unknown())? {
-                        if found.replace(t).is_some() {
-                            return Err(unknown());
-                        }
-                    }
+        }
+        if found.is_none() {
+            let tip = white_state::head(ctx, "latest")
+                .await
+                .map_err(|_| unknown())?;
+            for id in chain::hashes(ctx, &m, tip).await.map_err(|_| unknown())? {
+                if let Some(t) = chain::lookup(ctx, &m, id).await.map_err(|_| unknown())?
+                    && found.replace(t).is_some()
+                {
+                    return Err(unknown());
                 }
             }
         }
-        if let Some(t) = found {
-            if !m.save_fill(db,&t).await.map_err(|_|unknown())? {return Err(unknown());}
-            filled(p, r, &m, t).map_err(|_| unknown())?
-        } else if chain::unused_after_deadline(ctx, &m)
+    }
+    let result = if let Some(t) = found {
+        if !m.save_fill(db, &t).await.map_err(|_| unknown())? {
+            return Err(unknown());
+        }
+        let fresh = filled(p, r, &m, t).map_err(|_| unknown())?;
+        if let Some(f) = saved {
+            if fresh.trade.filled_qty != f.trade.filled_qty || fresh.gross_quote != f.gross_quote {
+                return Err(ctx.err(ErrorCode::OutcomeUnknown,"Ryze: та же подпись включена с другой суммой. Обе квитанции сохранены для денежной сверки").pending(pend.clone()));
+            }
+            let where_at = |f: &intent::SpotFill| {
+                f.trade
+                    .chain
+                    .as_ref()
+                    .map(|c| (c.hash, c.block, c.gas_used))
+            };
+            if where_at(f) == where_at(&fresh) {
+                m.release(db).await.map_err(|_| unknown())?;
+                return Ok(finished(f));
+            }
+        }
+        fresh
+    } else if saved.is_some() {
+        return Err(unknown());
+    } else if (!owned
+        && !m.was_reserved(db).await.map_err(|_| unknown())?
+        && alloy::primitives::U256::from(
+            white_state::head(ctx, "finalized")
+                .await
+                .map_err(|_| unknown())?
+                .timestamp,
+        ) > m.order.deadline)
+        || chain::unused_after_deadline(ctx, &m)
             .await
             .map_err(|_| unknown())?
-        {
-            empty(r, m.digest)
-        } else {
-            return Ok(None);
-        }
+        || super::other::consumed(ctx, &m)
+            .await
+            .map_err(|_| unknown())?
+    {
+        empty(r, m.digest)
+    } else {
+        return Ok(None);
     };
     intent::confirm(
         db,

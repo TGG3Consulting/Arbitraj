@@ -151,7 +151,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
         super::wire::swapNoncesCall { user: who },
     )
     .await?;
-    if nonce != m.order.nonce || !super::market::physical(ctx, c, &at, &m.order.path, who).await {
+    if nonce != m.order.nonce || !super::tokens::physical(ctx, c, &at, &m.order.path, who).await {
         return Err(bad());
     }
     let sig = signer.sign_hash_sync(&digest).map_err(|_| bad())?;
@@ -163,30 +163,25 @@ pub(in crate::venues::bsc_dex) async fn trade(
         intent::before_send(&pending),
     )
     .await?;
-    if !m.reserve(db).await.map_err(|_| unknown())? {
-        // Эта копия выиграла запись денежного шага, но проиграла другой сделке бронь кошелька. Подпись ещё локальна.
+    let reserved = m.reserve(db).await.map_err(|_| unknown())?;
+    if !reserved || !new.valid(Utc::now()) || Config::read(ctx).as_ref() != Some(c) {
+        // Единственный владелец before_send подтверждает исход до первого сетевого вызова.
         let e = intent::load(db, &key)
             .await
             .map_err(|_| unknown())?
             .ok_or_else(unknown)?;
-        if e.lookup == pending {
-            intent::confirm(
-                db,
-                &key,
-                &e,
-                intent::Outcome::Order(Box::new(recovery::empty(r.clone(), digest))),
-            )
+        if e.lookup != pending || e.result.is_some() {
+            return Err(unknown());
+        }
+        let done = super::result::empty(r, digest);
+        intent::confirm(db, &key, &e, intent::Outcome::Order(Box::new(done.clone())))
             .await
             .map_err(|_| unknown())?;
-        }
-        return Err(ctx.err(
-            ErrorCode::NoRoute,
-            "Ryze: очередь кошелька уже занята другой сделкой",
-        ));
+        m.release(db).await.map_err(|_| unknown())?;
+        intent::note_gross(Some(done.gross_quote));
+        return Ok(done.trade);
     }
-    if new.valid(Utc::now()) && Config::read(ctx).as_ref() == Some(c) {
-        let _accepted = http::submit_once(url, digest, body, limits).await;
-    }
+    let _accepted = http::submit_once(url, digest, body, limits).await;
     drop(slot);
     recovery::reconcile(p, r, &pending)
         .await?

@@ -91,3 +91,31 @@ impl Token {
         Ok(())
     }
 }
+
+use super::{deployment::Config, wire};
+pub(super) async fn physical(
+    ctx: &super::super::ctx::Ctx,
+    c: &Config,
+    at: &serde_json::Value,
+    path: &[wire::Hop],
+    owner: Address,
+) -> bool {
+    let Ok(collector) = canonical(ctx, at, c.router, wire::feeCollectorCall {}).await else {
+        return false;
+    };
+    let mut participants = vec![owner, c.router, collector];
+    participants.extend(path.iter().map(|h| h.pool));
+    participants.sort_unstable();
+    participants.dedup();
+    let tokens: std::collections::BTreeSet<_> =
+        path.iter().flat_map(|h| [h.tokenIn, h.tokenOut]).collect();
+    for a in tokens {
+        let Some(t) = c.tokens.iter().find(|t| t.address == a) else {
+            return false;
+        };
+        if t.verify(ctx, at, &participants).await.is_err() {
+            return false;
+        }
+    }
+    true
+}

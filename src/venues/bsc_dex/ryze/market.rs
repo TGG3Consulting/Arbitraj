@@ -13,8 +13,8 @@ use super::{
     price::{self, Quoted},
     wire::{self, SwapIntent},
 };
-use crate::core::types::{Asset, DexRoute, Quote, RouteMode, Side};
-use alloy::primitives::{Address, B256, U256};
+use crate::core::types::Side;
+use alloy::primitives::{Address, U256};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 
@@ -24,7 +24,6 @@ pub struct Ticket {
     pub order: SwapIntent,
     pub at: DateTime<Utc>,
     pub decimals: (u8, u8),
-    pub pools: Vec<(Address, Address, Address)>,
     pub qty: Decimal,
     pub side: Side,
     pub block: u64,
@@ -142,7 +141,7 @@ impl Snapshot {
         if balance < gross || allow < gross {
             return None;
         }
-        if !physical(ctx, c, &at, &path, self.wallet).await {
+        if !super::tokens::physical(ctx, c, &at, &path, self.wallet).await {
             return None;
         }
         let minimum = if buy {
@@ -186,7 +185,6 @@ impl Snapshot {
             order,
             at: quoted_at,
             decimals: decs,
-            pools: self.markets.clone(),
             qty,
             side,
             block: self.h.number.to(),
@@ -196,60 +194,4 @@ impl Snapshot {
         }
         Some((ticket, total))
     }
-}
-pub fn quote(
-    p: &Parts,
-    asset: &Asset,
-    t: &Ticket,
-    qty: Decimal,
-    gross: Decimal,
-    id: Option<B256>,
-) -> Option<Quote> {
-    Some(Quote {
-        venue: p.ctx.venue(),
-        asset: asset.clone(),
-        side: t.side,
-        qty,
-        fillable_qty: qty,
-        avg_price: gross.checked_div(qty)?,
-        costs: vec![],
-        route: Some(DexRoute {
-            mode: id.map_or(RouteMode::RelayIndicative, RouteMode::Relay),
-            legs: vec![],
-            block: t.block,
-            gas_units: 0,
-            executable: id.is_some(),
-            exec_note: Some("Ryze: плата релея учтена во входной сумме".into()),
-        }),
-        signal_route: None,
-        at: t.at,
-        pick: Some("Ryze MultiHopRouter".into()),
-    })
-}
-
-pub(super) async fn physical(
-    ctx: &super::super::ctx::Ctx,
-    c: &Config,
-    at: &serde_json::Value,
-    path: &[wire::Hop],
-    owner: Address,
-) -> bool {
-    let Ok(collector) = canonical(ctx, at, c.router, wire::feeCollectorCall {}).await else {
-        return false;
-    };
-    let mut participants = vec![owner, c.router, collector];
-    participants.extend(path.iter().map(|h| h.pool));
-    participants.sort_unstable();
-    participants.dedup();
-    let tokens: std::collections::BTreeSet<_> =
-        path.iter().flat_map(|h| [h.tokenIn, h.tokenOut]).collect();
-    for a in tokens {
-        let Some(t) = c.tokens.iter().find(|t| t.address == a) else {
-            return false;
-        };
-        if t.verify(ctx, at, &participants).await.is_err() {
-            return false;
-        }
-    }
-    true
 }

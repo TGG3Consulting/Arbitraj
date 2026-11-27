@@ -34,14 +34,10 @@ impl Cache {
         qty: Decimal,
     ) -> Option<(Ticket, Decimal)> {
         let b = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        let (t, cash, _) = b
-            .levels
-            .iter()
-            .filter(|(t, _, coin)| {
-                *coin == a && t.side == s && &t.config == c && t.valid(Utc::now()) && t.qty >= qty
-            })
-            .min_by_key(|(t, _, _)| t.qty)?;
-        Some((t.clone(), cash.checked_div(t.qty)?.checked_mul(qty)?))
+        let (t, cash, _) = b.levels.iter().find(|(t, _, coin)| {
+            *coin == a && t.side == s && &t.config == c && t.valid(Utc::now()) && t.qty == qty
+        })?;
+        Some((t.clone(), *cash))
     }
     pub(in crate::venues::bsc_dex) fn breaks(
         &self,
@@ -59,7 +55,7 @@ impl Cache {
             .filter(|(t, _, coin)| {
                 Some(*coin) == asset.contract
                     && t.side == side
-                    && &t.config == &c
+                    && t.config == c
                     && t.valid(Utc::now())
                     && t.qty <= max
             })

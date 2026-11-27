@@ -10,6 +10,8 @@ pub(crate) mod market;
 pub mod price;
 pub(crate) mod recovery;
 pub(crate) mod routing;
+mod result;
+mod other;
 #[cfg(test)]
 mod tests;
 pub(crate) mod tokens;

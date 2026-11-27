@@ -165,7 +165,11 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
     for raw in [include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_0.json.gz").as_slice(),
         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_1.json.gz").as_slice(),
         include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_2.json.gz").as_slice(),
-        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_3.json.gz").as_slice()]{
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_wallets_3.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_extra_0.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_extra_1.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_extra_2.json.gz").as_slice(),
+        include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_extra_3.json.gz").as_slice()]{
         let d:Value=serde_json::from_reader(GzDecoder::new(raw)).unwrap();
         let parse=|v:&Value|v.as_str().unwrap().parse::<Address>().unwrap();
         for m in d["markets"].as_array().unwrap(){
@@ -193,5 +197,5 @@ fn cypher_router_recovers_the_selected_custom_deployer_and_actual_wallet(){
             }
         }
     }
-    assert_eq!(fills,292);assert!(admitted>0);
+    assert_eq!(fills,336);assert!(admitted>0);
 }

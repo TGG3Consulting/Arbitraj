@@ -322,8 +322,9 @@ def tables(network, snapshots, profiles):
         if bounded:
             out.append(f"Штатный Router с увеличенным подписанным минимумом подтвердил {len(bounded)} покупок и {sum('sell' in r for r in bounded)} обратных продаж из купленного. Фактическая выплата и максимально гарантируемый минимум записаны отдельно. Для прямого исполнения требуются проверенные свойства дебета входного ERC20. Для reflection-токенов модуль вычисляет дебет через balanceOf.")
         with gzip.open(ds/"degenswap_ethereum_funded.json.gz","rt",encoding="utf8") as f:funded=json.load(f)
-        direct=[r for r in funded["cases"] if r["mode"]=="module"]
-        out.append(f"Модуль с измерением обоих переводов оплатил {sum('buy' in r for r in direct)} покупок и {sum('sell' in r for r in direct)} продаж. Вознаграждения держателей меняют соответствие между ERC20 Transfer и фактическим списанием. [Проверка чистого списания и поступления](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_funded.json.gz).")
+        for mode,label in (("module","Модуль с измерением обоих переводов"),("v5","V5 через тот же модуль")):
+            rows=[r for r in funded["cases"] if r["mode"]==mode]
+            out.append(f"{label} оплатил {sum('buy' in r for r in rows)} покупок и {sum('sell' in r for r in rows)} продаж на {len(rows)} исходных размерах. Комиссия перевода может уменьшить зачисление модулю. Плательщик оплачивает полный фактический дебет. [Выплаты, откаты и остатки](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_funded.json.gz).")
         cypher=observed("cypher_v2")
         native=[r for case in cypher["outcomes"] if case["mode"]=="router" for r in case.get("rounds",[])]
         executor=[r for case in cypher["outcomes"] if case["mode"]=="v5" for r in case.get("rounds",[])]
@@ -333,8 +334,14 @@ def tables(network, snapshots, profiles):
         cyp_cases=[]
         for part in range(4):
             with gzip.open(ds/f"cypher_v4_ethereum_wallets_{part}.json.gz","rt",encoding="utf8") as f:cyp_cases.extend(json.load(f)["markets"])
+        extra=[]
+        for part in range(4):
+            with gzip.open(ds/f"cypher_v4_ethereum_extra_{part}.json.gz","rt",encoding="utf8") as f:extra.extend(json.load(f)["markets"])
+        found={m["pool"] for m in extra if any("sell" in c for c in m["cases"])}
+        both={m["pool"] for m in cyp_cases+extra if any("sell" in c for c in m["cases"])}
+        out.append(f"Повторная проверка {len(extra)} ранее не подтверждённых пулов выявила ещё {len(found)} рынков с покупкой и продажей. В {sum(m['pool'] in found and int(m['liquidity'])==0 for m in extra)} из них начальный тик имел нулевую активную ликвидность. На проверенных размерах обе стороны оплатились в {len(both)} из {len(cl['markets'])} зарегистрированных пулов. " + " · ".join(f"[Дополнительная серия {p+1}](../tests/data/first_run_dex_2026-11-26/cypher_v4_ethereum_extra_{p}.json.gz)" for p in range(4))+".")
         levels={}
-        for m in cyp_cases:
+        for m in cyp_cases+extra:
             for case in m["cases"]:
                 for side in ("buy","sell"):
                     if side not in case:continue

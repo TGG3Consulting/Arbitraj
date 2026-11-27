@@ -20,6 +20,7 @@ mod native_rfq;
 pub mod hanji;
 mod source_quote;
 mod fermi;
+mod fynd;
 pub mod connection_events;
 pub mod connection_extra;
 pub mod connection_gas;

@@ -82,3 +82,49 @@ fn degen_protected_measures_each_leg_and_keeps_directional_refusals() {
         }
     }
 }
+
+#[test]
+fn degen_executor_preserves_the_full_wallet_debit_after_taxed_funding() {
+    let data = archive(include_bytes!(
+        "data/first_run_dex_2026-11-26/degenswap_ethereum_funded.json.gz"
+    ));
+    for mode in ["module", "v5"] {
+        let cases: Vec<_> = data["cases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|r| r["mode"] == mode)
+            .collect();
+        let mut fills = 0;
+        let mut discounted = 0;
+        for c in &cases {
+            for side in ["buy", "sell"] {
+                let leg = &c[side];
+                if !leg.is_object() {
+                    continue;
+                }
+                let x = &leg["exact"];
+                let before = x["before"].as_array().unwrap();
+                let after = x["after"].as_array().unwrap();
+                let paid = units(&x["spent"]);
+                let funded = units(&x["module_spent"]);
+                assert!(funded > alloy_primitives::U256::ZERO && funded <= paid);
+                assert_eq!(paid, units(&before[0]) - units(&after[0]));
+                assert_eq!(units(&x["received"]), units(&after[1]) - units(&before[1]));
+                assert_eq!(before[2..], after[2..]);
+                assert!(leg["above"].is_object() && leg["expired"].is_object());
+                if funded < paid {
+                    discounted += 1;
+                }
+                fills += 1;
+            }
+        }
+        assert_eq!(cases.len(), 66);
+        assert_eq!(fills, 92);
+        if mode == "v5" {
+            assert!(discounted > 0)
+        } else {
+            assert_eq!(discounted, 0)
+        }
+    }
+}

@@ -26,6 +26,7 @@
   import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import HashflowQuote from './HashflowQuote.svelte';
+  import FyndQuote from './FyndQuote.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -106,6 +107,7 @@
   {/if}
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
+  {#if w.address && dex && ['base', 'ethereum'].includes(w.chain)}<FyndQuote venue={dex} trader={w.address} />{/if}
 
   <h4>Исполнитель ArbExecutor</h4>
   <p>{#if w.executor}<code>{w.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут{/if}</p>

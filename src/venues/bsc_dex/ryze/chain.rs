@@ -96,7 +96,7 @@ pub async fn lookup(ctx: &Ctx, m: &Marker, id: B256) -> GatewayResult<Option<Min
     }))
 }
 
-pub(super) async fn last_valid(ctx:&Ctx,m:&Marker,tip:Head)->GatewayResult<u64>{
+pub(super) async fn last_valid(ctx: &Ctx, m: &Marker, tip: Head) -> GatewayResult<u64> {
     let start = m.start;
     let mut last = tip.number.to::<u64>();
     let base = white_state::head(ctx, &format!("{start:#x}")).await?;
@@ -124,8 +124,8 @@ pub(super) async fn last_valid(ctx:&Ctx,m:&Marker,tip:Head)->GatewayResult<u64>{
 
 /// Фильтр по исходному отправителю и физическим токенам. Верхняя граница по timestamp ограничивает работу после долгого простоя.
 pub async fn hashes(ctx: &Ctx, m: &Marker, tip: Head) -> GatewayResult<BTreeSet<B256>> {
-    let mut start=m.start;
-    let last=last_valid(ctx,m,tip).await?;
+    let mut start = m.start;
+    let last = last_valid(ctx, m, tip).await?;
     let topics = json!([
         IntentSwapExecuted::SIGNATURE_HASH,
         m.order.user.into_word(),
@@ -173,9 +173,11 @@ pub async fn unused_after_deadline(ctx: &Ctx, m: &Marker) -> GatewayResult<bool>
     if fin.number.to::<u64>() < m.start || U256::from(fin.timestamp) <= m.order.deadline {
         return Ok(false);
     }
-    let last=last_valid(ctx,m,fin).await?;
-    let after=white_state::head(ctx,&format!("{:#x}",last.saturating_add(1))).await?;
-    if after.number>fin.number || U256::from(after.timestamp)<=m.order.deadline{return Ok(false);}
+    let last = last_valid(ctx, m, fin).await?;
+    let after = white_state::head(ctx, &format!("{:#x}", last.saturating_add(1))).await?;
+    if after.number > fin.number || U256::from(after.timestamp) <= m.order.deadline {
+        return Ok(false);
+    }
     let at = after.selector();
     let (code, nonce): (Bytes, U256) = tokio::try_join!(
         rpc::call(ctx, "eth_getCode", json!([m.router, at])),

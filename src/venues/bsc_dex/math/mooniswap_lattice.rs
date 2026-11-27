@@ -1,12 +1,16 @@
-//! Exclude intervals without an integer taxed input. The two exact bounds for
-//! a candidate gross g are L=x*g/(y-g) and U=D*x*(g-w)/(D*w-(D-s)*g).
-//! An unbounded U needs no pruning. Both finite functions are convex.
-//! A tangent below L and a chord above U bound every possible integer point.
+//! Поиск интервалов gross, в которых нет целого входа после удержания комиссии.
+//! Вызывает mooniswap_inverse при подборе первого входа. Из формулы 1inch
+//! Liquidity Protocol (Mooniswap.sol, 48d3db12) следуют две границы входа:
+//! L=x*g/(y−g), U=D*x*(g−w)/(D*w−(D−s)*g). При положительном знаменателе
+//! обе функции выпуклы. Касательная L снизу и секущая U сверху содержат все
+//! возможные целые точки. Все произведения точны: размерность максимального
+//! слагаемого ограничена 4 словами uint256 с учётом D=10^18.
+//! https://github.com/1inch/liquidity-protocol/blob/48d3db12/contracts/Mooniswap.sol
 use super::{U256, scale};
 type W = alloy_primitives::Uint<1024, 16>;
 
-/// Sum floor((a*i+b)/m) for 0 <= i < n. After removing integer parts,
-/// transpose the remaining lattice triangle (Euclidean algorithm).
+/// Сумма floor((a*i+b)/m) при 0 <= i < n. После отделения целых частей
+/// меняем строки и столбцы оставшегося треугольника (алгоритм Евклида).
 fn floor_sum(mut n: W, mut m: W, mut a: W, mut b: W) -> W {
     let mut sum = W::ZERO;
     loop {
@@ -26,6 +30,7 @@ fn floor_sum(mut n: W, mut m: W, mut a: W, mut b: W) -> W {
     }
 }
 
+/// Даёт следующий gross после доказанно пустого префикса [start,last].
 pub(super) fn skip(x: U256, y: U256, want: U256, fee: U256, start: U256, last: U256) -> U256 {
     let (x, y, w, g, d) = (
         W::from(x),
@@ -43,7 +48,7 @@ pub(super) fn skip(x: U256, y: U256, want: U256, fee: U256, start: U256, last: U
     }
     let v = y - g;
     let m = v * v;
-    let lower_offset = x * g * v + m - W::ONE; // ceil L_tangent as a floor
+    let lower_offset = x * g * v + m - W::ONE; // Переносим ceil касательной в floor.
     let upper_offset = d * x * (g - w);
     let upper_step = d * x * W::from(fee) * w;
     let empty = |end: U256| {
@@ -55,8 +60,8 @@ pub(super) fn skip(x: U256, y: U256, want: U256, fee: U256, start: U256, last: U
             return false;
         }
         let n = r + W::ONE;
-        // U(g+i) <= U(g) + i*D*x*s*w/(b0*br). The envelope interval
-        // guarantees U>=L throughout, so each integer-point count is nonnegative.
+        // U(g+i) <= U(g) + i*D*x*s*w/(b0*br). В пределах исходной огибающей
+        // U>=L, поэтому каждый столбец даёт неотрицательное число целых точек.
         let upper = floor_sum(n, b0 * br, upper_step, upper_offset * br);
         let lower = floor_sum(n, m, x * y, lower_offset);
         upper + n == lower

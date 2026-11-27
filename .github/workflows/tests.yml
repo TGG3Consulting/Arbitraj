@@ -142,12 +142,19 @@ jobs:
           echo "HEAD $(git rev-parse HEAD); всего наборов $i"
       - name: Тесты части
         env:
+          ARB_MOONISWAP_INVERSE_EXPORT: ${{ runner.temp }}/mooniswap-inverse.json
           ARB_RANGES_BOUNDARIES: ${{ runner.temp }}/ranges-boundaries.json
           ARB_CARBON_ALLOCATION_EXPORT: ${{ runner.temp }}/carbon-order-vectors.json
         run: |
           extra=""
           if [ "${{ matrix.shard }}" = "0" ]; then extra="--lib --bins"; fi
           cargo test --locked --no-fail-fast $extra ${{ steps.pick.outputs.args }}
+      - if: matrix.shard == 0
+        uses: actions/upload-artifact@v4
+        with:
+          name: mooniswap-inverse-evaluations
+          path: ${{ runner.temp }}/mooniswap-inverse.json
+          if-no-files-found: error
       - name: Compare minimum exact-input debits and their predecessors with the official Ranges Router
         if: inputs.ethereum_open_archive && contains(steps.pick.outputs.args, '--test puzzle_ranges_ethereum')
         run: |

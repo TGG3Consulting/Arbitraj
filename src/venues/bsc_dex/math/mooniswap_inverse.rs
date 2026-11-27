@@ -1,4 +1,7 @@
-//! First payable integer input for Mooniswap; rounding can lower output on larger inputs.
+//! Наименьший целый вход для заданной выплаты. Вызывает MooniswapState::swap.
+//! В Liquidity Protocol выплата после двух округлений может упасть при увеличении
+//! входа. Используем границы по первому результату деления и точную проверку forward.
+//! https://github.com/1inch/liquidity-protocol/blob/48d3db12/contracts/Mooniswap.sol
 use super::{MooniswapState, Swapped, U256, scale};
 
 #[path = "mooniswap_lattice.rs"]
@@ -85,7 +88,7 @@ pub(super) fn first(
             return None;
         }
         gross = if next < last {
-            // A cancelled quote has no consumer. Other routes keep their existing time budget.
+            // По истечении срока вызывающий уже снял запрос котировки.
             if crate::venues::bsc_dex::quote::abandon::is_set() {
                 return None;
             }
@@ -107,6 +110,7 @@ mod tests {
         let n = U256::from(1_000_000_000u64);
         let want = n * n - U256::ONE;
         let y = U256::from(4) * n * n;
+        let mut evidence = Vec::new();
         for divisor in [1, 2, 3, 17] {
             let x = (n * n + n / U256::from(8)) / U256::from(divisor);
             let tokens = [Address::ZERO, Address::repeat_byte(1)];
@@ -134,6 +138,14 @@ mod tests {
             );
             assert!(fill.amount_out >= want);
             assert!(state.forward(x, y, fill.amount_in - U256::ONE).unwrap().0 < want);
+            evidence.push(serde_json::json!({
+                "divisor": divisor, "x": x.to_string(), "y": y.to_string(), "target": want.to_string(),
+                "first_input": fill.amount_in.to_string(), "output": fill.amount_out.to_string(),
+                "forward_evaluations": probes
+            }));
+        }
+        if let Some(path) = std::env::var_os("ARB_MOONISWAP_INVERSE_EXPORT") {
+            std::fs::write(path, serde_json::to_vec_pretty(&evidence).unwrap()).unwrap();
         }
     }
 }

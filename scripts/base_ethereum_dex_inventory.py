@@ -2012,6 +2012,15 @@ def tables(network, snapshots, profiles):
             directory = read(Path("tests/data/first_run_dex_2026-11-26/community_v3_ethereum_router.json"))
             candidates = [directory["factory"]]
             task = "[Подтверждено командой CommunityV3](https://forum.cow.fi/t/communityv3-liquidity-source-integration-proposal/3647)"
+        if base and str(row["id"]) == "3":
+            archive = json.loads(gzip.decompress((data_dir / "curve_base_crypto_v1.json.gz").read_bytes()))
+            candidates = list(archive["factories"].values())
+            task = ("Curve API публикует объём сети, резервный расчёт использует пять фабрик. "
+                    "На блоке 62 262 756 реестры дали Stable 15, Crypto v1 34, TwoCrypto 276, TriCrypto 95, Stable-NG 756. "
+                    "В Crypto v1 33 клона проверенного шаблона. В четырёх пулах обмены от WETH и обратно подтвердили "
+                    "16 выплат через V5 и 16 через пул. У WETH/cbETH в резерв входят native ETH, у двух проверенных "
+                    "размеров пятого рынка первая операция откатилась. Для торговли используется V5 шаг 9 с общим сроком "
+                    "и чистым минимумом. Сетевой оборот отдельно по фабрикам не распределялся.")
         if base and str(row["id"]) == "6625":
             snapshot = json.loads(gzip.decompress((data_dir / "sportfun_base_players.json.gz").read_bytes()))
             candidates = [p["address"] for p in snapshot["pairs"]]

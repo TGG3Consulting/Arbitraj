@@ -1235,7 +1235,8 @@
       "dex.sub_dex": [
         "curve-base-twocrypto-ng",
         "curve-base-tricrypto-ng",
-        "curve-base-plain"
+        "curve-base-plain",
+        "curve-base-crypto-v1"
       ]
     }
   },
@@ -1449,6 +1450,19 @@
         "0x1086f023146f9026a9bb22983ce866813c59518a",
         "0x1621e58d36eb5ef26f9768ebe9db77181b1f5a02",
         "0x2fddedf2d842f23da2b81b9144e75cecb691bf19"
+      ]
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "curve-base-crypto-v1",
+    "source": "https://github.com/curvefi/curve-factory-crypto · https://sourcify.dev/server/v2/contract/8453/0x0cd5a1e9e19af1f1b910ac3c3452a16b2b37155b · curve_base_crypto_v1.json.gz, Base 62262756",
+    "settings": {
+      "dex.kind": "curve_crypto_v1",
+      "dex.factory": "0x5ef72230578b3e399e6c6f4f6360edf95e83bbfd",
+      "dex.curve_crypto_v1_templates": [
+        "0x0cd5a1e9e19af1f1b910ac3c3452a16b2b37155b"
       ]
     }
   },

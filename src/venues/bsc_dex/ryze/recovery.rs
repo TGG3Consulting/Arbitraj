@@ -36,7 +36,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
         .pending(pend.clone())
     };
     let m = Marker::read(pend).ok_or_else(unknown)?;
-    if ctx.chain_id() != Some(8453)
+    if ctx.chain_id() != Some(super::CHAIN_ID)
         || r.venue != ctx.venue()
         || ctx.account.as_deref() != Some(m.account.as_str())
     {
@@ -149,7 +149,7 @@ pub(in crate::venues::bsc_dex) async fn prior(
     p: &Parts,
     r: &TradeRequest,
 ) -> GatewayResult<Option<TradeResult>> {
-    if p.ctx.chain_id() != Some(8453) || r.deal_id.is_empty() || r.asset.contract.is_none() {
+    if p.ctx.chain_id() != Some(super::CHAIN_ID) || r.deal_id.is_empty() || r.asset.contract.is_none() {
         return Ok(None);
     }
     let key = ledger::identity(&p.ctx, r)?;

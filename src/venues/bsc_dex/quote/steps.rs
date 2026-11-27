@@ -119,10 +119,11 @@ pub fn path_costs(
                 .filter(|f|(f.spent,f.received)==inputs);
             let f=by_input(side==Side::Sell).or_else(||by_input(side!=Side::Sell))
                 .ok_or_else(||ctx.err(ErrorCode::BadResponse,"Uniswap V1: размер или промежуточная выплата изменились"))?;
-            add(&mut out,CostKind::PoolFee,pct(h.pool_in,Decimal::new(3,1)),&from,true);
+            let fee = crate::core::types::uniswap_v1::UniswapV1State::fee_percent();
+            add(&mut out,CostKind::PoolFee,pct(h.pool_in,fee),&from,true);
             if s.dual(){
                 let eth=num::to_decimal(f.eth,num::BNB_DECIMALS).ok_or_else(||ctx.err(ErrorCode::BadResponse,"Uniswap V1: промежуточный ETH вне пределов"))?;
-                add(&mut out,CostKind::PoolFee,pct(eth,Decimal::new(3,1)),names.gas,true);
+                add(&mut out,CostKind::PoolFee,pct(eth,fee),names.gas,true);
             }
         } else if let PoolState::Rubicon(book)=&h.entry.pool.state {
             let exact_in=side==Side::Sell;

@@ -35,7 +35,7 @@ pub fn identity(ctx: &Ctx, r: &TradeRequest) -> GatewayResult<String> {
         .account
         .as_deref()
         .ok_or_else(|| ctx.err(ErrorCode::NotApplicable, "Ryze: требуется счёт сделки"))?;
-    if ctx.chain_id() != Some(8453)
+    if ctx.chain_id() != Some(super::CHAIN_ID)
         || r.deal_id.is_empty()
         || r.asset.contract.is_none()
         || r.venue != ctx.venue()
@@ -50,7 +50,7 @@ pub fn identity(ctx: &Ctx, r: &TradeRequest) -> GatewayResult<String> {
             "ryze/{}",
             keccak256(
                 json!([
-                    8453,
+                    super::CHAIN_ID,
                     ctx.place.id,
                     account,
                     r.asset.contract,
@@ -74,11 +74,11 @@ impl Marker {
     pub fn read(p: &PendingRef) -> Option<Self> {
         let m: Self = serde_json::from_value(p.parse.as_ref()?.get("ryze")?.clone()).ok()?;
         (p.client_id.as_deref()?.parse::<B256>().ok()? == m.digest
-            && m.order.digest(8453, m.router) == m.digest)
+            && m.order.digest(super::CHAIN_ID, m.router) == m.digest)
             .then_some(m)
     }
     fn slot(&self) -> String {
-        format!("8453/{}/{}", self.router, self.order.user)
+        format!("{}/{}/{}", super::CHAIN_ID, self.router, self.order.user)
     }
 
     pub fn claim(&self) -> String {

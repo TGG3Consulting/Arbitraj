@@ -1,4 +1,8 @@
 //! Спотовый AMM Ryze. EIP‑712 и выплаты собственному кошельку сверяются с исполненной заявкой в batch.
+// Домен EIP-712 размещённого Ryze MultiHopRouter на Base Mainnet.
+// https://documentation.ryze.pro/abi/amm/MultiHopRouter.json
+const CHAIN_ID: u64 = 8453;
+
 pub(crate) mod book;
 pub(crate) mod chain;
 pub(crate) mod deployment;

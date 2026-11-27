@@ -63,7 +63,7 @@ impl Cache {
             .collect()
     }
     pub(super) fn store(&self, t: Ticket) -> B256 {
-        let id = t.order.digest(8453, t.config.router);
+        let id = t.order.digest(super::CHAIN_ID, t.config.router);
         let mut b = self.0.lock().unwrap_or_else(|e| e.into_inner());
         b.orders.retain(|_, old| old.valid(Utc::now()));
         b.orders.insert((t.order.user, id), t);

@@ -101,7 +101,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let url = http::endpoint(&c.relayer, "intents/submit").ok_or_else(bad)?;
     let limits = ctx.limits()?;
     let fin = white_state::head(ctx, "finalized").await?;
-    let digest = order.digest(8453, c.router);
+    let digest = order.digest(super::CHAIN_ID, c.router);
     let tokens = c
         .tokens
         .iter()

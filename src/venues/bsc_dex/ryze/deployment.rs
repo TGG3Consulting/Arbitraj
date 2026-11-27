@@ -34,7 +34,7 @@ pub struct Config {
 
 impl Config {
     pub fn read(ctx: &Ctx) -> Option<Self> {
-        if ctx.chain_id() != Some(8453) || !ctx.flag("ryze.trading").unwrap_or(false) {
+        if ctx.chain_id() != Some(super::CHAIN_ID) || !ctx.flag("ryze.trading").unwrap_or(false) {
             return None;
         }
         let generation = ctx.settings.generation();
@@ -122,7 +122,7 @@ impl Config {
             || domain.fields.as_slice() != [15]
             || domain.name != "MultiHopRouter"
             || domain.version != "1"
-            || domain.chainId != U256::from(8453)
+            || domain.chainId != U256::from(super::CHAIN_ID)
             || domain.verifyingContract != self.router
             || !domain.salt.is_zero()
             || !domain.extensions.is_empty()

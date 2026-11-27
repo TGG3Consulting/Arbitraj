@@ -55,7 +55,7 @@ async fn conflicting(ctx: &Ctx, m: &Marker, id: B256, finalized: Head) -> Gatewa
         return Ok(false);
     };
     if signed.next().is_some()
-        || other.digest(8453, m.router) == m.digest
+        || other.digest(super::CHAIN_ID, m.router) == m.digest
         || !other.present_in(m.router, &tx.input)
     {
         return Ok(false);

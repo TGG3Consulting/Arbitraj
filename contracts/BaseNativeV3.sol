@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: MIT
+// Файл: contracts/BaseNativeV3.sol.
+// Что делает: сверяет пул и фабрику форков V3 на Base и вызывает подходящий роутер с минимумом и сроком.
+// Кто вызывает: BasePmmExecutor.execute при определении и оплате маршрута через отдельный V3-пул.
+// Зависит: getPool фабрики, текущая fee пула или swapFeeUnits у Horizon и соответствующий ABI роутера.
 pragma solidity 0.8.37;
 
 interface IBaseForkPool {

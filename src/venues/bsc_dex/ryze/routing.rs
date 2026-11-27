@@ -12,7 +12,7 @@ use rust_decimal::Decimal;
 use std::time::Duration;
 
 pub(in crate::venues::bsc_dex) fn active(p: &Parts) -> bool {
-    p.ctx.chain_id() == Some(8453) && p.ctx.flag("ryze.trading").unwrap_or(false)
+    p.ctx.chain_id() == Some(super::CHAIN_ID) && p.ctx.flag("ryze.trading").unwrap_or(false)
 }
 pub(in crate::venues::bsc_dex) async fn consider(
     p: &Parts,

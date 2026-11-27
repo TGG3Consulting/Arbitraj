@@ -75,7 +75,7 @@ impl SwapIntent {
     /// Тело POST создаётся после проверки локальной подписи; в журнал или устойчивую запись оно не попадает.
     pub fn submission(&self, router: Address, signature: &Signature) -> Option<Value> {
         if signature
-            .recover_address_from_prehash(&self.digest(8453, router))
+            .recover_address_from_prehash(&self.digest(super::CHAIN_ID, router))
             .ok()?
             != self.user
         {
@@ -95,7 +95,7 @@ impl SwapIntent {
         let Ok(batch) = executeSwapIntentsCall::abi_decode_validate(input) else {
             return false;
         };
-        let digest = self.digest(8453, router);
+        let digest = self.digest(super::CHAIN_ID, router);
         let mut matching = batch
             .signedIntents
             .iter()

@@ -54,6 +54,12 @@ fn output(x: U256, y: U256, want: U256) -> Option<U256> {
 }
 
 impl UniswapV1State {
+    /// Ставка одного обмена в процентах. Та же доля 997/1000 входит в getInputPrice и getOutputPrice.
+    pub fn fee_percent() -> rust_decimal::Decimal {
+        use rust_decimal::Decimal;
+        Decimal::from(FEE_SCALE - INPUT_AFTER_FEE) * Decimal::ONE_HUNDRED / Decimal::from(FEE_SCALE)
+    }
+
     pub fn side(&self, t: Address) -> Option<usize> {
         self.tokens.iter().position(|a| *a == t)
     }

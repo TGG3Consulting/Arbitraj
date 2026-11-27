@@ -81,6 +81,10 @@ pub async fn trade(
         usdt_dec: decs.1,
     };
     let is_native = native::is_native(ctx, &req.asset);
+    if leg.hops.iter().any(|h|q.reg.entry(&h.pool).is_some_and(|e|super::temple_wallet::enabled(&e))) &&
+       (leg.hops.len()!=1 || route.legs.len()!=1 || route.mode!=crate::core::types::RouteMode::Direct || is_native || native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)){
+        return Err(ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"TempleDAO: прямому модулю требуется один ERC20 шаг кошелька"));
+    }
     if let Some(e)=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).find(|e|super::carbon_direct::enabled(e)) &&
         (leg.hops.len()!=1||route.legs.len()!=1||route.mode!=crate::core::types::RouteMode::Direct||
         !matches!(&e.pool.state,crate::core::types::PoolState::Carbon(s) if s.native_side.is_some()==(is_native||native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)))){
@@ -145,6 +149,7 @@ pub async fn trade(
         );
         sc.vista = super::vista_direct::proof(&p);
         sc.ekubo=p.ekubo_proof();
+        if let Some(super::plan::DirectCall::Temple(t))=p.direct_market(){sc.temple=Some(Box::new((*t).clone()));}
         if let Some(super::plan::DirectCall::Carbon(c))=p.direct_market(){sc.carbon=Some(super::carbon_fact::Proof{call:(*c).clone(),payer:wallet});}
         if let Some(super::plan::DirectCall::MintClub(call))=p.direct_market(){ sc.mint_club=Some(super::mint_club_fact::Proof{call,bond:call.protection.map_or(p.router,|v|v.bond),payer:wallet}); }
         let min_out = p.min_total();
@@ -169,6 +174,7 @@ pub async fn trade(
                 .await
                 .map_err(|e| sc.attach(e.with_tx(d.chain.clone())))?;
         }
+        if let Some(proof)=&sc.temple && let Some(r)=&d.receipt && r.status.to::<u64>()==1{proof.included(ctx,d.chain.hash,r).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;}
         if let Some(proof)=&sc.carbon && let Some(r)=&d.receipt && r.status.to::<u64>()==1{proof.included(ctx,d.chain.hash,r).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;}
         if let Some(proof)=&sc.mint_club && let Some(receipt)=&d.receipt && receipt.status.to::<u64>()==1 {
             proof.included(ctx,d.chain.hash,receipt).await.map_err(|e|sc.attach(e.with_tx(d.chain.clone())))?;
@@ -207,6 +213,10 @@ async fn build(
     selected:(Option<alloy_primitives::Address>,Option<alloy_primitives::B256>),
 ) -> GatewayResult<(Plan, Base)> {
     let (at, now) = sim_base::head(&q.ctx, &q.heads).await?;
+    if let [s]=prep.steps.as_slice() && super::temple_wallet::enabled(&s.entry) {
+        let p=Box::pin(super::temple_wallet::plan(&q.ctx,s,wallet,at.number,selected.0)).await?;
+        return Ok((p,at));
+    }
     if let ([s],[hop])=(prep.steps.as_slice(),prep.path.hops.as_slice()) && super::carbon_direct::enabled(&s.entry) {
         let p=Box::pin(super::carbon_direct::path_plan(&q.ctx,s,hop,wallet,at.number,s.order.token_in==s.entry.usdt,selected)).await?;
         return Ok((p,at));

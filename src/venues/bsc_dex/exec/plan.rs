@@ -32,6 +32,7 @@ use super::ur;
 #[derive(Debug, Clone)]
 pub(super) enum DirectCall {
     Carbon(std::sync::Arc<super::carbon_wire::Call>),
+    Temple(std::sync::Arc<super::temple_wallet::Proof>),
     MintClub(super::mint_club_wire::Call),
     EkuboV2 {key:super::super::pools::ekubo_v2::OrderKey,core:Address,wrapped:Option<Address>},
     Module {
@@ -198,6 +199,7 @@ impl Plan {
                     rebate,
                 ),
                 DirectCall::Carbon(c)=>c.data(),
+                DirectCall::Temple(t)=>t.data(),
                 DirectCall::MintClub(order)=>order.data(self.wallet),
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
@@ -256,6 +258,7 @@ pub async fn build(
         return Err(ctx.err(ErrorCode::Internal, "план без шагов"));
     };
     let e = &first.entry;
+    if super::temple_wallet::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"TempleDAO: требуется выбранный модуль денежного маршрута"));}
     if super::carbon_direct::enabled(e){return Err(ctx.err(ErrorCode::NoRoute,"Carbon: требуется подтвержденный вектор действий контроллера"));}
     if super::mint_club_direct::enabled(e) { return Err(ctx.err(ErrorCode::NoRoute,"Mint Club: требуется прямое поручение с собственными границами суммы")); }
     if super::super::quote::ekubo_v2_pricing::enabled(e) {return Box::pin(super::ekubo_v2_direct::plan(ctx,steps,wallet,now,all_approvals)).await;}

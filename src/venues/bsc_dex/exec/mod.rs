@@ -39,6 +39,9 @@ pub(super) mod carbon_binding;
 pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
+pub(super) mod temple_wallet;
+#[cfg(test)]
+mod temple_wallet_tests;
 pub(super) mod mint_club_wire;
 pub(super) mod mint_club_fact;
 pub(super) mod mint_club_direct;

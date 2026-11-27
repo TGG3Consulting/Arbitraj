@@ -130,7 +130,9 @@ pub(super) fn with_native_fact(
     let vista=proofs.and_then(|p|p.vista.as_ref());
     let ekubo=proofs.and_then(|p|p.ekubo.as_ref());
     let carbon=proofs.and_then(|p|p.carbon.as_ref());
-    let (spent, got) = if let Some(proof)=carbon{
+    let (spent, got) = if let Some(proof)=proofs.and_then(|p|p.temple.as_ref()){
+        proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"TempleDAO: квитанция не подтвердила чистое списание и выплату исходной валюты").with_tx(d.chain.clone()))?
+    }else if let Some(proof)=carbon{
         proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Carbon: не подтверждены исходные стратегии и чистая выплата").with_tx(d.chain.clone()))?
     }else if let Some(proof)=proofs.and_then(|p|p.mint_club.as_ref()) {
         proof.amounts(&r.logs,wallet,tin,tout).ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Mint Club: расчёт по исходному поручению Bond не подтверждён").with_tx(d.chain.clone()))?

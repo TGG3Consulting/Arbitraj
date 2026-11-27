@@ -1001,7 +1001,8 @@ def tables(network, snapshots, profiles):
                    f"В изолированном исполнении покупки на 1 и 10 FRAX и продажи купленного TEMPLE дали одинаковые выплаты тремя способами. "
                    f"Газ покупки/продажи составил {gas_by_mode['router'][0]}/{gas_by_mode['router'][1]} у официального роутера, "
                    f"{gas_by_mode['protected'][0]}/{gas_by_mode['protected'][1]} у защитного модуля и {gas_by_mode['v5'][0]}/{gas_by_mode['v5'][1]} у V5. Учтён только газ самого обмена. "
-                   f"Для включения V5 владелец указывает адрес развёрнутого модуля для данной пары. "
+                   f"Разрешение ERC20 оценивается отдельно по расходам плательщика. Владелец задаёт адрес развёрнутого модуля пары для двух путей: прямой вызов кошелька или шаг V5. Оба фиксируют токен и чистый минимум в транзакции. "
+                   f"Официальная покупка возвращает ноль в ABI и выбирает пару из изменяемого реестра. На этом блоке изменение требует {tr['role_controls'][tr['owners'][1]]['threshold']} из {tr['role_controls'][tr['owners'][1]]['members']} подписей. "
                    f"[Реестр, резервы и порог](../{temple_registry_path.as_posix()}) · [Кошелёк, газ, минимум и срок](../{temple_wallet_path.as_posix()}).")
         carbon_path=Path("tests/data/first_run_dex_2026-11-26/carbon_ethereum.json.gz")
         with gzip.open(carbon_path,"rt",encoding="utf8") as stream:

@@ -39,6 +39,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
     DirectModule { pool: Address },
+    Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
     Vault(B256),
     Vista(super::super::exec::vista_wire::Call),
     Oasis { rebate: bool },
@@ -198,6 +199,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
+    if let Wire::Temple(key)=&o.wire {
+        let proof=super::super::exec::temple_wallet::Proof{key:**key,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::MintClub(c)=&o.wire {
         let proof=super::super::exec::mint_club_fact::Proof{call:*c,bond:c.protection.map_or(o.target,|v|v.bond),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -241,6 +246,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
     match &o.wire {
         Wire::Carbon(c)=>c.data(),
         Wire::MintClub(c) => c.data(o.payer),
+        Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),
         Wire::Vault(id) => super::super::exec::vault_direct::data(
             *id, o.input, o.output, o.amount, minimum, o.payer, deadline,

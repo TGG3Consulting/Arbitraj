@@ -31,6 +31,14 @@ def capture():
     reserves=list(get(PAIR,"getReserves()",[],[],["uint112","uint112","uint32"]))[:2]
     balances=[get(t,"balanceOf(address)",["address"],[PAIR],["uint256"]) for t in [TEMPLE,FRAX]]
     rate=get(treasury,"intrinsicValueRatio()",[],[],["uint256","uint256"])
+    owners=[address(PAIR,"owner()"),address(ROUTER,"owner()")]
+    role_controls={}
+    for owner in set(owners):
+        if int(owner,16)==0:continue
+        threshold=get(owner,"getThreshold()",[],[],["uint256"])
+        members=get(owner,"getOwners()",[],[],["address[]"])
+        if not 0<threshold<=len(set(members)):raise ValueError("invalid Safe quorum")
+        role_controls[owner]={"threshold":threshold,"members":len(members)}
     r0,r1=reserves;f,t=rate
     crossing=(995*r1*t-1000*r0*f)//(995*f)
     lots=sorted({1,2,3,10**15,10**18,10**22,*range(crossing-4,crossing+5)})
@@ -41,7 +49,7 @@ def capture():
         if branch!=(iv>amm) or out!=max(iv,amm):raise ValueError("router output differs")
         results.append({"input":str(n),"amm":str(amm),"iv":str(iv),"defence":branch,"out":str(out)})
     return {"selector":chain.tag,"state_root":ROOT_HASH,"height":chain.height,"contracts":contracts,"pair":PAIR,"router":ROUTER,"temple":TEMPLE,
-        "stable":FRAX,"defend":defend,"treasury":treasury,"owners":[address(PAIR,"owner()"),address(ROUTER,"owner()")],
+        "stable":FRAX,"defend":defend,"treasury":treasury,"owners":owners,"role_controls":role_controls,
         "token_pair":anchors,"reserves":list(map(str,reserves)),"balances":list(map(str,balances)),
         "ratio":list(map(str,rate)),"defense_balance":str(available),"boundaries":results,"calls":calls}
 

@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    super::super::exec::temple_wallet::enabled(e) || e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -32,7 +32,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         };
         let mut e = e.clone();
         if let Some(h) = head {
-            let check = if e.family.variant == Variant::BunnySwap {
+            let check = if e.family.variant==Variant::Temple {
+                super::super::pools::temple::market(ctx,e.family,e.pool.reference.address(),(e.coin,e.usdt),&h.selector()).await.map(|s|e.pool.state=crate::core::types::PoolState::Temple(Box::new(s)))
+            } else if e.family.variant == Variant::BunnySwap {
                 super::super::pools::bunnyswap::fresh(ctx,&e,&h.selector()).await
             } else if e.family.variant == Variant::CandySwap {
                 super::super::pools::v2_live_fee::candy_fresh(ctx,&e,&h.selector()).await
@@ -48,9 +50,9 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         let direct = Execution {
             mode: RouteMode::Direct,
             target: module,
-            wire: Wire::DirectModule {
-                pool: e.pool.reference.address(),
-            },
+            wire: if let crate::core::types::PoolState::Temple(s)=&e.pool.state{
+                Wire::Temple(std::sync::Arc::new(super::super::exec::temple_wallet::Key::new(s,module)))
+            }else{Wire::DirectModule{pool:e.pool.reference.address()}},
         };
         if let Ok(option) = v2_execution::option(q, i, e.clone(), payer, direct, head).await {
             quotes.push(option);

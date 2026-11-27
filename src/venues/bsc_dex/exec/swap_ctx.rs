@@ -44,6 +44,8 @@ pub struct SwapCtx {
     pub mint_club:Option<super::mint_club_fact::Proof>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub carbon:Option<super::carbon_fact::Proof>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub temple:Option<Box<super::temple_wallet::Proof>>,
     /// Кошелёк сделки. None — контекста свопа нет.
     #[serde(default)]
     pub wallet: Option<Address>,

@@ -23,6 +23,9 @@ fn exact_amount_selects_a_physical_cash_asset_and_empty_dai_keeps_the_amm() {
         defense_balance: n(&j["defense_balance"]),
         amm_authorized: true,
     };
+    let owner = j["owners"][1].as_str().unwrap();
+    assert_eq!(j["role_controls"][owner]["threshold"], 2);
+    assert_eq!(j["role_controls"][owner]["members"], 4);
     let token_pair = &j["token_pair"];
     assert!(s.defense_balance.is_zero());
     assert_eq!(

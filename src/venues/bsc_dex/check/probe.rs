@@ -343,7 +343,7 @@ async fn part(
     // через classic V2 Router форка (у V3-форка его нет). Путь сделки для них — шаг контракта-исполнителя: тем же
     // вызовом execute идёт и проба (check/probe_exec.rs); нет шага / не задан адрес — точная причина оттуда.
     if e.family.variant==super::super::pools::family_variant::Variant::Temple {
-        return Box::pin(probe_exec::part(ctx,e,order,wallet,now)).await;
+        return super::super::exec::temple_wallet::probe(ctx,e,&order,wallet,now);
     }
     if super::super::exec::mint_club_direct::enabled(e){return super::super::exec::mint_club_direct::probe(ctx,e,&order,wallet,protection);}
     if super::super::quote::ekubo_v2_pricing::enabled(e){return super::super::exec::ekubo_v2_direct::probe(ctx,e,&order,now);}

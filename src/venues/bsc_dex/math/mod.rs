@@ -78,6 +78,7 @@ pub mod fee_algebra_v1;
 pub mod fluid_check;
 pub mod fluid_swap;
 pub mod full_math;
+pub mod ammalgam;
 pub mod mooniswap;
 pub mod gyro_2clp;
 pub mod gyro_eclp;

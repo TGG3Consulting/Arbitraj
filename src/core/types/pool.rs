@@ -307,6 +307,15 @@ pub struct VirtualsState {
     pub external_swap: bool,
 }
 
+/// Spot reserves, start-of-observation reference, uncovered borrows and actual ERC20 in each direction.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AmmalgamState {
+    pub reserves: [U256; 2],
+    pub reference: [U256; 2],
+    pub missing: [U256; 2],
+    pub cash: [U256; 2],
+}
+
 /// Физические и виртуальные остатки Mooniswap в порядке getTokens. Метка блока общая для состояния и тарифов.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MooniswapState {
@@ -555,6 +564,7 @@ pub enum PoolState {
     /// Резервы пары и плата в ETH, уплачиваемая для каждого отдельного обмена.
     EtherVista(Box<EtherVistaState>),
     Mooniswap(Box<MooniswapState>),
+    Ammalgam(Box<AmmalgamState>),
     Virtuals(Box<VirtualsState>),
     MintClub(Box<MintClubState>),
     UmbraeDamm(Box<UmbraeDammState>),

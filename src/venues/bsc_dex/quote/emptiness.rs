@@ -47,6 +47,7 @@ pub fn empty(e: &Entry) -> bool {
         PoolState::UmbraeDamm(s) => s.reserves.contains(&U256::ZERO),
         PoolState::Bundles(s) => s.market.supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
         PoolState::Antfarm(s) => s.market.lp_supply<=U256::from(1000) || s.market.reserves.contains(&U256::ZERO),
+        PoolState::Ammalgam(s) => s.reserves.contains(&U256::ZERO) || s.reference.contains(&U256::ZERO) || s.cash == [U256::ZERO;2],
         PoolState::Mooniswap(s) => s.decay==0 || s.balances.iter().any(U256::is_zero),
         PoolState::Brokerbot(s) => s.price.is_zero() || s.max_units(true).unwrap_or_default().is_zero() && s.max_units(false).unwrap_or_default().is_zero(),
         PoolState::Temple(s) => s.reserves.contains(&U256::ZERO) || ((!s.amm_authorized || (e.coin!=s.stable && e.usdt!=s.stable))

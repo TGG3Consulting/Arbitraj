@@ -93,6 +93,7 @@ pub async fn view(st: &AppState) -> Value {
         wallets.push(json!({
             "id": w.id,
             "fynd": single_source("fynd.network"),
+            "clipper": dex.as_deref().is_some_and(|id| clipper_configured(st, id)),
             "bopamm": bopamm,
             "textile": single_source("textile.base_url"),
             "kipseli": single_source("kipseli.base_url"),
@@ -160,6 +161,7 @@ async fn by_chain(
             "venue": v.0,
             "chain": chain,
             "fynd": st.settings.text("fynd.network",at).is_ok_and(|s|!s.is_empty()),
+            "clipper": clipper_configured(st, &v.0),
             "bopamm": bopamm_configured(st, &v.0),
             "textile": st.settings.text("textile.base_url",at).is_ok_and(|s|!s.is_empty()),
             "kipseli": st.settings.text("kipseli.base_url",at).is_ok_and(|s|!s.is_empty()),
@@ -174,6 +176,13 @@ async fn by_chain(
         }));
     }
     out
+}
+
+fn clipper_configured(st: &AppState, venue: &str) -> bool {
+    let at = crate::settings::read::At { venue: Some(venue), coin: None };
+    matches!(st.settings.integer("dex.evm_chain_id",at).ok(),Some(1 | 8453))
+        && st.settings.get_exact("clipper.pools", &crate::settings::scope::Scope::Venue(venue.into()))
+            .is_some_and(|v| v.as_array().is_some_and(|rows| !rows.is_empty()))
 }
 
 fn bopamm_configured(st: &AppState, venue: &str) -> bool {

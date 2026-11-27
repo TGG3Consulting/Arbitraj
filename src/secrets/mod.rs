@@ -33,6 +33,7 @@ pub static KNOWN: &[(&str, &str, &str)] = &[
     ("textile.api_key", "textile", "Партнёрский ключ Textile trades:write. Для маршрута через свой модуль укажите согласованный доступ rfq:aggregator"),
     ("kipseli.api_key", "kipseli", "Ключ официального Kipseli PropAMM API для Base"),
     ("zeroex.api_key", "zeroex", "Ключ 0x Swap API v2 для Base и Ethereum"),
+    ("clipper.api_key", "clipper", "Индивидуальный ключ официального Blade RFQ v2 для Ethereum и Base"),
     ("fynd.api_key", "fynd", "Ключ Fynd Hosted API для ручной проверки цены Base и Ethereum"),
     ("hashflow.taker_key", "hashflow", "Ключ доступа Hashflow Taker API v3 для нескольких кошельков"),
     (TELEGRAM_DUTY_TOKEN, "telegram", "Токен бота для дежурного"),

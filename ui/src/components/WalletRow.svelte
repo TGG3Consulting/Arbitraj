@@ -26,6 +26,7 @@
   import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import HashflowQuote from './HashflowQuote.svelte';
+  import ClipperQuote from './ClipperQuote.svelte';
   import SourcePrice from './SourcePrice.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
@@ -111,6 +112,7 @@
   {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}
   {#if w.address && dex && w.textile}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="textile" label="Textile FX" />{/if}
   {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
+  {#if w.address && dex && w.clipper}<ClipperQuote venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.bopamm}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
 
   <h4>Исполнитель ArbExecutor</h4>

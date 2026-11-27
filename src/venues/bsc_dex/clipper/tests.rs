@@ -1,0 +1,76 @@
+//! Источник digest и кассовых дельт — восемь канонических исполненных сделок.
+use super::{
+    api::instruments,
+    wire::{Offer, Quote},
+};
+use alloy::signers::{SignerSync, local::PrivateKeySigner};
+use alloy_primitives::{Address, B256, U256};
+use serde_json::{Value, json};
+use std::io::Read;
+
+#[test]
+fn historical_digest_and_deadline_match_eight_payments() {
+    let mut raw = Vec::new();
+    flate2::read::GzDecoder::new(
+        include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/clipper_rfq_access.json.gz"
+        )
+        .as_slice(),
+    )
+    .read_to_end(&mut raw)
+    .unwrap();
+    let capture: Value = serde_json::from_slice(&raw).unwrap();
+    let mut count = 0;
+    for net in capture["networks"].as_object().unwrap().values() {
+        for r in net["original"].as_array().unwrap() {
+            let a = |k: &str| r[k].as_str().unwrap().parse::<Address>().unwrap();
+            let n = |r: &Value| U256::from_str_radix(r.as_str().unwrap(), 10).unwrap();
+            let o = Offer {
+                chain: r["chain"].as_u64().unwrap(),
+                pool: a("pool"),
+                owner: a("recipient"),
+                input: a("input"),
+                output: a("output"),
+                amount: n(&r["quoted"][0]),
+                received: n(&r["quoted"][1]),
+                until: n(&r["packed_good_until"]),
+            };
+            assert_eq!(
+                o.digest(),
+                r["digest"].as_str().unwrap().parse::<B256>().unwrap()
+            );
+            assert_eq!(Some(o.expires()), r["expires"].as_u64());
+            assert!(o.expires() >= r["timestamp"].as_u64().unwrap());
+            assert!(n(&r["delivered"][0]) > U256::ZERO && n(&r["delivered"][1]) > U256::ZERO);
+            let key = PrivateKeySigner::random();
+            let sig = key.sign_hash_sync(&o.digest()).unwrap();
+            let mut q:Quote=serde_json::from_value(json!({"chain_id":o.chain,"clipper_exchange_address":o.pool,"input_asset_address":o.input,
+            "output_asset_address":o.output,"input_amount":o.amount.to_string(),"output_amount":o.received.to_string(),"good_until":o.until.to_string(),
+            "destination_address":o.owner,"signature":{"v":27+u8::from(sig.v()),"r":B256::from(sig.r()),"s":B256::from(sig.s())}})).unwrap();
+            assert!(o.valid(&q, key.address()));
+            assert!(!o.valid(&q, a("signer")));
+            q.destination_address = Address::ZERO;
+            assert!(!o.valid(&q, key.address()));
+            q.destination_address = o.owner;
+            q.chain_id += 1;
+            assert!(!o.valid(&q, key.address()));
+            count += 1;
+        }
+    }
+    assert_eq!(count, 8);
+}
+#[test]
+fn api_symbols_belong_to_one_exchange_on_the_requested_chain() {
+    let pool = Address::repeat_byte(1);
+    let a = Address::repeat_byte(2);
+    let b = Address::repeat_byte(3);
+    let mut book = json!({"pool_type":"onchain","pools":[{"pool":{"chain_id":8453,"address":pool,"swaps_enabled":true},
+              "assets":[{"address":a,"name":"ETH"},{"address":b,"name":"USDC"}]}]});
+    assert_eq!(
+        instruments(&book, 8453, pool, [a, b]),
+        Some(["ETH".into(), "USDC".into()])
+    );
+    assert!(instruments(&book, 1, pool, [a, b]).is_none());
+    book["pools"][0]["assets"][1]["name"] = json!("ETH");
+    assert!(instruments(&book, 8453, pool, [a, b]).is_none());
+}

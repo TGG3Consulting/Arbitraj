@@ -14,6 +14,9 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
     if matches!(source, "kipseli" | "zeroex") {
         return super::keyed_price::preview(ctx, source, req).await;
     }
+    if source == "clipper" {
+        return super::clipper::preview(ctx, req).await;
+    }
     if source == "bopamm" {
         return super::fermi::bopamm::preview(ctx, req).await;
     }

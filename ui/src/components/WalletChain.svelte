@@ -19,6 +19,7 @@
   import { executorFeatures } from '../lib/walletExecutor.js';
   import CheckConnection from './CheckConnection.svelte';
   import HashflowQuote from './HashflowQuote.svelte';
+  import ClipperQuote from './ClipperQuote.svelte';
   import SourcePrice from './SourcePrice.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -72,6 +73,7 @@
   {#if w.address && c.venue && c.zeroex}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}
   {#if w.address && c.venue && c.textile}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="textile" label="Textile FX" />{/if}
   {#if w.address && c.venue && c.kipseli}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
+  {#if w.address && c.venue && c.clipper}<ClipperQuote venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue && c.bopamm}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
   <p>Исполнитель: {#if c.executor}<code>{c.executor}</code> <button onclick={() => setExec(null)}>Снять</button>{:else}не развёрнут в этой сети{/if}</p>
   {#if c.executor}

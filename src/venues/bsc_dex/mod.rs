@@ -25,6 +25,7 @@ mod source_quote;
 mod textile;
 mod keyed_price;
 mod fermi;
+mod clipper;
 mod fynd;
 pub mod connection_events;
 pub mod connection_extra;

@@ -62,6 +62,33 @@ fn both_wallets_match_the_fee_and_initialized_ticks() {
                 .collect::<std::collections::BTreeMap<_, _>>()
                 .into(),
         };
+        if let Some(controls) = m["one_atom_controls"].as_array() {
+            assert_eq!(controls.len(), 2);
+            let s = ClState {
+                sqrt_price: value(&row["sqrt"]),
+                tick: row["tick"].as_i64().unwrap() as i32,
+                liquidity: value(&row["liquidity"]).to(),
+                fee: 0,
+                ticks: &ticks,
+                version: Version::V4,
+            };
+            assert!(
+                quote(
+                    &s,
+                    false,
+                    false,
+                    row["fee"].as_u64().unwrap() as u32,
+                    true,
+                    U256::ONE
+                )
+                .is_none()
+            );
+            for control in controls {
+                assert!(value(&control["quoted"]) > U256::from(i128::MAX as u128));
+                assert_eq!(control["received"], "0");
+                assert_eq!(control["paid_input"], "0");
+            }
+        }
         for case in m["cases"]
             .as_array()
             .unwrap()

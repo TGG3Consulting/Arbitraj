@@ -51,6 +51,7 @@ pub(super) enum DirectCall {
         rebate: bool,
     },
     Vault { id: alloy_primitives::B256, input: Address, amount: U256 },
+    SectorLb { path:super::sectorone::Path,input:Address,amount:U256 },
     V2SupportingFee {
         input: Address,
         amount: U256,
@@ -204,6 +205,7 @@ impl Plan {
                 DirectCall::EkuboV2{key,..}=>key.calldata(self.min_total,self.deadline),
                 DirectCall::Vault { id, input, amount } => super::vault_direct::data(
                     id, input, self.token_out, amount, self.min_total, self.wallet, self.deadline),
+                DirectCall::SectorLb{path,input,amount}=>path.data(input,self.token_out,amount,self.min_total,self.wallet,self.deadline),
                 DirectCall::V2SupportingFee { input, amount } => super::fork_swap::swap_data(
                     amount,
                     self.min_total,
@@ -285,6 +287,7 @@ pub async fn build(
         ))
         .await;
     }
+    if super::super::pools::sectorone::enabled(e) {return Box::pin(super::sectorone::plan(ctx,steps,wallet,now,all_approvals)).await;}
     if super::super::quote::frax_pricing::is_frax(e) {
         return Box::pin(super::frax_direct::plan(
             ctx,

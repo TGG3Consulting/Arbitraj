@@ -139,6 +139,13 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
+    if super::super::pools::sectorone::enabled(e) {
+        let swap=if e.family.proto==super::super::pools::families::Proto::LbV20 {
+            super::super::pools::abi_lb20::ILBPairV20::Swap::SIGNATURE_HASH
+        }else{super::super::pools::abi_lb::ILBPair::Swap::SIGNATURE_HASH};
+        return logs.iter().any(|l| l.address==e.pool.reference.address() && l.topics.first()==Some(&swap))
+            .then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Рынок SectorOne не выпустил событие Swap"));
+    }
     if matches!(&e.pool.state,PoolState::MintClub(_) | PoolState::Temple(_) | PoolState::Carbon(_)) || e.family.tradable
         || super::super::quote::frax_pricing::is_frax(e)
         || super::super::quote::oasis_pricing::is_oasis(e)

@@ -10,7 +10,39 @@ def snapshot(name):
     return json.loads(gzip.decompress((DATA / name).read_bytes()))
 
 
+def sectorone(network):
+    output=["#### SectorOne / DLMM King", "",
+            "Обе версии исполняют ERC-20 через прямой LBRouter с проверкой реального прироста выходного токена или через V5. "
+            "В версии 2.0 прямой путь использует положительный binStep. У представленного как 2.2 роутера значение версии пути 2 выбирает собственную фабрику. "
+            "Обе стороны учитывают комиссию конкретного бина и изменение волатильности. Движок проверяет пары по getAllLBPairs и LBPairCreated. "
+            "[Адреса проекта](https://docs.sectorone.xyz/info/smart-contracts.md).", "",
+            "| Версия | Зарегистрировано / с двумя резервами | Проверенный пул | Вход → выплата → возврат, в атомах | Газ Router / V5, покупка и продажа |",
+            "|---|---:|---|---|---|"]
+    for v in ("2.0","2.2"):
+        file=f"sectorone-{v.replace('.','')}-{network}.json.gz"
+        archive=snapshot(file)
+        d,receipt=archive["directory"],archive["settlement"]
+        markets=d["markets"]
+        count=sum(all(map(int,r["reserves"])) for r in markets)
+        direct=[x for x in receipt["cases"] if x["mode"]=="router"]
+        v5=[x for x in receipt["cases"] if x["mode"]=="v5"]
+        for a,b in zip(direct,v5,strict=True):
+            back=a.get("sell",{})
+            output.append(f"| {v} | {len(markets)} / {count} | `{receipt['pool']}` | {a['buy']['input']} → {a['buy']['net']} → {back.get('net','отказ')} | "
+                          f"{a['buy']['gas']} / {b['buy']['gas']}, {back.get('gas','—')} / {b.get('sell',{}).get('gas','—')} |")
+        output.append(f"| [Адреса, исходные вызовы и выплаты {v}](../tests/data/first_run_dex_2026-11-26/{file}) | | | | |")
+    if network=="ethereum":
+        output.extend(["","У версии 2.0 на исходном блоке все восемь пар имели минимум одну пустую сторону. "
+                       "В WETH→токен покупка внесла WETH в исходно пустую сторону и позволила обратный обмен. "
+                       "У версии 2.2 меньшая покупка выплатила один атом токена, обратная нога на нём отклонилась."])
+    return output+[""]
+
+
 def paragraphs(network):
+    return sectorone(network)+other_markets(network)
+
+
+def other_markets(network):
     if network == "ethereum":
         mars = snapshot("marswap-ethereum.json.gz")
         rows = [r for r in mars["markets"] if "settlements" in r]

@@ -27,6 +27,7 @@ pub enum Variant {
     RingFew,
     /// 9mm, Throne и Omni на Base проверяют свои callback через роутеры фабрик.
     BaseNativeV3,
+    IziModules,
     RegisteredV3,
     /// Algebra Integral с проверяемым beacon-прокси плагина QuickSwap V4.
     QuickswapIntegral,
@@ -63,6 +64,8 @@ pub enum Variant {
     OmniV2,
     /// Резервы constant-product хука Deli у Uniswap V4.
     DeliConstant,
+    /// Размещение LB с обычным роутером и зарегистрированным клоном пула.
+    SectorLb,
     /// Концентрированная ликвидность Deli с комиссией в wBLT.
     DeliCl,
     /// Пара исполняется родным роутером, обычный 4-аргументный swap V5 недоступен.
@@ -223,6 +226,7 @@ pub fn of(kind: &str) -> Variant {
         "algebra_integral_supernova" => Variant::SupernovaIntegral,
         "algebra_integral_quickswap" => Variant::QuickswapIntegral,
         "lista_stableswap_proxy" => Variant::ListaStableProxy,
+        "izi_static_modules" => Variant::IziModules,
         "registered_v3" | "registered_v3_module" => Variant::RegisteredV3,
         "base_native_v3" | "base_native_v3_module" => Variant::BaseNativeV3,
         "v3_fork_ramses" => Variant::RamsesCl,
@@ -236,6 +240,7 @@ pub fn of(kind: &str) -> Variant {
         "v2_fork_dual_create2" => Variant::V2DualCreate2,
         "v2_fork_dual_create2_live_fee" => Variant::V2DualCreate2LiveFee,
         "v2_whiteswap" => Variant::WhiteSwap,
+        "sectorone_lb_v20" | "sectorone_lb_v22" => Variant::SectorLb,
         "deli_v4_cl" => Variant::DeliCl,
         "deli_v4_constant" => Variant::DeliConstant,
         "v2_omni_universal" => Variant::OmniV2,

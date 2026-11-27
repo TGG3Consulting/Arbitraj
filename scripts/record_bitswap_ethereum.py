@@ -3,6 +3,7 @@ import argparse
 import json
 from pathlib import Path
 import requests
+import time
 from eth_abi import encode, decode
 from eth_utils import keccak
 from record_balancer_markets import Capture, posts
@@ -19,13 +20,23 @@ def balance(token,w):
     return tx(token,"balanceOf(address)",["address"],[w])
 def read_batch(url, methods):
     out=[]
-    for idx in range(0,len(methods),16):
-        chunk=methods[idx:idx+16]
+    for idx in range(0,len(methods),8):
+        chunk=methods[idx:idx+8]
         request=[dict(id=i,jsonrpc="2.0",method=k,params=v) for i,(k,v) in enumerate(chunk)]
-        reply=requests.post(url,json=request,timeout=40)
-        reply.raise_for_status()
-        results={r["id"]:r for r in reply.json()}
-        out.extend(results[i]["result"] for i in range(len(chunk)))
+        errors=[]
+        for attempt in range(4):
+            alternate=(url,*(u for u in ENDPOINTS if u!=url))
+            try:
+                reply=requests.post(alternate[attempt%len(alternate)],json=request,timeout=40)
+                reply.raise_for_status()
+                results={r["id"]:r["result"] for r in reply.json()}
+                out.extend([results[i] for i in range(len(chunk))])
+                break
+            except (KeyError,TypeError,requests.RequestException) as ex:
+                errors.append(str(ex)[:140])
+                time.sleep(0.35*(attempt+1))
+        else:
+            raise ValueError(("canonical RPC batch",errors))
     return out
 def verify(url,tag,j):
     f=j["factory"];markets=j["markets"];mods=list(j["modules"].values())
@@ -48,7 +59,7 @@ def verify(url,tag,j):
         data=got[i*7:i*7+7];pool=m["pool"];x,y=m["tokens"]
         if [int.from_bytes(b,"big") for b in data]!=[int(f,16),int(x,16),int(y,16),m["fee"],m["step"],int(pool,16),int(pool,16)]:
             raise ValueError(("role mismatch",pool))
-        if [int(v,16) for v in targets[i*5:i*5+5]]!=[int(a,16) for a in mods]:
+        if [int(v[-40:],16) for v in targets[i*5:i*5+5]]!=[int(a,16) for a in mods]:
             raise ValueError(("delegated roles differ",pool))
 def capture(url):
     j=json.loads(FIXTURE.read_text());tag={"blockHash":BLOCK,"requireCanonical":True}
@@ -66,9 +77,9 @@ def capture(url):
         x,y=m["tokens"]
         if WETH not in [x,y] or not ({x,y}&set(STABLES)):continue
         for a,b in [(x,y),(y,x)]:
-            for amount in ([10**15,10**16] if a==WETH else [10**6,10**7]):
+            for amount in ([10**15,10**16,3*10**18] if a==WETH else [10**6,10**7,2000*10**6]):
                 if a==WETH:fund=tx(WETH,"deposit()",value=amount)
-                else:fund=tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[amount,[WETH,a],OWNER,end],10**18)
+                else:fund=tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[amount,[WETH,a],OWNER,end],5*10**18)
                 def swap(floor,expiry):
                     return tx(EXEC,"execute(address,uint256,address,uint256,uint256,"+STEP+"[])",
                           ["address","uint256","address","uint256","uint256",STEP+"[]"],[a,amount,b,floor,expiry,[(14,m["pool"],a,b,10000,b"")]])
@@ -79,7 +90,9 @@ def capture(url):
                 if quote[-1]["status"]!="0x1":
                     inactive.append(dict(pool=m["pool"],source=a,amount=str(amount),reason=quote[-1].get("error")));continue
                 used,out=decode(["uint256","uint256"],bytes.fromhex(quote[-1]["returnData"][2:]))
-                if not 0<used<=amount or not out:continue
+                if used>amount:raise ValueError(("callback exceeds authorized amount",m["pool"],amount,used))
+                if not used or not out:
+                    inactive.append(dict(pool=m["pool"],source=a,amount=str(amount),reason="zero amount in or out"));continue
                 before=[balance(t,w) for w in [OWNER,EXEC] for t in [a,b]]
                 calls=prep+before+[swap(out+1,end),swap(out,1)]+before+[swap(out,end)]+before
                 res=simulate_block(url,tag,overrides,calls)

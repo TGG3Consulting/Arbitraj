@@ -182,6 +182,7 @@ pub fn sources(ctx: &Ctx) -> Vec<(Address, B256, bool, &'static Family)> {
             // LBPair, pid) (ILBFactory.sol L49-L51). Решение 482: подписка у lb_v21 (Swapline V1 на Arbitrum нет у
             // индексатора); у lb_v22 — не подключена (фабрика V2.2 в этом решении не сверялась).
             // Ревью t251: только у DEX без справочника индексатора (LFJ BSC и др. — как раньше, без подписки).
+            Proto::LbV20 | Proto::LbV22 if f.variant == super::family_variant::Variant::SectorLb => ("dex.factory", ILBFactory::LBPairCreated::SIGNATURE_HASH, false),
             Proto::LbV21 if indexer_gap::outside(ctx, f.id) == Some(true) => (
                 "dex.factory",
                 ILBFactory::LBPairCreated::SIGNATURE_HASH,
@@ -506,7 +507,7 @@ pub fn candidate(f: &'static Family, log: &Log, quote: Address) -> Result<Candid
             (e.tokenA, e.tokenB, e.poolAddress)
         }
         // Решение 482: Liquidity Book V2.1 — пул и токены из LBPairCreated (tokenX, tokenY — indexed).
-        Proto::LbV21 => {
+        Proto::LbV21 | Proto::LbV20 | Proto::LbV22 => {
             let e = ILBFactory::LBPairCreated::decode_log_data(&log.inner.data)
                 .map_err(|e| format!("LBPairCreated не по ABI: {e}"))?;
             (e.tokenX, e.tokenY, e.LBPair)

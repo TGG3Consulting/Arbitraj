@@ -3,6 +3,8 @@ use super::{full_math::mul_div_up, swap_cl::Swapped, v2};
 use crate::core::types::TempleState;
 use alloy_primitives::{Address, U256, U512};
 
+#[path = "temple_limits.rs"]
+mod limits;
 #[path = "temple_rounding.rs"]
 mod rounding;
 #[cfg(test)]
@@ -127,47 +129,16 @@ fn crossover(s: &TempleState, n: U256, d: U256) -> Option<U256> {
 }
 
 fn inverse(s: &TempleState, buy: bool, defense: bool, want: U256) -> Option<U256> {
-    if buy {
-        return amm_input(s, true, want);
-    }
-    let [n, d] = s.ratio?;
-    let mut x = if defense {
-        if s.defense_balance < want {
+    let lo = if defense {
+        let [n, d] = s.ratio?;
+        if want > s.defense_balance {
             return None;
         }
         mul_div_up(want, d, n)?.max(crossover(s, n, d)?)
     } else {
-        if !s.amm_authorized {
-            return None;
-        }
-        amm_input(s, false, want)?
+        amm_input(s, buy, want)?
     };
-    // Most books, including the historical state, resolve on the first comparison.
-    for _ in 0..4 {
-        let (actual, a, iv) = amounts(s, false, x)?;
-        if actual == defense {
-            return Some(x);
-        }
-        // Once the integer difference is >=2, the real difference exceeds one.
-        // Past the crossing, IV's constant slope exceeds the declining AMM slope.
-        let next = if defense {
-            let goal = a.checked_add(U256::ONE)?;
-            if goal > s.defense_balance {
-                return None;
-            }
-            mul_div_up(goal, d, n)?
-        } else {
-            if iv - a >= U256::from(2) {
-                return None;
-            }
-            amm_input(s, false, iv)?
-        };
-        if next <= x {
-            return None;
-        }
-        x = next;
-    }
-    rounding::first(s, x, n, d, defense)
+    limits::find(s, buy, defense, lo, U256::MAX, false)
 }
 
 pub fn quote(
@@ -218,23 +189,11 @@ pub fn band(
     let buy = input == s.stable && output == s.temple;
     if s.amm_authorized && (buy || input == s.temple && output == s.stable) {
         let i = usize::from(buy);
-        let mut cap = super::full_math::mul_div(s.reserves[i], grow, scale)
-            .unwrap_or_default()
-            .min(
-                (U256::ONE << 112usize)
-                    .saturating_sub(U256::ONE)
-                    .saturating_sub(s.balances[i]),
-            );
-        if !buy && is_defense(s, input, cap) == Some(true) {
-            // At the rational crossing the AMM is at least as good as IV, including the tie.
-            cap = s
-                .ratio
-                .and_then(|[n, d]| crossover(s, n, d))
-                .unwrap_or_default()
-                .saturating_sub(U256::ONE)
-                .min(cap);
-        }
-        if let Some((fill, _)) = paid(s, input, output, cap) {
+        let cap = super::full_math::mul_div(s.reserves[i], grow, scale).unwrap_or_default();
+        if let Some(x) = limits::find(s, buy, false, U256::ONE, cap, true)
+            && let Some((fill, _)) = paid(s, input, output, x)
+        {
+            let cap = x;
             best = if cash_in {
                 fill.amount_in
             } else {
@@ -250,24 +209,14 @@ pub fn band(
     }
     if input == s.temple
         && output == s.defend
-        && let Some([n, d]) = s.ratio
-        && !d.is_zero()
-        && !n.is_zero()
-        && !s.defense_balance.is_zero()
+        && let Some(x) = limits::find(s, false, true, U256::ONE, U256::MAX, true)
+        && let Some((fill, _)) = paid(s, input, output, x)
     {
-        let max_raw = U256::MAX / n;
-        let cap = s
-            .defense_balance
-            .checked_add(U256::ONE)
-            .and_then(|b| mul_div_up(b, d, n))
-            .map_or(max_raw, |x| x.saturating_sub(U256::ONE).min(max_raw));
-        if let Some((fill, _)) = paid(s, input, output, cap) {
-            best = best.max(if cash_in {
-                fill.amount_in
-            } else {
-                fill.amount_out
-            });
-        }
+        best = best.max(if cash_in {
+            fill.amount_in
+        } else {
+            fill.amount_out
+        });
     }
     best
 }

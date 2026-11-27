@@ -375,6 +375,12 @@ async fn part(
         ))
         .await;
     }
+    if super::super::pools::sectorone::enabled(e) {
+        let steps=plan::single(e,order);
+        let plan=Box::pin(super::super::exec::sectorone::plan(ctx,&steps,wallet,now,true)).await?;
+        let data=plan.data(alloy_primitives::U256::ZERO);
+        return Ok((plan.approvals,plan.router,data));
+    }
     if super::super::quote::frax_pricing::is_frax(e)
         && ctx
             .dex_text("dex.fraxswap_router_hash", e.family.id)

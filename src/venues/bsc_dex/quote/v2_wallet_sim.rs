@@ -35,6 +35,7 @@ pub(in crate::venues::bsc_dex) struct V5Step {
 #[derive(Clone)]
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
+    SectorLb(super::super::exec::sectorone::Path),
     Carbon(std::sync::Arc<super::super::exec::carbon_wire::Call>),
     MintClub(super::super::exec::mint_club_wire::Call),
     EkuboV2(super::super::pools::ekubo_v2::OrderKey,Option<Address>),
@@ -280,6 +281,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Oasis { rebate } => super::super::exec::oasis_direct::swap_data(
             o.input, o.output, o.amount, minimum, o.payer, deadline, *rebate,
         ),
+        Wire::SectorLb(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::Router02 => {
             fork_swap::swap_data(o.amount, minimum, &[o.input, o.output], o.payer, deadline)
         }

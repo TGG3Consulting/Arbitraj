@@ -84,6 +84,11 @@ async fn eval(
     let (q, ctx) = (v.q, &v.q.ctx);
     let mut entries = Vec::with_capacity(found.len());
     for mut e in found.iter().cloned() {
+        if super::super::pools::sectorone::enabled(&e) {
+            let tag=super::quoter_refetch::block(q).map(|b|format!("{b:#x}")).unwrap_or_else(||"latest".into());
+            let head=super::super::quote::white_state::head(ctx,&tag).await?;
+            Box::pin(super::super::pools::sectorone::check(ctx,&e,&head.selector(),direct_mode)).await?;
+        }
         if e.family.variant == super::super::pools::family_variant::Variant::Memebox {
             let at=super::quoter_refetch::block(q).map(|b|format!("{b:#x}")).unwrap_or_else(||"latest".into());
             let head=super::super::quote::white_state::head(ctx,&at).await?;

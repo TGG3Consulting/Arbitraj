@@ -89,8 +89,8 @@ mod tests {
             router: Address::repeat_byte(1),
             token: Address::repeat_byte(2),
             pair: Address::repeat_byte(pair),
-            balance: available.into(),
-            amount: n.into(),
+            balance: U256::from(available),
+            amount: U256::from(n),
         };
         assert!(fits(
             [use_cash(3, 10, 6), use_cash(3, 4, 2), use_cash(4, 10, 2)].into_iter()

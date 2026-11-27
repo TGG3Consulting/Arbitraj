@@ -96,7 +96,7 @@ pub fn clone_implementation(code: &[u8]) -> Option<Address> {
     Some(Address::from_slice(&code[20..40]))
 }
 
-async fn verify_clone(ctx: &Ctx, found: Found, pool: Address) -> Verdict {
+pub(super) async fn verify_clone(ctx: &Ctx, found: Found, pool: Address) -> Verdict {
     let implementations = match super::verify_lb22::settings(ctx, found.family) {
         Ok(items) => items,
         Err(w) => return Verdict::Rejected(w),
@@ -106,7 +106,14 @@ async fn verify_clone(ctx: &Ctx, found: Found, pool: Address) -> Verdict {
             .await;
     match reply {
         Err(e) => Verdict::Failed(e.message),
-        Ok(code) if clone_implementation(&code).is_some_and(|a| implementations.contains(&a)) => {
+        Ok(code)
+            if (if found.family.proto == super::families::Proto::LbV20 {
+                super::verify_crypto_v1::proxy_target(&code)
+            } else {
+                clone_implementation(&code)
+            })
+            .is_some_and(|a| implementations.contains(&a)) =>
+        {
             Verdict::Taken(Box::new(found))
         }
         Ok(_) => Verdict::Rejected(format!(

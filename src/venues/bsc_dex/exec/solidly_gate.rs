@@ -67,6 +67,10 @@ pub async fn fresh_cap(q: &Quoting, entries: &[&Entry]) -> GatewayResult<Option<
     let mut role_block = None;
     for e in entries.iter().copied() {
         let f = e.family;
+        if f.variant==Variant::IziModules{
+            let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
+            Box::pin(super::super::pools::izi_modules::at(ctx,f,e.pool.reference.address(),(e.pool.token0,e.pool.token1),at)).await?;
+        }
         if f.variant==Variant::AlgebraSingleV19 {
             let at=match &role_block {Some(at)=>at,None=>role_block.insert(super::super::pools::nami::block(ctx,"latest").await?)};
             Box::pin(super::super::pools::synth_farming::check(ctx,f,e.pool.reference.address(),at)).await?;

@@ -3800,5 +3800,67 @@
         "0xd8df4f5a4ae2db7ea724d1ee451806167f01f0dc@0xe3f49d688868354689da7cfe42791dab03a8a585af04008aecf02f68c6a9ee85"
       ]
     }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sectorone-v2.0-base",
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-20-base.json.gz",
+    "settings": {
+      "dex.kind": "sectorone_lb_v20",
+      "dex.factory": "0x217da3e53f221d1f36e8b09bc7d55d4012c0aa70",
+      "dex.router": "0xd4f937581650a2d6e416dd9ef5372c1672422843",
+      "dex.router_runtime_hash": "0x4fbe3240a144951cf070e4753eeff4267c67f6fdf764cd2269eea3638fe6c397",
+      "dex.lb_implementations": [
+        "0x37d11ffc23f4b87ae65a7ffd4951b331bded1dd9"
+      ],
+      "dex.quoter": "0xd4f937581650a2d6e416dd9ef5372c1672422843"
+    }
+  },
+  {
+    "chain_id": 8453,
+    "network": "base",
+    "id": "sectorone-base",
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-22-base.json.gz",
+    "settings": {
+      "dex.kind": "sectorone_lb_v22",
+      "dex.factory": "0x3357f02fb3aa78fc86d3bccdc5edf039d4b952b5",
+      "dex.router": "0x87ac1eb5596d47f6fd7d0d17bee233783db5cfec",
+      "dex.router_runtime_hash": "0xf52a38031f9741ec7d0368878f442cd13f42ea0991249b4487652aba01c101e1",
+      "dex.lb_implementations": [
+        "0xf879e534a9c7a099dcb532fd931eb93e653649db"
+      ]
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "sectorone-v2.0-ethereum",
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-20-ethereum.json.gz",
+    "settings": {
+      "dex.kind": "sectorone_lb_v20",
+      "dex.factory": "0x98501d0bb98d92a3234bae0f2a42befb5075224a",
+      "dex.router": "0x9adb4beaeecf04313619dbec923f71323d96c26a",
+      "dex.router_runtime_hash": "0x3391415c8d3ffd26c714d082fc2dbd8679e37ed077f7b5dd29e92887b1d486cb",
+      "dex.lb_implementations": [
+        "0x585e52b2b4fb0ccbd433751791eb60d8e3a50a43"
+      ],
+      "dex.quoter": "0x9adb4beaeecf04313619dbec923f71323d96c26a"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "sectorone-v2.2-ethereum",
+    "source": "https://docs.sectorone.xyz/info/smart-contracts.md · tests/data/first_run_dex_2026-11-26/sectorone-22-ethereum.json.gz",
+    "settings": {
+      "dex.kind": "sectorone_lb_v22",
+      "dex.factory": "0x9d8688043150c2b2a4cdce2ed03eb40b6ccd2c57",
+      "dex.router": "0x035a4a069f8949845eef57fcd697d0196a80ae7d",
+      "dex.router_runtime_hash": "0x25a21ed1b6107719ff7ea4531c07b7ac406034b793da880c640c2fccaa71dce9",
+      "dex.lb_implementations": [
+        "0xca3fe461f0041662826697916c33c8af5cbdb7f1"
+      ]
+    }
   }
 ]

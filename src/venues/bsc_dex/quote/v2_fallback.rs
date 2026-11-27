@@ -19,7 +19,7 @@ pub(super) async fn candidates(
     use super::{
         delta_pricing, frax_pricing, oasis_pricing, router_pricing, white_pricing, white_state,
     };
-    let mut kinds = [false; 11];
+    let mut kinds = [false; 12];
     for e in &i.entries {
         kinds[5] |= super::vista_pricing::is_vista(e) || (native && super::vista_pricing::native_router(e));
         kinds[10] |= super::super::exec::carbon_direct::enabled(e);
@@ -28,6 +28,7 @@ pub(super) async fn candidates(
         if native {
             continue;
         }
+        kinds[11] |= super::super::pools::sectorone::enabled(e);
         kinds[7] |= super::module_pricing::enabled(e);
         kinds[6] |= super::super::exec::vault_direct::enabled(e);
         kinds[4] |= oasis_pricing::is_oasis(e);
@@ -47,7 +48,7 @@ pub(super) async fn candidates(
     } else {
         None
     };
-    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo, mint_club, carbon) = tokio::join!(
+    let (white, frax, delta, router, oasis, vista, vault, memebox, ekubo, mint_club, sector, carbon) = tokio::join!(
         async {
             if kinds[0] {
                 Box::pin(white_pricing::candidates(q, i, head)).await
@@ -98,6 +99,7 @@ pub(super) async fn candidates(
         },
         async { if kinds[8] { Box::pin(super::ekubo_v2_pricing::candidates(q,i,head)).await } else { Vec::new() } },
         async { if !native && kinds[9] { Box::pin(super::mint_club_pricing::candidates(q,i,head)).await } else { Vec::new() } },
+        async { if kinds[11] {Box::pin(super::sectorone::candidates(q,i,head)).await} else {Vec::new()} },
         async { if kinds[10] { Box::pin(super::carbon_pricing::candidates(q,i,head)).await }else{Vec::new()} }
     );
     let mut all = white;
@@ -105,6 +107,7 @@ pub(super) async fn candidates(
     all.extend(ekubo);
     all.extend(mint_club);
     all.extend(carbon);
+    all.extend(sector);
     all.extend(frax);
     all.extend(delta);
     all.extend(router);
@@ -125,6 +128,7 @@ fn individual(e: &Entry, native: bool) -> bool {
         || super::white_pricing::is_white(e)
         || super::frax_pricing::is_frax(e)
         || super::router_pricing::is_native(e)
+        || super::super::pools::sectorone::enabled(e)
         || super::delta_pricing::is_delta(e)
 }
 

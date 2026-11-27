@@ -541,7 +541,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Metric OMM (решение 285): в графе и сигналах по лесенке ответов пула; исполнение — шаг METRIC (только v2).
         "metric_omm" => (PoolKind::OraclePmm, Proto::MetricOmm, true, false, false),
         // iZiSwap и Biswap V3 (решение 286): в графе и сигналах по лесенке ответов пула; исполнение — шаг IZI (только v2).
-        "iziswap" => (PoolKind::OraclePmm, Proto::IziSwap, true, false, false),
+        "iziswap" | "izi_static_modules" => (PoolKind::OraclePmm, Proto::IziSwap, true, false, false),
         "biswap_v3" => (PoolKind::OraclePmm, Proto::BiswapV3, true, false, false),
         // KyberSwap Classic DMM (решение 287): в графе и сигналах (своя формула); исполнение — шаг KYBER_DMM (только v2).
         "kyber_dmm" => (PoolKind::AmpV2, Proto::KyberDmm, true, false, false),
@@ -583,9 +583,9 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         // Решение 470: Aero Basic — в графе и сигналах (математика Solidly); исполнение — шаг SOLIDLY исполнителя.
         "aero_basic" => (PoolKind::Solidly, Proto::AeroBasic, true, false, false),
         // Liquidity Book v2.0 (решение 445): в графе и сигналах (порт swap v2.0); исполнение — шаг LB20 исполнителя.
-        "lb_v20" => (PoolKind::LbBin, Proto::LbV20, true, false, false),
+        "lb_v20" | "sectorone_lb_v20" => (PoolKind::LbBin, Proto::LbV20, true, false, false),
         // Liquidity Book V2.2 (решение 446): тот же путь, что у lb_v21 (порт getSwapOut + откат MAX_LIQUIDITY_PER_BIN), шаг LB.
-        "lb_v22" => (PoolKind::LbBin, Proto::LbV22, true, false, false),
+        "lb_v22" | "sectorone_lb_v22" => (PoolKind::LbBin, Proto::LbV22, true, false, false),
         // Ekubo (решение 447): в графе и сигналах (порт swap ядра); исполнение — шаг EKUBO исполнителя.
         "ekubo_v2_router" => (PoolKind::Ekubo, Proto::Ekubo, true, true, true),
         "ekubo" => (PoolKind::Ekubo, Proto::Ekubo, true, false, false),
@@ -1020,6 +1020,7 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         Proto::MetricOmm => list.extend(["dex.factory", "dex.quoter"]),
         // iZiSwap / Biswap V3 (решение 286): фабрика (factory() пула и реестр pool(x, y, fee)); квотер — только
         // виртуальный (dex.quoter_virtual = да убирает dex.quoter): официальный квотер в код не подключён.
+        Proto::IziSwap if f.variant==Variant::IziModules => list.extend(["dex.factory","dex.quoter","dex.factory_runtime_hash","dex.pair_runtime_hash","dex.pool_code_hashes","dex.izi_module_bindings"]),
         Proto::IziSwap | Proto::BiswapV3 => list.extend(["dex.factory", "dex.quoter"]),
         // KyberSwap Classic DMM (решение 287): фабрика (factory() пула, реестр getPools, PoolCreated) и квотер сверки —
         // DMMRouter02 (getAmountsOut по пути из одного пула; адрес — официальная документация KyberSwap).
@@ -1079,6 +1080,8 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
         }
         // Liquidity Book v2.0 (решение 445): фабрика (factory() пула и реестр getLBPairInformation) и квотер сверки —
         // LBRouter v2.0 getSwapOut(пара, вход, swapForY): у пары v2.0 своего getSwapOut нет.
+        Proto::LbV20 if f.variant == Variant::SectorLb => list.extend(["dex.factory","dex.quoter","dex.router","dex.router_runtime_hash","dex.lb_implementations"]),
+        Proto::LbV22 if f.variant == Variant::SectorLb => list.extend(["dex.factory","dex.router","dex.router_runtime_hash","dex.lb_implementations"]),
         Proto::LbV20 => list.extend(["dex.factory", "dex.quoter"]),
         // Liquidity Book V2.2 (решение 446): ещё реализации пула, сверенные с исходником (implementation() пула).
         Proto::LbV22 => list.extend(["dex.factory", "dex.lb_implementations"]),

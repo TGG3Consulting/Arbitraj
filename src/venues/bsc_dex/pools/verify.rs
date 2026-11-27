@@ -217,10 +217,19 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     }
     // iZiSwap / Biswap V3 (решение 286): поля пула + реестр фабрики pool(x, y, fee) (verify_izi.rs).
     let list: Vec<Candidate> = izi.iter().map(|i| cands[*i].clone()).collect();
-    for (i, r) in izi
+    let mut izi_block=None;
+    for (i, mut r) in izi
         .into_iter()
         .zip(verify_izi::verify(ctx, &list, size).await)
     {
+        if let Verdict::Taken(f)=&r && f.family.variant==Variant::IziModules {
+            let head=match &izi_block{Some(h)=>h,None=>izi_block.insert(super::nami::block(ctx,"latest").await)};
+            let bound=match head{
+                Ok(at)=>Box::pin(super::izi_modules::at(ctx,f.family,f.reference.address(),(f.token0,f.token1),at)).await,
+                Err(e)=>Err(e.clone()),
+            };
+            if let Err(e)=bound{r=if e.code==ErrorCode::NotApplicable{Verdict::Rejected(e.to_string())}else{Verdict::Failed(e.to_string())};}
+        }
         out[i] = Some(r);
     }
     // Balancer V2 (решение 289): хранилище getPool(id) + фабрики isPoolFromFactory + токены пула (verify_balancer.rs).

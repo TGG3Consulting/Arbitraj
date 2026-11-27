@@ -40,6 +40,10 @@ pub async fn load(
     counter: Address,
     tag: &str,
 ) -> GatewayResult<PoolState> {
+    if f.variant==super::family_variant::Variant::IziModules{
+        let at=super::nami::block(ctx,tag).await?;
+        Box::pin(super::izi_modules::at(ctx,f,pool,pair,&at)).await?;
+    }
     let bad = |what: String| ctx.err(ErrorCode::BadResponse, format!("iZiSwap {pool}: {what}"));
     let calls: Vec<(Address, Bytes)> = vec![
         (pool, P::tokenXCall {}.abi_encode().into()),

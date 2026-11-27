@@ -70,6 +70,11 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict>
                 None => Verdict::Failed("нет ответа фабрики".into()),
                 Some(Err(node)) => Verdict::Failed(node),
                 Some(Ok(a)) => match verify_lb::decide(c, p, f, &a) {
+                    Ok(found)
+                        if found.family.variant == super::family_variant::Variant::SectorLb =>
+                    {
+                        verify_lb::verify_clone(ctx, found, p.0).await
+                    }
                     Ok(found) => Verdict::Taken(Box::new(found)),
                     Err(w) => Verdict::Rejected(w),
                 },

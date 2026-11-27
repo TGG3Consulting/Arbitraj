@@ -31,6 +31,7 @@ pub mod cycle_segment;
 pub mod cycle_steps;
 pub mod cycle_trade;
 pub(super) mod delta_direct;
+pub(super) mod sectorone;
 pub(super) mod vault_direct;
 pub(super) mod ekubo_v2_direct;
 pub(super) mod ekubo_v2_fact;

@@ -61,52 +61,34 @@ fn above(s: &TempleState, x: U256, n: U256, d: U256, rem: U256) -> bool {
     U512::from(t) * U512::from(den) > U512::from(ar) * U512::from(d)
 }
 
-pub(super) fn first(s: &TempleState, low: U256, n: U256, d: U256, defense: bool) -> Option<U256> {
-    if n.is_zero() || d.is_zero() || s.reserves.contains(&U256::ZERO) {
-        return None;
+/// The continuous price difference is increasing from the first rational crossing.
+pub(super) fn possible(
+    s: &TempleState,
+    lo: U256,
+    hi: U256,
+    n: U256,
+    d: U256,
+    defense: bool,
+) -> bool {
+    let Some(cross) = crossover(s, n, d) else {
+        return !defense;
+    };
+    if hi < cross {
+        return !defense;
     }
-    let fee = U256::from(995);
-    let mut high = (U256::MAX / n)
-        .min(U256::MAX / s.reserves[1] / fee)
-        .min((U256::MAX - s.reserves[0].checked_mul(U256::from(1000))?) / fee);
+    if !defense && lo < cross {
+        return true;
+    }
+    let lo = lo.max(cross);
+    let len = hi - lo + U256::ONE;
+    let a = n % d;
+    let b = modular(a, U256::ZERO, lo, d);
     if defense {
-        if let Some(v) = s
-            .defense_balance
-            .checked_add(U256::ONE)
-            .and_then(|v| mul_div_up(v, d, n))
-        {
-            high = high.min(v.saturating_sub(U256::ONE));
-        }
+        above(s, hi, n, d, min_residue(a, b, d, len))
     } else {
-        high = high.min(((U256::ONE << 112usize) - U256::ONE).saturating_sub(s.balances[0]));
+        let maximum = d - U256::ONE - min_residue((d - a) % d, d - U256::ONE - b, d, len);
+        !above(s, lo, n, d, maximum)
     }
-    let mut intervals = vec![(low, high)];
-    while let Some((lo, hi)) = intervals.pop() {
-        if lo > hi {
-            continue;
-        }
-        let a = n % d;
-        let b = modular(a, U256::ZERO, lo, d);
-        if above(s, lo, n, d, b) == defense {
-            return Some(lo);
-        }
-        if lo == hi {
-            continue;
-        }
-        let len = hi - lo + U256::ONE;
-        let possible = if defense {
-            above(s, hi, n, d, min_residue(a, b, d, len))
-        } else {
-            let maximum = d - U256::ONE - min_residue((d - a) % d, d - U256::ONE - b, d, len);
-            !above(s, lo, n, d, maximum)
-        };
-        if possible {
-            let mid = lo + (hi - lo) / U256::from(2);
-            intervals.push((mid + U256::ONE, hi));
-            intervals.push((lo, mid));
-        }
-    }
-    None
 }
 
 #[cfg(test)]

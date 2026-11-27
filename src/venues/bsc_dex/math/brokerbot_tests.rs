@@ -113,3 +113,82 @@ fn odd_increment_changes_the_first_sufficient_sale() {
     };
     assert_eq!(updated.gross(true, u(2)), Some(u(9)));
 }
+
+// Сальдо только по ERC20 конкретного адреса. Плата за газ находится в ETH.
+fn wallet_transfers(events: &Value, token: &str, owner: &str) -> (u128, u128) {
+    let topic = format!("0x{:0>64}", &owner[2..]);
+    let mut debited = 0;
+    let mut credited = 0;
+    for log in events.as_array().unwrap() {
+        let topics = log["topics"].as_array().unwrap();
+        if log["address"] != token
+            || topics.len() != 3
+            || topics[0] != "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+        {
+            continue;
+        }
+        let amount = u128::from_str_radix(&log["data"].as_str().unwrap()[2..], 16).unwrap();
+        if topics[1].as_str() == Some(topic.as_str()) {
+            debited += amount;
+        }
+        if topics[2].as_str() == Some(topic.as_str()) {
+            credited += amount;
+        }
+    }
+    (debited, credited)
+}
+
+#[test]
+fn usdt_round_trips_account_for_both_v3_pools_and_the_investors_franc_change() {
+    let routes = inflate(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/aktionariat_ethereum_usdt.json.gz"
+    ));
+    let native = inflate(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/aktionariat_ethereum_native.json.gz"
+    ));
+    assert_eq!(routes["selector"], native["selector"]);
+    let owner = routes["owner"].as_str().unwrap();
+    let usdt = "0xdac17f958d2ee523a2206206994597c13d831ec7";
+    let mut tested = std::collections::BTreeSet::new();
+    for r in routes["controls"].as_array().unwrap() {
+        let read = |property: &str| r[property].as_str().unwrap().parse::<u128>().unwrap();
+        let units = u128::from(r["units"].as_u64().unwrap());
+        let cash = r["cash"].as_str().unwrap();
+        let share = r["share"].as_str().unwrap();
+        let broker = r["broker"].as_str().unwrap();
+        let [buy, sell] =
+            <&[Value; 2]>::try_from(r["logs"].as_array().unwrap().as_slice()).unwrap();
+        assert_eq!(wallet_transfers(buy, usdt, owner), (read("budget"), 0));
+        assert_eq!(wallet_transfers(sell, usdt, owner), (0, read("returned")));
+        assert_eq!(wallet_transfers(buy, share, owner), (0, units));
+        assert_eq!(wallet_transfers(sell, share, owner), (units, 0));
+        assert_eq!(wallet_transfers(buy, cash, owner), (0, read("cash_dust")));
+        assert_eq!(wallet_transfers(sell, cash, owner), (0, 0));
+        let baseline = native["controls"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["market"] == broker && n["units"] == r["units"] && n["mode"] == "hub")
+            .unwrap();
+        let sell_net = baseline["sells"]["direct"]["net_cash"]
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            wallet_transfers(sell, cash, routes["module"].as_str().unwrap()),
+            (sell_net, sell_net)
+        );
+        for pool in r["pools"].as_array().unwrap() {
+            for logs in [buy, sell] {
+                let swaps = logs.as_array().unwrap().iter().filter(|e| e["address"]==*pool
+                    && e["topics"][0]=="0xc42079f94a6350d7e6235f29174924f928cc2ac818eb64fed8004e115fbcca67").count();
+                assert_eq!(swaps, 1);
+            }
+        }
+        assert_eq!(r["refusals"][0]["code"], 3);
+        assert_eq!(r["refusals"][1]["code"], 3);
+        assert!(tested.insert((cash, units)));
+    }
+    assert_eq!(tested.len(), 4);
+}

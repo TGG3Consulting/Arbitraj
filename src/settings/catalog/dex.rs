@@ -273,6 +273,8 @@ pub static DEX: &[SettingDef] = &[
     d("FermiSwap", "fermi.books_interval_ms", K::Integer, L::Positive, "мс", V, "Интервал фонового запроса кадра выбранного строителя и расчёта уровней при включённом источнике. Срок действия ограничен слотом самого сообщения.").optional().dex_venue(),
     d("Hashflow", "hashflow.gas_budget_native", K::Decimal, L::Positive, "нативная монета", GV, "Предельная стоимость газа RFQ. В локальном индикативном расчёте учитывается весь резерв; перед отправкой возврат с отказом, если верхняя оценка транзакции его превышает.").optional().dex_venue(),
     d("Epsilon", "epsilon.trading", K::Bool,L::None,"да/нет",V,"Сравнивать доступные маршруты Epsilon через собственный кошелёк.").optional().dex_venue(),
+    d("Epsilon", "epsilon.openocean_url", K::Url,L::None,"HTTPS",V,"Адрес публичного OpenOcean V4 выбранной сети для GET quote и swap.").optional().dex_venue(),
+    d("Epsilon", "epsilon.openocean_contracts", K::TextList,L::None,"сети, адреса и хеши",V,"Привязки отдельного модуля, Epsilon, OpenOcean, его реализации и исполнителя.").optional().dex_venue(),
     d("Epsilon", "epsilon.contracts", K::TextList,L::None,"сети, адреса и хеши",V,"Роутер Epsilon, два роутера поставщиков по семействам DEX и необязательный защитный модуль.").optional().dex_venue(),
     d("Epsilon", "epsilon.max_age_ms", K::Integer,L::Positive,"мс",V,"Время хранения состояния площадки и разрешений своего кошелька.").optional().dex_venue(),
     d("Epsilon", "epsilon.quote_timeout_ms", K::Integer,L::Positive,"мс",V,"Бюджет проверки альтернатив на одном каноническом блоке.").optional().dex_venue(),

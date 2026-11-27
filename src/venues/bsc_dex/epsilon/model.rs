@@ -111,6 +111,7 @@ pub(super) fn choices(
         };
         let legs = [first, second];
         let plan = Plan {
+            ocean: None,
             router: state.config.router.address,
             providers: state
                 .config

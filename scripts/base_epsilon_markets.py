@@ -26,5 +26,23 @@ def epsilon_markets():
     for uri, family in zip(data["providers"], ["alien-base-v3", "uniswap-v3-base"]):
         lines.append(f"- `8453 provider {family} {uri['router']} 0x{uri['code']}`")
     lines += [f"- Необязательная запись `8453 wallet <адрес размещённого владельцем модуля> {data['walletHash']}`. Архивная проверка использует адрес изолированной симуляции.",
-              "", "При первом запуске epsilon.trading выключен. Владелец задаёт epsilon.max_age_ms, epsilon.quote_timeout_ms и предел epsilon.gas_budget_native. Оплата нативным ETH, маршруты агрегаторов с внешней заявкой и привилегированные операции в данный торговый путь не включены. [Исходник площадки](https://repo.sourcify.dev/8453/0x303ca5c65aabcb1ce242df93f478c41e0e4d2580) · [Симуляции кошелька](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45980111657/job/140441571118)", ""]
+              "", "При первом запуске epsilon.trading выключен. Владелец задаёт epsilon.max_age_ms, epsilon.quote_timeout_ms и предел epsilon.gas_budget_native. Оплата нативным ETH и привилегированные операции в данный торговый путь не включены. [Исходник площадки](https://repo.sourcify.dev/8453/0x303ca5c65aabcb1ce242df93f478c41e0e4d2580) · [Симуляции кошелька](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45980111657/job/140441571118)", ""]
+    api = json.loads(gzip.decompress((root / "epsilon_openocean_base_wallets.json.gz").read_bytes()))
+    roles = json.loads((root / "epsilon_openocean_roles.json").read_bytes())
+    lines.extend(["#### Публичные заявки OpenOcean V4", "",
+                  f"На Base в блоке {api['block']} обычный HTTPS GET quote и swap предоставил исполнимые заявки зарегистрированному в параметрах получателю. Собственный кошелёк оплатил три суммы напрямую через OpenOcean и те же три через Epsilon. Ключ API для этих запросов не потребовался. Для 4 USDC в обеих формах API вернул другую форму исполнения. Бот пропускает её до оплаты.", "",
+                  "| Вход и сумма, сырые единицы | Чистая выдача напрямую | Газ напрямую | Чистая выдача через Epsilon | Газ через Epsilon |",
+                  "|---|---:|---:|---:|---:|"])
+    for direct, nested in zip(api["cases"][::2], api["cases"][1::2]):
+        if "exact" not in direct or "exact" not in nested:
+            continue
+        a,b=direct["exact"],nested["exact"]
+        lines.append(f"| {direct['src']} · {direct['n']} | {a['received']} | {a['gas']} | {b['received']} | {b['gas']} |")
+    lines.extend(["","Сравнение использует конечную сумму своего кошелька и реальный газ подписываемой формы с расходами публикации. Допуск approve требуется заранее. Заявка с просроченным сроком или с минимумом выше выплаты на единицу откатывается. Перед оплатой модуль связывает ERC20 обеих сторон, собственного плательщика, исходную сумму, получателя и официальный вызов swap без частичного расходования. При восстановлении сверяются оба события, изначальный хеш, nonce и реализация прокси на позиции сделки.", "",
+                  "Для epsilon.openocean_url укажите https://open-api.openocean.finance/v4/base. Записи для epsilon.openocean_contracts:", ""])
+    for k,v in roles.items():
+        label={"router":"venue","ocean":"provider"}.get(k,k)
+        lines.append(f"- `8453 {label} {v[0]} {v[1]}`")
+    lines.extend([f"- `8453 wallet <адрес модуля своего владельца> {api['walletHash']}`. Адрес подстановки в архиве исключён из первоначальных настроек.", "",
+                 "При сбое API или отклонении формы сохраняется штатная котировка исходного DEX. Отдельная API-форма 0x требует учётных данных. [Описание OpenOcean](https://docs.openocean.finance/docs/swap-api/v4) · [Архив фактических оплат](https://github.com/TGG3Consulting/Arbitraj/actions/runs/45985702087)", ""])
     return lines

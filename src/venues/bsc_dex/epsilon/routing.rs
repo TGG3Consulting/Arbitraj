@@ -17,13 +17,13 @@ pub(in crate::venues::bsc_dex) struct Ticket {
     pub(super) side: Side,
     pub(super) decs: (u8, u8),
     pub(super) families: [Option<&'static str>; 2],
-    pub(super) config: Config,
+    pub(super) config: Option<Config>,
     pub(in crate::venues::bsc_dex) fallback_fee: Option<Decimal>,
 }
 pub(in crate::venues::bsc_dex) fn mixed_ticket(route: &DexRoute) -> Option<B256> {
     match route.mode {
         RouteMode::Orderbook(id)
-            if route.executable && route.exec_note.as_deref() == Some(LABEL) =>
+            if route.executable && matches!(route.exec_note.as_deref(), Some(LABEL | DIRECT)) =>
         {
             Some(id)
         }
@@ -33,10 +33,9 @@ pub(in crate::venues::bsc_dex) fn mixed_ticket(route: &DexRoute) -> Option<B256>
 pub(in crate::venues::bsc_dex) fn available(p: &Parts, a: &Asset) -> bool {
     enabled(&p.ctx)
         && a.contract.is_some_and(|c| {
-            p.tokens
-                .usdt(&p.ctx)
-                .ok()
-                .is_some_and(|q| !p.registry.pair_arcs(c, q).is_empty())
+            p.tokens.usdt(&p.ctx).ok().is_some_and(|q| {
+                !p.registry.pair_arcs(c, q).is_empty() || super::ocean_route::configured(&p.ctx)
+            })
         })
 }
 struct Search<'a> {
@@ -142,7 +141,7 @@ impl Search<'_> {
                 side: self.side,
                 decs: self.decs,
                 families: choice.families,
-                config: state.config.clone(),
+                config: Some(state.config.clone()),
                 fallback_fee: None,
             });
         }
@@ -186,6 +185,16 @@ impl Search<'_> {
     }
 }
 pub(in crate::venues::bsc_dex) async fn consider(
+    p: &Parts,
+    a: &Asset,
+    s: Side,
+    qty: Decimal,
+    old: GatewayResult<Quote>,
+) -> GatewayResult<Quote> {
+    let baseline = pools(p, a, s, qty, old).await;
+    super::ocean_route::consider(p, a, s, qty, baseline).await
+}
+async fn pools(
     p: &Parts,
     a: &Asset,
     s: Side,

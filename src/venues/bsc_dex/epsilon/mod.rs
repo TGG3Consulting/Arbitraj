@@ -8,6 +8,12 @@ use std::{
     time::{Duration, Instant},
 };
 mod model;
+mod ocean_api;
+mod ocean_role;
+mod ocean_route;
+#[cfg(test)]
+mod ocean_tests;
+mod ocean_wire;
 mod profile;
 pub(super) mod routing;
 #[cfg(test)]
@@ -16,6 +22,7 @@ pub(super) mod trade;
 pub(super) mod wire;
 use profile::{Config, State};
 pub(super) const LABEL: &str = "Epsilon";
+pub(super) const DIRECT: &str = ocean_route::DIRECT;
 pub(super) fn enabled(ctx: &Ctx) -> bool {
     ctx.flag("epsilon.trading").unwrap_or(false)
 }

@@ -27,6 +27,7 @@ fn raw_and_guarded_pay_the_original_owner_on_each_split() {
         let cash = total - total * U256::from(fee) / U256::from(10_000);
         let share = row["firstPercent"].as_u64().unwrap();
         let plan = Plan {
+            ocean: None,
             router: addr(&data["router"]),
             wallet: protected.then(|| addr(&data["wallet"])),
             providers: providers.map(|v| addr(&v["router"])),

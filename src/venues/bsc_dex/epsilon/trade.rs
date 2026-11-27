@@ -65,7 +65,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
         .ok_or_else(bad)?;
         order.minimum = order.minimum.max(min);
     }
-    let (saved, data) = order.signed(t.config.chain, who).ok_or_else(bad)?;
+    let (saved, data) = order.signed(t.proof.call.chain, who).ok_or_else(bad)?;
     let env = p.env();
     let hold = env
         .inflows
@@ -82,8 +82,13 @@ pub(in crate::venues::bsc_dex) async fn trade(
         return Err(bad());
     }
     let h = white_state::head(ctx, "latest").await?;
-    let state = t.config.live(ctx, h).await.ok_or_else(bad)?;
-    if !state.accepts(ctx, h, &order, t.families).await {
+    let valid = if let Some(cfg) = &t.config {
+        let state = cfg.live(ctx, h).await.ok_or_else(bad)?;
+        state.accepts(ctx, h, &order, t.families).await
+    } else {
+        super::ocean_role::verified(ctx, h, &order).await
+    };
+    if !valid {
         return Err(bad());
     }
     saved.measure(ctx, h, &data).await?;
@@ -92,7 +97,12 @@ pub(in crate::venues::bsc_dex) async fn trade(
     }
     let mut parse = exec::swap_ctx::SwapCtx::swap(who, pair, t.decs, &[], None, None);
     parse.epsilon = Some(Box::new(saved.clone()));
-    parse.who = Some(LABEL.into());
+    let label = if order.ocean.as_ref().is_some_and(|p| !p.nested) {
+        DIRECT
+    } else {
+        LABEL
+    };
+    parse.who = Some(label.into());
     let raw = exec::txs::send(
         &env,
         &slot,
@@ -121,6 +131,6 @@ pub(in crate::venues::bsc_dex) async fn trade(
     exec::result::by(
         exec::result::with_native_fact(ctx, req, done, who, pair, t.decs, &[], Some(&parse))
             .map_err(|e| parse.attach(e)),
-        LABEL,
+        label,
     )
 }

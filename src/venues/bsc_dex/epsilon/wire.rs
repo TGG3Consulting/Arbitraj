@@ -48,6 +48,8 @@ pub(crate) struct Plan {
     pub minimum: U256,
     pub deadline: u64,
     pub wallet: Option<Address>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ocean: Option<super::ocean_wire::Ocean>,
 }
 impl Plan {
     pub(super) fn fee(&self) -> Option<U256> {
@@ -77,6 +79,9 @@ impl Plan {
         ])
     }
     pub(super) fn data(&self) -> Option<Bytes> {
+        if let Some(offer) = &self.ocean {
+            return offer.data(self);
+        }
         let amounts = self.legs()?;
         if self.minimum.is_zero() || self.input == self.output || self.amount.is_zero() {
             return None;
@@ -159,12 +164,20 @@ pub(crate) struct Saved {
     pub call: Erc20Call,
     pub plan: Plan,
 }
-fn one(logs: &[Log], addr: Address, topic: B256) -> Option<&Log> {
+pub(super) fn one(logs: &[Log], addr: Address, topic: B256) -> Option<&Log> {
     let mut m = logs
         .iter()
         .filter(|x| x.address() == addr && x.topics().first() == Some(&topic));
     let first = m.next()?;
     m.next().is_none().then_some(first)
+}
+pub(super) fn venue_event(plan: &Plan, payer: Address, logs: &[Log]) -> bool {
+    one(logs, plan.router, abi::Swapped::SIGNATURE_HASH)
+        .and_then(|v| abi::Swapped::decode_log_data(&v.inner.data).ok())
+        .is_some_and(|s| {
+            (s.user, s.tokenIn, s.tokenOut, s.amountIn)
+                == (payer, plan.input, plan.output, plan.amount)
+        })
 }
 impl Saved {
     pub(in crate::venues::bsc_dex) fn wallet(&self, ctx: &Ctx) -> bool {
@@ -174,6 +187,9 @@ impl Saved {
     pub(in crate::venues::bsc_dex) fn amounts(&self, logs: &[Log]) -> Option<(U256, U256)> {
         let p = &self.plan;
         let who = self.call.payer;
+        if let Some(api) = &p.ocean {
+            return api.amounts(p, who, logs);
+        }
         let signer = p.wallet.unwrap_or(who);
         let s = abi::Swapped::decode_log_data(
             &one(logs, p.router, abi::Swapped::SIGNATURE_HASH)?
@@ -276,6 +292,13 @@ impl Saved {
         r: &Receipt,
     ) -> GatewayResult<()> {
         self.call.included(ctx, hash, nonce, r).await?;
+        if r.status.to::<u64>() == 1
+            && let Some(api) = &self.plan.ocean
+        {
+            api.implementation
+                .at_transaction(ctx, api.proxy, hash, r, None)
+                .await?;
+        }
         if r.status.to::<u64>() == 1 && self.amounts(&r.logs).is_none() {
             return Err(ctx.err(
                 ErrorCode::OutcomeUnknown,

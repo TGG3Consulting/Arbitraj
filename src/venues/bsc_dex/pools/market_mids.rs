@@ -34,14 +34,12 @@ pub fn find(ctx: &Ctx, coins: &HashMap<Address, String>, mids: &[Mid]) -> (Vec<F
     (found, watches)
 }
 
-/// Ethereum: для графа с тремя шагами нужны также пары промежуточных валют с
-/// разрешённой обёрткой ETH. Храним единственную ориентацию (CHF как coin, WETH как quote).
+/// Для графа с тремя шагами нужны также пары промежуточных валют с
+/// разрешённой нативной обёрткой. Храним единственную ориентацию (CHF как coin, WETH как quote).
 pub(super) fn wrapped_bridges(ctx:&Ctx,mids:&[Mid])->(HashMap<Address,String>,Vec<Mid>){
-    if ctx.chain_id()!=Some(1) || ctx.text("dex.router_mode").ok().as_deref()!=Some("graph")
-        || ctx.int("dex.route_max_hops").unwrap_or(0)<3 { return Default::default(); }
-    let Ok(wrapped)=ctx.addr("dex.native_wrapped") else{return Default::default();};
+    let Some((wrapped,allowed)) = super::super::quote::rate::bridge_settings(ctx) else{return Default::default();};
     let Some(w)=mids.iter().find(|m|m.address==wrapped) else{return Default::default();};
-    (mids.iter().filter(|m|m.address!=wrapped).map(|m|(m.address,m.ticker.clone())).collect(),vec![w.clone()])
+    (mids.iter().filter(|m|m.address!=wrapped && allowed.contains(&m.address)).map(|m|(m.address,m.ticker.clone())).collect(),vec![w.clone()])
 }
 
 /// Монеты подписки вместе с промежуточными (для пулов «промежуточная — USDT» и проверок налогов). Ошибок нет.

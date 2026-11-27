@@ -235,6 +235,10 @@ impl Variant {
     pub fn pool_address_step(self)->bool{self.registered_module() || matches!(self,Self::Stabull | Self::MaverickOne)}
     /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
     pub(crate) fn checked_slipstream_fee(self) -> bool { matches!(self, Self::TopazCl | Self::RegisteredSlipstream) }
+    /// Плоский ABI QuoterV1 и защита выплаты кошелька у модуля Shiba.
+    pub(crate) fn shiba_v2(self)->bool{matches!(self,Self::ShibaswapV2)}
+    /// Классический router со spacing и индивидуальной комиссией проверенной пары.
+    pub(crate) fn registered_slipstream(self)->bool{matches!(self,Self::RegisteredSlipstream)}
     pub fn origin_fee(self)->bool{self==Self::TopazCl}
     /// These native routers and their callback modules have separate configured addresses.
     pub(crate) fn separate_v3_router(self) -> bool { matches!(self, Self::VvsV3 | Self::ShibaswapV2) }

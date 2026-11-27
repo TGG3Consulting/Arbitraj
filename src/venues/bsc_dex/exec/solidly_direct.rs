@@ -39,7 +39,7 @@ pub(super) async fn plan(
             super::super::pools::empire::fresh(ctx, &step.entry, &at),
             direct_module::verify_factory(ctx, step.entry.family, router, &at)
         )?;
-    } else if step.entry.family.variant != super::super::pools::family_variant::Variant::ShibaswapV2
+    } else if !step.entry.family.variant.shiba_v2()
     {
         direct_module::verify(ctx, step.entry.family, router, "latest").await?;
     }
@@ -61,6 +61,7 @@ pub(super) async fn plan(
     if step.entry.family.variant.empire_module() {
         plan.set_direct_market(super::plan::DirectCall::Empire(std::sync::Arc::new(
             super::empire_wallet::Proof {
+            chain: crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,
                 module: router,
                 pool,
                 payer: wallet,
@@ -73,8 +74,9 @@ pub(super) async fn plan(
         )));
         return Ok(plan);
     }
-    if step.entry.family.variant == super::super::pools::family_variant::Variant::ShibaswapV2 {
+    if step.entry.family.variant.shiba_v2() {
         let mut proof = super::shiba_payment::Proof {
+            chain: crate::venues::bsc_dex::node::chain_id::chain_id(ctx)?,
             module: router,
             pool,
             payer: wallet,

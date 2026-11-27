@@ -42,7 +42,7 @@ pub async fn on_head(p: &Pools, pools: &[&(Found, String)], block: u64) -> Resul
     }
     let tag = call::block_tag(block);
     for (fam, items) in by {
-        if fam.variant.spacing_keyed() || fam.variant == super::family_variant::Variant::RegisteredSlipstream {
+        if fam.variant.spacing_keyed() || fam.variant.registered_slipstream() {
             pool_fees(p,&items,&tag,block).await?;
             continue;
         }

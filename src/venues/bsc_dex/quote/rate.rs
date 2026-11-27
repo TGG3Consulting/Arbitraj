@@ -69,13 +69,13 @@ fn best(
     }
 }
 
-/// Только активные Ethereum-профили с явным разрешением обеих промежуточных валют.
+/// Две разрешённые промежуточные валюты и отдельное разрешение искать их общую пару.
 pub(crate) fn wrapped_bridge(ctx:&Ctx,usdt:Address,quote:Address)->Option<Address>{
     let (w,allowed)=bridge_settings(ctx)?;
     (w!=quote && w!=usdt && quote!=usdt && allowed.contains(&quote)).then_some(w)
 }
 pub(crate) fn bridge_settings(ctx:&Ctx)->Option<(Address,Vec<Address>)>{
-    if ctx.chain_id()!=Some(1) || !ctx.flag("dex.intermediate_enabled").unwrap_or(false) ||
+    if !ctx.flag("dex.intermediate_wrapped_bridge").unwrap_or(false) || !ctx.flag("dex.intermediate_enabled").unwrap_or(false) ||
         ctx.text("dex.router_mode").ok().as_deref()!=Some("graph") || ctx.int("dex.route_max_hops").ok()?<3 {return None;}
     let w=ctx.addr("dex.native_wrapped").ok()?;
     let allowed=ctx.settings.addresses("dex.intermediate_tokens",ctx.at()).ok()?;

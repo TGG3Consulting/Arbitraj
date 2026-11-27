@@ -54,6 +54,7 @@ async fn three_hop_graph_matches_both_whole_share_payments_and_original_executor
         ("dex.router_mode", json!("graph")),
         ("dex.route_max_hops", json!(3)),
         ("dex.intermediate_enabled", json!(true)),
+        ("dex.intermediate_wrapped_bridge", json!(true)),
         ("dex.intermediate_tokens", json!(allowed)),
         ("dex.native_wrapped", json!(w)),
         ("dex.depth_band_pct", json!(1)),

@@ -1866,7 +1866,7 @@ def tables(network, snapshots, profiles):
                     "При продаже одной акции старый Market выплатил 143,194545 из показанных 144,495 XCHF. Удержано 0,9%. "
                     "Дробная часть акции не покупается. Для нового кошелька разверните AktionariatWallet из карточки DEX, "
                     "адрес сохраняется в dex.router. Валюты рынков XCHF и ZCHF, для расчёта в USDT требуется исполнимый обмен валюты. "
-                    "Для обычного графа включите dex.intermediate_enabled, dex.router_mode=graph и dex.route_max_hops ≥ 3. "
+                    "Для обычного графа включите dex.intermediate_enabled и dex.intermediate_wrapped_bridge, задайте dex.router_mode=graph и dex.route_max_hops ≥ 3. "
                     "В dex.intermediate_tokens разрешите WETH, XCHF (0xb4272071ecadd69d933adcd19ca99fe80664fc08) и ZCHF (0xb58e61c3098d85632df34eecfb899a1ed80921cb). "
                     "Для промежуточных токенов без биржевого тикера включите dex.intermediate_dex_priced. Укажите собственный V5 и свой предел check.probe_usdt. "
                     "Курс CHF для пробы и глубины берётся из фактических пулов через WETH. На 1/10 акциях XCHF-рынка внесено 76,455466/892,908956 USDT, "

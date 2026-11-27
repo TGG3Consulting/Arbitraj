@@ -234,7 +234,7 @@ pub fn fee_pct(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<Decimal
     let pips = |p: u32| Decimal::from(p) / Decimal::from(10_000u32);
     let zero_for_one = token_in == e.pool.token0;
     match (&e.pool.state, e.pool.kind) {
-        (PoolState::Temple(_)|PoolState::Carbon(_) | PoolState::MintClub(_) | PoolState::Virtuals(_) | PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
+        (PoolState::Antfarm(_)|PoolState::Temple(_)|PoolState::Carbon(_) | PoolState::MintClub(_) | PoolState::Virtuals(_) | PoolState::EtherVista(_), PoolKind::V2) => Ok(Decimal::ZERO),
         (_, PoolKind::V2) => super::pool_quote::v2_fee_pct(ctx, e),
         (_, PoolKind::V3) => e
             .pool

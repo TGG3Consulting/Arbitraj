@@ -164,6 +164,13 @@ fn side(
 ) -> Result<(U256, bool), String> {
     let pick = |amount_in: U256, amount_out: U256| if buy { amount_in } else { amount_out };
     match (&e.pool.state, e.pool.kind) {
+        (PoolState::Antfarm(book),PoolKind::V2) => {
+            let i=usize::from(book.market.tokens[1]==token_in);
+            let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};
+            let budget=super::super::math::full_math::mul_div(book.market.reserves[i],U256::from((grow*SCALE) as u128),U256::from(SCALE as u128)).ok_or("Antfarm: граница превышает размер резерва")?;
+            let amount=book.route(token_in,true,budget).and_then(|p|p.swapped()).map_or(U256::ZERO,|p|pick(p.amount_in,p.amount_out));
+            Ok((amount,false))
+        }
         (PoolState::Temple(s),PoolKind::V2) => {
             let out=if zfo{e.pool.token1}else{e.pool.token0};
             let grow=if buy{(1.0+b).sqrt()-1.0}else{1.0/(1.0-b).sqrt()-1.0};

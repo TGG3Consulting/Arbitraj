@@ -40,6 +40,9 @@ contract MooniswapWallet {
         if(address(registry).code.length==0||address(wrapper).code.length==0||address(registry)==address(wrapper)) revert Market();
         factory=registry;wrapped=wrapper;hasSwapFor=supportsReceiver;
     }
+    // Старый пул выплачивает ETH вызывающему контракту, WETH.withdraw — держателю WETH.
+    // receive укладывается в stipend отправителя. Ранее поступивший ETH сохраняется в b.eth:
+    // выплачивается только прирост от swap, а итоговый ETH-баланс модуля обязан равняться исходному.
     receive() external payable {}
 
     function execute(Order calldata order) external payable returns(uint256) {

@@ -554,6 +554,8 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_base_launch_wallets.py "${MARKET#launch-}" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'ammalgam-ethereum-quotes'
+        run: python scripts/record_ammalgam_quotes.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'ammalgam-ethereum-wallet'
         run: |
           npm ci --prefix contracts --no-audit --no-fund

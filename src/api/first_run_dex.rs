@@ -276,6 +276,15 @@ mod tests {
                 .into_iter()
                 .find(|s| s["chain_id"] == p.chain_id)
                 .unwrap();
+            if p.id == "yield-basis-ethereum" {
+                let market: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+                    include_bytes!("../../tests/data/first_run_dex_2026-11-26/yield_basis_ethereum.json.gz").as_slice())).unwrap();
+                let address=market["factory"].as_str().unwrap();
+                assert_eq!(market["selector"],snapshot["selector"]);
+                assert_eq!(market["factory_code"],snapshot["contracts"][address]);
+                assert_eq!(p.settings.get("dex.factory"),Some(&Parameter::Text(address.into())));
+                assert_eq!(p.settings.get("dex.factory_runtime_hash"),Some(&Parameter::Text(market["factory_code"]["keccak256"].as_str().unwrap().into())));
+            }
             if p.id == "balancer-v1-ethereum" {
                 let original: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
                     include_bytes!("../../tests/data/first_run_dex_2026-11-26/balancer_v1_ethereum.json.gz").as_slice())).unwrap();

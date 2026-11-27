@@ -7,11 +7,12 @@ from pathlib import Path
 import requests
 from eth_abi import decode
 from record_balancer_markets import Capture
-from record_base_slipstream_executor import OWNER, EXEC, STEP, calldata, rpc
+from record_base_slipstream_executor import OWNER, EXEC, ROOT, STEP, calldata, rpc
 from record_diamondswap_base import direct_wallet
 from record_ethervista_wallets import tx
-from record_maverick_two_directory import DATA
 from maverick_two_target import targets
+
+DATA=ROOT/"tests/data/first_run_dex_2026-11-26"
 
 
 def capture(network,endpoint,source):

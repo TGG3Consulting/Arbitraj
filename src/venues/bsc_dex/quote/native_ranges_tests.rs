@@ -78,6 +78,31 @@ fn v5_uses_native_payment_and_reconciles_both_directions_on_three_ranges_pools()
                     (U256::ZERO, received)
                 }
             );
+            let receipt:crate::venues::bsc_dex::send::track::Receipt=serde_json::from_value(serde_json::json!({
+                "status":"0x1","blockNumber":"0x1","gasUsed":"0x1","effectiveGasPrice":"0x0","logs":fill["logs"]
+            })).unwrap();
+            use crate::core::types::Side;
+            use crate::venues::bsc_dex::exec::executor::fact::native_amounts;
+            assert_eq!(
+                native_amounts(
+                    &receipt,
+                    order.payer,
+                    order.target,
+                    (input, output),
+                    Side::Buy
+                ),
+                Some((received, amount))
+            );
+            assert_eq!(
+                native_amounts(
+                    &receipt,
+                    order.payer,
+                    order.target,
+                    (input, output),
+                    Side::Sell
+                ),
+                Some((amount, received))
+            );
             counts[i] += 1;
         }
     }

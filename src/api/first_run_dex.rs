@@ -156,6 +156,16 @@ mod tests {
             ))
             .unwrap(),
         );
+        for (network, bytes) in [
+            ("base", include_bytes!("../../tests/data/first_run_dex_2026-11-26/docswap_base_simulated.json.gz").as_slice()),
+            ("ethereum", include_bytes!("../../tests/data/first_run_dex_2026-11-26/docswap_ethereum_simulated.json.gz").as_slice()),
+        ] {
+            let data: Value = serde_json::from_reader(flate2::read::GzDecoder::new(bytes)).unwrap();
+            assert_eq!(data["original_count"], 0);
+            assert_eq!(data["cases"].as_array().unwrap().len(), 8);
+            pairs.push(serde_json::json!({"network":network,"dex":format!("dex-on-crypto-{network}"),
+                "creation_code_hash":data["init_hash"]}));
+        }
         let omni: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/omni-v2-base.json.gz").as_slice(),
         )).unwrap();

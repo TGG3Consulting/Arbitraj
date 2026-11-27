@@ -54,7 +54,7 @@ pub(in crate::venues::bsc_dex) fn rabbit_wire(
         },
     ))
 }
-pub(in crate::venues::bsc_dex) use super::vista_cash::{cash, cash_market, terminal_cash};
+pub(in crate::venues::bsc_dex) use super::vista_cash::{cash, cash_market, graph_target as native_cash_target, marked as cash_marker, terminal_cash};
 pub(in crate::venues::bsc_dex) fn form(native: bool, input: Address, wrapped: Address) -> Form {
     if !native {
         Form::ModuleToken

@@ -21,6 +21,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
+mod client;
 mod wire;
 const PROFILE: &str = "native_rfq.roles";
 
@@ -156,21 +157,19 @@ async fn check(
     amount: U256,
 ) -> GatewayResult<Checked> {
     let generation = ctx.settings.generation();
-    let req = ctx
-        .http
-        .get("https://v2-pub.api.native.org/swap-api-v2/v1/firm-quote")
-        .query(&[
-            ("src_chain", profile.slug.clone()),
-            ("dst_chain", profile.slug.clone()),
-            ("token_in", input.to_string()),
-            ("token_out", output.to_string()),
-            ("from_address", payer.to_string()),
-            ("beneficiary_address", payer.to_string()),
-            ("amount_wei", amount.to_string()),
-            ("version", "6".into()),
-            ("allow_multihop", "false".into()),
-        ]);
-    let (status, body) = http::exchange(req, ctx.limits()?)
+    let mut url = client::url(ctx, "firm-quote")?;
+    url.query_pairs_mut().extend_pairs([
+        ("src_chain", profile.slug.clone()),
+        ("dst_chain", profile.slug.clone()),
+        ("token_in", input.to_string()),
+        ("token_out", output.to_string()),
+        ("from_address", payer.to_string()),
+        ("beneficiary_address", payer.to_string()),
+        ("amount_wei", amount.to_string()),
+        ("version", "6".into()),
+        ("allow_multihop", "false".into()),
+    ]);
+    let (status, body) = http::exchange(ctx.http.get(url), ctx.limits()?)
         .await
         .map_err(|_| bad(ctx, "Нет полного ответа Native RFQ"))?;
     if !status.is_success() {
@@ -193,6 +192,26 @@ async fn check(
             "Нет одиночной Native RFQ v6 с подходящими условиями",
         )
     })?;
+    let (received, gas, head) = simulate(ctx, profile, &firm, firm.proof.minimum).await?;
+    if ctx.settings.generation() != generation {
+        return Err(bad(ctx, "Изменился профиль Native RFQ"));
+    }
+    Ok(Checked {
+        firm,
+        received,
+        gas,
+        head,
+    })
+}
+async fn simulate(
+    ctx: &Ctx,
+    profile: &Profile,
+    firm: &wire::Firm,
+    minimum: U256,
+) -> GatewayResult<(U256, u64, white_state::Head)> {
+    let generation = ctx.settings.generation();
+    let proof = &firm.proof;
+    let (payer, input, output, amount) = (proof.payer, proof.input, proof.output, proof.sold);
     let head = white_state::head(ctx, "latest").await?;
     profile.verify(ctx, head).await?;
     let latest = || Utc::now().timestamp().max(0) as u64;
@@ -200,7 +219,7 @@ async fn check(
         return Err(bad(ctx, "Предложение Native RFQ истекло"));
     }
     let (target, calldata) = match profile.module {
-        Some(m) => (m.address, firm.call(firm.proof.minimum)),
+        Some(m) => (m.address, firm.call(minimum)),
         None => (profile.router.address, firm.raw.clone()),
     };
     let pay = balance(payer, input);
@@ -253,12 +272,10 @@ async fn check(
             "Условия, событие или остатки Native RFQ расходятся",
         ));
     }
-    Ok(Checked {
-        firm,
-        received,
-        gas: op.gas_used.to(),
-        head,
-    })
+    if received < minimum {
+        return Err(bad(ctx, "Не достигнут минимум владельца в Native RFQ"));
+    }
+    Ok((received, op.gas_used.to(), head))
 }
 pub(super) async fn preview(ctx: &Ctx, r: Request) -> GatewayResult<Preview> {
     let profile = Profile::read(ctx)?;

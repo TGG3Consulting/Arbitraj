@@ -134,14 +134,19 @@ pub(super) async fn once(
         return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::for_chain(ctx.chain_id(), height,time)});
     }
     let deployed = executor::address(ctx)?;
+    let cash_target=super::super::quote::vista_pricing::native_cash_target(route);
+    if cash_target.is_some() && (deployed!=cash_target || !native::cash(ctx,&ctx.text("venue.quote_asset")?,usdt)) {
+        return Err(ctx.err(ErrorCode::NoRoute,"Выбранный исполнитель или валюта ETH изменились"));
+    }
     let takes =
-        shape == RouteMode::Graph && executor::takes(ctx, &q.reg, route, is_native)?.is_some();
+        shape == RouteMode::Graph && executor::takes(ctx, &q.reg, route, is_native || cash_target.is_some())?.is_some();
     let via_exec = mode == DryMode::Executor || takes;
+    if cash_target.is_some() && !via_exec {return Err(ctx.err(ErrorCode::NoRoute,"Поручению оплаты ETH нужен выбранный исполнитель"));}
     if via_exec {
         // Решение 272: нативный BNB — executeNative: в режиме «через исполнитель» (код v2 подставлен) или у
         // развёрнутого исполнителя v2; иначе отказ. Задача t122 (п. 4): причина — native_block, как в сделке
         // (exec/executor/trade.rs, задача t114): не сверен / v1 — «переразверните исполнитель» / обёртка не та.
-        if is_native
+        if (is_native || cash_target.is_some())
             && mode != DryMode::Executor
             && let Some(why) = executor::native_block(ctx)
         {
@@ -150,6 +155,7 @@ pub(super) async fn once(
         }
         let nat = match native::wrapped(ctx) {
             Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),
+            Some((_, w)) if cash_target.is_some() => Some((w, req.side == Side::Buy)),
             _ => None,
         };
         let (at, now) = q.heads.at(ctx).await?;

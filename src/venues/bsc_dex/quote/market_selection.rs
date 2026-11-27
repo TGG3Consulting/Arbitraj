@@ -82,6 +82,8 @@ impl Quoting {
             Err(e) => Err(e),
         };
         for (quote, approval) in alternatives {
+            if native_cash && !vista_pricing::terminal_cash(&self.reg,quote.route.as_ref()) {continue;}
+
             let Ok(other) = self
                 .finish(quote, (coin_dec, usdt_dec), gas, fees, native, approval, tm)
                 .await

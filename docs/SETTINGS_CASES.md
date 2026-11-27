@@ -6462,6 +6462,10 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 |---|---|---|---|
 | `dex.kind` · DEX | У одной из трёх подтверждённых фабрик Aerodrome Slipstream на Base применяется `getPool(address,address,int24)`, `CLPool.fee()` получает комиссию фабрики, квотер принимает шаг тика | `slipstream_dynamic_fee`. Для каждого ID задайте собственные `dex.factory` и `dex.quoter` из [общего справочника](BASE_ETHEREUM_SETTINGS.md). Профиль читает комиссию на блоке расчёта и перед отправкой проверяет, что она не выросла | Семейство без `dex.kind` не классифицируется. Если фабрика или квотер не заданы, адаптер покажет недостающий параметр |
 
+### `native_rfq.base_url`
+
+Укажите для выбранной площадки HTTPS-адрес каталога публичного API Native. При первом запуске на Ethereum рекомендован `https://v2-pub.api.native.org/swap-api-v2/v1/`. Адаптер добавляет имя метода и кодирует параметры. При отсутствии значения запрос показывает имя недостающей настройки. [Официальное руководство Native](https://docs.native.org/native-dev/build-with-native/swap-aggregators/guide)
+
 ### `native_rfq.roles`
 
 Для ручной проверки одиночного предложения Native RFQ v6 в выбранной DEX укажите строку `network <chainId> <имя API>`, строки `router <адрес> <runtime hash>` и `pool <адрес> <runtime hash>`. Для расчёта через размещённый владельцем NativeRfqAdapter добавьте строку `module <адрес> <runtime hash>`. Все суммы в ручном запросе задаются в минимальных единицах двух ERC‑20. Симуляция использует действительные средства и разрешение собственного кошелька на выбранный контракт. При отсутствии профиля ручной запрос сообщает о недостающей настройке. [Адреса Native](https://docs.native.org/native-dev/resources/addresses)

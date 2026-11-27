@@ -5160,7 +5160,52 @@
       ],
       "dex.factory_runtime_hash": "0x6b9498e51756555a1b4c146105a65cbcb556c276ba097c3c2d76bc0fe345d390",
       "dex.router_runtime_hash": "0xdb8abdf146ea12ffa4c481014f76d5a0230598c63f533979ffbed862854de2e9",
-      "dex.quoter_runtime_hash": "0xb074300d5ac9173ef86d517945fcf1955f77dcde25011a20668be55788a75dbb"
+      "dex.quoter_runtime_hash": "0xb074300d5ac9173ef86d517945fcf1955f77dcde25011a20668be55788a75dbb",
+      "dex.module_runtime_hashes": [
+        "0x0cae5a39d8c8042031ef949f8878f59d08434fb2df7021e1e21610fe1b1e592e"
+      ]
+    }
+  },
+  {
+    "network": "base",
+    "chain_id": 8453,
+    "id": "dex-on-crypto-base",
+    "source": "https://github.com/DOCSWAP/Blockchains/blob/f20e0a7c88f9874d02497f0b8146995bf6eef8fa/README.md · tests/data/first_run_dex_2026-11-26/docswap_base_simulated.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2_live_fee",
+      "dex.factory": "0x9904c6d92ed455292f88b58665bc95b7019343c2",
+      "dex.router": "0xf8af117a61993f02f70884f0507f87b653d4bba4",
+      "dex.factory_runtime_hash": "0xa609d8a40966fa01e982722ad5ee6b23ffb39b97c52ea2fdca20eb358f066c74",
+      "dex.router_runtime_hash": "0x77157ac637109ec411ad42376cee7429c2b91a78714730ba62284efc19454209",
+      "dex.pair_runtime_hash": "0x0731ff45e5f4a32af9b9c216c91f810d21eb11de24141d4bc3ac40986bbb6946",
+      "dex.pool_code_hashes": [
+        "0x6458e0be71dd94eac7c99e31351b2d6db3323c0a0df90d8401600ac5ab4c4981"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "totalFee()",
+      "dex.v2_fee_denominator": 1000,
+      "dex.v2_fee_rule_hash": "0x3b33961980b57d6bf2696f559becda62f5b4af81321904f5e854f4621d67cc0e"
+    }
+  },
+  {
+    "network": "ethereum",
+    "chain_id": 1,
+    "id": "dex-on-crypto-ethereum",
+    "source": "https://github.com/DOCSWAP/Blockchains/blob/f20e0a7c88f9874d02497f0b8146995bf6eef8fa/README.md · tests/data/first_run_dex_2026-11-26/docswap_ethereum_simulated.json.gz",
+    "settings": {
+      "dex.kind": "v2_fork_dual_create2_live_fee",
+      "dex.factory": "0x0f667e1c023c54ef88f9a55b16be601a423318ff",
+      "dex.router": "0x9904c6d92ed455292f88b58665bc95b7019343c2",
+      "dex.factory_runtime_hash": "0xa609d8a40966fa01e982722ad5ee6b23ffb39b97c52ea2fdca20eb358f066c74",
+      "dex.router_runtime_hash": "0x75c2dea8d449bf45c51bf66854b45f938f2a08803cfb953eedb82a0b5cdbe074",
+      "dex.pair_runtime_hash": "0x0731ff45e5f4a32af9b9c216c91f810d21eb11de24141d4bc3ac40986bbb6946",
+      "dex.pool_code_hashes": [
+        "0x6458e0be71dd94eac7c99e31351b2d6db3323c0a0df90d8401600ac5ab4c4981"
+      ],
+      "dex.v2_fee_source": "factory",
+      "dex.v2_fee_method": "totalFee()",
+      "dex.v2_fee_denominator": 1000,
+      "dex.v2_fee_rule_hash": "0x3f59b139e6a783740236288c1344b585711c78b5723a3369033a58555a73e03c"
     }
   }
 ]

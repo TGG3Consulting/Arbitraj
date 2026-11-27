@@ -115,24 +115,10 @@ fn native_result(
     let Some(r) = receipt else {
         return Err(unknown("квитанции нет"));
     };
-    let Some((n_in, n_out)) = settled(&r, executor) else {
-        return Err(unknown("события NativeSettled исполнителя в квитанции нет"));
-    };
-    let (units, usdt_u) = match t.request.side {
-        Side::Sell => (
-            n_in.saturating_sub(n_out),
-            fill::moved(&r, tout, None, Some(wallet)),
-        ),
-        Side::Buy => (
-            n_out,
-            fill::moved(&r, tin, Some(wallet), None).saturating_sub(fill::moved(
-                &r,
-                tin,
-                Some(executor),
-                Some(wallet),
-            )),
-        ),
-    };
+    let (units, usdt_u) = native_amounts(&r, wallet, executor, (tin, tout), t.request.side)
+        .ok_or_else(|| {
+            unknown("нативная выплата, возврат или событие NativeSettled не подтверждены")
+        })?;
     let (Some(coins), Some(usdt)) = (
         num::to_decimal(units, decs.0),
         num::to_decimal(usdt_u, decs.1),
@@ -157,14 +143,45 @@ fn native_result(
     Ok(t)
 }
 
+/// Signed executeNative reports the currency as paid or received. The trade side assigns units of coin and cash.
+pub(in crate::venues::bsc_dex) fn native_amounts(
+    r: &super::super::super::send::track::Receipt,
+    wallet: Address,
+    executor: Address,
+    (input, output): (Address, Address),
+    side: Side,
+) -> Option<(U256, U256)> {
+    let (n_in, n_out) = settled(r, executor)?;
+    let (spent, received) = if n_in.is_zero() {
+        (
+            fill::moved(r, input, Some(wallet), None).checked_sub(fill::moved(
+                r,
+                input,
+                Some(executor),
+                Some(wallet),
+            ))?,
+            n_out,
+        )
+    } else {
+        (
+            n_in.checked_sub(n_out)?,
+            fill::moved(r, output, None, Some(wallet)),
+        )
+    };
+    Some(match side {
+        Side::Buy => (received, spent),
+        Side::Sell => (spent, received),
+    })
+}
+
 /// Событие NativeSettled(nativeIn, nativeOut) исполнителя в квитанции. None — нет. Ошибок нет.
 pub fn settled(
     r: &super::super::super::send::track::Receipt,
     executor: Address,
 ) -> Option<(U256, U256)> {
-    r.logs
-        .iter()
-        .filter(|l| l.address() == executor)
-        .find_map(|l| ArbExecutor::NativeSettled::decode_log_data(&l.inner.data).ok())
-        .map(|e| (e.nativeIn, e.nativeOut))
+    let mut events = r.logs.iter().filter(|l| {
+        l.address() == executor && l.topic0() == Some(&ArbExecutor::NativeSettled::SIGNATURE_HASH)
+    });
+    let e = ArbExecutor::NativeSettled::decode_log_data(&events.next()?.inner.data).ok()?;
+    events.next().is_none().then_some((e.nativeIn, e.nativeOut))
 }

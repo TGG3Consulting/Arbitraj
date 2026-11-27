@@ -48,7 +48,7 @@ def current_offer(src, dst, qty):
     return res.json()
 
 
-def protected_calls(artifact, roles, src, dst, qty, minimum, deadline, signed, fund):
+def protected_calls(artifact, roles, src, dst, qty, minimum, deadline, signed, fund, strict=None):
     target, market = roles
     # Первый вызов создаёт только собственный временный контракт внутри child, исходный nonce проверяется отдельно.
     module = "0x" + keccak(bytes.fromhex("d694" + OWNER[2:] + "80"))[-20:].hex()
@@ -61,7 +61,7 @@ def protected_calls(artifact, roles, src, dst, qty, minimum, deadline, signed, f
     checks = [balance(t,w) for w in (OWNER,module) for t in (src,dst)]
     checks += [tx(src,"allowance(address,address)",["address","address"],[module,target["address"]])]
     before = [create, fund, approval(src,module,qty), *checks]
-    controls = [exchange(minimum + 1, deadline), exchange(minimum, 0)]
+    controls = [exchange(2**256-1 if strict is None else strict, deadline), exchange(minimum, 0)]
     op = exchange(minimum, deadline)
     return before + controls + checks + [op] + checks, len(before), len(checks), module
 
@@ -114,7 +114,7 @@ def leg(roles, src, dst, qty, artifact=None):
         if len(result)!=len(calls):raise ValueError("неполная симуляция модуля")
         if any(r["status"]!="0x1" for r in result[:controls]):
             return {**row,"status":"module or funding unavailable","reason":[r.get("error") for r in result[:controls] if r["status"]!="0x1"]}
-        if result[controls]["status"]=="0x1":return {**row,"status":"signed minimum differs from current payout"}
+        if result[controls]["status"]=="0x1":raise ValueError("предельный минимум не остановил вызов")
         if result[controls+1]["status"]=="0x1":raise ValueError("личный срок не остановил вызов")
         index=controls+2+width
         swap=result[index]
@@ -131,8 +131,21 @@ def leg(roles, src, dst, qty, artifact=None):
         if len(events)!=1 or events[0]["topics"]!=topics:raise ValueError("событие модуля")
         dg,si,so,sp,nt=decode(["bytes32","address","address","uint256","uint256"],bytes.fromhex(events[0]["data"][2:]))
         if (dg,si,so,sp,nt)!=(keccak(signed),src,dst,qty,post[1]-pre[1]):raise ValueError("денежное событие модуля")
+        # Измеренный выход может быть выше подписанного минимума. На той же ещё текущей голове
+        # проверяем именно чистый приход + 1, с действующей котировкой и обычным временем узла.
+        live=read("eth_getBlockByNumber",["latest",False],end)
+        if not live or live["hash"]!=head["hash"]:return {**row,"status":"current head advanced before strict bound"}
+        strict_calls,_,_,_=protected_calls(artifact,roles,src,dst,qty,minimum,end,signed,fund,nt+1)
+        strict_result=read("eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(10**18)}},"calls":strict_calls}]},tag],end)
+        if not strict_result:return {**row,"status":"expired before strict bound"}
+        if len(strict_result)!=1 or strict_result[0]["parentHash"]!=head["hash"] or strict_result[0]["timestamp"]!=child[0]["timestamp"]:
+            return {**row,"status":"current child advanced before strict bound"}
+        second=strict_result[0]["calls"]
+        if len(second)!=len(result) or any(r["status"]!="0x1" for r in second[:controls]) or second[controls]["status"]!="0x0" or second[index]["status"]!="0x1":
+            return {**row,"status":"strict bound not reproduced"}
+        if balances(second[controls+2:index])!=pre or balances(second[index+1:])!=post:raise ValueError("иная выплата при проверке minimum+1")
         row.update(module=module, runtime="0x"+keccak(hexstr=result[0]["returnData"]).hex(),
-                   module_before=pre[2:],module_after=post[2:],strict=minimum+1,rollback=rollback)
+                   module_before=pre[2:],module_after=post[2:],strict=nt+1,rollback=rollback)
         result=[result[1],result[2],*result[controls-width:controls-width+2],swap,*result[index+1:index+3]]
     if len(result)!=7 or any(r["status"]!="0x1" for r in result[:4]):return {**row,"status":"funding unavailable"}
     swap=result[4]
@@ -157,5 +170,8 @@ if __name__=="__main__":
     rows=[]
     for sample in fixture["firm_summaries"]:
         q=sample["request"]
-        rows.append(leg(fixture["roles"]["roles"],q["token_in"],q["token_out"],int(q["amount_wei"]),artifact))
+        for attempt in range(3):
+            sample_result=leg(fixture["roles"]["roles"],q["token_in"],q["token_out"],int(q["amount_wei"]),artifact)
+            if sample_result["status"] not in {"current head advanced before strict bound","current child advanced before strict bound"}:break
+        rows.append(sample_result)
     args.output.write_text(json.dumps(dict(payer=OWNER,source=BASE,observed=rows),separators=(",",":")),encoding="utf8")

@@ -73,12 +73,17 @@ pub async fn trade(
     worst_positive(ctx, &req)?;
     let is_native = native::is_native(ctx, &req.asset);
     // Задача t114 (3а): причина — из native_block (не сверен / v1 / обёртка не та / настройка не задана).
-    if is_native && let Some(why) = super::native_block(ctx) {
+    let cash_target=super::super::super::quote::vista_pricing::native_cash_target(route);
+    if cash_target.is_some_and(|t|t!=executor) {
+        return Err(ctx.err(ErrorCode::NoRoute,"Изменился выбранный исполнитель расчёта в ETH"));
+    }
+    if (is_native || cash_target.is_some()) && let Some(why) = super::native_block(ctx) {
         return Err(ctx.err(ErrorCode::NoRoute, super::native_refusal(&why)));
     }
     // Решение 272: (обёртка, продажа ли) для executeNative; обёртка — dex.native_wrapped (is_native её уже прочитал).
     let nat = match native::wrapped(ctx) {
         Some((_, w)) if is_native => Some((w, req.side == Side::Sell)),
+        Some((_, w)) if cash_target.is_some() => Some((w, req.side == Side::Buy)),
         _ => None,
     };
     let (coin, usdt, decs) = sides(q, &req).await?;

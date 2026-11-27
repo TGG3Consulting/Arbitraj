@@ -13,6 +13,22 @@ pub(in crate::venues::bsc_dex) fn cash_market(p: &super::super::parts::Parts)->b
     let Ok(ticker)=p.ctx.text("venue.quote_asset") else {return false};
     super::super::exec::native::cash_ticker(&p.ctx,&ticker)
 }
+pub(in crate::venues::bsc_dex) fn marked(mode: Option<crate::core::types::RouterFeeMode>) -> bool {
+    use crate::core::types::RouterFeeMode::*;
+    matches!(mode, Some(NativeSettlement{..} | NativeWallet{native_cash:true,..}
+        | FluxEth{native_cash:true,..} | CarbonWallet{native_cash:true,..}))
+}
+
+/// Native cash may use the graph executor only when its own quote pinned that exact recipient.
+pub(in crate::venues::bsc_dex) fn graph_target(route: &crate::core::types::DexRoute) -> Option<Address> {
+    if route.mode!=RouteMode::Graph {return None}
+    let [leg]=route.legs.as_slice() else{return None};
+    let [hop]=leg.hops.as_slice() else{return None};
+    match hop.fee_mode {
+        Some(crate::core::types::RouterFeeMode::NativeWallet{target,native_cash:true}) if !target.is_zero()=>Some(target),
+        _=>None
+    }
+}
 /// Подтверждённый механизм перевода именно нативной расчётной валюты на одной или другой стороне сделки.
 pub(in crate::venues::bsc_dex) fn terminal_cash(
     reg: &super::super::pools::registry::Registry,
@@ -25,12 +41,12 @@ pub(in crate::venues::bsc_dex) fn terminal_cash(
     let [h] = leg.hops.as_slice() else {
         return false;
     };
-    matches!(r.mode, RouteMode::Direct)
-        && matches!(
-            h.fee_mode,
-            Some(crate::core::types::RouterFeeMode::NativeSettlement { .. }|crate::core::types::RouterFeeMode::NativeWallet{native_cash:true,..}|crate::core::types::RouterFeeMode::FluxEth{native_cash:true,..}|crate::core::types::RouterFeeMode::CarbonWallet{native_cash:true,..})
-        )
-        && reg.entry(&h.pool).is_some_and(|e| e.family.variant.flux_native() || native_router(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::carbon_direct::enabled(&e))
+    let Some(e)=reg.entry(&h.pool) else{return false};
+    if graph_target(r).is_some() {
+        return e.family.variant==super::super::pools::family_variant::Variant::PuzzleRanges;
+    }
+    r.mode==RouteMode::Direct && marked(h.fee_mode) && (e.family.variant.flux_native()
+        || native_router(&e) || super::ekubo_v2_pricing::enabled(&e) || super::super::exec::carbon_direct::enabled(&e))
 }
 /// Проверяет аванс ETH, разрешения, газ и публикацию на балансе плательщика перед допуском.
 pub(super) async fn funded(

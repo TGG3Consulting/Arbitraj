@@ -3605,3 +3605,16 @@ value = "0x961717fac9ad8ce321da9270305470a7f3bfb1f3340ee7c209c51dac7156b8b9"
 source = "Хеш runtime собственного исполнителя из артефакта GitHub Actions и с адреса размещения."
 rationale = "Keccak256 проверенной сборки FermiSlotExecutor."
 prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
+title = "Native RFQ v6 на Ethereum"
+intro = "Настройки публичного источника котировки и проверенные размещения для ручной сверки."
+
+[[section.rec]]
+name = "native_rfq.base_url"
+area = "площадка eth_dex"
+unit = "URL"
+value = "https://v2-pub.api.native.org/swap-api-v2/v1/"
+source = "Native Relay RFQ Guide — https://docs.native.org/native-dev/build-with-native/swap-aggregators/guide"
+rationale = "Официальный публичный каталог API без ключа. Используется при проверке котировки Native после сохранения оператором."
+prefill = { kind = "Venue", id = "eth_dex" }

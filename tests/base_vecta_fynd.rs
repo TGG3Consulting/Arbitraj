@@ -40,6 +40,7 @@ fn all_vecta_markets_and_fee_tiers_keep_their_paid_or_rejected_results() {
     let pools = d["markets"].as_array().unwrap();
     assert_eq!(pools.len() + 1, d["nonce"].as_u64().unwrap() as usize);
     assert_eq!(pools.len(), 3);
+    let mut module = 0;
     let mut router = 0;
     let mut v5 = 0;
     for p in pools {
@@ -74,13 +75,14 @@ fn all_vecta_markets_and_fee_tiers_keep_their_paid_or_rejected_results() {
                 match c["mode"].as_str().unwrap() {
                     "router" => router += 1,
                     "v5" => v5 += 1,
-                    "module" => {}
+                    "module" => module += 1,
                     m => panic!("{m}"),
                 };
             }
         }
     }
-    assert_eq!((router, v5), (4, 4));
+    assert_eq!((router, v5, module), (4, 4, 4));
+    assert!(w["module_hash"].as_str().unwrap().parse::<B256>().is_ok());
 }
 
 #[test]

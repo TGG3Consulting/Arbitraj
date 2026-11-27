@@ -925,14 +925,8 @@ impl BscDex {
         // выхода при откате по minOut (exec/executor/remeasure.rs). t81 (Тигран 10.11: согласовано): пути t78 (признак
         // Remeasure.any_executor) — как до t78; у своего сборщика при этом пере-замер остаётся (trade_path.rs).
         let via_kyber = self.p.ctx.flag("exec.via_kyber").unwrap_or(false);
-        let marked = req.route.as_ref().is_some_and(|r| {
-            r.legs.iter().flat_map(|l| &l.hops).any(|h| {
-                matches!(
-                    h.fee_mode,
-                    Some(crate::core::types::RouterFeeMode::NativeSettlement { .. })
-                )
-            })
-        });
+        let marked = req.route.as_ref().is_some_and(|r| r.legs.iter().flat_map(|l| &l.hops)
+            .any(|h| super::quote::vista_pricing::cash_marker(h.fee_mode)));
         let cash_market = super::quote::vista_pricing::cash_market(&self.p);
         let path = if cash_market || marked {
             let selected =

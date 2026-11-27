@@ -23,12 +23,16 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
     if directory is None:
         with gzip.open(DATA/"base_launch_hooks.json.gz") as f:directory=json.load(f)
     d=directory
-    holders=json.loads((DATA/"o1_launch_holders.json").read_bytes())
-    if holders["selector"]!=d["selector"]:raise ValueError("держатели на другой высоте")
-    payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()},**d.get("holders",{})}
+    chain=d.get("chain_id",8453)
+    wrapped=d.get("wrapped",WETH)
+    payers=dict(d.get("holders",{}))
+    if chain==8453:
+        holders=json.loads((DATA/"o1_launch_holders.json").read_bytes())
+        if holders["selector"]!=d["selector"]:raise ValueError("держатели на другой высоте")
+        payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()},**payers}
     at=d["selector"];header=rpc(endpoint,"eth_getBlockByHash",[at["blockHash"],False]);end=int(header["timestamp"],16)+120
     if d["state_root"]!=header["stateRoot"]:raise ValueError("изменилось состояние родителя")
-    cfg=next(p["settings"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["chain_id"]==8453 and p["settings"]["dex.kind"]=="uniswap_v4")
+    cfg=next(p["settings"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["chain_id"]==chain and p["settings"]["dex.kind"]=="uniswap_v4")
     flux=d.get("flux")
     if flux:cfg=flux
     bin_pool = group == "omni-flux-bin"
@@ -42,7 +46,9 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
             address,code=wrapped_module
             frame["stateOverrides"]={address:dict(code=code)}
         if mode in ("v5","wrapped_v5"):
-            frame.setdefault("stateOverrides",{})[EXEC]=dict(code=runtime,stateDiff={word(0):word(int(payer,16)),word(1):word(int(WETH,16))})
+            frame.setdefault("stateOverrides",{})[EXEC]=dict(code=runtime,stateDiff={word(0):word(int(payer,16)),word(1):word(int(wrapped,16))})
+        if d.get("fund_wrapped"):
+            frame.setdefault("stateOverrides",{})[payer]=dict(balance=hex(10**18))
         b,=rpc(endpoint,"eth_simulateV1",[dict(blockStateCalls=[frame],validation=False),at])
         if b["parentHash"]!=at["blockHash"] or len(calls)!=len(b["calls"]):raise ValueError("другая база симуляции")
         return b["calls"]
@@ -140,7 +146,11 @@ def replay(group,endpoint,directory=None,wrapped_module=None):
                 if ZERO not in key[:2]:continue
                 modes=["router_exact"]
             for mode in modes:
-                prefix,buy=leg(wire_key,owner,[],mode,cash,asset,qty)
+                prefix=[]
+                if d.get("fund_wrapped"):
+                    if cash!=wrapped or rpc(endpoint,"eth_getCode",[owner,at])!="0x":raise ValueError("неизвестное исходное финансирование")
+                    prefix=[{"from":owner,"to":wrapped,"data":calldata("deposit()",[],[]),"value":hex(qty)}]
+                prefix,buy=leg(wire_key,owner,prefix,mode,cash,asset,qty)
                 sell=leg(wire_key,owner,prefix,mode,asset,cash,int(buy["net"]))[1] if prefix else None
                 item["cases"].append(dict(mode=mode,amount=str(qty),buy=buy,sell=sell))
     return dict(group=group,height=d["height"],selector=at,state_root=header["stateRoot"],roles=cfg,v5_hash="0x"+keccak(bytes.fromhex(runtime[2:])).hex(),markets=markets)

@@ -79,7 +79,7 @@ def recovered(network):
 def registry_row(network,id):
     if id in {"dex-on-crypto-base","dex-on-crypto-ethereum"}:
         r=json.loads((DATA/"docswap_empty_directories.json").read_bytes())[network]
-        return None,r["factory"],"Router.factory и WETH; allPairsLength = 0","фабрика проверена, 0 зарегистрированных пар на снимке"
+        return None,r["factory"],"Router.factory и WETH; allPairsLength = 0","В исходной сети 0 пар. В изолированной симуляции фабрика создала пару, штатный Router и V5 провели 8 обменов, завышенный минимум и истёкший срок дали откат. Профиль проверяет комиссию фабрики при появлении ликвидности"
     if network!="base":return None
     if id in {"ryze","thirdfy","baseline-base"}:
         r=json.loads((DATA/"base_recovered_markets.json").read_bytes())
@@ -185,5 +185,7 @@ def vecta():
         "При обратном обмене тем же маршрутом получено 997 и 999 798 raw USDC. Штатный Router и V5 дали равные суммы. "
         "Для WETH/USDC и WETH/USDT на этой высоте нулевая активная ликвидность и два отказа котировки. "
         "Обе монеты действующей пары допускают смену реализации, поэтому обычный Router с номинальным минимумом не подтверждает "
-        "прирост баланса для произвольной реализации. V5 сверяет конечную выплату при исполнении. "
+        "прирост баланса для произвольной реализации. Для заданного владельцем адреса dex.v3_wallet_module профиль сверяет runtime и фабрику. "
+        "Модуль контролирует полный вход и чистую выплату. На 1 USDC покупка стоила 150 300 gas против 163 801 в V5; "
+        "обратная продажа — 128 920 против 142 483 gas. Реальный адрес нового модуля задаёт владелец при его размещении. "
         "[Списания, выплаты, газ и контрольные отказы](../tests/data/first_run_dex_2026-11-26/vecta_base_wallets.json.gz).",""]

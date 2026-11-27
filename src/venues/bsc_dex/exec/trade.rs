@@ -179,10 +179,12 @@ async fn run(
             }
             // Решение 122 (часть X): задан exec.executor_address — одной транзакцией через свой исполнитель.
             GraphForm::Bundle => {
-                let is_native = super::native::is_native(ctx, &req.asset);
+                let cash_target=super::super::quote::vista_pricing::native_cash_target(&route);
+                let is_native = super::native::is_native(ctx, &req.asset) || cash_target.is_some();
                 if let Some(x) = executor::takes(ctx, &q.reg, &route, is_native)? {
                     return executor::trade::trade(q, env, nonces, req, &route, verified, x).await;
                 }
+                if cash_target.is_some() {return Err(ctx.err(ErrorCode::NoRoute,"Поручению оплаты ETH нужен выбранный исполнитель"));}
                 return bundle_trade::trade(q, env, nonces, req, &route, verified).await;
             }
         }

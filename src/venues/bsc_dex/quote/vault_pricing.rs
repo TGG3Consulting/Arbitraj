@@ -64,16 +64,16 @@ async fn forms(
     };
     let native_asset=super::super::exec::native::is_native(&q.ctx,&i.asset);
     let native_cash=super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt);
-    if native_cash || (native_asset && e.family.variant!=Variant::PuzzleRanges) {
+    if (native_cash || native_asset) && e.family.variant!=Variant::PuzzleRanges {
         return None;
     }
     if e.family.variant == Variant::PuzzleRanges {
         let (m, router) = ranges_wallet::Market::read(&q.ctx, e).ok()?;
-        let native = if native_asset {
+        let native = if native_asset || native_cash {
             let (_,wrapped)=super::super::exec::native::wrapped(&q.ctx)?;
             Some((wrapped,args.0==wrapped))
         } else {None};
-        let direct = if !native_asset && exact_wallet_tokens::eligible(&q.ctx, e.family.id, args.0, args.1)
+        let direct = if native.is_none() && exact_wallet_tokens::eligible(&q.ctx, e.family.id, args.0, args.1)
             && match h {
                 Some(h) => m
                     .checked(&q.ctx, e, router, args, &h.selector())

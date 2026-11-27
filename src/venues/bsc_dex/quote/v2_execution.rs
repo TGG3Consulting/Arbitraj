@@ -106,6 +106,8 @@ pub(super) async fn option(
         }
     }
     let fee_mode = match &execution.wire {
+        v2_wallet_sim::Wire::V5Funded(step,_) if step.native.is_some() && super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)=>
+            Some(RouterFeeMode::NativeWallet{target:execution.target,native_cash:true}),
         super::v2_wallet_sim::Wire::Ranges(_) | super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae() || c.entry.family.variant==super::super::pools::family_variant::Variant::VvsV3=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::FluxEth(m)=>Some(RouterFeeMode::FluxEth{target:m.router,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
@@ -183,7 +185,7 @@ pub(super) async fn option(
             ctx,
             &q.reg,
             route,
-            super::super::exec::native::is_native(ctx, &i.asset),
+            super::super::exec::native::is_native(ctx, &i.asset) || super::vista_pricing::native_cash_target(route).is_some(),
         )? != Some(target)
         {
             return Err(bad());

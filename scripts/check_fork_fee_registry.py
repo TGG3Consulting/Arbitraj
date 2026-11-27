@@ -4,11 +4,21 @@ import json
 from pathlib import Path
 import sys
 
-from record_fork_fee_registry import verify
+from record_fork_fee_registry import FIXTURES, ROOT, SPECS, verify
 
 
 def check(snapshot):
+    network, independent = {1:("ethereum","community_v3_storage"),8453:("base","derpdex_directory")}[snapshot["chain_id"]]
+    reference = json.loads((FIXTURES/(independent+".json")).read_bytes())
+    if reference["selector"] != snapshot["selector"] or (reference.get("block") or reference["to"]) != snapshot["block"]:
+        raise ValueError("different archival head")
+    config = json.loads((ROOT/"config/first_run_dex.json").read_bytes())
+    targets = {p["id"]:p["settings"]["dex.factory"].lower() for p in config if p["network"]==network and p["id"] in SPECS}
+    if {r["id"]:r["factory"] for r in snapshot["factories"]} != targets or len(snapshot["factories"])!=2:
+        raise ValueError("incorrect network or factory selection")
     for row in snapshot["factories"]:
+        if row["state_root"] != reference["state_root"] or row["kind"] != SPECS[row["id"]][0]:
+            raise ValueError("factory proof bound to the wrong state root or ABI")
         verify(row)
         tiers={int(f):sp for f,sp in row["tiers"].items()}
         activations={v["fee"]:v["spacing"] for v in row["activations"]}

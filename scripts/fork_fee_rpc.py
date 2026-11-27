@@ -42,27 +42,37 @@ class Reader:
             raise ValueError("incomplete "+group[0][0]+": "+str(next((v.get("error") for v in by_id.values() if "error" in v), None))[:100])
         return [by_id[i]["result"] for i in range(len(batch))]
 
+    def fetch(self, group):
+        method = group[0][0]
+        urls = list(dict.fromkeys([self.by_method.get(method), *self.endpoints]))
+        problems = []
+        for url in filter(None, urls):
+            try:
+                result = self.request(url, group)
+                self.by_method[method] = url
+                return result
+            except (ValueError, KeyError, TypeError, requests.RequestException) as exc:
+                problems.append(str(exc)[:100])
+        if len(group) > 1:
+            half=len(group)//2
+            return self.fetch(group[:half])+self.fetch(group[half:])
+        # Public archive nodes have separate batch, compute-unit and per-second limits.
+        for wait in (2,5,10):
+            time.sleep(wait)
+            for url in filter(None, urls):
+                try:
+                    result=self.request(url,group)
+                    self.by_method[method]=url
+                    return result
+                except (ValueError,KeyError,TypeError,requests.RequestException) as exc:
+                    problems.append(str(exc)[:100])
+        raise ValueError((method,problems[-len(urls):]))
+
     def many(self, ops):
         result = []
         stream = iter(ops)
-        while group := list(islice(stream, 18)):
-            method = group[0][0]
-            urls = list(dict.fromkeys([self.by_method.get(method), *self.endpoints]))
-            problems = []
-            for attempt in range(2):
-                for url in filter(None, urls):
-                    try:
-                        result.extend(self.request(url, group))
-                        self.by_method[method] = url
-                        break
-                    except (ValueError, KeyError, TypeError, requests.RequestException) as exc:
-                        problems.append(str(exc)[:95])
-                else:
-                    if attempt == 0:
-                        time.sleep(2)
-                        continue
-                    raise ValueError((method, problems[-len(urls):]))
-                break
+        while group := list(islice(stream, 6)):
+            result.extend(self.fetch(group))
         return result
 
     def one(self, method, params):

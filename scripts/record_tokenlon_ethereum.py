@@ -13,7 +13,7 @@ from record_ethereum_x7 import ENDPOINTS
 
 DATA = ROOT / "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json"
 READS = {"eth_chainId", "eth_getTransactionReceipt", "eth_getTransactionByHash", "eth_getBlockByHash",
-         "eth_getCode", "eth_getStorageAt", "eth_simulateV1"}
+         "eth_getCode", "eth_getStorageAt", "eth_getBalance", "eth_simulateV1"}
 MULTICALL = "0xca11bde05977b3631167028862be2a173976ca11"
 EVENT = "0x" + keccak(text="FillOrder(string,bytes32,bytes32,address,address,uint256,address,address,uint256,address,uint256,uint16)").hex()
 FILL = ["string","address","uint256","address","address","uint256","address","uint256","uint16"]
@@ -112,7 +112,12 @@ def simulate(c, roles):
         reads.append(dict(gas=hex(100_000),to=MULTICALL if native else token, data=calldata("getEthBalance(address)" if native else "balanceOf(address)", ["address"],[who])))
     # Исполняем только в симуляции. Исходные ETH и ERC20 остаются на архивных счетах.
     swap = {"from":tx["from"], "to":proxy, "value":tx["value"], "data":tx["input"], "gas":tx["gas"]}
-    calls = [*reads,swap,*reads,swap,*reads]
+    value = int(tx["value"], 16)
+    funded = int(rpc("eth_getBalance", [tx["from"],tag]), 16) if value else 0
+    repeat = not value or funded >= 2 * value
+    calls = [*reads,swap,*reads]
+    if repeat:
+        calls.extend([swap,*reads])
     block = dict(blockOverrides=dict(time=header["timestamp"]),calls=calls)
     # EIP-1898 фиксирует родителя, а time точно воспроизводит истечение заявки.
     child, = rpc("eth_simulateV1", [{"blockStateCalls":[block]},tag])
@@ -123,18 +128,23 @@ def simulate(c, roles):
                 paid_by=payer, receiver=c["recipient"], tx_sender=tx["from"].lower(), original_gas=int(receipt["gasUsed"],16),
                 block=c["block_hash"], parent=header["parentHash"], **proof)
     if reply[2]["status"] != "0x1":
-        return {**base,"replay":"original paid; original intra-block prestate unavailable",
+        return {**base,"replay":"original paid; reverted from canonical parent",
                 "revert":reply[2].get("error",{}).get("message","")[:140]}
     def amounts(pair):
         assert all(x["status"] == "0x1" and len(x["returnData"]) == 66 for x in pair)
         return [int(x["returnData"],16) for x in pair]
-    before, after, retry = [amounts(reply[i:i+2]) for i in (0,3,6)]
+    before, after = amounts(reply[:2]), amounts(reply[3:5])
     debit, credit = before[0] - after[0], after[1] - before[1]
     assert (debit, credit) == (int(c["taker"]), int(c["net"]))
     event(reply[2]["logs"])
-    assert reply[5]["status"] == "0x0" and after == retry
+    if repeat:
+        assert reply[5]["status"] == "0x0" and after == amounts(reply[6:8])
+        duplicate = "reverted without balance change"
+    else:
+        assert value <= funded < value * 2
+        duplicate = "insufficient original ETH for a second identical payment"
     return {**base,"replay":"paid","paid":str(debit),"received":str(credit),"gas":int(reply[2]["gasUsed"],16),
-            "before":list(map(str,before)),"after":list(map(str,after)),"repeat_reverted":True,"logs":reply[2]["logs"]}
+            "before":list(map(str,before)),"after":list(map(str,after)),"duplicate":duplicate,"logs":reply[2]["logs"]}
 
 
 if __name__ == "__main__":

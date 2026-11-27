@@ -1042,11 +1042,21 @@ def tables(network, snapshots, profiles):
         file = Path("tests/data/first_run_dex_2026-11-26/bancor_v21_wallet.json.gz")
         wallet = json.loads(gzip.decompress(file.read_bytes()))
         cases = wallet["controls"]
-        out.append(f"**Bancor V2.1.** Для прямого пути используются физические резервы и якорь конвертера. "
+        two = {(tuple(r["path"]), r["spent"], r["mode"]): r for r in cases if len(r["path"]) == 5}
+        saved = []
+        for (path, spent, mode), row in two.items():
+            if mode == "wallet":
+                v5 = two[path, spent, "v5"]
+                assert v5["source"] == row["source"] and v5["target"] == row["target"] and v5["received"] == row["received"]
+                saved.append(v5["gas"] - row["gas"])
+        out.append(f"**Bancor V2.1.** Прямой вызов может провести обмен через один конвертер или через два по общему промежуточному активу. "
                    "Ставку рассчитывает оригинальный BancorNetwork по явному пути. "
                    f"На архивном блоке прошли {sum(r['mode']=='wallet' for r in cases)} выплат по ERC20/WETH, "
                    f"{sum(r['mode']=='native_wallet' for r in cases)} по нативной валюте и "
                    f"{sum(r['mode']=='v5' for r in cases)} через V5. В проверку вошли пути через один и два пула. "
+                   f"В {len(saved)} сравнениях при одинаковых входе и выплате один вызов Network через модуль "
+                   f"потребовал на {min(saved)}–{max(saved)} единиц газа меньше, чем два шага V5. "
+                   "Величина в USDT зависит от стоимости газа и курса ETH при отправке. "
                    "После размещения модуля из карточки DEX сохраните его адрес в `dex.router`. "
                    f"[Исходные суммы, квитанции, газ и отклонённые поручения](../{file.as_posix()}).")
     if base and "alien-carbon-base" in configured:
@@ -1844,6 +1854,19 @@ def tables(network, snapshots, profiles):
                         "(../tests/data/first_run_dex_2026-11-26/alien_base_750.json.gz)")
             else:
                 task = "Alien Base V2 · секция alienbase для Base указывает фабрику профиля и 0,16% на обмен"
+        if not base and str(row["id"]) == "405":
+            fixture = Path("tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json")
+            tokenlon = read(fixture)
+            window = tokenlon["window"]
+            sources = window["fills_by_source"]
+            external = sum(sources[name] for name in ("uniswap_v2", "uniswap_v3", "curve", "sushiswap"))
+            candidates = [tokenlon["roles"][name]["address"] for name in ("pmm", "wrapper", "rfq6")]
+            task = (f"Блоки {window['first']}–{window['last']}. Число оплат из инвентаря маркет-мейкеров PMM — "
+                    f"{sources['pmm_zeroex_v2']}. Сделок через внешние AMM — {external} (Uniswap, "
+                    "Curve и SushiSwap). Публичная цена PMM доступна через SDK. При запросе окончательной заявки "
+                    "три пустых кошелька получили USER_BALANCE_INSUFFICIENT. Для допуска требуется действующая "
+                    "подпись маркет-мейкера и симуляция выплаты своему кошельку. "
+                    f"[Исходные платежи и ответы сервиса](../{fixture.as_posix()})")
         if not base and str(row["id"])=="162":
             fixture = Path("tests/data/first_run_dex_2026-11-26/bancor_v21_ethereum.json.gz")
             original = json.loads(gzip.decompress(fixture.read_bytes()))

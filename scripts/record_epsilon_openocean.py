@@ -37,8 +37,17 @@ def firm(src, dst, n, caller):
     return dict(data=d["data"], block=int(d["blockNumber"]), minimum=str(t[5]), expected=str(d["outAmount"]))
 
 
+def latest_header(endpoint):
+    response=requests.post(endpoint,json={"jsonrpc":"2.0","id":1,"method":"eth_getBlockByNumber","params":["latest",False]},timeout=15)
+    response.raise_for_status()
+    block=response.json().get("result")
+    if not isinstance(block,dict) or not block.get("hash"):
+        raise ValueError("public latest header unavailable")
+    return block
+
+
 def capture(url, artifact):
-    live = rpc(url, "eth_getBlockByNumber", ["latest", False])
+    live = latest_header(url)
     if int(rpc(url, "eth_chainId", []), 16) != 8453:
         raise ValueError("chain")
     tag = {"blockHash": live["hash"], "requireCanonical": True}
@@ -55,7 +64,7 @@ def capture(url, artifact):
                     plan = {"refused": str(exc)[:220]}
                 offers.append(dict(src=src, dst=dst, n=str(n), nested=nested, firm=plan))
                 time.sleep(0.25)
-    latest = rpc(url, "eth_getBlockByNumber", ["latest", False])
+    latest = latest_header(url)
     head = latest["hash"]; tag = {"blockHash": head, "requireCanonical": True}
     ts = int(latest["timestamp"], 16) + 2
     if any(rpc(url, "eth_getCode", [a, tag]) != "0x" for a in [OWNER, WALLET]):

@@ -1,5 +1,6 @@
 <!-- Размещение принятого модуля одним CREATE в выбранной сети по действию оператора. -->
 <script>
+  import {fluidCard} from '../lib/fluidLiteDeploy.js';
   import {unsignedCache} from '../lib/aquaDeploy.js';
   import {onDestroy} from 'svelte';
   import {selectPropDeployment} from '../lib/propVenueDeploy.js';
@@ -28,7 +29,7 @@
     llamma_lending:{file:'llamma-oneway',key:'llamma-oneway:1',name:'Curve LLAMMA lending в Ethereum',load:()=>import('../assets/llamma-oneway-create.json')},
     llamma_mint:{file:'llamma-mint',key:'llamma-mint:1',name:'Curve LLAMMA mint в Ethereum',load:()=>import('../assets/llamma-mint-create.json')},
     llamma_v2:{file:'llamma-v2',key:'llamma-v2:1',name:'Curve LLAMMA v2 в Ethereum',load:()=>import('../assets/llamma-v2-create.json')},
-    fluid_dex_lite:{file:'fluid-dex-lite-ethereum',key:'fluid-lite-wallet:1',name:'FluidDexLiteWallet в Ethereum',load:()=>import('../assets/fluid-dex-lite-ethereum.json')},
+    fluid_dex_lite:{file:'fluid-dex-lite-ethereum',key:'fluid-lite-wallet:1',name:'FluidDexLiteWallet в Ethereum',load:fluidCard},
     ambient_ethereum:{file:'ambient-ethereum',key:'ambient-wallet:1',name:'AmbientWallet в Ethereum',load:()=>import('../assets/ambient-ethereum-create.json')},
     ammalgam_dlex:{file:'ammalgam-ethereum',key:'ammalgam-ethereum:1',name:'AmmalgamWallet в Ethereum',load:()=>import('../assets/ammalgam-ethereum-create.json')},
     motoswap_v2:{file:'motoswap-ethereum',key:'motoswap-wallet:1',name:'MotoswapWallet в Ethereum',load:()=>import('../assets/motoswap-ethereum.json')},
@@ -177,10 +178,21 @@
     return compare(); // Browsers without Web Locks can verify/export, but cannot submit a new request.
   }
   async function verify(action=scope()) {
-    const supplied=txHash.trim(), plan=manifest;
+    const supplied=txHash.trim();
+    let plan=manifest;
     refreshPending(action);
     const original=pending;
     readyAddress='';
+    if (plan.kind === 'fluid_dex_lite') {
+      let input;
+      if (!original && /^0x[a-fA-F0-9]{64}$/.test(supplied)) {
+        const transaction = await provider().request({method:'eth_getTransactionByHash', params:[supplied]});
+        if (!transaction) throw Error('Транзакция размещения пока не найдена.');
+        if (typeof transaction.input !== 'string') throw Error('В ответе узла отсутствуют данные CREATE.');
+        input = transaction.input;
+      }
+      plan = (await fluidCard(action.settings, original, input)).default;
+    }
     await loadPlan(action.settings, plan);
     action.check();
     const fact = await deployed(provider(), plan, supplied, original);
@@ -201,11 +213,11 @@
         result=fact.replacementHash ? 'Замена CREATE с исходным nonce финализирована. Код модуля подтверждён.' : 'Каноническая транзакция и код модуля подтверждены.';
       }
     });
-    return {original, address:fact.address};
+    return {original, plan, address:fact.address};
   }
   async function useAddress() {
-    const action=scope(), plan=manifest;
-    const {original,address}=await verify(action);
+    const action=scope();
+    const {original,address,plan}=await verify(action);
     if (!address) throw new Error('Подтверждённого адреса модуля нет.');
     await reconcile(action,original,async()=>{
       await loadPlan(action.settings,plan);

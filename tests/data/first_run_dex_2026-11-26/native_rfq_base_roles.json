@@ -1,0 +1,57 @@
+{
+  "source": "https://docs.native.org/native-dev/resources/addresses",
+  "chain_id": 8453,
+  "block": 62262756,
+  "block_hash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+  "roles": {
+    "router": {
+      "address": "0x9706d3fff42571305fc201f996adc0e768d72911",
+      "bytes": 18168,
+      "runtime": "0x68703546e8a7a7c1a8567671e4aabd2a551887f825696ff7eb01003b1e694b7c"
+    },
+    "pool": {
+      "address": "0x72574feefb0197271f63e263cc158d8941f12454",
+      "bytes": 15414,
+      "runtime": "0x0f17b2ec76effd441e7f11b9da218311207016cc1b923a14b138d31f29db3f59"
+    }
+  },
+  "book": {
+    "url": "https://v2-pub.api.native.org/swap-api-v2/v1/orderbook?chain=base",
+    "at": "2026-11-27T05:11:46.856384+00:00",
+    "directions": [
+      {
+        "i": "0x4200000000000000000000000000000000000006",
+        "o": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "base": "WETH",
+        "quote": "USDC",
+        "levels": 5,
+        "side": "bid"
+      },
+      {
+        "i": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "o": "0x4200000000000000000000000000000000000006",
+        "base": "USDC",
+        "quote": "WETH",
+        "levels": 6,
+        "side": "bid"
+      },
+      {
+        "i": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "o": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "base": "cbBTC",
+        "quote": "USDC",
+        "levels": 2,
+        "side": "bid"
+      },
+      {
+        "i": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+        "o": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+        "base": "USDC",
+        "quote": "cbBTC",
+        "levels": 2,
+        "side": "bid"
+      }
+    ],
+    "success": true
+  }
+}

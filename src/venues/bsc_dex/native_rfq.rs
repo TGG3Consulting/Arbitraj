@@ -30,6 +30,7 @@ pub(in crate::venues::bsc_dex) fn enabled(ctx: &Ctx) -> bool {
 mod abi;
 mod client;
 mod wire;
+pub(super) const LABEL: &str="Native RFQ v6";
 const PROFILE: &str = "native_rfq.roles";
 
 #[derive(Clone, Copy)]

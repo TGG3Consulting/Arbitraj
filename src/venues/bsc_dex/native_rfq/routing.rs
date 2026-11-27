@@ -12,7 +12,7 @@ use crate::{
         ctx::Ctx, exec, gas_ticker, hashflow, num, parts::Parts, quote::direct, send,
     },
 };
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256};
 use chrono::Utc;
 use rust_decimal::Decimal;
 use std::time::Duration;
@@ -138,7 +138,7 @@ async fn candidate(
         .funds
         .get(p, profile.chain, i, module, age)?;
     let di = funds.decimals;
-    let dout = p.tokens.decimals_known(o)?;
+
     let buy = side == Side::Buy;
     let amount = direct::ceil_units(if buy { quote_cash } else { qty }, di)?;
     if amount < minimum_input || amount > funds.spend || funds.native < num::to_units(cap, 18)? {
@@ -162,7 +162,7 @@ async fn candidate(
             block: head.number,
             gas_units: 0,
             executable: false,
-            exec_note: Some("Уровни Native RFQ, требуется действующее предложение".into()),
+            exec_note: Some(super::LABEL.into()),
         }),
         signal_route: None,
         at: Utc::now(),
@@ -173,6 +173,7 @@ async fn candidate(
     if !quote_stage::is_final() {
         return better(hashflow::routing::total(p, &quote).await?).then_some(quote);
     }
+    let dout=p.tokens.decimals(ctx,o).await.ok()?;
     let mut checked = super::check(ctx, &profile, funds.who, i, o, amount)
         .await
         .ok()?;
@@ -220,7 +221,7 @@ async fn candidate(
         block: checked.head.number.to(),
         gas_units: checked.gas,
         executable: true,
-        exec_note: None,
+        exec_note: Some(super::LABEL.into()),
     });
     let net = hashflow::routing::total(p, &quote).await?;
     if !better(net) || ctx.settings.generation() != generation || !timely(ctx, checked.firm.expiry)

@@ -1,4 +1,5 @@
 //! Уровни Native orderbook задают порции входного ERC20. Минимум API указан в сырых единицах.
+//! https://docs.native.org/native-dev/build-with-native/swap-aggregators/firmquote-swap-apis/get-orderbook
 use super::{Profile, wire};
 use crate::{
     core::types::Side,
@@ -100,6 +101,7 @@ impl Depth {
         None
     }
     fn markets(&self, quote: Address, p: &Parts) -> BTreeMap<Address, (bool, bool)> {
+        let known:std::collections::HashSet<_>=p.tokens.all().into_iter().map(|t|t.address).collect();
         let mut result = BTreeMap::new();
         for (i, o) in self.0.keys().copied() {
             let coin = if i == quote {
@@ -109,7 +111,7 @@ impl Depth {
             } else {
                 continue;
             };
-            if p.tokens.decimals_known(coin).is_none() {
+            if !known.contains(&coin) {
                 continue;
             }
             let entry = result.entry(coin).or_insert((false, false));
@@ -198,8 +200,10 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
     loop {
         let initial = p.ctx.settings.generation();
         let cfg = || {
+            let profile=Profile::read(&p.ctx).ok()?;
+            profile.module?;
             Some((
-                Profile::read(&p.ctx).ok()?,
+                profile,
                 p.ctx.int("native_rfq.max_age_ms").ok()?.max(1),
                 p.tokens.usdt(&p.ctx).ok()?,
             ))

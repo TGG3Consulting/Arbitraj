@@ -174,7 +174,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     };
     let mut parse = exec::swap_ctx::SwapCtx::swap(who, pair, t.decs, &[], None, None);
     parse.native_rfq = Some(Box::new(saved.clone()));
-    parse.who = Some("Native RFQ v6".into());
+    parse.who = Some(super::LABEL.into());
     let raw = exec::txs::send(&env, &slot, module, data, U256::ZERO, false, Some(hold));
     let d = hashflow::native_send(p, &req, q.expiry, t.generation, &parse, raw).await?;
     if matches!(d.chain.outcome, TxOutcome::Included | TxOutcome::Reverted) {
@@ -194,6 +194,6 @@ pub(in crate::venues::bsc_dex) async fn trade(
     }
     exec::result::by(
         exec::result::result(ctx, req, d, who, pair, t.decs, &[]).map_err(|e| parse.attach(e)),
-        "Native RFQ v6",
+        super::LABEL,
     )
 }

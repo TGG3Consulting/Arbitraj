@@ -42,8 +42,11 @@ def runtime(c, artifact, roles):
     return data
 
 
-def capture(endpoint, artifact):
-    d=json.loads(gzip.decompress(SNAP.read_bytes()))
+def capture(endpoint, artifact, degen=False):
+    source=SNAP.with_name("degenswap_ethereum_directory.json.gz") if degen else SNAP
+    d=json.loads(gzip.decompress(source.read_bytes()))
+    deployments=([dict(id="degenswap",roles={"factory":d["factory"],"router":d["router"]},markets=d["markets"])]
+                 if degen else d["deployments"][2:])
     c=Capture(dict(endpoint=endpoint,selector=d["selector"]))
     head=rpc(endpoint,"eth_getBlockByHash",[c.selector["blockHash"],False])
     if (rpc(endpoint,"eth_chainId",[])!="0x1" or head["hash"]!=c.selector["blockHash"] or head["stateRoot"]!=ROOT_HASH or
@@ -52,7 +55,7 @@ def capture(endpoint, artifact):
     word=lambda n:"0x"+format(n,"064x")
     ether=lambda who:tx(MULTICALL,"getEthBalance(address)",["address"],[who])
     result=[]
-    for dep in d["deployments"][2:]:
+    for dep in deployments:
         router=dep["roles"]["router"]["address"]
         factory=dep["roles"]["factory"]["address"]
         public=dep.get("access",{}).get("trade",{}).get("address",ZERO)
@@ -120,17 +123,42 @@ def capture(endpoint, artifact):
             if WETH not in m["tokens"]:continue
             observed=[r for r in m.get("rounds",[])+m.get("paid_public",[]) if r.get("mode","router")=="router" and
                       all(r.get(s,{}).get("exact",{}).get("status")=="0x1" for s in ("buy","sell"))]
-            if not observed:continue
+            if degen:
+                i=m["tokens"].index(WETH)
+                stored=int(m["reserves"][i])
+                physical=int(m["balances"][i] or 0)
+                if min(stored,physical)<=0 or any(int(v or 0)<=0 for v in m["reserves"]+m["balances"]):
+                    continue
+                sizes=sorted({max(1,min(10**15,min(stored,physical)//1000)),
+                              max(2,min(10**16,min(stored,physical)//100))})
+            else:
+                sizes=[int(r["buy"]["exact"]["spent"]) for r in observed]
             token=next(a for a in m["tokens"] if a!=WETH)
-            for r in observed:
-                size=int(r["buy"]["exact"]["spent"])
-                for mode in ("separate","module","v5"):
+            for size in sizes:
+                for mode in (("module","v5") if degen else ("separate","module","v5")):
                     # The wrapped modes fund the economically same buy: principal plus its ETH fee.
                     fee=fees([],WETH,token,size);budget=size if mode=="separate" else size+fee
                     pre=[tx(WETH,"deposit()",value=budget)]
                     if public!=ZERO and mode!="separate":pre+=[tx(MODULE,"fundFees()",value=10**16)]
-                    buy,prefix=leg(pre,mode,WETH,token,budget)
-                    sell,_=leg(prefix,mode,token,WETH,int(buy["exact"]["received"]))
+                    if degen:
+                        case=dict(profile=dep["id"],mode=mode,pool=m["pool"],token=token,budget=str(budget))
+                        def refusal(error):
+                            # Only a genuine EVM refusal of this wallet/size is a market observation.
+                            details=error.args[0] if error.args else None
+                            if isinstance(details,tuple) and details[0]=="protected loose":
+                                return str(details[-1])[:250]
+                            raise error
+                        try: buy,prefix=leg(pre,mode,WETH,token,budget)
+                        except ValueError as error:
+                            result.append(dict(case,buy_refused=refusal(error)))
+                            continue
+                        try: sell,_=leg(prefix,mode,token,WETH,int(buy["exact"]["received"]))
+                        except ValueError as error:
+                            result.append(dict(case,buy=buy,sell_refused=refusal(error)))
+                            continue
+                    else:
+                        buy,prefix=leg(pre,mode,WETH,token,budget)
+                        sell,_=leg(prefix,mode,token,WETH,int(buy["exact"]["received"]))
                     preserved=None
                     if public!=ZERO:
                         # Perturb only the canonical balance by one wei in this isolated frame.
@@ -166,17 +194,20 @@ def capture(endpoint, artifact):
                     result.append(dict(profile=dep["id"],mode=mode,pool=m["pool"],token=token,payer=OWNER,module=MODULE,
                                        executor=EXEC,factory=factory,router=router,public=public,runtime="0x"+keccak(hexstr=code).hex(),
                                        buy=buy,sell=sell,preserved_public_ether=preserved))
-    if {r["profile"] for r in result}!={"proxy-1","proxy-2"}:raise ValueError("missing protected market")
+    if degen:
+        if not any("sell" in r for r in result):raise ValueError("no proven DegenSwap round trip")
+    elif {r["profile"] for r in result}!={"proxy-1","proxy-2"}:raise ValueError("missing protected market")
     return dict(selector=c.selector,height=d["height"],state_root=ROOT_HASH,runtime_template="0x"+keccak(hexstr=artifact["runtime"]).hex(),
                 cases=result)
 
 
 if __name__=="__main__":
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument("artifact",type=Path);parser.add_argument("output",type=Path)
+    parser.add_argument("--degenswap",action="store_true")
     args=parser.parse_args();errors=[]
     for endpoint in ENDPOINTS:
         try:
-            data=capture(endpoint,json.loads(args.artifact.read_bytes()))
+            data=capture(endpoint,json.loads(args.artifact.read_bytes()),args.degenswap)
             args.output.write_text(json.dumps(data,separators=(",",":")),encoding="utf8");break
         except (requests.RequestException,ValueError,KeyError,RuntimeError) as error:errors.append((endpoint,str(error)[:350]))
     else:raise RuntimeError(errors)

@@ -3607,7 +3607,7 @@ rationale = "Keccak256 проверенной сборки FermiSlotExecutor."
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section]]
-title = "Native RFQ v6 на Ethereum"
+title = "Native RFQ v6 на Ethereum и Base"
 intro = "Настройки публичного источника котировки и проверенные размещения для ручной сверки."
 
 [[section.rec]]
@@ -3618,3 +3618,30 @@ value = "https://v2-pub.api.native.org/swap-api-v2/v1/"
 source = "Native Relay RFQ Guide — https://docs.native.org/native-dev/build-with-native/swap-aggregators/guide"
 rationale = "Официальный публичный каталог API без ключа. Используется при проверке котировки Native после сохранения оператором."
 prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.base_url"
+area = "площадка base_dex"
+unit = "URL"
+value = "https://v2-pub.api.native.org/swap-api-v2/v1/"
+source = "Native Relay RFQ Guide — https://docs.native.org/native-dev/build-with-native/swap-aggregators/guide"
+rationale = "Официальный публичный каталог API без ключа. Используется при проверке котировки Native после сохранения оператором."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "native_rfq.roles"
+area = "площадка eth_dex"
+unit = "сеть и контракты"
+value = "network 1 ethereum,router 0x4777a6b3a9a889abfd4c7666bdd2a7ab633293be 0x98ba0cd2ebc1a0c9c165bcfca51f02a23aee4e358fae04de96550d25e55ff739,pool 0xef435b99c2108d0309211d0cc05b70d202c0b5df 0x3343a77f0eb64c8e132131707b441b4367b63b184d81e3258bc80c5c0b4ecaad"
+source = "https://docs.native.org/native-dev/resources/addresses — размещения V6, код прочитан на каноническом блоке."
+rationale = "Подготовка ручной проверки. Рабочий адрес и хеш модуля указывает владелец после размещения в этой сети."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "native_rfq.roles"
+area = "площадка base_dex"
+unit = "сеть и контракты"
+value = "network 8453 base,router 0x9706d3fff42571305fc201f996adc0e768d72911 0x68703546e8a7a7c1a8567671e4aabd2a551887f825696ff7eb01003b1e694b7c,pool 0x72574feefb0197271f63e263cc158d8941f12454 0x0f17b2ec76effd441e7f11b9da218311207016cc1b923a14b138d31f29db3f59"
+source = "https://docs.native.org/native-dev/resources/addresses — размещения V6, код прочитан на каноническом блоке."
+rationale = "Подготовка ручной проверки. Рабочий адрес и хеш модуля указывает владелец после размещения в этой сети."
+prefill = { kind = "Venue", id = "base_dex" }

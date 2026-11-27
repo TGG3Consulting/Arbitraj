@@ -73,7 +73,7 @@ pub async fn details(
         Side::Sell => (e.coin, num::to_units(quote.fillable_qty, coin_dec)),
     };
     let amount = amount.ok_or_else(bad)?;
-    if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::BancorLegacy{native:true,..}|crate::core::types::RouterFeeMode::YieldBasis{native:true,..}|crate::core::types::RouterFeeMode::BalancerV1{native:true,..}|crate::core::types::RouterFeeMode::BancorV3{native:true,..}|crate::core::types::RouterFeeMode::UniswapV1{native:true,..})) && token==ctx.addr("dex.native_wrapped")?{return Ok(None);}
+    if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::BancorLegacy{native:true,..}|crate::core::types::RouterFeeMode::Mooniswap{native:true,..}|crate::core::types::RouterFeeMode::YieldBasis{native:true,..}|crate::core::types::RouterFeeMode::BalancerV1{native:true,..}|crate::core::types::RouterFeeMode::BancorV3{native:true,..}|crate::core::types::RouterFeeMode::UniswapV1{native:true,..})) && token==ctx.addr("dex.native_wrapped")?{return Ok(None);}
     if let Some(crate::core::types::RouterFeeMode::FluxEth{target,..})=hop.fee_mode {
         let m=super::super::exec::flux_eth::Market::read(ctx,&e,ctx.dex_addr("dex.universal_router",e.family.id)?!=target)?;
         if target!=m.router{return Err(bad());}

@@ -28,6 +28,7 @@ enum Venue {
     FollowingBlock(Head),
     WalletRouter(Address),
     FundedExecutor,
+    Mooniswap,
     SafeSwap,
     Integral,
     Prop,
@@ -51,7 +52,7 @@ pub(super) struct Leg {
 }
 impl Market {
     pub fn wallet_funded(ctx: &Ctx, e: &Entry) -> bool {
-        e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
+        matches!(e.pool.state,PoolState::Mooniswap(_)) || e.family.variant.issuer_shares() || e.family.variant==super::super::pools::family_variant::Variant::PropVenue || e.family.variant.protected_router_wallet() || matches!(&e.pool.state, PoolState::Surge(_) | PoolState::Bundles(_) | PoolState::Dagrow(_))
             || mint_club_direct::enabled(e) || carbon_direct::enabled(e)
             || (super::registered_v3::configured(ctx,e) && super::super::exec::executor::address(ctx).ok().flatten().is_none())
     }
@@ -71,6 +72,12 @@ impl Market {
         let mut vista = None;
         let venue = if e.family.variant == super::super::pools::family_variant::Variant::Surge {
             Venue::FollowingBlock(white_state::head(ctx, &format!("{number:#x}")).await?)
+        } else if let PoolState::Mooniswap(_) = &e.pool.state {
+            let head=white_state::head(ctx,&format!("{number:#x}")).await?;
+            Box::pin(super::super::exec::mooniswap_plan::check_step(ctx,e,e.usdt,&head.selector())).await?;
+            Box::pin(mint_club_direct::funded(ctx,wallet,e.usdt,amount,head)).await?;
+            anchor=Some((head,Box::new(e.clone())));
+            Venue::Mooniswap
         } else if mint_club_direct::enabled(e) {
             let head = white_state::head(ctx, &format!("{number:#x}")).await?;
             let state = mint_club_direct::state(ctx, e, head).await?;
@@ -234,7 +241,7 @@ impl Market {
     pub fn funding(&self, e: &Entry, source: Address, wallet: Address, amount: U256) -> Vec<Call> {
         if matches!(
             self.venue,
-            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::FundedExecutor
+            Venue::Brokerbot | Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Carbon | Venue::MintClub(_) | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::FundedExecutor
         ) || self.self_funded(e, source)
         {
             Vec::new()
@@ -371,7 +378,7 @@ impl Market {
                 bought,
                 (wallet, p, &buy.logs),
             ),
-            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::FundedExecutor => Ok(None),
+            Venue::FollowingBlock(_) | Venue::Bundles | Venue::SafeSwap | Venue::Prop | Venue::Integral | Venue::Pendle | Venue::Dagrow | Venue::Regular | Venue::WalletRouter(_) | Venue::Mooniswap | Venue::FundedExecutor => Ok(None),
         }
     }
 }

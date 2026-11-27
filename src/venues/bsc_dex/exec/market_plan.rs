@@ -26,6 +26,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     SafeSwap,
     Aktionariat,
     BancorLegacy,
+    Mooniswap,
     YieldBasis,
     BalancerV1,
     BancorV3,
@@ -50,6 +51,7 @@ pub(super) struct Selection {
     bounds:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
     bancor_legacy:Option<(Address,bool)>,
+    mooniswap:Option<(Address,bool)>,
     yield_basis:Option<(Address,bool)>,
     balancer_v1:Option<super::balancer_v1_plan::Selection>,
     bancor_v3:Option<(Address,super::bancor_v3_plan::Form)>,
@@ -70,6 +72,7 @@ impl Selection {
                 bounds:None,
                 proceeds: Some((tier, loan)),
                 bancor_legacy:None,
+                mooniswap:None,
                 yield_basis:None,
                 balancer_v1:None,
                 bancor_v3:None,
@@ -87,6 +90,7 @@ impl Selection {
             native_flat:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::NativeFlat{target,wei})=>Some((target,wei)),_=>None},_=>None},
             venue_fallback:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::VenueFallback{target,allowed})=>Some((target,allowed)),_=>None},_=>None},
             bancor_legacy:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::BancorLegacy{target,native,..})=>Some((target,native)),_=>None},_=>None},
+            mooniswap:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::Mooniswap{target,native,..})=>Some((target,native)),_=>None},_=>None},
             yield_basis:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::YieldBasis{target,native,..})=>Some((target,native)),_=>None},_=>None},
             balancer_v1:match leg.hops.as_slice(){[h]=>match h.fee_mode{
                 Some(crate::core::types::RouterFeeMode::BalancerV1{target,native,desired,..})=>
@@ -117,6 +121,7 @@ impl Market {
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             _ if e.family.variant.issuer_shares()=>Some(Self::Aktionariat),
             _ if e.family.variant==Variant::BancorLegacy=>Some(Self::BancorLegacy),
+            _ if e.family.variant==Variant::Mooniswap=>Some(Self::Mooniswap),
             _ if e.family.variant==Variant::YieldBasis=>Some(Self::YieldBasis),
             PoolState::BalancerV1(_) => Some(Self::BalancerV1),
             PoolState::BancorV3(_) => Some(Self::BancorV3),
@@ -133,6 +138,7 @@ impl Market {
     pub(super) fn currency(self, e: &Entry, native: bool) -> bool {
         match (&e.pool.state, self) {
             (_,Self::BancorLegacy)=>e.family.variant==Variant::BancorLegacy,
+            (_,Self::Mooniswap)=>e.family.variant==Variant::Mooniswap,
             (_,Self::YieldBasis)=>e.family.variant==Variant::YieldBasis,
             (PoolState::BalancerV1(_),Self::BalancerV1)=>true,
             (PoolState::BancorV3(_),Self::BancorV3)=>true,
@@ -155,6 +161,7 @@ impl Market {
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
             Self::Aktionariat=>"Aktionariat: требуется подтверждённое поручение на целые акции",
             Self::BancorLegacy=>"BancorLegacy: отсутствует исходное поручение кошелька",
+            Self::Mooniswap=>"Mooniswap: отсутствует исходное поручение кошелька",
             Self::YieldBasis=>"YieldBasis: отсутствует исходное поручение кошелька",
             Self::BalancerV1=>"Balancer V1: отсутствует поручение для выбранного BPool",
             Self::BancorV3=>"Bancor V3: отсутствует поручение для выбранного рынка",
@@ -187,6 +194,7 @@ impl Market {
             Self::SafeSwap => "SafeSwap",
             Self::Aktionariat=>"Aktionariat",
             Self::BancorLegacy=>"BancorLegacy",
+            Self::Mooniswap=>"Mooniswap",
             Self::YieldBasis=>"YieldBasis",
             Self::BalancerV1=>"Balancer V1",
             Self::BancorV3=>"Bancor V3",
@@ -256,6 +264,7 @@ impl Market {
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Aktionariat=>Box::pin(super::aktionariat_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::BancorLegacy=>Box::pin(super::bancor_legacy_plan::plan(ctx,s,wallet,height,selected.bancor_legacy)).await,
+            Self::Mooniswap=>Box::pin(super::mooniswap_plan::plan(ctx,s,wallet,height,selected.mooniswap)).await,
             Self::YieldBasis=>Box::pin(super::yield_basis_plan::plan(ctx,s,wallet,height,selected.yield_basis)).await,
             Self::BalancerV1=>Box::pin(super::balancer_v1_plan::plan(ctx,s,wallet,height,selected.balancer_v1)).await,
             Self::BancorV3=>Box::pin(super::bancor_v3_plan::plan(ctx,s,wallet,height,selected.bancor_v3)).await,
@@ -335,6 +344,11 @@ pub(super) fn router_shape(
             && q.reg.entry(&hop.pool).is_some_and(|e|e.family.variant==Variant::YieldBasis){return Ok(());}
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"YieldBasis: изменилась валюта кошелька"));
     }
+    if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::Mooniswap{native,..})=hop.fee_mode {
+        if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash))
+            && q.reg.entry(&hop.pool).is_some_and(|e|matches!(e.pool.state,PoolState::Mooniswap(_))){return Ok(());}
+        return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Mooniswap: изменилась валюта кошелька"));
+    }
     if let [hop]=leg.hops.as_slice() && let Some(crate::core::types::RouterFeeMode::BalancerV1{native,..})=hop.fee_mode {
         if direct && route.legs.len()==1 && native==(native_asset || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash))
             && q.reg.entry(&hop.pool).is_some_and(|e|matches!(e.pool.state,PoolState::BalancerV1(_))){return Ok(());}
@@ -376,6 +390,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
         (_,Variant::Brokerbot)=>Some(super::aktionariat_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::BancorLegacy)=>Some(super::bancor_legacy_plan::probe(ctx,e,order,wallet,now)),
+        (_,Variant::Mooniswap)=>Some(super::mooniswap_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::YieldBasis)=>Some(super::yield_basis_plan::probe(ctx,e,order,wallet,now)),
         (PoolState::BalancerV1(_),_)=>Some(super::balancer_v1_plan::probe(ctx,e,order,wallet,now)),
         (PoolState::BancorV3(s),_)=>Some(super::bancor_v3_plan::probe(ctx,e,s,order,wallet,now)),

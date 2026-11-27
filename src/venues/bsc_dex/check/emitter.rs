@@ -38,6 +38,16 @@ pub fn swap_topics() -> [B256; 6] {
 
 /// Выпустил ли этот пул событие обмена. Ошибок нет.
 pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
+    if let crate::core::types::PoolState::Mooniswap(s)=&e.pool.state {
+        use super::super::exec::mooniswap_wallet::abi::{IOriginal,ISuccessor};
+        if log.address!=e.pool.reference.address(){return false;}
+        let pair=if s.successor{
+            ISuccessor::Swapped::decode_raw_log(log.topics.iter().copied(),&log.data).ok().map(|v|[v.src,v.dst])
+        }else{
+            IOriginal::Swapped::decode_raw_log(log.topics.iter().copied(),&log.data).ok().map(|v|[v.src,v.dst])
+        };
+        return pair.is_some_and(|p|p==s.physical || [p[1],p[0]]==s.physical);
+    }
     if let crate::core::types::PoolState::Brokerbot(s)=&e.pool.state {return super::brokerbot_probe::traded(s,log);}
     if e.family.variant.umbrae(){return e.pool.reference.address()==log.address && log.topics.first()==Some(&super::super::pools::umbrae::swap_topic(e.family.variant));}
     if let crate::core::types::PoolState::Temple(s)=&e.pool.state {

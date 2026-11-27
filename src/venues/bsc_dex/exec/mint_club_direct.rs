@@ -270,6 +270,7 @@ pub(in crate::venues::bsc_dex) fn selected(leg: &crate::core::types::RouteLeg) -
             crate::core::types::RouterFeeMode::ProtectedWallet { target }
             | crate::core::types::RouterFeeMode::NativeWallet {target, ..}
             | crate::core::types::RouterFeeMode::BancorLegacy {target, ..}
+            | crate::core::types::RouterFeeMode::Mooniswap {target, ..}
             | crate::core::types::RouterFeeMode::YieldBasis {target, ..}
             | crate::core::types::RouterFeeMode::BalancerV1 {target, ..}
             | crate::core::types::RouterFeeMode::BancorV3 {target, ..}

@@ -826,6 +826,8 @@ jobs:
         env:
           MARKET: ${{ matrix.market }}
         run: python scripts/record_basin_networks.py "${MARKET#basin-registry-}" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'aero-basic-ethereum'
+        run: python scripts/record_aero_basic_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'motoswap-ethereum'
         run: python scripts/record_motoswap.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'mooniswap-')

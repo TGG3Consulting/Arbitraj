@@ -9,7 +9,7 @@ use crate::venues::bsc_dex::{
     pools::{families, prop_venue},
 };
 use alloy::sol_types::{SolCall, SolValue};
-use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, U64, keccak256};
 use chrono::Utc;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;

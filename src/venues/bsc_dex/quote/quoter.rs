@@ -134,7 +134,7 @@ pub async fn out_at(
     }
     let (to, data) = quoter_calls::request(ctx, e, token_in, amount)?;
     let mut tx=json!({"to":to,"input":data});
-    if e.family.variant==super::super::pools::family_variant::Variant::TopazCl{tx["from"]=json!(super::super::pools::topaz::sender(ctx));}
+    if e.family.variant.origin_fee(){tx["from"]=json!(super::super::pools::topaz::sender(ctx)?);}
     let raw:Bytes=rpc::call(ctx,"eth_call",json!([tx,block])).await?;
     if e.family.variant.factory_quoter()
         && let crate::core::types::PoolRef::Contract(pool) = e.pool.reference

@@ -111,10 +111,11 @@ pub(super) async fn option(
         super::v2_wallet_sim::Wire::Ranges(_) | super::v2_wallet_sim::Wire::RegisteredV3(_) | super::v2_wallet_sim::Wire::SolidlyRouter(_) => Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::Umbrae(_) | super::v2_wallet_sim::Wire::DirectModule{..} if c.entry.family.variant.umbrae() || c.entry.family.variant==super::super::pools::family_variant::Variant::VvsV3=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::FluxEth(m)=>Some(RouterFeeMode::FluxEth{target:m.router,native_cash:super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt)}),
-        super::v2_wallet_sim::Wire::SafeSwap(_)|super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
+        super::v2_wallet_sim::Wire::SafeSwap(_)|super::v2_wallet_sim::Wire::DegenRouter(_)|super::v2_wallet_sim::Wire::DegenModule(_)|super::v2_wallet_sim::Wire::Pendle(_)|super::v2_wallet_sim::Wire::O1(_)=>Some(RouterFeeMode::ProtectedWallet{target:execution.target}),
         super::v2_wallet_sim::Wire::AntfarmOutput(t)=>Some(RouterFeeMode::AntfarmProceeds{target:t.module,tier:t.funding,loan:t.use_loan}),
         super::v2_wallet_sim::Wire::Antfarm(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.module}),
         super::v2_wallet_sim::Wire::Bundles(t)=>Some(RouterFeeMode::ProtectedWallet{target:t.target}),
+        super::v2_wallet_sim::Wire::Integral(t)=>Some(RouterFeeMode::WalletBounds{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Dagrow(t)=>Some(RouterFeeMode::Dagrow{target:t.target,desired:t.desired}),
         super::v2_wallet_sim::Wire::Temple(k)=>Some(RouterFeeMode::ProtectedWallet{target:k.module}),
         super::v2_wallet_sim::Wire::Carbon(c)=>Some(RouterFeeMode::CarbonWallet{module:c.module,allocation:Some(c.allocation()),native_cash:c.wrapped().is_some() && super::vista_pricing::cash(&q.ctx,&i.usdt_ticker,i.usdt)}),
@@ -148,6 +149,11 @@ pub(super) async fn option(
     };
     if c.coins != i.qty {
         return Err(bad());
+    }
+    if let super::v2_wallet_sim::Wire::Integral(t)=&execution.wire && let (Some(want),Some(head))=(t.desired,h){
+        let need=super::super::pools::integral_quotes::required(ctx,t.relay,i.usdt,i.coin,want,&head.selector()).await?;
+        if i.side!=Side::Buy{return Err(bad())}
+        c.swapped.amount_in=need;c.swapped.amount_out=want;c.usdt=num::to_decimal(need,i.usdt_dec).ok_or_else(bad)?;
     }
     let carbon_fee=if let super::v2_wallet_sim::Wire::Carbon(order)=&execution.wire{
         let (spent,received,fee)=order.estimate.ok_or_else(bad)?;

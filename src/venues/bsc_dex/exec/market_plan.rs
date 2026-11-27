@@ -24,6 +24,7 @@ pub(in crate::venues::bsc_dex) enum Market {
     Antfarm,
     Dagrow,
     SafeSwap,
+    Integral,
     Pendle,
     Bundles,
     Temple,
@@ -35,7 +36,7 @@ pub(in crate::venues::bsc_dex) enum Market {
 pub(super) struct Selection {
     target: Option<Address>,
     carbon: Option<B256>,
-    dagrow:Option<(Address,Option<alloy_primitives::U256>)>,
+    bounds:Option<(Address,Option<alloy_primitives::U256>)>,
     proceeds: Option<(u16, bool)>,
     flux_eth:bool,
 }
@@ -48,7 +49,7 @@ impl Selection {
             return Self {
                 target: Some(target),
                 carbon: None,
-                dagrow:None,
+                bounds:None,
                 proceeds: Some((tier, loan)),
                 flux_eth:false,
             };
@@ -56,7 +57,7 @@ impl Selection {
         Self {
             target: super::mint_club_direct::selected(leg),
             carbon: super::carbon_direct::selected(leg).1,
-            dagrow:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
+            bounds:match leg.hops.as_slice(){[h]=>match h.fee_mode{Some(crate::core::types::RouterFeeMode::WalletBounds{target,desired}|crate::core::types::RouterFeeMode::Dagrow{target,desired})=>Some((target,desired)),_=>None},_=>None},
             proceeds: None,
             flux_eth:matches!(leg.hops.as_slice(),[hop] if matches!(hop.fee_mode,Some(crate::core::types::RouterFeeMode::FluxEth{..}))),
         }
@@ -74,6 +75,7 @@ impl Market {
             PoolState::Bundles(_) => Some(Self::Bundles),
             _ if e.family.variant.protected_router_wallet() => Some(Self::SafeSwap),
             _ if e.family.variant==Variant::Pendle && e.family.executor_kind.is_some()=>Some(Self::Pendle),
+            _ if e.family.variant==Variant::IntegralSize=>Some(Self::Integral),
             PoolState::Dagrow(_) => Some(Self::Dagrow),
             PoolState::Temple(_) if e.family.executor_kind.is_some() => Some(Self::Temple),
             PoolState::Carbon(_) => Some(Self::Carbon),
@@ -102,6 +104,7 @@ impl Market {
             Self::Bundles=>"Bundles Swap: требуется выбранный адрес исполнения",
             Self::Dagrow => "DAGrow: требуются исходные условия поручения",
             Self::SafeSwap => "SafeSwap: требуется выбранный модуль с оплатой из WETH",
+            Self::Integral => "Integral SIZE: требуется выбранная форма мгновенного поручения",
             Self::Pendle => "Pendle: требуется выбранный модуль этой серии",
             Self::Temple => "TempleDAO: требуется выбранный модуль денежного маршрута",
             Self::Carbon => "Carbon: требуется подтвержденный вектор действий контроллера",
@@ -122,6 +125,7 @@ impl Market {
             Self::Dagrow => "DAGrow",
             Self::Temple => "TempleDAO",
             Self::SafeSwap => "SafeSwap",
+            Self::Integral => "Integral SIZE",
             Self::Pendle => "Pendle",
             Self::Carbon => "Carbon",
             Self::MintClub => "Mint Club",
@@ -179,7 +183,8 @@ impl Market {
             Self::Bundles=>Box::pin(super::bundles_plan::plan(ctx,s,wallet,height,selected.target)).await,
             Self::SafeSwap=>Box::pin(super::safeswap_wallet::plan(ctx,s,wallet,height,selected.target)).await,
             Self::Pendle=>Box::pin(super::pendle_wallet::plan(ctx,s,wallet,height,selected.target)).await,
-            Self::Dagrow=>Box::pin(super::dagrow_wallet::plan(ctx,s,wallet,height,selected.dagrow)).await,
+            Self::Integral=>Box::pin(super::integral_plan::plan(ctx,s,wallet,height,selected.bounds)).await,
+            Self::Dagrow=>Box::pin(super::dagrow_wallet::plan(ctx,s,wallet,height,selected.bounds)).await,
             Self::Temple => {
                 Box::pin(super::temple_wallet::plan(
                     ctx,
@@ -229,7 +234,7 @@ pub(super) fn router_shape(
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Omni Flux: поручение требует физический ETH и один рынок"));
     }
     let needs_wallet=leg.hops.iter().filter_map(|h|q.reg.entry(&h.pool)).any(|e|
-        (direct && (matches!(e.family.variant,Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
+        (direct && (matches!(e.family.variant,Variant::IntegralSize|Variant::Dagrow|Variant::Bundles|Variant::PuzzleRanges|Variant::SafeSwapTrade|Variant::DegenSwap) || e.family.variant.exact_router() || super::o1_wallet::enabled(&e))) || e.family.variant.umbrae() || super::super::pools::sectorone::enabled(&e));
     if needs_wallet && (!direct || leg.hops.len()!=1 || route.legs.len()!=1 || native_asset
         || super::native::cash(&q.ctx,&q.ctx.text("venue.quote_asset")?,cash)) {
         return Err(q.ctx.err(crate::gateway::errors::ErrorCode::NoRoute,"Прямой роутер пула: требуется один шаг между ERC-20 кошелька"));
@@ -253,6 +258,7 @@ pub(in crate::venues::bsc_dex) fn probe(
         (_,Variant::Bundles)=>Some(super::bundles_plan::probe(ctx,e,order,wallet,now)),
         (_,variant) if variant.protected_router_wallet()=>Some(super::safeswap_wallet::probe(ctx,e,order,wallet,now)),
         (_,Variant::Pendle) if e.family.executor_kind.is_some()=>Some(super::pendle_wallet::probe(ctx,e,order,now)),
+        (_,Variant::IntegralSize)=>Some(super::integral_plan::probe(ctx,e,order,wallet,now)),
         (_,Variant::Dagrow)=>Some(super::dagrow_wallet::probe(ctx,e,order,wallet,now)),
         (_, Variant::Temple) => Some(super::temple_wallet::probe(ctx, e, order, wallet, now)),
         (PoolState::MintClub(_), _) => Some(super::mint_club_direct::probe(

@@ -127,6 +127,7 @@ pub enum Variant {
     Carbon,
     Temple,
     Dagrow,
+    IntegralSize,
     Pendle,
     MaverickOne,
     Surge,
@@ -207,6 +208,10 @@ impl Variant {
     pub fn flux_native(self) -> bool { matches!(self, Self::FluxNativeCl | Self::FluxNativeBin) }
     pub fn native_market_module(self) -> bool { self == Self::LaunchO1Wrapped || self.flux_native() }
     pub fn deli(self)->bool{matches!(self,Self::DeliConstant|Self::DeliCl)}
+    /// У шага 17 адрес отдельного рынка закодирован как poolId, а назначение — модуль фабрики.
+    pub fn pool_address_step(self)->bool{self.registered_module() || self==Self::MaverickOne}
+    /// Величина платы меняется по tx.origin и может измениться между двумя шагами в одном пуле.
+    pub fn origin_fee(self)->bool{self==Self::TopazCl}
     pub fn registered_module(self) -> bool { matches!(self, Self::RegisteredV3 | Self::VvsV3) }
     pub fn registered_v3(self) -> bool { matches!(self, Self::RegisteredV3 | Self::RegisteredUniV3 | Self::HelloV3 | Self::VvsV3) }
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
@@ -314,6 +319,7 @@ pub fn of(kind: &str) -> Variant {
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
         "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,
         "surge_native" | "surge_v5" => Variant::Surge,
+        "integral_size" | "integral_size_v5" => Variant::IntegralSize,
         "pendle_market" | "pendle_market_v5" => Variant::Pendle,
         "dagrow" | "dagrow_v5" => Variant::Dagrow,
         "temple" | "temple_v5" => Variant::Temple,

@@ -51,7 +51,10 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DirectModule { pool: Address },
     Bundles(super::super::exec::bundles_wallet::Terms),
     SafeSwap(Address),
+    DegenRouter(Address),
+    DegenModule(Address),
     Pendle(Address),
+    Integral(super::super::exec::integral_wallet::Terms),
     Dagrow(super::super::exec::dagrow_wallet::Terms),
     Temple(std::sync::Arc<super::super::exec::temple_wallet::Key>),
     AntfarmOutput(std::sync::Arc<super::super::exec::antfarm_output_wallet::Terms>),
@@ -149,7 +152,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
             )
         }
     };
-    let exact_approval=matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
+    let exact_approval=matches!(&o.wire, Wire::Integral(t) if t.target==t.relay) || matches!(&o.wire, Wire::Dagrow(t) if t.pool==t.target) || matches!(&o.wire,Wire::Bundles(t) if t.router==t.target);
     let allowed=|token:Address,amount:U256| async move {
         let encoded=Bytes::from(IMoney::allowanceCall{owner:o.payer,spender:o.target}.abi_encode());
         let current:Bytes=rpc::call(ctx,"eth_call",json!([{"to":token,"data":encoded},h.selector()])).await?;
@@ -193,12 +196,13 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     let received = word(&r[n + 4])
         .and_then(|after| after.checked_sub(word(&r[1])?))
         .ok_or_else(fail)?;
-    let exact_target=matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
+    let exact_target=matches!(&o.wire,Wire::Integral(t) if t.desired.is_some())||matches!(o.wire,Wire::Dagrow(t) if t.desired.is_some());
     let charged=spent.ok_or_else(fail)?;
     if charged.is_zero() || charged>o.amount || (!exact_target && charged!=o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
     if let Wire::Bundles(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::Integral(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Dagrow(t)=&o.wire && t.proof(&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::SolidlyRouter(market)=&o.wire {
         let proof=super::super::exec::solidly_router_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
@@ -226,7 +230,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let proof=super::super::exec::o1_wallet::Proof{id:*id,module:o.target,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
     }
-    if let Wire::SafeSwap(m)=&o.wire && super::super::exec::safeswap_wallet::Proof::order(*m,&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
+    if let Wire::SafeSwap(m)|Wire::DegenRouter(m)|Wire::DegenModule(m)=&o.wire && super::super::exec::safeswap_wallet::Proof::order(*m,&o,o.minimum,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Pendle(m)=&o.wire && super::super::exec::pendle_wallet::Proof::order(*m,&o,deadline).measured(&r[n+2].logs)!=Some((charged,received)){return Err(fail())}
     if let Wire::Temple(key)=&o.wire {
         let proof=super::super::exec::temple_wallet::Proof{key:**key,payer:o.payer,input:o.input,output:o.output,amount:o.amount,minimum:o.minimum,deadline};
@@ -241,6 +245,7 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
         let strict = received.checked_add(U256::ONE).ok_or_else(fail)?;
         let strict_carbon=match &o.wire{Wire::Carbon(c)=>Some(c.tighten(o.amount,received).ok_or_else(fail)?),_=>None};
         calls[offset + n + 2].input = match &o.wire {
+            Wire::Integral(t) if exact_target=>{let mut p=t.proof(&o,o.minimum,deadline);p.amount=charged.checked_sub(U256::ONE).ok_or_else(fail)?;p.data()}
             Wire::Dagrow(t) if exact_target=>{
                 let mut proof=t.proof(&o,o.minimum,deadline);proof.amount=charged.checked_sub(U256::ONE).ok_or_else(fail)?;proof.data()
             }
@@ -280,8 +285,9 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::AntfarmOutput(t)=>t.data(minimum,deadline),
         Wire::Antfarm(t)=>t.data(minimum,deadline),
         Wire::Bundles(t)=>t.proof(o,minimum,deadline).data(),
+        Wire::Integral(t)=>t.proof(o,minimum,deadline).data(),
         Wire::Dagrow(t)=>t.proof(o,minimum,deadline).data(),
-        Wire::SafeSwap(m)=>super::super::exec::safeswap_wallet::Proof::order(*m,o,minimum,deadline).data(),
+        Wire::SafeSwap(m)|Wire::DegenRouter(m)|Wire::DegenModule(m)=>super::super::exec::safeswap_wallet::Proof::order(*m,o,minimum,deadline).data(),
         Wire::Pendle(m)=>super::super::exec::pendle_wallet::data(*m,o.input,o.output,o.amount,minimum,deadline),
         Wire::Temple(k)=>k.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::EkuboV2(key,_) => key.calldata(minimum,deadline),

@@ -101,7 +101,9 @@ pub(super) async fn load(
     counter: Address,
     at: &Value,
 ) -> GatewayResult<PoolState> {
-    let module = Box::pin(safeswap_trade::market(ctx, f, pool, pair, at)).await?;
+    let module = if f.variant==super::family_variant::Variant::DegenSwap {
+        Box::pin(super::degenswap::router(ctx,f,pool,pair,at)).await?
+    }else{Box::pin(safeswap_trade::market(ctx, f, pool, pair, at)).await?};
     let coin = if pair.0 == counter { pair.1 } else { pair.0 };
     let (buy_sizes, mut sell_sizes) = tokio::try_join!(
         ladder_counter::amounts(ctx, tokens, reg, f.id, counter),

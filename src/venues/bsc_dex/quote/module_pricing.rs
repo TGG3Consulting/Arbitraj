@@ -15,7 +15,7 @@ use crate::{core::types::RouteMode, gateway::quote_stage};
 use alloy_primitives::Bytes;
 
 pub(super) fn enabled(e: &Entry) -> bool {
-    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
+    (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
@@ -30,6 +30,19 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native())) {
         if matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap){
             let safe=e.family.variant.protected_router_wallet();
+            if e.family.variant==Variant::DegenSwap {
+                let src=if i.side==crate::core::types::Side::Buy{i.usdt}else{i.coin};
+                if super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,src) {
+                    let target=match head{
+                        Some(h)=>super::super::exec::degen_router::checked(ctx,e,src,&h.selector()).await.ok(),
+                        None=>ctx.dex_addr("dex.quoter",e.family.id).ok(),
+                    };
+                    if let Some(target)=target{
+                        let native=Execution{mode:RouteMode::Direct,target,wire:Wire::DegenRouter(e.pool.reference.address())};
+                        if let Ok(v)=v2_execution::option(q,i,e.clone(),payer,native,head).await{quotes.push(v)}
+                    }
+                }
+            }
             let Ok(target)=ctx.dex_addr("dex.router",e.family.id) else{continue};
             if super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt){continue}
             let input=if i.side==crate::core::types::Side::Buy{i.usdt}else{i.coin};
@@ -39,7 +52,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 if !ok {continue}
             }
             let market=e.pool.reference.address();
-            let direct=Execution{mode:RouteMode::Direct,target,wire:if safe{Wire::SafeSwap(market)}else{Wire::Pendle(market)}};
+            let direct=Execution{mode:RouteMode::Direct,target,wire:if e.family.variant==Variant::DegenSwap{Wire::DegenModule(market)}else if safe{Wire::SafeSwap(market)}else{Wire::Pendle(market)}};
             if let Ok(v)=v2_execution::option(q,i,e.clone(),payer,direct,head).await{quotes.push(v)}
             if graph && let Ok(Some(v5))=executor::address(ctx){
                 let step=if safe{V5Step{native:None,kind:29,pool:target,data:Bytes::new()}}else{V5Step{native:None,kind:17,pool:target,data:Bytes::copy_from_slice(market.into_word().as_slice())}};
@@ -47,6 +60,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 if let Ok(v)=v2_execution::option(q,i,e.clone(),payer,via,head).await{quotes.push(v)}
             }continue
         }
+        if e.family.variant==Variant::IntegralSize{quotes.extend(Box::pin(super::integral_pricing::options(q,i,e,payer,graph,head)).await);continue}
         if e.family.variant==Variant::Bundles{
             quotes.extend(Box::pin(super::bundles_pricing::options(q,i,e,payer,graph,head)).await);
             continue;
@@ -111,7 +125,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             quotes.push(option);
         }
         if graph && let Ok(Some(target)) = executor::address(ctx) {
-            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant==Variant::MaverickOne || e.family.variant.registered_module() {
+            let (kind, data) = if let Some(id)=o1 {(17,Bytes::copy_from_slice(id.as_slice()))} else if e.family.variant.pool_address_step() {
                 (
                     17,
                     Bytes::copy_from_slice(e.pool.reference.address().into_word().as_slice()),
@@ -128,7 +142,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
             let via = Execution {
                 mode: RouteMode::Graph,
                 target,
-                wire: if e.family.variant==Variant::MaverickOne || e.family.variant.registered_module(){
+                wire: if e.family.variant.pool_address_step(){
                     Wire::funded(step,vec![e.pool.reference.address()],None)
                 }else{Wire::V5(step)},
             };

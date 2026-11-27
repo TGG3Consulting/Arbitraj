@@ -20,6 +20,7 @@ fn selected(mode: Option<RouterFeeMode>) -> Spender {
         Some(
             NativeWallet { target, .. }
             | ProtectedWallet { target }
+            | WalletBounds { target, .. }
             | Dagrow { target, .. }
             | AntfarmProceeds { target, .. },
         ) => Spender::Selected(target),
@@ -51,6 +52,7 @@ impl Market {
             | Market::Umbrae
             | Market::O1
             | Market::Antfarm
+            | Market::Integral
             | Market::Dagrow
             | Market::Bundles
             | Market::Temple => selected(mode),

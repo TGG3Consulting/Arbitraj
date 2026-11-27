@@ -107,7 +107,7 @@ pub async fn verify(ctx: &Ctx, cands: &[Candidate]) -> GatewayResult<Vec<Verdict
     let mut v2v3 = Vec::new();
     for (i, c) in cands.iter().enumerate() {
         match c.family.proto {
-            _ if c.family.variant.launch() || c.family.variant.flux_native() || matches!(c.family.variant,Variant::MaverickOne | Variant::Pendle | Variant::UmbraeDamm | Variant::UmbraeDlmm | Variant::Bundles | Variant::Antfarm | Variant::Temple | Variant::Surge | Variant::Dagrow | Variant::Gemswap | Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon | Variant::DeliConstant) => stable_u.push(i),
+            _ if c.family.variant.launch() || c.family.variant.flux_native() || matches!(c.family.variant,Variant::IntegralSize | Variant::MaverickOne | Variant::Pendle | Variant::UmbraeDamm | Variant::UmbraeDlmm | Variant::Bundles | Variant::Antfarm | Variant::Temple | Variant::Surge | Variant::Dagrow | Variant::Gemswap | Variant::BunnySwap | Variant::Virtuals | Variant::MintClub | Variant::Carbon | Variant::DeliConstant) => stable_u.push(i),
             _ if c.family.variant == Variant::RingFew => ring.push(i),
             Proto::InfinityCl | Proto::InfinityBin | Proto::UniswapV4 => v4.push(i),
             p if p.is_dodo() => dodo.push(i),
@@ -433,6 +433,7 @@ async fn contracts(ctx: &Ctx, cands: &[Candidate], size: usize) -> Vec<Verdict> 
                 None=>create_block.insert(super::nami::block(ctx,"latest").await),
             };
             let checked=match block {
+                Ok(at) if c.family.variant==Variant::DegenSwap => Box::pin(super::degenswap::router(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant.protected_router_wallet() => Box::pin(super::safeswap_trade::market(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await.map(|_|()),
                 Ok(at) if c.family.variant==Variant::SafeSwapProxy => Box::pin(super::safeswap::pair(ctx,c.family,f.reference.address(),(f.token0,f.token1),at)).await,
                 Ok(at) if matches!(c.family.variant,Variant::V2ExactRouter|Variant::SafeSwapV2|Variant::V2DualCreate2LiveFee) => super::v2_pair_binding::code(ctx,c.family.id,f.reference.address(),at).await,

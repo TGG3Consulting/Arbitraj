@@ -23,6 +23,11 @@ pub(super) struct WalletQuoter {
 
 pub(super) fn wallet_quoter(variant: Variant) -> Option<WalletQuoter> {
     match variant {
+        Variant::MaverickOne => Some(WalletQuoter{
+            request:super::super::pools::maverick_one_quotes::request,
+            payout:super::super::pools::maverick_one_quotes::payout,
+        }),
+        Variant::IntegralSize=>Some(WalletQuoter{request:super::super::pools::integral_quotes::request,payout:super::super::pools::integral_quotes::payout}),
         Variant::DegenSwap => Some(WalletQuoter{
             request: super::super::pools::degenswap_quotes::request,
             payout: super::super::pools::degenswap_quotes::payout,
@@ -141,6 +146,16 @@ mod tests {
             reply[31] = 1;
             assert_eq!((quoter.payout)(&reply), Some(U256::ONE));
             assert_eq!((quoter.payout)(&reply[..32]), None);
+        }
+        for kind in ["maverick_v1","maverick_v1_module"] {
+            let f=families::make("maverick",kind).unwrap();
+            assert!(!super::super::v2_pair_quote::kind_on(f));
+            let quoter=wallet_quoter(f.variant).unwrap();
+            let mut reply=[0u8;32];
+            assert_eq!((quoter.payout)(&reply),None);
+            reply[31]=7;
+            assert_eq!((quoter.payout)(&reply),Some(U256::from(7)));
+            assert_eq!((quoter.payout)(&reply[..31]),None);
         }
         let fork = families::make("pair", "v2_fork_executor").unwrap();
         assert!(wallet_quoter(fork.variant).is_none());

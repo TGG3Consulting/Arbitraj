@@ -10,6 +10,29 @@ use crate::{
 };
 use alloy_primitives::{Address, Bytes, U256};
 use serde_json::Value;
+pub(in crate::venues::bsc_dex) fn request(
+    ctx: &Ctx,
+    e: &super::registry::Entry,
+    token: Address,
+    amount: U256,
+) -> GatewayResult<(Address, Bytes)> {
+    use alloy::sol_types::SolCall;
+    if token != e.pool.token0 && token != e.pool.token1 {
+        return Err(ctx.err(ErrorCode::NoRoute, "Maverick V1: вход вне пары"));
+    }
+    let order = quote(e.pool.reference.address(), token == e.pool.token0, amount)
+        .ok_or_else(|| ctx.err(ErrorCode::NoRoute, "Maverick V1: сумма вне uint128"))?;
+    Ok((
+        ctx.dex_addr("dex.quoter", e.family.id)?,
+        order.abi_encode().into(),
+    ))
+}
+pub(in crate::venues::bsc_dex) fn payout(raw: &[u8]) -> Option<U256> {
+    use alloy::sol_types::SolCall;
+    super::maverick_one::IMaverickOne::calculateSwapCall::abi_decode_returns(raw)
+        .ok()
+        .filter(|v| !v.is_zero())
+}
 async fn pass(
     ctx: &Ctx,
     viewer: Address,

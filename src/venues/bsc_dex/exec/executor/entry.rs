@@ -217,7 +217,7 @@ pub fn params(ctx: &Ctx, e: &Entry, token_in: Address) -> GatewayResult<(Params,
             return Err(ctx.err(ErrorCode::NoRoute,"CandySwap: для избыточного входного остатка требуется модуль с учётом средств плательщика"));
         }
     }
-    if e.family.variant.protected_router_wallet() {
+    if e.family.variant==super::super::super::pools::family_variant::Variant::IntegralSize || e.family.variant.protected_router_wallet() {
         if k!=ExecKind::Basin || !matches!(&e.pool.state,PoolState::OraclePmm(_)) || (token_in!=e.pool.token0 && token_in!=e.pool.token1){
             return Err(ctx.err(ErrorCode::NoRoute,"SafeSwap Trade: требуется подтверждённый рынок и его входной токен"));
         }

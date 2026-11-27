@@ -139,6 +139,14 @@ fn no_route(ctx: &Ctx, e: &Entry, why: &str) -> GatewayError {
 /// исключён (как раньше, check/probe.rs); NoRoute — через исполнитель событие пула не найдено (не настройка и не
 /// вердикт по монете: «не проверено», пул не исключается).
 pub async fn emitter(ctx: &Ctx, e: &Entry, logs: &[SimLog]) -> GatewayResult<()> {
+    if e.family.variant==super::super::pools::family_variant::Variant::IntegralSize{
+        use super::super::exec::integral_wallet::IRelay::Sell;
+        let r=super::super::pools::integral_size::Roles::read(ctx,e.family.id)?;
+        let mut fills=logs.iter().filter(|log|log.address==r.relay&&log.topics.first()==Some(&Sell::SIGNATURE_HASH));
+        let (a,b)=(e.pool.token0,e.pool.token1);
+        let event=fills.next().and_then(|l|Sell::decode_raw_log(l.topics.iter().copied(),&l.data).ok());
+        return (fills.next().is_none()&&event.is_some_and(|v|v.orderContract==r.delay&&!v.orderId.is_zero()&&((v.tokenIn,v.tokenOut)==(a,b)||(v.tokenIn,v.tokenOut)==(b,a)))).then_some(()).ok_or_else(||ctx.err(ErrorCode::NoRoute,"Integral SIZE: мгновенная продажа не подтверждена"));
+    }
     if super::super::quote::uses_wallet_quoter(e.family.variant) {
         let event=if e.family.variant==super::super::pools::family_variant::Variant::Pendle {
             super::super::exec::pendle_wallet::IAdapter::Swap::SIGNATURE_HASH

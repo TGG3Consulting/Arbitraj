@@ -91,12 +91,16 @@ def capture(url):
                    for l in logs if len(l["topics"])==3 and l["topics"][0]==topic(TRANSFER)]
         def delta(token,owner):
             return sum(n*(int(out==owner)-int(inp==owner)) for a,inp,out,n in transfers if a==token)
-        if (delta(source,user),delta(target,recipient))!=(-spent,net):
-            raise ValueError("ERC20 wallet deltas differ from router")
+        spent_to_router=sum(n for token,a,b,n in transfers if (token,a,b)==(source,user,router))
+        paid_by_router=sum(n for token,a,b,n in transfers if (token,a,b)==(target,router,recipient))
+        pools={hop[0] for hop in path}
+        input_from_pools=sum(n for token,a,b,n in transfers if token==source and a in pools and b==user)
+        if (spent_to_router,paid_by_router)!=(spent,net) or delta(source,user)!=input_from_pools-spent or delta(target,recipient)!=net:
+            raise ValueError("wallet movements do not reconcile to the router and signed path")
         cases.append(dict(transaction=tx_hash,block=int(head["number"],16),block_hash=head["hash"],parent_hash=parent["hash"],
                           root=head["stateRoot"],router=router,digest="0x"+digest.hex(),user=user,recipient=recipient,
                           token_in=source,token_out=target,input=str(budget),minimum=str(minimum),net=str(net),
-                          fee_in_input=str(fee),deadline=deadline,nonce=nonce,nonces=nonce_pair,path=path,
+                          fee_in_input=str(fee),additional_pool_input=str(input_from_pools),wallet_net_spent=str(-delta(source,user)),deadline=deadline,nonce=nonce,nonces=nonce_pair,path=path,
                           event=matches[0],transfers=transfers,gas_paid_by=tx["from"]))
     return {"chain":8453,"abi":ABI_URL,"selector":selector,"cases":cases}
 

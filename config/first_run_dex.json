@@ -5372,6 +5372,9 @@
         "0.1",
         "1",
         "5"
+      ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23"
       ]
     }
   },
@@ -5394,6 +5397,40 @@
       "dex.v2_fee_method": "lpInfo()",
       "dex.v2_fee_denominator": 10000,
       "dex.v2_fee_rule_hash": "0xf291ce419268ebf4578c38fa373186c8cf91f3618f4c90815af7cfb1ab7c3fd4"
+    }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "integral-size-ethereum",
+    "source": "https://github.com/IntegralHQ/Integral-SIZE-Smart-Contracts · tests/data/first_run_dex_2026-11-26/integral_size_ethereum.json.gz",
+    "settings": {
+      "dex.kind": "integral_size_v5",
+      "dex.factory": "0xc480b33ee5229de3fbdfad1d2dcd3f3bad0c56c6",
+      "dex.factory_runtime_hash": "0x61c59259b640ed2d79e2783e8fc1c4bc5c394e9d2830d31940916aff9ce57507",
+      "dex.quoter": "0xd17b3c9784510e33cd5b87b490e79253bcd81e2e",
+      "dex.quoter_runtime_hash": "0x72fd2b7e1ce82463717aba010deb02386e6fe7b155d5776115b3239c2b2fd58b",
+      "dex.proxy_implementations": [
+        "0xaf780de01dc9c6ff4c29c6556b4666e852951584"
+      ],
+      "dex.proxy_runtime_hashes": [
+        "0x6cc73df0d7083fa1e2a9b33feeeda8b993924cd37b5396b799dcad79401424a3"
+      ],
+      "dex.integral_delay": [
+        "0xc3a99a855d060d727367c599ecb2423e0bebee24 0x7ba84e3bc20a8da43bdc2069f3f066f74214a7d05863bf3f879a06d4a311943c"
+      ],
+      "dex.module_runtime_hashes": [
+        "0xe542e35bd3064c0b7a1d39c94f45b9b18d4cd8fa9f1f24dc32bf874b25b4ca09"
+      ],
+      "dex.router_exact_tokens": [
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0x131ff5c755b710d543ea70fede2eb38e5d15b1456df0ae932ba12e2786f7e5df"
+      ],
+      "dex.pmm_ladder_counter": true,
+      "dex.pmm_ladder_usd": [
+        "1",
+        "10"
+      ]
     }
   }
 ]

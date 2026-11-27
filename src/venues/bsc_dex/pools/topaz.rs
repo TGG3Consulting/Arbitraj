@@ -16,8 +16,8 @@ alloy::sol! { interface ITopaz{
     function swapFeeModule() external view returns(address);
     function factory() external view returns(address);
 }}
-pub(crate) fn sender(ctx: &Ctx) -> Address {
-    signer::address(ctx).unwrap_or_default()
+pub(crate) fn sender(ctx: &Ctx) -> GatewayResult<Address> {
+    signer::address(ctx)
 }
 
 pub(crate) async fn fee(
@@ -66,7 +66,7 @@ pub(crate) async fn fee(
     let fee = rpc::call::<Bytes>(
         ctx,
         "eth_call",
-        json!([{"from":sender(ctx),"to":pool,"data":Bytes::from(ICLPool::feeCall{}.abi_encode())},at]),
+        json!([{"from":sender(ctx)?,"to":pool,"data":Bytes::from(ICLPool::feeCall{}.abi_encode())},at]),
     );
     let (
         (),

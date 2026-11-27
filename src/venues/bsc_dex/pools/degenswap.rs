@@ -24,7 +24,7 @@ alloy::sol! { interface IDegen {
     function getAmountsOut(uint256 amount,address[] calldata path) external view returns(uint256[]);
     function balanceOf(address owner) external view returns(uint256);
 }}
-pub(in crate::venues::bsc_dex) async fn market(
+pub(in crate::venues::bsc_dex) async fn router(
     ctx: &Ctx,
     f: &Family,
     pool: Address,
@@ -40,7 +40,6 @@ pub(in crate::venues::bsc_dex) async fn market(
     let generation = ctx.settings.generation();
     let factory = ctx.dex_addr("dex.factory", f.id)?;
     let router = ctx.dex_addr("dex.quoter", f.id)?;
-    let module = ctx.dex_addr("dex.router", f.id)?;
     let wrapped = ctx.addr("dex.native_wrapped")?;
     let init = ctx.dex_list("dex.pool_code_hashes", f.id)?;
     let [init] = init.as_slice() else {
@@ -71,14 +70,8 @@ pub(in crate::venues::bsc_dex) async fn market(
         batch::view(at, router, Roles::factoryCall {}),
         batch::view(at, router, IDegen::factoryAddressCall {}),
         batch::view(at, router, Roles::WETHCall {}),
-        batch::view(at, module, Roles::factoryCall {}),
-        batch::view(at, module, Roles::routerCall {}),
-        batch::view(at, module, Roles::tradeCall {}),
-        batch::view(at, module, Roles::wrappedCall {}),
-        batch::view(at, module, Roles::payerCall {}),
-        batch::view(at, module, Roles::executorCall {}),
     ];
-    let (rows, (), (), (), ()) = tokio::try_join!(
+    let (rows, (), (), ()) = tokio::try_join!(
         batch::read(ctx, calls),
         code::plain(
             ctx,
@@ -87,33 +80,62 @@ pub(in crate::venues::bsc_dex) async fn market(
             at
         ),
         code::plain(ctx, router, hash(ctx, f.id, "dex.quoter_runtime_hash")?, at),
-        code::plain(ctx, pool, hash(ctx, f.id, "dex.pair_runtime_hash")?, at),
-        super::direct_module::verify_code(ctx, f.id, module, at)
+        code::plain(ctx, pool, hash(ctx, f.id, "dex.pair_runtime_hash")?, at)
     )?;
-    let required = [
-        pool,
-        a,
-        b,
-        factory,
-        router,
-        factory,
-        factory,
-        wrapped,
-        factory,
-        router,
-        Address::ZERO,
-        wrapped,
-        signer::address(ctx)?,
-    ];
+    let required = [pool, a, b, factory, router, factory, factory, wrapped];
     for (raw, wanted) in rows.iter().zip(required) {
         if batch::decode(raw, Roles::factoryCall {})? != wanted {
             return Err(bad());
         }
     }
-    if ctx
-        .executor()?
-        .is_some_and(|e| batch::decode(&rows[13], Roles::executorCall {}).ok() != Some(e))
-        || generation != ctx.settings.generation()
+    if generation != ctx.settings.generation() {
+        return Err(bad());
+    }
+    Ok(router)
+}
+pub(in crate::venues::bsc_dex) async fn market(
+    ctx: &Ctx,
+    f: &Family,
+    pool: Address,
+    pair: (Address, Address),
+    at: &Value,
+) -> GatewayResult<Address> {
+    let generation = ctx.settings.generation();
+    let module = ctx.dex_addr("dex.router", f.id)?;
+    let calls = [
+        batch::view(at, module, Roles::factoryCall {}),
+        batch::view(at, module, Roles::routerCall {}),
+        batch::view(at, module, Roles::tradeCall {}),
+        batch::view(at, module, Roles::wrappedCall {}),
+        batch::view(at, module, Roles::payerCall {}),
+        batch::view(at, module, Roles::executorCall {}),
+    ];
+    let (native, rows, ()) = tokio::try_join!(
+        router(ctx, f, pool, pair, at),
+        batch::read(ctx, calls),
+        super::direct_module::verify_code(ctx, f.id, module, at)
+    )?;
+    let bad = || {
+        ctx.err(
+            ErrorCode::NotApplicable,
+            "DEGENSwap: изменились роли модуля",
+        )
+    };
+    for (raw, wanted) in rows.iter().zip([
+        ctx.dex_addr("dex.factory", f.id)?,
+        native,
+        Address::ZERO,
+        ctx.addr("dex.native_wrapped")?,
+        signer::address(ctx)?,
+    ]) {
+        if batch::decode(raw, Roles::factoryCall {})? != wanted {
+            return Err(bad());
+        }
+    }
+    if generation != ctx.settings.generation()
+        || ctx
+            .executor()?
+            .is_some_and(|a| batch::decode(&rows[5], Roles::executorCall {}).ok() != Some(a))
     {
         return Err(bad());
     }

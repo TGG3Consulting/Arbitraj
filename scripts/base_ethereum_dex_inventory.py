@@ -310,9 +310,14 @@ def tables(network, snapshots, profiles):
         def observed(id):
             with gzip.open(ds/f"{id}_ethereum_wallets.json.gz","rt",encoding="utf8") as f:return json.load(f)
         degen=observed("degenswap")
-        native=[r for case in degen["outcomes"] for r in case.get("rounds",[])]
+        native=[r for case in degen["outcomes"] if case["mode"]=="router" for r in case.get("rounds",[])]
         npositive=sum(all(int(v or 0)>0 for v in p["balances"]+p["reserves"]) for p in degen["markets"])
-        out.extend(["",f"DegenSwap Ethereum · Фабрика зарегистрировала {len(degen['markets'])} пар WETH, у {npositive} положительны оба резерва и оба баланса. Штатный роутер подтвердил {len(native)} покупок из {len(degen['outcomes'])} размеров. У {sum('sell_error' in r for r in native)} обратных продаж штатная проверка расхода и минимальной выплаты не прошла. Роутер уменьшает подписанный минимум, когда комиссия взимается в выходной валюте. Для индивидуального модуля проверяются плательщик, физические токены, CREATE2, изменяемые сборы и точная дельта получателя. [Реестр и результаты по размерам](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_wallets.json.gz)."])
+        out.extend(["",f"DegenSwap Ethereum · Фабрика зарегистрировала {len(degen['markets'])} пар WETH, у {npositive} положительны оба резерва и оба баланса. Штатный роутер подтвердил {len(native)} покупок из {sum(case['mode']=='router' for case in degen['outcomes'])} размеров. У {sum('sell_error' in r for r in native)} обратных продаж штатная проверка расхода и минимальной выплаты не прошла. Роутер уменьшает подписанный минимум, когда комиссия взимается в выходной валюте. Для индивидуального модуля проверяются плательщик, физические токены, CREATE2, изменяемые сборы и точная дельта получателя. [Реестр и результаты по размерам](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_wallets.json.gz)."])
+        with gzip.open(ds/"degenswap_ethereum_protected.json.gz","rt",encoding="utf8") as f:protected=json.load(f)
+        combos=protected["cases"]
+        for mode in ("module","v5"):
+            rows=[r for r in combos if r["mode"]==mode]
+            out.append(f"DegenSwap, {mode} · {sum('buy' in r for r in rows)} оплат покупок на {len(rows)} размеров, {sum('sell' in r for r in rows)} продаж купленного. В {sum('funding' in r.get('sell_refused','') for r in rows)} случаях ERC20 зачислил модулю меньше полного входа. [Квитанции, фактические суммы и газ](../tests/data/first_run_dex_2026-11-26/degenswap_ethereum_protected.json.gz).")
         cypher=observed("cypher_v2")
         native=[r for case in cypher["outcomes"] if case["mode"]=="router" for r in case.get("rounds",[])]
         executor=[r for case in cypher["outcomes"] if case["mode"]=="v5" for r in case.get("rounds",[])]
@@ -1479,6 +1484,19 @@ def tables(network, snapshots, profiles):
             status = f"`{task}` · {need}"
         if id == ("solidly-v3-base" if base else "solidly-v3") and solidly.exists():
             status = "DEX-19 · проверены исходники, комиссия и прямые обмены. Для торговли требуется проверенное размещение модуля"
+        if not base and id in ("cypher","degenswap","baseline-ethereum") and "degenswap-ethereum" in configured:
+            if id=="degenswap":
+                pool=next(p["pool"] for p in degen["markets"] if all(int(v or 0)>0 for v in p["balances"]+p["reserves"]))
+                factory=degen["factory"]["address"]; roundtrip="allPairs → CREATE2 → getPair в обоих порядках"
+                status="профиль degenswap-ethereum; требуется проверенное размещение модуля владельца"
+            elif id=="cypher":
+                pool=cypher["markets"][0]["pool"];factory=cypher["factory"]["address"]
+                roundtrip="официальный реестр Cypher V2, CREATE2, getPair в обоих порядках"
+                status="Cypher V2 · два пути; отдельный реестр V4 и проверки кошелька выше"
+            else:
+                keyset=json.loads(gzip.decompress((ds/"baseline_ethereum_directory.json.gz").read_bytes()))
+                pool=baseline["markets"][0]["pool"]; factory=keyset["relay"];roundtrip="PoolId ↔ bToken в Relay, Initialize в PoolManager"
+                status=f"профиль Baseline Ethereum; {deals} архивных выплат"
         if not base and id == "integral_size":
             market=next(m for m in integral["markets"] if set(m["tokens"])=={ih["input"],ih["output"]})
             pool,factory,roundtrip=market["pair"],integral["roles"]["factory"]["address"],"allPairs + getPair в обоих направлениях"
@@ -1557,6 +1575,12 @@ def tables(network, snapshots, profiles):
             snapshot=base_launch_inventory.evidence(f"{kind}_v1_{network}_directory.json.gz")
             candidates=[snapshot["roles"][role]["address"]]
             task=f"DEX-46 · {len(snapshot['markets'])} зарегистрированных рынков, см. кошельковые результаты выше"
+        if not base and str(row["id"]) in {"7037","7038"} and "degenswap-ethereum" in configured:
+            snapshot=cypher if str(row["id"])=="7037" else cl
+            candidates=[snapshot["factory"]["address"]]
+            task=f"Cypher · {len(snapshot['markets'])} действительных регистраций, испытания и границы выше"
+        if not base and str(row["id"])=="7520":
+            task="Карточные платежи; адаптер crypto-card.ts измеряет использование карты. Отдельные спотовые реестры Cypher указаны под 7037 и 7038"
         if not base and str(row["id"]) == "9435":
             directory = read(Path("tests/data/first_run_dex_2026-11-26/goliath_ethereum.json"))
             candidates = [directory["venue"]]

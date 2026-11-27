@@ -136,6 +136,9 @@ async fn pass(
     let ranges=Box::pin(super::puzzle_ranges::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in ranges.found {found.entry(coin).or_default().extend(rows);}
     notes.extend(ranges.notes); no_answer+=ranges.no_answer;
+    let integral=Box::pin(super::integral_directory::scan(ctx,coins,&quote_list)).await;
+    for (coin,rows) in integral.found{found.entry(coin).or_default().extend(rows);}
+    notes.extend(integral.notes);no_answer+=integral.no_answer;
     let pendle=super::pendle::scan(ctx,coins,&quote_list);
     for (coin,rows) in pendle.found{found.entry(coin).or_default().extend(rows);}
     let surge=super::surge::scan(ctx,coins,&quote_list);
@@ -143,7 +146,7 @@ async fn pass(
     let dag=Box::pin(super::dagrow::scan(ctx,coins,&quote_list)).await;
     for (coin,rows) in dag.found{found.entry(coin).or_default().extend(rows);}
     notes.extend(dag.notes);no_answer+=dag.no_answer;
-    let n_calls = dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
+    let n_calls = integral.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
     let fresh = ctx.index.with(|s| {
         let mut fresh = Vec::new();

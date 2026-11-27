@@ -73,6 +73,7 @@ mod temple_budget;
 pub(super) mod mint_club_pricing;
 mod module_pricing;
 pub(in crate::venues::bsc_dex) mod surge_pricing;
+mod integral_pricing;
 mod dagrow_pricing;
 mod bundles_pricing;
 mod bundles_route;

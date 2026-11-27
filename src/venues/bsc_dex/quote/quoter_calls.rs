@@ -47,12 +47,6 @@ pub fn request(
     if let Some(quoter) = super::market_selection::wallet_quoter(e.family.variant) {
         return (quoter.request)(ctx, e, token_in, amount);
     }
-    if e.family.variant==super::super::pools::family_variant::Variant::MaverickOne {
-        if token_in!=e.pool.token0 && token_in!=e.pool.token1{return Err(ctx.err(ErrorCode::NoRoute,"Maverick V1: вход вне пары"));}
-        let call=super::super::pools::maverick_one::quote(e.pool.reference.address(),token_in==e.pool.token0,amount)
-            .ok_or_else(||ctx.err(ErrorCode::NoRoute,"Maverick V1: сумма вне uint128"))?;
-        return Ok((ctx.dex_addr("dex.quoter",e.family.id)?,call.abi_encode().into()));
-    }
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::request(ctx,e,token_in,amount);}
     if let PoolState::Dagrow(s)=&e.pool.state {
         let output=if token_in==s.stable{s.dagr}else if token_in==s.dagr{s.stable}else{return Err(ctx.err(ErrorCode::NoRoute,"DAGrow: неизвестная валюта"))};
@@ -545,9 +539,6 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
-    if let Some(quoter) = super::market_selection::wallet_quoter(e.family.variant) {
-        return (quoter.payout)(out);
-    }
     if e.family.variant.umbrae(){return super::super::pools::umbrae_quotes::payout(e.family.variant,out,amount);}
     if let PoolState::Dagrow(_)=&e.pool.state {
         let values=super::super::pools::dagrow::ISsp::getAmountsOutCall::abi_decode_returns(out).ok()?;
@@ -612,8 +603,8 @@ pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> O
 }
 
 pub fn decode(e: &Entry, out: &[u8]) -> Option<U256> {
-    if e.family.variant==super::super::pools::family_variant::Variant::MaverickOne {
-        return super::super::pools::maverick_one::IMaverickOne::calculateSwapCall::abi_decode_returns(out).ok().filter(|v|!v.is_zero());
+    if let Some(quoter) = super::market_selection::wallet_quoter(e.family.variant) {
+        return (quoter.payout)(out);
     }
     if e.family.variant.umbrae(){return None;}
     if e.family.variant==super::super::pools::family_variant::Variant::BunnySwap {

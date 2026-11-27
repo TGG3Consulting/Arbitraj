@@ -157,6 +157,7 @@ pub enum RouterFeeMode {
     /// Защитный модуль ERC20 выбран по чистой выплате и закреплён до подписи.
     ProtectedWallet { target: alloy_primitives::Address },
     /// DAGrow SSP: точный вход или заявленная сумма выхода, привязанные к адресу исполнения.
+    WalletBounds {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},
     Dagrow {target:alloy_primitives::Address,desired:Option<alloy_primitives::U256>},
     /// Ethereum Antfarm reimburses physical ATF from this trade's output, in the same call.
     AntfarmProceeds { target: alloy_primitives::Address, tier:u16, loan:bool },

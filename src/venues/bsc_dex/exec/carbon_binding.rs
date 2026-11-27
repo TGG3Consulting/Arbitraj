@@ -48,7 +48,7 @@ impl Code {
         native_recipient: Option<Address>,
     ) -> GatewayResult<()> {
         let fail = || {
-            ctx.err(ErrorCode::OutcomeUnknown,"Carbon: не подтверждена реализация контроллера на позиции сделки в каноническом блоке")
+            ctx.err(ErrorCode::OutcomeUnknown,"Не подтверждена реализация прокси на позиции сделки в каноническом блоке")
         };
         #[derive(Deserialize)]
         #[serde(rename_all = "camelCase")]

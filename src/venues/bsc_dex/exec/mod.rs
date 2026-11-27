@@ -45,6 +45,8 @@ pub(super) mod carbon_binding;
 pub(super) mod carbon_wire;
 pub(super) mod carbon_direct;
 pub(super) mod carbon_fact;
+pub(super) mod integral_wallet;
+pub(super) mod integral_plan;
 pub(super) mod dagrow_wallet;
 pub(super) mod bundles_wallet;
 #[cfg(test)]
@@ -54,6 +56,7 @@ pub(super) mod bundles_plan;
 mod dagrow_wallet_tests;
 pub(super) mod temple_wallet;
 pub(super) mod safeswap_wallet;
+pub(crate) mod degen_router;
 pub(super) mod pendle_wallet;
 pub(super) mod o1_wallet;
 pub(super) mod flux_eth;

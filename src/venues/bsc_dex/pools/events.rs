@@ -176,6 +176,7 @@ pub fn apply(e: &mut Entry, log: &Log) -> Applied {
         _ if e.family.variant==super::family_variant::Variant::MaverickOne=>{e.valid=false;Applied::Refresh("Изменилось состояние Maverick V1".into())}
         _ if e.family.variant==super::family_variant::Variant::Surge=>{e.valid=false;Applied::Refresh("Обновилось состояние Surge".into())}
         _ if e.family.variant.protected_router_wallet()=>{e.valid=false;Applied::Refresh("Изменились условия защищённого обмена".into())}
+        _ if e.family.variant==super::family_variant::Variant::IntegralSize=>{e.valid=false;Applied::Refresh("Изменилось состояние пары Integral SIZE".into())}
         _ if e.family.variant==super::family_variant::Variant::Pendle=>{e.valid=false;Applied::Refresh("Изменилось состояние рынка Pendle".into())}
         _ if e.family.variant==super::family_variant::Variant::Dagrow=>{ e.valid=false;Applied::Refresh("Обновилось состояние DAGrow SSP".into()) }
         _ if e.family.variant==super::family_variant::Variant::Temple => {e.valid=false;Applied::Refresh("Изменились резервы TempleDAO".into())}

@@ -323,7 +323,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         "wombat" => ExecKind::Wombat,
         // Решение 485: swapFrom скважины без белого списка вызывающих (Well.sol L207-L217: nonReentrant и срок — общие).
         // Адаптер Fraxswap реализует тот же wire ABI swapFrom. Адрес шага выбирает executor/entry.
-        "degenswap_module" | "safeswap_trade_module" | "surge_v5" | "dagrow_v5" | "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
+        "integral_size_v5" | "degenswap_module" | "safeswap_trade_module" | "surge_v5" | "dagrow_v5" | "temple_v5" | "candyswap_module" | "bunnyswap_module" | "memebox_v5" | "basin_well" | "fraxswap_twamm_v5" | "oasisswap_v2_v5" | "ethervista_v5" => ExecKind::Basin,
         // Решение 486: Ocean.doMultipleInteractions — вызывающий = пользователь, без белого списка (Ocean.sol aaa0ccf
         // L271-L297, v3 Sourcify 0x96B4f4E4… L190-L201); computeOutputAmount пула — только от Ocean (onlyOcean), учёт
         // передаёт адрес пользователя (LiquidityPool.sol L135). Шаг 31, только исполнитель v5.
@@ -434,6 +434,7 @@ mod tests {
             "antfarm", // Signed router and separate ATF budget.
             "surge_native",
             "maverick_v1",
+            "integral_size",
             "pendle_market", // котировки до задания защищённого модуля
             "dagrow", // SSP с кошелька
             "temple", // официальный view, без шага V5

@@ -12,16 +12,21 @@ use crate::{
 use alloy_primitives::{Address, B256, U256};
 use serde_json::Value;
 
-alloy::sol! {
-    interface IMaverickOne {
-        event PoolCreated(address poolAddress,uint256 fee,uint256 tickSpacing,int32 activeTick,int256 lookback,uint64 protocolFeeRatio,address tokenA,address tokenB);
-        function isFactoryPool(address pool) external view returns(bool);
-        function factory() external view returns(address);
-        function tokenA() external view returns(address);
-        function tokenB() external view returns(address);
-        function calculateSwap(address pool,uint128 amount,bool tokenAIn,bool exactOutput,uint256 sqrtPriceLimit) external returns(uint256);
+// Конструктор события PoolCreated в ABI фабрики принимает восемь полей.
+#[allow(clippy::too_many_arguments)]
+mod abi {
+    alloy::sol! {
+        interface IMaverickOne {
+            event PoolCreated(address poolAddress,uint256 fee,uint256 tickSpacing,int32 activeTick,int256 lookback,uint64 protocolFeeRatio,address tokenA,address tokenB);
+            function isFactoryPool(address pool) external view returns(bool);
+            function factory() external view returns(address);
+            function tokenA() external view returns(address);
+            function tokenB() external view returns(address);
+            function calculateSwap(address pool,uint128 amount,bool tokenAIn,bool exactOutput,uint256 sqrtPriceLimit) external returns(uint256);
+        }
     }
 }
+pub(crate) use abi::IMaverickOne;
 
 pub(crate) async fn market(
     ctx: &Ctx,

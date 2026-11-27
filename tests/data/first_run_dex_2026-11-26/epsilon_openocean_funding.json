@@ -1,0 +1,26 @@
+{
+  "block": 62937208,
+  "hash": "0x986238a6f36b6add5df65c2e8d4ade6dfa1c42657eeb6cf645e8e98f7ea2c18e",
+  "roles": {
+    "funding": [
+      "0x114b11ae066a7785452c4570b42fff1b7fa5b001",
+      "0x24f7c75783390994465547c6d2688cf81b9aa2f511eb1dc73042849ebf7fe85b"
+    ],
+    "beacon": [
+      "0xd477349548e0515e5a68cce75942771c49e9bdf3",
+      "0x6198b877e3043cef34dd3447fe6b3d516c73adb1130fc02cf339c2b490945e89"
+    ],
+    "vault": [
+      "0x8d6fcf96253cd9c828b7c5d37ebcc1e1f0d7aa5e",
+      "0x2a6ee158683080311227ebf388ad8db54f10f0c4f45d324c6029a0a2fe408d4e"
+    ],
+    "funding_implementation": [
+      "0xec772b4019a21af2edd567136072b90feff59bc0",
+      "0x0f281ed62a91ea089932f415311f340e93e28e976ac80963c6c8407b9cbb24a3"
+    ],
+    "vault_implementation": [
+      "0xa2ca2f1e3e4d6ecbdced888e8edab0467d30adc6",
+      "0x0eb1b1db4f59eed73fd6534857bd05d502b37041d02b1ef35e92fc11727efb46"
+    ]
+  }
+}

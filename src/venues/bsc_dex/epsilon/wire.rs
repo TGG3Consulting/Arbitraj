@@ -298,6 +298,17 @@ impl Saved {
             api.implementation
                 .at_transaction(ctx, api.proxy, hash, r, None)
                 .await?;
+            if api.prepaid(&self.plan) == Some(true) {
+                let fail = || {
+                    ctx.err(ErrorCode::OutcomeUnknown,"OpenOcean: не подтверждена предоплата провайдера в исходном каноническом блоке")
+                };
+                api.funding
+                    .as_ref()
+                    .ok_or_else(fail)?
+                    .included(ctx, hash, r)
+                    .await
+                    .ok_or_else(fail)?;
+            }
         }
         if r.status.to::<u64>() == 1 && self.amounts(&r.logs).is_none() {
             return Err(ctx.err(

@@ -21,6 +21,7 @@ pub(super) struct Roles {
     pub implement: Contract,
     pub executor: Contract,
     pub wallet: Contract,
+    pub funding: Option<super::ocean_funding::Funding>,
 }
 impl Roles {
     pub fn read(ctx: &Ctx) -> Option<Self> {
@@ -47,17 +48,29 @@ impl Roles {
                 return None;
             }
         }
-        if rows.len() != 5
+        if !matches!(rows.len(), 5 | 10)
             || rows
                 .values()
                 .map(|v| v.address)
                 .collect::<std::collections::HashSet<_>>()
                 .len()
-                != 5
+                != rows.len()
         {
             return None;
         }
+        let funding = if rows.len() == 10 {
+            Some(super::ocean_funding::Funding {
+                entry: rows.remove("funding")?,
+                beacon: rows.remove("beacon")?,
+                implementation: rows.remove("funding_implementation")?,
+                vault: rows.remove("vault")?,
+                vault_implementation: rows.remove("vault_implementation")?,
+            })
+        } else {
+            None
+        };
         Some(Self {
+            funding,
             chain,
             venue: rows.remove("venue")?,
             ocean: rows.remove("provider")?,
@@ -89,7 +102,7 @@ impl Roles {
             .filter(|f| *f < 10000)
     }
 }
-async fn word(ctx: &Ctx, h: Head, to: Address, sig: &str, arg: &[u8]) -> Option<B256> {
+pub(super) async fn word(ctx: &Ctx, h: Head, to: Address, sig: &str, arg: &[u8]) -> Option<B256> {
     let mut data = keccak256(sig)[..4].to_vec();
     data.extend_from_slice(arg);
     rpc::call(
@@ -135,6 +148,15 @@ pub(super) async fn verified(ctx: &Ctx, h: Head, plan: &Plan) -> bool {
     );
     if checks.is_err() {
         return false;
+    }
+    if api.prepaid(plan) != Some(false) {
+        let Some(f) = api.funding.as_deref() else { return false };
+        if Some(f) != r.funding.as_ref()
+            || !f.at(ctx, h).await
+            || word(ctx, h, w, "fundingReceiver()", &[]).await != Some(f.entry.address.into_word())
+        {
+            return false;
+        }
     }
     let roles = tokio::join!(
         word(ctx, h, w, "router()", &[]),

@@ -6504,7 +6504,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `epsilon.openocean_contracts`
 
 - **Кейс:** Проверка официального прокси, его реализации и собственного модуля перед отправкой.
-- **Что ставить:** Укажите пять строк формата chainId role address runtimeHash с ролями venue, provider, implementation, executor и wallet. Адрес wallet указывает на размещение собственного EpsilonApiWallet, проверенное владельцем. [Официальная документация](https://docs.openocean.finance/docs/swap-api/v4)
+- **Что ставить:** Укажите пять строк формата chainId role address runtimeHash с ролями venue, provider, implementation, executor и wallet. Для отдельной предоплаты LiquidFi дополнительно укажите все пять ролей funding, beacon, funding_implementation, vault и vault_implementation. Адрес wallet указывает на размещение собственного EpsilonApiWallet, проверенное владельцем. [Официальная документация](https://docs.openocean.finance/docs/swap-api/v4)
 - **Если не задана:** API-форма пропускается. Прямые пулы и настроенные маршруты Epsilon доступны.
 
 ### `epsilon.contracts`

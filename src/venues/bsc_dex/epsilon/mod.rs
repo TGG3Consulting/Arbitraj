@@ -9,6 +9,7 @@ use std::{
 };
 mod model;
 mod ocean_api;
+mod ocean_funding;
 mod ocean_role;
 mod ocean_route;
 #[cfg(test)]

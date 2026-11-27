@@ -10,7 +10,14 @@ fn canonical_api_forms_require_actual_wallet_and_provider_payment() {
     let raw = include_bytes!(
         "../../../../tests/data/first_run_dex_2026-11-26/epsilon_openocean_base_wallets.json.gz"
     );
-    let d: Value = serde_json::from_reader(GzDecoder::new(raw.as_slice())).unwrap();
+    check(raw, [3, 3], 2);
+    let prepaid = include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/epsilon_openocean_prepaid_base_wallets.json.gz"
+    );
+    check(prepaid, [4, 4], 0);
+}
+fn check(raw: &[u8], counts: [usize; 2], missing: usize) {
+    let d: Value = serde_json::from_reader(GzDecoder::new(raw)).unwrap();
     let addr = |v: &Value| v.as_str().unwrap().parse::<Address>().unwrap();
     let num = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
     let owner = addr(&d["owner"]);
@@ -32,6 +39,26 @@ fn canonical_api_forms_require_actual_wallet_and_provider_payment() {
                 runtime: B256::ZERO,
             },
             nested,
+            funding: d
+                .get("funding")
+                .map(|s| {
+                    let role = |address| super::profile::Contract {
+                        address,
+                        code: B256::ZERO,
+                    };
+                    super::ocean_funding::Funding {
+                        entry: role(addr(s)),
+                        beacon: role(Address::ZERO),
+                        implementation: role(Address::ZERO),
+                        vault: role(
+                            "0x8d6fcf96253cd9c828b7c5d37ebcc1e1f0d7aa5e"
+                                .parse()
+                                .unwrap(),
+                        ),
+                        vault_implementation: role(Address::ZERO),
+                    }
+                })
+                .map(Box::new),
             payload: row["firm"]["data"].as_str().unwrap().parse().unwrap(),
         };
         let raw = Plan {
@@ -62,11 +89,18 @@ fn canonical_api_forms_require_actual_wallet_and_provider_payment() {
         let correct = (num(&paid["spent"]), num(&paid["received"]));
         assert_eq!(proof.amounts(&logs), Some(correct));
         assert_eq!(correct.0, raw.amount);
+        if let Some(f) = &raw.ocean.as_ref().unwrap().funding
+            && raw.ocean.as_ref().unwrap().prepaid(&raw) == Some(true)
+        {
+            let mut missing = logs.clone();
+            missing.retain(|x| x.address() != f.entry.address);
+            assert!(proof.amounts(&missing).is_none());
+        }
         logs.retain(|x| x.address() != addr(&d["ocean"]));
         assert!(proof.amounts(&logs).is_none());
         assert_eq!(row["controls"].as_array().unwrap().len(), 2);
         forms[usize::from(nested)] += 1;
     }
-    assert_eq!(forms, [3, 3]);
-    assert_eq!(refusals, 2);
+    assert_eq!(forms, counts);
+    assert_eq!(refusals, missing);
 }

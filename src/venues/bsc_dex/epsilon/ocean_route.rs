@@ -150,6 +150,7 @@ impl Compare<'_> {
                     implementation: r.code(),
                     executor: r.executor.address,
                     nested,
+                    funding: r.funding.clone().map(Box::new),
                     payload: offer.data?,
                 }),
             };

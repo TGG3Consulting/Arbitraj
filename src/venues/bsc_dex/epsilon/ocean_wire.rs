@@ -28,6 +28,8 @@ pub(crate) struct Ocean {
     pub implementation: Code,
     pub executor: Address,
     pub nested: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) funding: Option<Box<super::ocean_funding::Funding>>,
     pub payload: Bytes,
 }
 impl Ocean {
@@ -42,8 +44,19 @@ impl Ocean {
         if req.executor != self.executor
             || req.steps.is_empty()
             || self.payload.as_ref() != req.abi_encode()
-            || (d.src, d.dst, d.from, d.receiver, d.amount)
-                != (p.input, p.output, self.executor, caller, n)
+            || (d.src, d.dst, d.receiver, d.amount) != (p.input, p.output, caller, n)
+            || d.from != self.executor
+                && !self.funding.as_ref().is_some_and(|f| {
+                    let c = &req.steps[0];
+                    f.payment(
+                        d.from,
+                        [d.src, d.dst],
+                        self.executor,
+                        c.target,
+                        c.value,
+                        &c.data,
+                    )
+                })
             || d.minimum.is_zero()
             || d.flags != U256::from(2)
             || !d.referrer.is_zero()
@@ -63,6 +76,9 @@ impl Ocean {
                 throughVenue: self.nested,
             },
         ))
+    }
+    pub(super) fn prepaid(&self, p: &Plan) -> Option<bool> {
+        Some(self.request(p)?.0.trade.from != self.executor)
     }
     pub(super) fn data(&self, p: &Plan) -> Option<Bytes> {
         let (_, o) = self.request(p)?;
@@ -137,6 +153,14 @@ impl Ocean {
             d.guaranteed,
             d.referrer,
         ) || y.returnAmount < received
+        {
+            return None;
+        }
+        if d.from != self.executor
+            && !self
+                .funding
+                .as_ref()?
+                .paid(p, owner, caller, self.executor, d.amount, logs)
         {
             return None;
         }

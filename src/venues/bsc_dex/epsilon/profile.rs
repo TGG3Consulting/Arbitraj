@@ -5,7 +5,7 @@ use super::super::{
 use alloy_primitives::{Address, B256, U256, keccak256};
 use serde_json::json;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(super) struct Contract {
     pub address: Address,
     pub code: B256,

@@ -158,11 +158,12 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
     else {
         return Ok(None);
     };
-    if exec::swap_ctx::SwapCtx::of(&entry.lookup).is_some_and(|c| c.textile.is_some_and(|n|!n.wallet(&p.ctx)) || c.native_rfq.is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.is_some_and(|g|!g.wallet(&p.ctx))){
+    let saved = exec::swap_ctx::SwapCtx::of(&entry.lookup);
+    if saved.as_ref().is_some_and(|c| c.textile.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.native_rfq.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.as_ref().is_some_and(|g|!g.wallet(&p.ctx))){
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
     }
     if let Some(intent::Outcome::Order(x)) = entry.result {
-        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.rfq{
+        if let Some(proof)=saved.as_ref().and_then(|c|c.rfq.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Hashflow: требуется исходная сеть и первоначальный кошелёк завершённого поручения").pending(entry.lookup.clone());
             if wallet::signer::address(&p.ctx).ok()!=Some(proof.trader){return Err(unknown());}
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
@@ -170,34 +171,34 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
         }
-        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.textile{
+        if let Some(proof)=saved.as_ref().and_then(|c|c.textile.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Textile: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
             let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
             let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
-            let (_,dec)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|s|s.decs).ok_or_else(unknown)?;
+            let (_,dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
             if crate::venues::bsc_dex::num::to_decimal(if r.side==Side::Buy{d}else{c},dec)!=Some(x.gross_quote){return Err(unknown());}
         }
-        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.epsilon{
+        if let Some(proof)=saved.as_ref().and_then(|c|c.epsilon.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Epsilon: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
             let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
             let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
-            let (_,dec)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|s|s.decs).ok_or_else(unknown)?;
+            let (_,dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
             if crate::venues::bsc_dex::num::to_decimal(if r.side==Side::Buy{d}else{c},dec)!=Some(x.gross_quote){return Err(unknown());}
         }
-        if let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) && let Some(proof)=c.raindex{
+        if let Some(proof)=saved.as_ref().and_then(|c|c.raindex.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Raindex: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
             let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
             proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
             let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
-            let (_,dec)=exec::swap_ctx::SwapCtx::of(&entry.lookup).and_then(|s|s.decs).ok_or_else(unknown)?;
+            let (_,dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
             if crate::venues::bsc_dex::num::to_decimal(if r.side==Side::Buy{d}else{c},dec)!=Some(x.gross_quote){return Err(unknown());}
         }
         if x.trade.request.qty == r.qty {
@@ -323,12 +324,17 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     if let Some(trade) = prior(p, &req).await? {
         return Ok(trade);
     }
+    // A recovery lookup ends here without constructing the futures for signing or exchange.
+    Box::pin(send_selected(p, req, id)).await
+}
+
+async fn send_selected(p: &Parts, req: TradeRequest, id: B256) -> GatewayResult<TradeResult> {
     let ctx = &p.ctx;
     ctx.bound()?;
     let who = wallet::signer::address(ctx)?;
     if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::textile::LABEL) {
         let ticket=p.textile.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Textile"))?;
-        return super::super::textile::trade(p,req,&ticket).await;
+        return Box::pin(super::super::textile::trade(p,req,&ticket)).await;
     }
     let old=p.rfqs.take(who,id);
     let native=p.native_quotes.take(who,id);
@@ -386,7 +392,7 @@ pub(super) async fn trade(p: &Parts, req: TradeRequest, id: B256) -> GatewayResu
     }
     let mut fallback = req;
     fallback.route = fresh.route;
-    exec::trade::trade(&quoting, &p.env(), &p.nonces, fallback).await
+    Box::pin(exec::trade::trade(&quoting, &p.env(), &p.nonces, fallback)).await
 }
 
 async fn selected(

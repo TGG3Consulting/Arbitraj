@@ -606,6 +606,11 @@ jobs:
           npm ci --prefix contracts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropVenueAdapter
           python scripts/record_prop_creates.py "$RUNNER_TEMP/prop/PropVenueAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'prop-bound-creates'
+        run: |
+          npm ci --prefix contracts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/prop" PropSlotVenueAdapter
+          python scripts/record_prop_creates.py "$RUNNER_TEMP/prop/PropSlotVenueAdapter.json" "$RUNNER_TEMP/market.json" --bound
       - if: startsWith(matrix.market, 'builder-bound-')
         env:
           MARKET: ${{ matrix.market }}

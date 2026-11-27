@@ -30,7 +30,7 @@ def venues():
     return found
 
 
-def capture(endpoint, compiled):
+def capture(endpoint, compiled, bound=False):
     height, block = next(iter(REFERENCE.items()))
     selector={"blockHash":block,"requireCanonical":True}
     client=Capture({"endpoint":endpoint,"selector":selector})
@@ -40,6 +40,7 @@ def capture(endpoint, compiled):
     out={}
     types=["address"]*3+["bytes32"]*3
     for venue,(vault,accepted) in venues().items():
+        if bound and venue not in {case[0] for case in CASES.values()}:continue
         addresses=[ROUTER,venue,vault]
         code=[bytes.fromhex(rpc(client,"eth_getCode",[a,selector])["result"][2:]) for a in addresses]
         if not all(code):
@@ -48,6 +49,12 @@ def capture(endpoint, compiled):
         values=addresses+hashes
         runtime=bytes.fromhex(runtime_with_args(client,compiled,types,values)[2:])
         runtime_hash="0x"+keccak(runtime).hex()
+        if bound:
+            import gzip
+            name=next(key for key,case in CASES.items() if case[0]==venue)
+            archive=Path("tests/data/first_run_dex_2026-11-26")/(name+"_ethereum_bound_wallet.json.gz")
+            expected={r["runtime"] for r in json.loads(gzip.decompress(archive.read_bytes()))["builders"]}
+            if expected!={runtime_hash}:raise ValueError("slot wallet differs from the funded replay")
         if accepted and runtime_hash not in accepted:
             raise ValueError("constructor differs from accepted wallet runtime for "+venue)
         data=bytes.fromhex(compiled["creation"])+encode(types,values)
@@ -61,11 +68,12 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument("compiled",type=Path)
     parser.add_argument("output",type=Path)
+    parser.add_argument("--bound",action="store_true")
     args=parser.parse_args()
     artifact=json.loads(args.compiled.read_text())
     for endpoint in ENDPOINTS:
         try:
-            result=capture(endpoint,artifact)
+            result=capture(endpoint,artifact,args.bound)
         except Exception as e:
             print(type(e).__name__,str(e)[:180],flush=True)
             continue

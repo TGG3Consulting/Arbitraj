@@ -188,6 +188,27 @@ mod tests {
             assert_eq!(changed["cases"].as_array().unwrap().len(), 8);
             pairs.push(serde_json::json!({"network":network,"dex":id,"creation_code_hash":recorded["init_hash"]}));
         }
+        let moto: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+            include_bytes!("../../tests/data/first_run_dex_2026-11-26/motoswap_ethereum.json.gz").as_slice(),
+        )).unwrap();
+        assert_eq!(moto["selector"], eth["selector"]);
+        let directory = &moto["directory"];
+        let factory = directory["roles"]["factory"].as_str().unwrap().parse().unwrap();
+        let init = directory["init"].as_str().unwrap().parse().unwrap();
+        let profile = all.iter().find(|p| p.id == "motoswap-ethereum").unwrap();
+        let shells = directory["pairs"].as_array().unwrap();
+        assert_eq!(shells.len(), 22);
+        for pair in shells {
+            let address = |v: &Value| v.as_str().unwrap().parse::<alloy_primitives::Address>().unwrap();
+            let tokens = &pair["tokens"];
+            let predicted = crate::venues::bsc_dex::pools::verify::v2_create2(
+                factory, address(&tokens[0]), address(&tokens[1]), init,
+            );
+            assert_eq!(predicted, address(&pair["pool"]));
+            assert_eq!(profile.settings.get("dex.pair_runtime_hash"),
+                Some(&Parameter::Text(pair["runtime"].as_str().unwrap().into())));
+        }
+        pairs.push(serde_json::json!({"network":"ethereum","dex":"motoswap-ethereum","creation_code_hash":directory["init"]}));
         let theorem: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
             include_bytes!("../../tests/data/first_run_dex_2026-11-26/theorem_ethereum.json.gz").as_slice(),
         )).unwrap();

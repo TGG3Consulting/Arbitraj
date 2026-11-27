@@ -61,6 +61,23 @@ def tables(network, snapshots, profiles):
     out[2] += (f" Из {len(gt['rows'])} строк GeckoTerminal адресные профили заданы для {len(matched)}, "
                f"остаются открытыми {len(gt['rows']) - len(matched)}. Ещё {len(configured) - len(matched)} "
                "внутренних ключей обозначают отдельные фабрики и семейства.")
+    verified = {
+        key: observation for key, observation in data["factory-probes"]["rows"].items()
+        if observation.get("factory_roundtrip") and observation.get("token0")
+        and observation.get("token1") and observation["token0"] != observation["token1"]
+    }
+    matching_factories = sum(
+        key in aliases and
+        configured[aliases[key]]["settings"].get("dex.factory", "").lower() ==
+        observation["reported_factory"].lower()
+        for key, observation in verified.items()
+    )
+    out[2] += (
+        f" На блоке {data['factory-probes']['block']} для {len(verified)} ID один пул из выборки "
+        f"подтвердил две разные валюты, а фабрика вернула его адрес. Для {matching_factories} из "
+        f"этих ID адрес фабрики совпал с профилем. Здесь посчитаны проверенные ID, по одному "
+        f"образцу на ID. Исполнимый объём и доходность из этого числа определить нельзя."
+    )
     for id, row in configured.items():
         fields = []
         for k, v in row["settings"].items():
@@ -1785,6 +1802,12 @@ def tables(network, snapshots, profiles):
             status += f" · `T-DEX-{network}-{id}` найти первичное размещение Base и привязать событие обмена к фабрике"
         if id in ("solidly-v3-base", "solidly-v3"):
             status += " · оператор задаёт собственный адрес принятого модуля"
+        if id in verified and id in aliases:
+            actual = verified[id]["reported_factory"].lower()
+            expected = configured[aliases[id]]["settings"].get("dex.factory")
+            if expected and expected.lower() != actual:
+                status += (f" · Проверенная фабрика образца отличается от dex.factory профиля "
+                           f"({expected}). Этот образец не подтверждает профиль.")
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):

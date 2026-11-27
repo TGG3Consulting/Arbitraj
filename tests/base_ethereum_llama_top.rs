@@ -230,15 +230,52 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
             }
             if let Some(number) = volumes.get(id).and_then(Value::as_f64) {
                 known += 1;
-                assert!(volume.parse::<f64>().is_ok(), "{key} {id}: {volume}");
+                assert_eq!(volume.parse::<f64>().unwrap(), number, "{key} {id}");
                 if row.contains("оборот < 5 000 USD, отложено") {
                     assert!(number < 5_000.0, "{key} {id}: {number}");
                 }
             } else {
                 assert_eq!(volume, "нет данных", "{key} {id}");
+                assert!(!decision.starts_with("оборот < 5 000 USD"), "{key} {id}");
             }
         }
         assert_eq!((ids.len(), known), (catalog_rows, expected_known));
         assert_eq!(nonspot, if key == "base" { 39 } else { 21 });
+    }
+}
+
+#[test]
+fn catalog_factory_sample_counts_only_confirmed_pairs_and_matching_profile_domains() {
+    let bytes = include_bytes!("data/first_run_dex_2026-11-26/catalog_factory_probes.json.gz");
+    let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(&bytes[..])).unwrap();
+    let profiles = json(include_str!("../config/first_run_dex.json"));
+    let document = include_str!("../docs/BASE_ETHEREUM_SETTINGS.md");
+    for (net, count, matched_count) in [("base", 64, 64), ("ethereum", 28, 27)] {
+        let mut total = 0;
+        let mut matching = 0;
+        for (id, row) in archive[net]["rows"].as_object().unwrap() {
+            if row["factory_roundtrip"].as_str().is_none() || row["token0"] == row["token1"]
+                || row["token0"].as_str().is_none() || row["token1"].as_str().is_none()
+            {
+                continue;
+            }
+            total += 1;
+            let profile = items(&profiles).iter().find(|p| {
+                p["network"] == net
+                    && p["settings"]["dex.indexer_id"].as_str().or(p["id"].as_str()) == Some(id)
+            }).unwrap();
+            let expected = profile["settings"]["dex.factory"].as_str().unwrap();
+            let actual = row["reported_factory"].as_str().unwrap();
+            if actual.eq_ignore_ascii_case(expected) {
+                matching += 1;
+            } else {
+                let line = document.lines().find(|line| {
+                    line.starts_with(&format!("| `{id}` |")) && line.contains(actual)
+                }).unwrap();
+                assert!(line.contains(expected) && line.contains("отличается от dex.factory"));
+            }
+        }
+        assert_eq!((total, matching), (count, matched_count));
+        assert!(document.contains(archive[net]["source_sha256"].as_str().unwrap()));
     }
 }

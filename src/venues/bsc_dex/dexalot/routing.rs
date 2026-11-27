@@ -24,6 +24,7 @@ pub(in crate::venues::bsc_dex) struct Ticket {
     pub(super) spent: U256,
     pub(super) received: U256,
     pub(super) gas: u64,
+    pub(super) requested_output: Option<U256>,
     pub(super) head: white_state::Head,
     pub(super) generation: u64,
     pub(super) di: u8,
@@ -31,16 +32,19 @@ pub(in crate::venues::bsc_dex) struct Ticket {
 }
 type Tickets = HashMap<(Address, B256), Arc<Ticket>>;
 #[derive(Clone, Default)]
-pub(in crate::venues::bsc_dex) struct Book(Arc<Mutex<Tickets>>);
+pub(in crate::venues::bsc_dex) struct Book {
+    tickets: Arc<Mutex<Tickets>>,
+    pub(super) feed: super::automatic::Feed,
+}
 impl Book {
     pub(super) fn put(&self, t: Arc<Ticket>) {
-        let mut rows = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let mut rows = self.tickets.lock().unwrap_or_else(|e| e.into_inner());
         let now = chrono::Utc::now().timestamp().max(0) as u64;
         rows.retain(|_, v| v.proof.expiry > now);
         rows.insert((t.proof.call.payer, t.proof.call.calldata), t);
     }
     pub(in crate::venues::bsc_dex) fn take(&self, who: Address, id: B256) -> Option<Arc<Ticket>> {
-        let mut rows = self.0.lock().ok()?;
+        let mut rows = self.tickets.lock().ok()?;
         let order = rows.remove(&(who, id))?;
         rows.retain(|_, t| {
             (
@@ -69,7 +73,7 @@ impl Book {
         let ctx = &p.ctx;
         let who = wallet::signer::address(ctx).ok()?;
         Some(
-            self.0
+            self.tickets
                 .lock()
                 .ok()?
                 .values()
@@ -98,7 +102,7 @@ impl Book {
             .iter()
             .filter_map(|v| {
                 let (raw, dec) = if s == Side::Buy {
-                    (v.received, v.dout)
+                    (v.requested_output.unwrap_or(v.received), v.dout)
                 } else {
                     (v.spent, v.di)
                 };
@@ -108,11 +112,12 @@ impl Book {
     }
 }
 pub(in crate::venues::bsc_dex) fn available(p: &Parts) -> bool {
-    enabled(&p.ctx)
-        && p.dexalot
-            .0
-            .lock()
-            .is_ok_and(|rows| rows.values().any(|v| timely(&p.ctx, v.proof.expiry)))
+    super::automatic::ready(&p.ctx)
+        || (enabled(&p.ctx)
+            && p.dexalot
+                .tickets
+                .lock()
+                .is_ok_and(|rows| rows.values().any(|v| timely(&p.ctx, v.proof.expiry))))
 }
 /// A simulated rebate can disappear at inclusion. Compare the calldata's maximum debit to the budget.
 pub(super) fn within_input(authorized: U256, decimals: u8, budget: Decimal) -> bool {
@@ -138,17 +143,41 @@ pub(in crate::venues::bsc_dex) async fn consider(
     let c = &p.ctx;
 
     let buy = s == Side::Buy;
-    let mut candidates = p.dexalot.candidates(p, a, s).unwrap_or_default();
-    candidates.retain(|t| {
-        let (v, d) = if buy {
-            (t.received, t.dout)
-        } else {
-            (t.spent, t.di)
-        };
-        num::to_decimal(v, d) == Some(qty)
-    });
+    let matching = || {
+        let mut candidates = p.dexalot.candidates(p, a, s).unwrap_or_default();
+        candidates.retain(|t| {
+            let (v, d) = if buy {
+                (t.requested_output.unwrap_or(t.received), t.dout)
+            } else {
+                (t.spent, t.di)
+            };
+            num::to_decimal(v, d) == Some(qty)
+        });
+        candidates
+    };
+    let mut candidates = matching();
     if candidates.is_empty() {
-        return old;
+        let Ok(wait) = c.timeout() else { return old };
+        match tokio::time::timeout(
+            wait,
+            Box::pin(super::automatic::evaluate(
+                p,
+                a,
+                s,
+                qty,
+                pair,
+                old.as_ref().ok(),
+            )),
+        )
+        .await
+        {
+            Ok(super::automatic::Next::Indicative(q)) => return Ok(*q),
+            Ok(super::automatic::Next::Reserved) => candidates = matching(),
+            _ => return old,
+        }
+        if candidates.is_empty() {
+            return old;
+        }
     }
     let Ok(h) = white_state::head(c, "latest").await else {
         return old;
@@ -157,14 +186,22 @@ pub(in crate::venues::bsc_dex) async fn consider(
         && q.fillable_qty == qty
         && (!quote_stage::is_final() || q.route.as_ref().is_some_and(|r| r.executable))
     {
-        hashflow::routing::total(p, q).await
+        let Some(current) = hashflow::routing::total(p, q).await else {
+            return old;
+        };
+        Some(current)
     } else {
         None
     };
     let mut best = old;
     for t in candidates {
         let (coin, cash, cd, sd) = if buy {
-            (t.received, t.spent, t.dout, t.di)
+            (
+                t.requested_output.unwrap_or(t.received),
+                t.spent,
+                t.dout,
+                t.di,
+            )
         } else {
             (t.spent, t.received, t.di, t.dout)
         };

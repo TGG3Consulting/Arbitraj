@@ -113,7 +113,7 @@ impl Fail {
 pub struct Reply {
     pub status: StatusCode,
     pub text: String,
-    /// Retry-After в секундах (RFC 9110, раздел 10.2.3: delay-seconds). Заголовка нет или он в виде даты — None.
+    /// Retry-After в секундах (RFC 9110, раздел 10.2.3: delay-seconds). Дата HTTP переводится в оставшиеся секунды.
     pub retry_after_s: Option<u64>,
 }
 
@@ -175,7 +175,15 @@ async fn read(req: RequestBuilder, lim: Limits, got: &AtomicUsize) -> Result<Rep
         .headers()
         .get(reqwest::header::RETRY_AFTER)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.trim().parse::<u64>().ok());
+        .and_then(|v| {
+            let value = v.trim();
+            value.parse::<u64>().ok().or_else(|| {
+                let date = chrono::DateTime::parse_from_rfc2822(value)
+                    .ok()?
+                    .timestamp();
+                Some(date.saturating_sub(chrono::Utc::now().timestamp()).max(0) as u64)
+            })
+        });
     let mut body = Vec::new();
     loop {
         match tokio::time::timeout(lim.idle, resp.chunk()).await {

@@ -1,4 +1,5 @@
 //! Same-chain Dexalot orders. The public reference price may use ETH as the WETH price source.
+mod automatic;
 mod client;
 mod firm;
 mod price;
@@ -85,6 +86,7 @@ pub(super) async fn preview(p: &Parts, r: Request) -> GatewayResult<Preview> {
             f,
             r.trader,
             (dec, pair.precision(r.output).ok_or_else(bad)?),
+            None,
         ))
         .await;
     }

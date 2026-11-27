@@ -34,7 +34,12 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let buy = req.side == Side::Buy;
     let pair = if buy { (stable, coin) } else { (coin, stable) };
     let (asset, cash, cd, sd) = if buy {
-        (t.received, t.spent, t.dout, t.di)
+        (
+            t.requested_output.unwrap_or(t.received),
+            t.spent,
+            t.dout,
+            t.di,
+        )
     } else {
         (t.spent, t.received, t.di, t.dout)
     };

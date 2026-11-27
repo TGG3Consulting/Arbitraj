@@ -94,6 +94,43 @@ impl Config {
             )
         })
     }
+    pub(super) async fn check_makers(
+        &self,
+        ctx: &Ctx,
+        protected: bool,
+        h: Head,
+    ) -> GatewayResult<()> {
+        let at = h.selector();
+        let allowed =
+            call::canonical(ctx, &at, self.router.addr, IRfq::getAllowedRFQsCall {}).await?;
+        for maker in &self.makers {
+            if !allowed.contains(&maker.addr)
+                || (!protected && maker.proxy.is_some())
+                || maker.check(ctx, &at).await.is_err()
+            {
+                continue;
+            }
+            if !protected
+                || call::canonical(
+                    ctx,
+                    &at,
+                    maker.addr,
+                    IRfq::hasRoleCall {
+                        role: keccak256("TRUSTED_FORWARDER_ROLE"),
+                        grantee: self.router.addr,
+                    },
+                )
+                .await
+                .unwrap_or(false)
+            {
+                return Ok(());
+            }
+        }
+        Err(fail(
+            ctx,
+            "Dexalot: отсутствует доступный проверенный maker",
+        ))
+    }
     pub(super) async fn ready(
         &self,
         ctx: &Ctx,

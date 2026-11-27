@@ -29,6 +29,7 @@ pub(super) async fn report(
     f: FirmTerms,
     trader: Option<Address>,
     decs: (u8, u8),
+    expected: Option<U256>,
 ) -> GatewayResult<Preview> {
     let account = p.bound(&f.wallet);
     let ctx = &account.ctx;
@@ -69,22 +70,23 @@ pub(super) async fn report(
     let config = Config::read(ctx)?;
     let h = white_state::head(ctx, "latest").await?;
     let bal = dagrow::balance(ctx, input, who, &h.selector()).await?;
-    if (!q.by_target && bal < q.qty) || bal.is_zero() {
+    let required = expected.unwrap_or(if q.by_target { U256::ONE } else { q.qty });
+    if bal < required || required.is_zero() || required > maximum {
         return Err(bad());
     }
     let mut choices = Vec::new();
+    let mapped_direct = expected.is_some();
     for m in &config.modules {
         if config.ready(ctx, who, Some(*m), h).await.is_ok()
             && dagrow::allowance(ctx, input, who, m.addr, &h.selector())
                 .await
-                .is_ok_and(|v| !v.is_zero() && (q.by_target || v >= q.qty))
+                .is_ok_and(|v| v >= required)
         {
             choices.push(Some(*m));
         }
     }
     // A bare immutable maker can be considered for an exact ERC20 pair, a zero slippage flag and the owner's own payee.
-    if !q.input.is_zero()
-        && !q.output.is_zero()
+    if (mapped_direct || (!q.input.is_zero() && !q.output.is_zero()))
         && exact_wallet_tokens::check(ctx, "dexalot", input, output, &h.selector())
             .await
             .is_ok()
@@ -93,7 +95,7 @@ pub(super) async fn report(
             if m.proxy.is_none()
                 && dagrow::allowance(ctx, input, who, m.addr, &h.selector())
                     .await
-                    .is_ok_and(|v| !v.is_zero() && (q.by_target || v >= q.qty))
+                    .is_ok_and(|v| v >= required)
             {
                 choices.push(None);
                 break;
@@ -105,6 +107,18 @@ pub(super) async fn report(
             ctx,
             "Dexalot: нет настроенного модуля или неизменяемого maker с разрешением от владельца",
         ));
+    }
+    if expected.is_some() {
+        let mut selected = None;
+        for module in choices {
+            if config.ready(ctx, who, module, h).await.is_ok()
+                && config.check_makers(ctx, module.is_some(), h).await.is_ok()
+            {
+                selected = Some(module);
+                break;
+            }
+        }
+        choices = selected.into_iter().collect();
     }
     let mut tickets = Vec::new();
     let mut last = None;
@@ -124,7 +138,12 @@ pub(super) async fn report(
             dout,
             generation: gen_before,
         };
-        match option(&account, &config, q, h, scope).await {
+        let order = if mapped_direct && m.is_none() {
+            Query { input, output, ..q }
+        } else {
+            q
+        };
+        match option(&account, &config, order, h, scope).await {
             Ok(t) => tickets.push(Arc::new(t)),
             Err(e) => last = Some(e),
         }
@@ -191,6 +210,7 @@ async fn option(
         )
     };
     config.ready(c, a.who, a.module, h).await?;
+    config.check_makers(c, a.module.is_some(), h).await?;
     let actor = a.module.map_or(a.who, |v| v.addr);
     let mut body = json!({"chainid":a.chain,"takerAsset":q.input,"makerAsset":q.output,"userAddress":a.who,"executor":actor});
     body[if q.by_target {
@@ -237,6 +257,9 @@ async fn option(
     if a.module.is_none() {
         exact_wallet_tokens::check(c, "dexalot", q.input, q.output, &fresh.selector()).await?;
     }
+    p.dexalot
+        .feed
+        .hold_signed(c, (a.input, a.output), a.who, o.deadline());
     let real_cap = o.takerAmount.min(a.maximum);
     let make = |partial, minimum| {
         let data = o.data(
@@ -303,6 +326,7 @@ async fn option(
             data,
             spent,
             received: net,
+            requested_output: q.by_target.then_some(q.qty),
             gas,
             generation: a.generation,
             di: a.di,

@@ -87,14 +87,31 @@ def capture():
     reference=tx(VAULTS[0],SWAP,TYPES,[bytes.fromhex(pair[2:]),USDC,AAPL,10**6,1,1])["data"][:10]
     verified=[f for f in frames if f["input"].startswith(reference) and not f["error"]]
     methods=r.many([(AAPL,"symbol()",(),"string"),(AAPL,"decimals()",(),"uint8")])
+    signed_inputs=[]
+    samples={WITNESS}|{row["sample"] for row in report["rows"]}
+    for key in sorted(samples):
+        original=r.rpc("eth_getTransactionByHash",[key])
+        payload=original["input"][2:].lower()
+        for pos in range(0,len(payload)-392+1,2):
+            if payload[pos:pos+8]!=reference[2:]:continue
+            body=bytes.fromhex(payload[pos+8:pos+392])
+            try: decoded=decode(TYPES,body)
+            except ValueError:continue
+            if AAPL in decoded[1:3]:
+                signed_inputs.append(dict(hash=key,target=original["to"],offset=pos//2,pair="0x"+decoded[0].hex(),
+                                          source=decoded[1],destination=decoded[2],amount=decoded[3],minimum=decoded[4]))
     trials=[]
     for v in VAULTS:
         # Старая касса приводится к фактическому Base входу из оплаченной квитанции,
         # вторая реализует байткод кассы Ethereum с тем же обычным ABI.
-        if v==VAULTS[0] and not verified:continue
-        for tag in (hist,r.tag):trials.append(own(r,tag,v,pair))
+        # При отсутствии открытой трассы это только гипотеза о совместимости обычного
+        # шестипараметрического интерфейса. Отказ не доказывает закрытость другого входа.
+        for tag in (hist,r.tag):
+            observation=own(r,tag,v,pair)
+            observation["historical_call_observed"]=any(f["cash"].lower()==v for f in verified)
+            trials.append(observation)
     return dict(history=report,roles={v:r.code_hash(v) for v in VAULTS},witness=WITNESS,token=[AAPL,*methods],payer=OWNER,
-                trader="0x"+swap["topics"][2][-40:],frames=frames,trace_error=trace_error,observations=trials)
+                trader="0x"+swap["topics"][2][-40:],frames=frames,signed_inputs=signed_inputs,trace_error=trace_error,observations=trials)
 
 
 if __name__=="__main__":

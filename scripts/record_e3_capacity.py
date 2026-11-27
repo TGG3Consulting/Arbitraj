@@ -33,6 +33,15 @@ def examine(r,pool,tokens,step,router,stamp,run):
                     warm=run([buy,read(src)])
                     if ok(warm[0]) and int.from_bytes(result(warm[1]))>=cap+1:
                         funding=buy;break
+            if funding is None and src!=USDC:
+                from record_deliswap_base import AERO, FACTORY, ROUTES
+                for stable in (True,False):
+                    routes=[(WETH,USDC,False,FACTORY),(USDC,src,stable,FACTORY)]
+                    buy=tx(AERO,"swapExactETHForTokens(uint256,"+ROUTES+",address,uint256)",["uint256",ROUTES,"address","uint256"],
+                           [cap+1,routes,OWNER,stamp+90],budget)
+                    warm=run([buy,read(src)])
+                    if ok(warm[0]) and int.from_bytes(result(warm[1]))>=cap+1:
+                        funding=buy;break
         if funding is None:
             rows.append(dict(pool=pool,input=src,output=dst,capacity=cap,unfunded=True));continue
         for mode,spender in [('official',router),('v5',EXEC)]:

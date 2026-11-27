@@ -34,7 +34,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    «необязательное». Релиз не готов, пока в списке «Открытые правки» ниже есть хоть одна строка. Список ведёт Claude:
 >    закрытые пункты вычёркиваются с SHA исправления.
 
-Последний просмотренный коммит: `79537046` (27.11.2026).
+Последний просмотренный коммит: `cf5eeeae` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2990,7 +2990,8 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 | О-42 | 14c028f5 | `contracts/DexalotWallet.sol`: (1) `order.nonceAndMeta>>96` — сдвиг без имени и ссылки на строку MainnetRFQ.sol, где задана упаковка «адрес получателя в старших 160 битах». Дать именованную константу со ссылкой на строку. (2) `block.timestamp>uint32(order.expiry)` — поле `expiry` объявлено `uint128`, приведение к `uint32` отбрасывает старшие биты. Сравнивать полное значение, как сам MainnetRFQ, или ссылкой на исходник показать, почему uint32. После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **edb898c1: карточка `dexalot-base-create.json` уже собрана из текущего байткода. После правки О-42 её пересобрать и сверить (см. О-26, О-31).** |
 | О-43 | 77f6419b | R-42: прямые `== Variant::EulerV1/EulerV2` в общих файлах: `exec/stabull_plan.rs:175`, `pools/created_log.rs:76-77`, `pools/direct_module.rs:142`, `pools/factory_calls.rs:170`, `pools/families.rs:852`. Предикат `euler()` есть; для различия поколений завести, например, `euler_v2()` или выбор внутри `euler_swap.rs` и заменить. В профильных `euler_*.rs` сравнения допустимы. |
 | О-44 | b5584d2e | `contracts/FluidDexLiteWallet.sol`: раскладка хранилища ядра записана в комментарии со ссылкой на репозиторий и коммит, но без строки. Числа без имён: слот `1` массива DexKey, шаг `3` слова на ключ, `uint192` для индекса, `bytes8` идентификатора. Дать имена-константы со ссылкой на файл и строку `fluid-contracts-public@404d73f9`, как требуется в О-33 и О-37. После правки пересобрать в CI; когда появятся карточки и хеши — сверить с новым байткодом. | **c2a328f9: карточка `fluid-dex-lite-ethereum.json` уже собрана из текущего байткода. После правки О-44 её пересобрать и сверить (см. О-26, О-31).** |
-| О-45 | c8772fa3 | Fluid DEX Lite. (1) R-42: прямые `== Variant::FluidDexLite` в общих файлах: `exec/executor/entry.rs:192,242`, `exec/market_plan.rs:137`, `exec/vista_gate.rs:31`, `quote/module_pricing.rs:39`, `quote/v2_execution.rs:80`. Завести предикат, как `euler()`, `aqua()` и `llamma()`. (2) Размер: `pools/fluid_dex_lite.rs` — 348 строк, `exec/fluid_lite_wallet.rs` — 224, ориентир 200. |
+| О-45 | c8772fa3 | Fluid DEX Lite. (1) R-42: прямые `== Variant::FluidDexLite` в общих файлах: `exec/executor/entry.rs:192,242`, `exec/market_plan.rs:137`, `exec/vista_gate.rs:31`, `quote/module_pricing.rs:39`, `quote/v2_execution.rs:80`. Завести предикат, как `euler()`, `aqua()` и `llamma()`. (2) Размер: `pools/fluid_dex_lite.rs` — 348 строк, `exec/fluid_lite_wallet.rs` — 224, ориентир 200. | **e6656a64: размеры выросли — `pools/fluid_dex_lite.rs` 443 строки, `quote/fluid_hop_pricing.rs` 276, `exec/fluid_lite_plan.rs` 267, `exec/fluid_lite_wallet.rs` 236.** |
+| О-47 | 55b8ecde | R-42: прямые `== Variant::E3Lb` в общих файлах `pools/factory_calls.rs:112` и `pools/families.rs:1155`. В профильных `sectorone*.rs` и `e3.rs` они допустимы. Завести предикат или выбор внутри `e3.rs`. |
 | ~~О-46~~ ✅ 60430edb | 8de98ae9 | Та же ошибка, что О-26 и О-31. `contracts/FluidDexLiteWallet.sol` изменён (добавлен `executeHop`), а карточка `ui/src/assets/fluid-dex-lite-ethereum.json` (`0xd69663d1…`) и хеш в `first_run_dex.json` остались от сборки c2a328f9, то есть от байткода b5584d2e. Кнопка в UI разместит старый контракт без `executeHop`. Нужно пересобрать в CI, обновить карточку и `dex.module_runtime_hashes` и сверить с записанными данными новой сборки. |
 
 ### 650ce364, e0d22d6e — проверено
@@ -4185,3 +4186,15 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 - Добавлены только скрипт записи и CI. Код бота не менялся. Замечаний нет.
 
 Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44, О-45.
+
+### e6656a64, 55b8ecde, cf5eeeae — Fluid swapHop; E3 Base; Kaliber/Taurus (скрипты)
+
+- e6656a64: атомарный `swapHop` Fluid в боте (`exec/fluid_lite_hop.rs`, `quote/fluid_hop_*.rs`, `RouterFeeMode::FluidHop`). Регрессия BSC проверена.
+  - `quote/mod.rs`: для каждой котировки вызывается `fluid_hop_pricing::candidates`. Функция сразу возвращает пустой список при `!watches_ambient()` (на BSC Ambient и Fluid нет).
+  - `trade_direct.rs` и `trade_direct_prep.rs`: ветки срабатывают только при `fee_mode == FluidHop`.
+  - `direct_module::verify_factory` теперь возвращает хеш через `verified_hash`, прежний вызов не изменился.
+  - О-45 (2): размеры файлов Fluid выросли.
+- 55b8ecde: E3 (LB) на Base, вариант `E3Lb`. `executor/trade.rs` (общий, BSC) вызывает `e3::presend` для каждой сделки, но функция сразу возвращает `Ok`, если шагов `E3Lb` нет. На BSC поведение то же. Тест `tests/base_e3.rs` на записанных данных. **Правка: О-47** (R-42).
+- cf5eeeae: только скрипты записи и CI.
+
+Открыто: О-23, О-27, О-28, О-29, О-30, О-32, О-33, О-34, О-35, О-36, О-37, О-38, О-39, О-40, О-41, О-42, О-43, О-44, О-45, О-47.

@@ -6,6 +6,11 @@ const same = (a,b) => typeof a === 'string' && a.toLowerCase() === b;
 const word = value => value.replace(/^0x/,'').padStart(64,'0');
 const validAddress = a => address.test(a) && !/^0x0+$/.test(a);
 
+// Выбор по сохранённому отпечатку сохраняет повтор CREATE для уже настроенной площадки.
+export function usesOriginalAktionariat(hashes) {
+  return hashes?.length === 1 && same(hashes[0], '0xc89be9fbbce19d4f938d94776d4eec71574a276bc61bf8bbe8ff158a670857d3');
+}
+
 export async function loadAktionariat(settings,plan,sha) {
   if (settings.kind !== 'aktionariat' || plan.kind !== settings.kind || plan.chainId !== 1 ||
       String(settings.chainId) !== '1' || !digest.test(plan.runtimeKeccak) || !digest.test(plan.sourceBlock) ||

@@ -3567,6 +3567,28 @@ rationale = "Перебор слотов маппинга balances 0..N−1 (Sol
 prefill = { kind = "Venue", id = "bsc_dex" }
 
 [[section]]
+title = "Clipper / Sushi Blade — проверенные пулы для котировки"
+intro = "Пул и хеш кода привязаны к сети. Для каждого запроса проверяются адрес получателя, подпись источника и срок действия."
+
+[[section.rec]]
+name = "clipper.pools"
+area = "площадка base_dex"
+unit = "пул и хеш байткода"
+value = "0xb32d856cad3d2ef07c94867a800035e37241247c 0xddc707f62c6f07045367300f26b00136ca585733e14a45d68663c5ae7d5d3a1f"
+source = "tests/data/first_run_dex_2026-11-26/clipper_base_directory.json.gz и clipper_rfq_access.json.gz"
+rationale = "В архиве воспроизведена действительная подпись для этого пула. Свежую заявку поставщик подписывает на адрес кошелька оператора."
+prefill = { kind = "Venue", id = "base_dex" }
+
+[[section.rec]]
+name = "clipper.pools"
+area = "площадка eth_dex"
+unit = "пул и хеш байткода"
+value = "0x655edce464cc797526600a462a8154650eee4b77 0xb55e2badae042574124bba90ff2ff4bf60bc6ea347b985193a1ccada4556642c"
+source = "tests/data/first_run_dex_2026-11-26/clipper_ethereum_directory.json.gz и clipper_rfq_access.json.gz"
+rationale = "В архиве воспроизведена действительная подпись для этого пула. Свежую заявку поставщик подписывает на адрес кошелька оператора."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section]]
 title = "bopAMM на Ethereum"
 intro = "Адреса и код для проверки публичного кадра Titan или BuilderNet. Адрес развёрнутого модуля кошелька добавляет его владелец."
 

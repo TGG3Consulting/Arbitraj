@@ -1744,6 +1744,22 @@ def tables(network, snapshots, profiles):
         if specific:
             selected, factory, roundtrip, status = specific
             pool = selected or pool
+        # Эти строки имеют собственное доказательство и уточнение допуска вместо общей подписи.
+        if (id in configured and status != "профиль, см. параметры выше"
+                and "профиль" not in status.lower()):
+            status = f"профиль `{id}` · {status}"
+        if not base and id == "cypher":
+            assert configured["cypher-v4-ethereum"]["settings"]["dex.indexer_id"] == id
+            status = "профиль `cypher-v4-ethereum` · " + status
+        if base and id == "treble-v4-limit":
+            assert "treble-v4" in configured
+            status += " · базовый профиль `treble-v4`; расчёт пассивной заявки зависит от исполнения эпохи"
+        if base and id == "ryze":
+            status += " · персональный RFQ через настройки Ryze площадки Base; нужен доступ своего кошелька"
+        if base and id in ("ensurer", "dejungle"):
+            status += f" · `T-DEX-{network}-{id}` найти первичное размещение Base и привязать событие обмена к фабрике"
+        if id in ("solidly-v3-base", "solidly-v3"):
+            status += " · оператор задаёт собственный адрес принятого модуля"
         if sample.get("state") != "enumerated":
             status += ", страница не прочитана"
         elif not sample.get("rows_page1"):
@@ -2158,15 +2174,6 @@ def tables(network, snapshots, profiles):
             if domains or source_addresses:
                 candidates = list(dict.fromkeys(domains + source_addresses))
             task = f"LL20 · {scope['description']}"
-        out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
-                   f"| {addresses(candidates)} | {task} |")
-    scope_note = (
-        "Из Base двадцатки обнаружено одно дополнительное размещение уже известной площадки. "
-        "У ранней фабрики Aerodrome Slipstream 22 пула, у двух положительна активная ликвидность. "
-        "За сутки с 61 830 752 по 62 262 756 найден один Swap. Допуск ранней фабрики опирается на [платежи двух кошельковых маршрутов](../tests/data/first_run_dex_2026-11-26/early_slipstream_wallets.json.gz). У Hanji найдено три книги адаптера объёма, одна из них рассчиталась с кассой из штатного API. [Регистрация и фактическая выплата](../tests/data/first_run_dex_2026-11-26/llama_top_hanji.json.gz). Karta учитывает карточные расчёты, "
-        "а Homelander повторно учитывает пулы сторонних AMM."
-        if base else
-        "В Ethereum двадцатке подтверждена отдельная касса Kipseli. Из 1452 событий за сутки "
         if str(row["id"]) == "622":
             fixture = data_dir / f"clipper_{network}_directory.json.gz"
             with gzip.open(fixture, "rt", encoding="utf8") as stream:
@@ -2207,6 +2214,15 @@ def tables(network, snapshots, profiles):
             assert empire["factory"] in {a.lower() for a in candidates}
             task = (f"EmpireDEX · фабрика подтвердила {len(empire['pools'])} пар. "
                     f"[Реестр](../{fixture.as_posix()}) · [Платежи и контроль защищённого маршрута](../tests/data/first_run_dex_2026-11-26/empire_ethereum_protected.json.gz).")
+        out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
+                   f"| {addresses(candidates)} | {task} |")
+    scope_note = (
+        "Из Base двадцатки обнаружено одно дополнительное размещение уже известной площадки. "
+        "У ранней фабрики Aerodrome Slipstream 22 пула, у двух положительна активная ликвидность. "
+        "За сутки с 61 830 752 по 62 262 756 найден один Swap. Допуск ранней фабрики опирается на [платежи двух кошельковых маршрутов](../tests/data/first_run_dex_2026-11-26/early_slipstream_wallets.json.gz). У Hanji найдено три книги адаптера объёма, одна из них рассчиталась с кассой из штатного API. [Регистрация и фактическая выплата](../tests/data/first_run_dex_2026-11-26/llama_top_hanji.json.gz). Karta учитывает карточные расчёты, "
+        "а Homelander повторно учитывает пулы сторонних AMM."
+        if base else
+        "В Ethereum двадцатке подтверждена отдельная касса Kipseli. Из 1452 событий за сутки "
         "на одном обмене прослежены 3342,773397 USDC в кассу и 3346,310065 USDT получателю. "
         "Через публичный Ethereum PropAMMRouter один EOA продал WETH за USDC в трёх сделках. В диапазоне 26444589–26494988 "
         "роутер указал Kipseli 732 раза по четырём парам USDC с WETH, WBTC, cbBTC и USDT. Фактический путь входа: "

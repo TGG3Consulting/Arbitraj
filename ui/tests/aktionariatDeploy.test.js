@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import test from 'node:test';
+import {usesOriginalAktionariat} from '../src/lib/aktionariatDeploy.js';
 import {checkMarket,loadPlan} from '../src/lib/walletDeployment.js';
 
 const read=file=>JSON.parse(readFileSync(new URL(file,import.meta.url)));
@@ -26,4 +27,14 @@ test('a different network rejects the deployment before reading any role',async(
   const provider={request:({method})=>{seen.push(method);return '0x2105';}};
   await assert.rejects(checkMarket(provider,archive,{requireCanonical:true,blockHash:archive.sourceBlock}));
   assert.deepEqual(seen,['eth_chainId']);
+});
+
+test('saved module fingerprint selects the original CREATE; new profiles select the accepted update',async()=>{
+  const original=read('../src/assets/aktionariat-ethereum-original.json');
+  const saved={...settings,hashes:[original.runtimeKeccak]};
+  assert.equal(usesOriginalAktionariat(saved.hashes),true);
+  assert.equal(usesOriginalAktionariat(settings.hashes),false);
+  assert.equal(await loadPlan(saved,original),original);
+  await assert.rejects(loadPlan(saved,archive));
+  await assert.rejects(loadPlan(settings,original));
 });

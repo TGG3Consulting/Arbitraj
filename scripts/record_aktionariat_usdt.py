@@ -110,7 +110,7 @@ def capture(url):
         return dict(token0=t0,token1=t1,fee=fee,spacing=spacing,liquidity=str(liquidity),
                     sqrt=str(slot[0]),tick=slot[1],words=[words.start,words.stop-1],ticks=points)
     states={a:inspect_pool(a) for a in sorted({p for c in controls for p in c["pools"]})}
-    return dict(selector=tag,owner=OWNER,module=MODULE,executor=EXEC,factory=FACTORY,controls=controls,states=states)
+    return dict(selector=tag,owner=OWNER,module=MODULE,module_runtime=m["runtimeKeccak"],executor=EXEC,factory=FACTORY,controls=controls,states=states)
 if __name__=="__main__":
     p=argparse.ArgumentParser(description=__doc__);p.add_argument("output",type=Path);a=p.parse_args()
     failures=[]

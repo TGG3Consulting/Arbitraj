@@ -4,6 +4,7 @@
   import {deploymentScope} from '../lib/deploymentScope.js';
   import {store, setValue} from '../lib/settings.svelte.js';
   import {loadPlan, unsigned, estimate, send, deployed} from '../lib/walletDeployment.js';
+  import {usesOriginalAktionariat} from '../lib/aktionariatDeploy.js';
   import ErrorText from './ErrorText.svelte';
   let {id, kind, venue} = $props();
   const stabullPlan = {file:'stabull-base',key:'stabull-create:8453',name:'StabullAdapter на Base',load:()=>import('../assets/stabull-base.json')};
@@ -13,7 +14,7 @@
     empire_module:{file:'empire-ethereum',key:'empire-create:1',name:'EmpireWallet в Ethereum',load:()=>import('../assets/empire-ethereum.json')},
     angstrom_l1:{file:'angstrom-ethereum',key:'angstrom-create:1',name:'AngstromWallet в Ethereum',load:()=>import('../assets/angstrom-ethereum.json')},
     uniswap_v1:{file:'uniswap-v1-ethereum',key:'uniswap-v1-create:1',name:'UniswapV1Adapter в Ethereum',load:()=>import('../assets/uniswap-v1-ethereum.json')},
-    aktionariat:{file:'aktionariat-ethereum',key:'aktionariat-create:1',name:'AktionariatWallet в Ethereum',load:()=>import('../assets/aktionariat-ethereum.json')},
+    aktionariat:{file:'aktionariat-ethereum',key:'aktionariat-create:1',name:'AktionariatWallet в Ethereum',load:(settings)=>usesOriginalAktionariat(settings.hashes) ? import('../assets/aktionariat-ethereum-original.json') : import('../assets/aktionariat-ethereum.json')},
     bancor_legacy:{file:'bancor-v21-ethereum',key:'bancor-v21-create:1',name:'BancorLegacyAdapter в Ethereum',load:()=>import('../assets/bancor-v21-ethereum.json')},
     bancor_v3:{file:'bancor-v3-ethereum',key:'bancor-v3-create:1',name:'BancorV3Adapter в Ethereum',load:()=>import('../assets/bancor-v3-ethereum.json')},
     yield_basis:{file:'yield-basis-ethereum',key:'yield-basis-create:1',name:'YieldBasisAdapter в Ethereum',load:()=>import('../assets/yield-basis-ethereum.json')},
@@ -73,7 +74,7 @@
     refreshPending(action);
     let artifact;
     if (plan.load) {
-      artifact = (await plan.load()).default;
+      artifact = (await plan.load(action.settings)).default;
     } else {
       const response = await fetch(import.meta.env.BASE_URL+plan.file+'.json');
       if (!response.ok) throw new Error('Архив размещения отсутствует в этой сборке.');

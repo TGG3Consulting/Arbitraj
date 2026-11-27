@@ -80,8 +80,10 @@ def capture(network, events):
         addresses = set(registered)
         history = []
         if version == 2 and events:
-            from eulerswap_origins import origins
-            history = origins(r, roles["V2Factory"], nonce)
+            from eulerswap_origins import from_receipts, origins
+            candidate_file=DATA/f"eulerswap_{network}_origins.json.gz"
+            history=(from_receipts(r,roles["V2Factory"],nonce,candidate_file) if candidate_file.exists()
+                     else origins(r, roles["V2Factory"], nonce))
             addresses.update(log["pool"] for log in history)
             assert len(addresses) == nonce-1
         pools = []
@@ -108,6 +110,9 @@ def capture(network, events):
             assert (listed == address) == (address in registered)
             row = dict(address=address,tokens=tokens,reserves=reserves,config=config,account=account,
                        installed=installed,registered=address in registered,decimals=[d0,d1],limits=limits)
+            if history:
+                origin=next(x for x in history if x["pool"]==address)
+                assert origin["tokens"]==tokens and origin["config"]==config
             if more:
                 row.update(dynamic=more[0],protocol_fee=more[2])
             quotes = []

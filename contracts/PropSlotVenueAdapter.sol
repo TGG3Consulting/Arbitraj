@@ -5,6 +5,9 @@ import {IPublicPropRouter, PropVenueAdapter} from "./PropVenueAdapter.sol";
 
 /// @notice One named market on one Ethereum parent and slot, using the same custody checks as a normal swap.
 contract PropSlotVenueAdapter is PropVenueAdapter {
+    // Titan and BuilderNet slot timestamps and parent blocks belong to Ethereum mainnet.
+    uint256 private constant ETHEREUM_MAINNET = 1;
+
     struct SlotOrder {
         bytes32 leg;
         bytes32 parent;
@@ -27,7 +30,7 @@ contract PropSlotVenueAdapter is PropVenueAdapter {
     function slotVersion() external pure returns (uint256) { return 2; }
 
     function executeAtSlot(SlotOrder calldata order) external returns (uint256 spent, uint256 received) {
-        if (order.leg==bytes32(0) || order.parent==bytes32(0) || block.chainid!=1 ||
+        if (order.leg==bytes32(0) || order.parent==bytes32(0) || block.chainid!=ETHEREUM_MAINNET ||
             block.number!=order.height || block.timestamp!=order.timestamp ||
             blockhash(block.number-1)!=order.parent) revert WrongSlot();
         if (completed[msg.sender][order.leg]) revert AlreadyFilled();

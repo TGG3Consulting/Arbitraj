@@ -24,7 +24,7 @@ def tx(target,name,types,values,value=0):
     return call(target,data(name,types,values),value,gas=10_000_000)
 
 
-def capture(network,url,artifact):
+def capture(network,url,artifact,legacy=False):
     src=json.loads(gzip.decompress((DATA/f"raindex_{network}_quotes.json.gz").read_bytes()))
     tag=src["anchor"];is_base=network=="base";chain=8453 if is_base else 1
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
@@ -37,6 +37,7 @@ def capture(network,url,artifact):
         if child["parentHash"]!=tag["blockHash"] or len(child["calls"])!=len(calls):raise ValueError("child")
         return child["calls"]
     books=([{"book":src["book"],"version":6,"runtime":src["runtime"],"live":src["entries"]}] if is_base else src["books"])
+    if legacy:books=[b for b in books if b["version"]==3]
     def module(b):
         book=b["book"]
         if book in identities:return identities[book]["address"]
@@ -60,6 +61,8 @@ def capture(network,url,artifact):
     weth=WETH[network];usd=USDC[network];stable=usd if is_base else USDT
     router=(next(x["settings"]["dex.router"] for x in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if x["id"]=="uniswap-v2-base") if is_base else "0x7a250d5630b4cf539739df2c5dacb4c659f2488d")
     seed=[tx(weth,"deposit",[],[],10**17),tx(router,"swapExactETHForTokens",["uint256","address[]","address","uint256"],[1,[weth,stable],OWNER,end],10**17)]
+    if legacy:
+        seed=[tx(router,"swapExactETHForTokens",["uint256","address[]","address","uint256"],[1,[weth,stable],OWNER,end],2*10**18)]
     if not all(map(GOOD,run(seed))):raise ValueError("own funding")
     def bal(token,owner=OWNER):return tx(token,"balanceOf",["address"],[owner])
     def approve(token,to,v):return tx(token,"approve",["address","uint256"],[to,v])
@@ -109,11 +112,13 @@ def capture(network,url,artifact):
         if pay not in (stable,weth):continue
 
         record={"pay":pay,"receive":out,"cases":[]};pairs.append(record)
-        for scale in (1,100,500):
+        for scale in ((80,84,85,100,200) if legacy else (1,100,500)):
             df,dt=dec(pay),dec(out);both=b["version"]>=6
             # Older books receive the requested asset; signed maximum capital still comes from this payer.
             budget=scale*(10_000 if df==6 else 10**15)
             fixed_size=max(1,scale*10**dt//100)
+            if legacy:
+                budget=3_000*10**df;fixed_size=scale*10**dt
             if both:
                 ratio=decimal(l["ratio"])
                 possible=int(Decimal(budget).scaleb(-df)/ratio*Decimal(10**dt)) if ratio>0 else 0
@@ -158,12 +163,12 @@ def capture(network,url,artifact):
 
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);p.add_argument("--legacy",action="store_true");args=p.parse_args()
     urls=(["https://base.drpc.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"] if args.network=="base" else ["https://eth.drpc.org","https://mainnet.gateway.tenderly.co","https://ethereum-rpc.publicnode.com"])
     errors=[]
     for url in urls:
         try:
-            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None)
+            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None,args.legacy)
             args.out.write_text(json.dumps(archive,separators=(",",":")),encoding="utf8");break
         except (requests.RequestException,ValueError,KeyError) as error:errors.append(str(error)[:200])
     else:raise ValueError(errors)

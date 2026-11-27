@@ -26,8 +26,8 @@ pub(super) async fn candidates(
         kinds[9] |= super::super::exec::mint_club_direct::enabled(e);
         kinds[8] |= super::ekubo_v2_pricing::enabled(e);
         if native {
-            let (flux,ranges)=native_markets(e.family.variant);
-            kinds[7] |= flux;
+            let (module,ranges)=native_markets(e.family.variant);
+            kinds[7] |= module;
             kinds[6] |= ranges;
             continue;
         }
@@ -129,7 +129,7 @@ pub(super) async fn candidates(
 /// Families with a distinct physical ETH payment in their wallet comparison.
 fn native_markets(variant: super::super::pools::family_variant::Variant) -> (bool,bool) {
     use super::super::pools::family_variant::Variant;
-    (variant.flux_native(), variant==Variant::PuzzleRanges)
+    (super::module_pricing::native_module(variant), variant==Variant::PuzzleRanges)
 }
 
 fn individual(e: &Entry, native: bool) -> bool {
@@ -137,7 +137,7 @@ fn individual(e: &Entry, native: bool) -> bool {
     if e.family.variant==super::super::pools::family_variant::Variant::Surge {return true;}
     if native && super::ekubo_v2_pricing::enabled(e) { return true; }
     if native {
-        return super::vista_pricing::native_router(e);
+        return super::vista_pricing::native_router(e) || super::module_pricing::native_module(e.family.variant);
     }
     super::ekubo_v2_pricing::enabled(e) || super::module_pricing::enabled(e) || super::super::exec::vault_direct::enabled(e) || super::vista_pricing::is_vista(e)
         || super::oasis_pricing::is_oasis(e)
@@ -271,9 +271,9 @@ pub(super) fn private(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn native_market_dispatch_reaches_the_two_flux_abis_and_ranges() {
+    fn native_market_dispatch_reaches_each_wallet_without_another_protocol_in_the_book() {
         use super::super::super::pools::family_variant::Variant;
-        for kind in [Variant::FluxNativeCl,Variant::FluxNativeBin] {
+        for kind in [Variant::FluxNativeCl,Variant::FluxNativeBin,Variant::UniswapV1,Variant::BancorV3,Variant::BalancerV1,Variant::BancorLegacy,Variant::YieldBasis] {
             assert_eq!(super::native_markets(kind),(true,false));
         }
         assert_eq!(super::native_markets(Variant::PuzzleRanges),(false,true));

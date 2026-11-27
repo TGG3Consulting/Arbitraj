@@ -88,7 +88,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         let t=super::bancor_legacy_plan::terms(ctx,e,target,native)?;
         super::bancor_legacy_plan::verify(ctx,e,input,t,&at).await?;
         if !t.normalized.contains(&input) || !t.normalized.contains(&output){return Err(bad());}
-        (Wire::BancorLegacy(t),super::bancor_legacy_plan::step_id(e,input).ok_or_else(bad)?)
+        (Wire::BancorLegacy(Box::new(t)),super::bancor_legacy_plan::step_id(e,input))
     } else {
         let t=yield_basis_plan::terms(ctx,e,target,native)?;
     let (market, ()) = tokio::try_join!(
@@ -102,7 +102,7 @@ pub(in crate::venues::bsc_dex) async fn path(
         yield_basis_plan::check_module(ctx, e, t, &at)
     )?;
         if !market.coins().contains(&input) || !market.coins().contains(&output){return Err(bad());}
-        (Wire::YieldBasis(t),t.market)
+        (Wire::YieldBasis(t),Some(t.market))
     };
     let wanted = direct::ceil_units(qty, v.coin_dec).ok_or_else(bad)?;
     if wanted.is_zero()
@@ -121,7 +121,7 @@ pub(in crate::venues::bsc_dex) async fn path(
                 native: None,
                 kind: 17,
                 pool: target,
-                data: Bytes::copy_from_slice(market_key.as_slice()),
+                data: Bytes::copy_from_slice(market_key.ok_or_else(bad)?.as_slice()),
             }),
         )
     } else {

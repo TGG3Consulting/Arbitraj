@@ -18,6 +18,10 @@ pub(super) fn enabled(e: &Entry) -> bool {
     (matches!(e.family.variant,Variant::Pendle | Variant::SafeSwapTrade | Variant::DegenSwap) && e.family.executor_kind.is_some()) || matches!(e.family.variant,Variant::BancorLegacy|Variant::YieldBasis|Variant::BalancerV1|Variant::BancorV3|Variant::UniswapV1|Variant::RubiconClassic|Variant::PropVenue|Variant::Stabull|Variant::IntegralSize|Variant::Dagrow|Variant::Bundles) || super::super::exec::o1_wallet::enabled(e) || super::super::exec::antfarm_wallet::enabled(e) || super::super::exec::temple_wallet::enabled(e) || !e.family.variant.umbrae() && e.family.variant.wallet_module() && e.family.tradable && e.family.executor_kind.is_some()
 }
 
+pub(super) fn native_module(v:Variant)->bool {
+    v.flux_native() || matches!(v,Variant::UniswapV1|Variant::BancorV3|Variant::BalancerV1|Variant::BancorLegacy|Variant::YieldBasis)
+}
+
 pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Vec<OptionQuote> {
     let ctx = &q.ctx;
     let Ok(payer) = signer::address(ctx) else {
@@ -27,7 +31,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
         !quote_stage::settlement() && ctx.text("dex.router_mode").ok().as_deref() == Some("graph");
     let mut quotes = Vec::new();
     let native=super::super::exec::native::is_native(ctx,&i.asset) || super::vista_pricing::cash(ctx,&i.usdt_ticker,i.usdt);
-    for e in i.entries.iter().filter(|e| enabled(e) && (!native || e.family.variant.flux_native() || matches!(e.family.variant,Variant::UniswapV1|Variant::BancorV3|Variant::BalancerV1|Variant::BancorLegacy|Variant::YieldBasis))) {
+    for e in i.entries.iter().filter(|e| enabled(e) && (!native || native_module(e.family.variant))) {
         if e.family.variant==Variant::BancorLegacy {
             quotes.extend(Box::pin(super::bancor_legacy_pricing::options(q,i,e,payer,native,graph,head)).await);
             continue;

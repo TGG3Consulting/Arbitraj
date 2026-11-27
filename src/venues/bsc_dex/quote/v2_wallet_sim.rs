@@ -54,7 +54,7 @@ pub(in crate::venues::bsc_dex) enum Wire {
     DegenRouter(Address),
     DegenModule(Address),
     Pendle(Address),
-    BancorLegacy(super::super::exec::bancor_legacy_wallet::Terms),
+    BancorLegacy(Box<super::super::exec::bancor_legacy_wallet::Terms>),
     YieldBasis(super::super::exec::yield_basis_wallet::Terms),
     BalancerV1(super::super::exec::balancer_v1_wallet::Terms),
     BancorV3(Box<super::super::exec::bancor_v3_wallet::Terms>),

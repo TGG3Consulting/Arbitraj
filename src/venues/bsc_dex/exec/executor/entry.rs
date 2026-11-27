@@ -144,7 +144,7 @@ pub fn fits_ok(ctx: &Ctx, e: &Entry) -> bool {
         return false;
     };
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::BancorLegacy {
-        return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some() && pinned_module_target(ctx,e).is_some();
+        return k==ExecKind::Balancer && super::super::bancor_legacy_plan::state(e).is_some_and(|s|s.second.is_none()) && pinned_module_target(ctx,e).is_some();
     }
     if e.family.variant==crate::venues::bsc_dex::pools::family_variant::Variant::YieldBasis{return k==ExecKind::Balancer && super::super::super::pools::yield_basis_quotes::shape(e).is_some() && pinned_module_target(ctx,e).is_some();}
     if !k.singleton() {

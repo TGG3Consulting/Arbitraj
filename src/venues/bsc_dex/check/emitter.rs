@@ -45,8 +45,8 @@ pub fn by_pool(e: &Entry, log: &SimLog) -> bool {
     if let crate::core::types::PoolState::BancorLegacy(s)=&e.pool.state {
         use super::super::exec::bancor_legacy_wallet::abi::ILegacyNetwork;
         return log.address==s.network && log.topics.len()==4 && log.topics[0]==ILegacyNetwork::Conversion::SIGNATURE_HASH &&
-            log.topics[1]==s.anchor.into_word() && [(s.reserves[0],s.reserves[1]),(s.reserves[1],s.reserves[0])].into_iter()
-                .any(|(a,b)|log.topics[2]==a.into_word() && log.topics[3]==b.into_word());
+            s.tokens.iter().filter_map(|input|s.path(*input)).any(|path|path.windows(3).step_by(2)
+                .any(|leg|log.topics[1]==leg[1].into_word() && log.topics[2]==leg[0].into_word() && log.topics[3]==leg[2].into_word()));
     }
     if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis {
         use super::super::exec::yield_basis_wallet::abi::{IUnderlyingSwap,IVirtualSwap};

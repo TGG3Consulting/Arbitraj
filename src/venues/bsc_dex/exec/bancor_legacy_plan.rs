@@ -1,6 +1,6 @@
 //! Bind a quoted v2.1 path to its current wallet module and original registry entry.
 use super::{
-    bancor_legacy_wallet::{abi::{ILegacyNetwork,ILegacyWallet}, NATIVE, Proof, Terms},
+    bancor_legacy_wallet::{abi::{ILegacyNetwork,ILegacyWallet}, Bridge, NATIVE, Proof, Terms},
     chain::Step, plan::{DirectCall, Plan},
 };
 use crate::{
@@ -19,12 +19,22 @@ fn bad(ctx:&Ctx)->crate::gateway::errors::GatewayError {
 }
 pub(crate) fn state(e:&Entry)->Option<&BancorLegacyState>{
     let PoolState::BancorLegacy(s)=&e.pool.state else{return None;};
-    (e.family.variant==Variant::BancorLegacy && e.pool.reference==PoolRef::Contract(s.converter) &&
+    let shape=match (&s.second,&e.pool.reference) {
+        (None,PoolRef::Contract(owner))=>*owner==s.converter,
+        (Some(b),PoolRef::Singleton{manager,id})=>*manager==s.converter && *id==b.converter.into_word() &&
+            s.tokens==[e.pool.token0,e.pool.token1] && s.tokens[0]<s.tokens[1] &&
+            !b.middle.is_zero() && b.middle!=NATIVE && !s.reserves.contains(&b.middle) &&
+            b.converter!=s.converter && !b.converter.is_zero() && b.anchor!=s.anchor && !b.anchor.is_zero(),
+        _=>false,
+    };
+    (e.family.variant==Variant::BancorLegacy && shape &&
      !s.anchor.is_zero() && !s.network.is_zero() && !s.converter.is_zero() && s.tokens[0]!=s.tokens[1] &&
      (s.tokens==[e.pool.token0,e.pool.token1] || s.tokens==[e.pool.token1,e.pool.token0])).then_some(s)
 }
 pub(crate) fn step_id(e:&Entry,input:Address)->Option<B256> {
-    let path=state(e)?.path(input)?;
+    let state=state(e)?;
+    if state.second.is_some(){return None;} // kind 17 encodes one anchor; V5 uses the two original steps.
+    let path=state.path(input)?;
     let mut id=path[1].into_word();
     id.0[11]=u8::from(path[0]==NATIVE) | (u8::from(path[2]==NATIVE)<<1);
     Some(id)
@@ -32,12 +42,12 @@ pub(crate) fn step_id(e:&Entry,input:Address)->Option<B256> {
 pub(crate) fn request(ctx:&Ctx,e:&Entry,input:Address,amount:U256)->GatewayResult<(Address,Bytes)> {
     let s=state(e).ok_or_else(||bad(ctx))?;
     let path=s.path(input).ok_or_else(||bad(ctx))?;
-    Ok((s.network,ILegacyNetwork::rateByPathCall{path:path.to_vec(),amount}.abi_encode().into()))
+    Ok((s.network,ILegacyNetwork::rateByPathCall{path,amount}.abi_encode().into()))
 }
 pub(crate) async fn official(ctx:&Ctx,e:&Entry,input:Address,amount:U256,at:&Value)->GatewayResult<U256> {
     let s=state(e).ok_or_else(||bad(ctx))?;
     let path=s.path(input).ok_or_else(||bad(ctx))?;
-    canonical(ctx,at,s.network,ILegacyNetwork::rateByPathCall{path:path.to_vec(),amount}).await
+    canonical(ctx,at,s.network,ILegacyNetwork::rateByPathCall{path,amount}).await
 }
 pub(crate) fn terms(ctx:&Ctx,e:&Entry,target:Address,native:bool)->GatewayResult<Terms> {
     let s=state(e).ok_or_else(||bad(ctx))?;
@@ -49,18 +59,30 @@ pub(crate) fn terms(ctx:&Ctx,e:&Entry,target:Address,native:bool)->GatewayResult
         let normalized=if s.reserves[i]==NATIVE {ctx.addr("dex.native_wrapped")?} else {s.reserves[i]};
         if normalized!=s.tokens[i] || normalized.is_zero() {return Err(bad(ctx));}
     }
-    Ok(Terms{target,network:s.network,normalized:s.tokens,reserves:s.reserves,anchor:s.anchor,native,module_hash:*module_hash})
+    let bridge=s.second.as_ref().map(|b|Bridge{middle:b.middle,anchor:b.anchor,converters:[s.converter,b.converter]});
+    Ok(Terms{target,network:s.network,normalized:s.tokens,reserves:s.reserves,anchor:s.anchor,bridge,native,module_hash:*module_hash})
 }
 pub(crate) async fn verify(ctx:&Ctx,e:&Entry,input:Address,t:Terms,at:&Value)->GatewayResult<()> {
-    if t.path(input).is_none(){return Err(bad(ctx));}
-    let (_,pools,network,wrapped,owner)=tokio::try_join!(
+    let check_path=async {
+        let path=t.path(input).ok_or_else(||bad(ctx))?;
+        if t.bridge.is_some() {
+            let fresh=Box::pin(super::super::pools::bancor_legacy_bridge::bound(ctx,e.family,&e.pool.reference,
+                (e.pool.token0,e.pool.token1),at)).await?;
+            if fresh.path(input).as_deref()!=Some(path.as_slice()) || fresh.network!=t.network{return Err(bad(ctx));}
+        } else {
+            let owner=canonical(ctx,at,t.anchor,ILegacyNetwork::ownerCall{}).await?;
+            if e.pool.reference!=PoolRef::Contract(owner){return Err(bad(ctx));}
+        }
+        Ok(())
+    };
+    let (_,pools,network,wrapped,())=tokio::try_join!(
         direct_module::verify_code(ctx,e.family.id,t.target,at),
         canonical(ctx,at,t.target,ILegacyWallet::poolsCall{}),
         canonical(ctx,at,t.target,ILegacyWallet::networkCall{}),
         canonical(ctx,at,t.target,ILegacyWallet::wrappedCall{}),
-        canonical(ctx,at,t.anchor,ILegacyNetwork::ownerCall{}))?;
+        check_path)?;
     if pools!=ctx.dex_addr("dex.factory",e.family.id)? || network!=t.network ||
-       wrapped!=ctx.addr("dex.native_wrapped")? || e.pool.reference!=PoolRef::Contract(owner) {return Err(bad(ctx));}
+       wrapped!=ctx.addr("dex.native_wrapped")? {return Err(bad(ctx));}
     Ok(())
 }
 pub(super) async fn check_step(ctx:&Ctx,e:&Entry,input:Address,at:&Value)->GatewayResult<()> {
@@ -76,7 +98,7 @@ pub(super) async fn plan(ctx:&Ctx,s:&Step,payer:Address,height:u64,pick:Option<(
     let h=white_state::head(ctx,&format!("{height:#x}")).await?;
     let at=h.selector();
     verify(ctx,&s.entry,o.token_in,t,&at).await?;
-    let order=sim::Order{payer,target,input:o.token_in,output:o.token_out,amount:o.amount_in,minimum:o.min_out,wire:sim::Wire::BancorLegacy(t)};
+    let order=sim::Order{payer,target,input:o.token_in,output:o.token_out,amount:o.amount_in,minimum:o.min_out,wire:sim::Wire::BancorLegacy(Box::new(t))};
     let deadline=U256::from(h.timestamp.to::<u64>().checked_add(ctx.int("dex.deadline_s")?).ok_or_else(||bad(ctx))?);
     let proof=t.proof(&order,o.min_out,deadline);
     sim::measure(ctx,h,order,true).await?;

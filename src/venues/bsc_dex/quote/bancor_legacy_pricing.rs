@@ -8,7 +8,7 @@ pub(super) async fn options(q:&Quoting,i:&Input,e:&Entry,payer:Address,native:bo
     let Ok(terms)=bancor_legacy_plan::terms(ctx,e,target,native) else{return vec![];};
     let input=if i.side==Side::Buy{i.usdt}else{i.coin};
     if let Some(h)=head && bancor_legacy_plan::verify(ctx,e,input,terms,&h.selector()).await.is_err(){return vec![];}
-    let direct=v2_execution::option(q,i,e.clone(),payer,Execution{wire:Wire::BancorLegacy(terms),mode:RouteMode::Direct,target},head);
+    let direct=v2_execution::option(q,i,e.clone(),payer,Execution{wire:Wire::BancorLegacy(Box::new(terms)),mode:RouteMode::Direct,target},head);
     let v5=async {
         if !graph || native{return None;}
         let exec=executor::address(ctx).ok()??;

@@ -30,6 +30,13 @@ pub(in crate::venues::bsc_dex) mod abi {
 }
 use abi::{ILegacyNetwork, ILegacyWallet};
 
+#[derive(Debug,Clone,Copy,Eq,PartialEq,Serialize,Deserialize)]
+pub struct Bridge {
+    pub middle: Address,
+    pub anchor: Address,
+    pub converters: [Address;2],
+}
+
 #[derive(Debug,Clone,Copy,Serialize,Deserialize)]
 pub struct Terms {
     pub target: Address,
@@ -37,20 +44,31 @@ pub struct Terms {
     pub normalized: [Address;2],
     pub reserves: [Address;2],
     pub anchor: Address,
+    #[serde(default,skip_serializing_if="Option::is_none")]
+    pub bridge: Option<Bridge>,
     pub native: bool,
     pub module_hash: B256,
 }
 impl Terms {
-    pub fn path(&self, input: Address) -> Option<[Address;3]> {
+    pub fn path(&self,input:Address)->Option<Vec<Address>> {
         let i=self.normalized.iter().position(|t| *t==input)?;
-        Some([self.reserves[i], self.anchor, self.reserves[1-i]])
+        let mut path=vec![self.reserves[0],self.anchor];
+        if let Some(b)=self.bridge {
+            if b.middle.is_zero() || b.middle==NATIVE || self.reserves.contains(&b.middle) ||
+               b.anchor.is_zero() || b.anchor==self.anchor || b.converters[0]==b.converters[1] ||
+               b.converters.iter().any(|a|a.is_zero()) {return None;}
+            path.extend([b.middle,b.anchor]);
+        }
+        path.push(self.reserves[1]);
+        if i==1 {path.reverse();}
+        Some(path)
     }
     pub fn native_asset(&self) -> Option<Address> {
         let side=self.reserves.iter().position(|a|*a==NATIVE)?;
         self.native.then_some(self.normalized[side])
     }
     fn asset(&self, token: Address) -> Address {
-        if self.native && self.path(token).is_some_and(|p| p[0]==NATIVE) {Address::ZERO} else {token}
+        if self.native_asset()==Some(token) {Address::ZERO} else {token}
     }
     pub fn value(&self, input: Address, amount: U256) -> U256 {
         if self.asset(input).is_zero(){amount}else{U256::ZERO}
@@ -72,15 +90,52 @@ fn unique<E: SolEvent>(logs: &[Log], address: Address) -> Option<E> {
 impl Proof {
     pub fn data(&self) -> Bytes {
         let t=&self.terms;
-        let path=t.path(self.input).map(Vec::from).unwrap_or_default();
+        let path=t.path(self.input).unwrap_or_default();
         ILegacyWallet::executeCall{order:ILegacyWallet::WalletOrder{source:t.asset(self.input),target:t.asset(self.output),
             amount:self.maximum,minimum:self.minimum,deadline:self.deadline,path}}.abi_encode().into()
+    }
+    fn converter_events(&self,logs:&[Log],bridge:Bridge)->bool {
+        use crate::venues::bsc_dex::pools::bancor_legacy::ILegacy;
+        let Some(path)=self.terms.path(self.input) else{return false;};
+        let mut owners=bridge.converters;
+        if self.input==self.terms.normalized[1]{owners.reverse();}
+        let mut amount=self.maximum;
+        for (leg,owner) in path.windows(3).step_by(2).zip(owners){
+            let Some(conv)=unique::<ILegacy::Conversion>(logs,owner) else{return false;};
+            if (conv.sourceToken,conv.targetToken,conv.sourceAmount)!=(leg[0],leg[2],amount) ||
+                ![self.terms.target,self.terms.network].contains(&conv.trader){return false;}
+            amount=conv.targetAmount;
+        }
+        amount>=self.minimum
     }
     pub(super) async fn included(&self,ctx:&Ctx,hash:B256,r:&Receipt)->GatewayResult<()> {
         let t=&self.terms;
         signed_call::included(ctx,hash,r,self.payer,t.target,t.value(self.input,self.maximum),self.data()).await?;
         let block=r.block_hash.ok_or_else(||ctx.err(ErrorCode::OutcomeUnknown,"Bancor V2.1: квитанция без блока"))?;
         solidly_classic_factory::plain(ctx,t.target,t.module_hash,&serde_json::json!({"blockHash":block,"requireCanonical":true})).await?;
+        if let Some(b)=t.bridge && !self.converter_events(&r.logs,b) {
+            // Older converters may use another event ABI. Prove the owner at the parent and
+            // absence of anchor events before our transaction, including its own receipt.
+            use crate::venues::bsc_dex::node::{call::canonical,rpc};
+            use serde_json::json;
+            let unresolved=||ctx.err(ErrorCode::OutcomeUnknown,"Bancor V2.1: не подтверждён конвертер на позиции исходной операции");
+            #[derive(Deserialize)]
+            #[serde(rename_all="camelCase")]
+            struct Header {hash:B256,parent_hash:B256,transactions:Vec<B256>}
+            let (h,logs):(Header,Vec<Log>)=tokio::try_join!(
+                rpc::call(ctx,"eth_getBlockByHash",json!([block,false])),
+                rpc::call(ctx,"eth_getLogs",json!([{"blockHash":block,"address":[t.anchor,b.anchor]}]))
+            )?;
+            let i=r.transaction_index.ok_or_else(unresolved)?.to::<usize>();
+            if h.hash!=block || h.transactions.get(i)!=Some(&hash) || logs.iter().any(|l|
+                l.block_hash!=Some(block) || l.transaction_index.is_none_or(|n|n<=i as u64)) {return Err(unresolved());}
+            let parent=json!({"blockHash":h.parent_hash,"requireCanonical":true});
+            let (a,z)=tokio::try_join!(
+                canonical(ctx,&parent,t.anchor,ILegacyNetwork::ownerCall{}),
+                canonical(ctx,&parent,b.anchor,ILegacyNetwork::ownerCall{})
+            )?;
+            if [a,z]!=b.converters{return Err(unresolved());}
+        }
         crate::venues::bsc_dex::send::canonical_receipt::verify(ctx,hash,r).await
     }
     pub fn measured(&self,logs:&[SimLog])->Option<(U256,U256)> {
@@ -92,10 +147,18 @@ impl Proof {
         if (payer,input,output)!=(self.payer,self.input,self.output) || input==output || !t.normalized.contains(&output) ||
             self.minimum.is_zero() || self.maximum.is_zero() { return None; }
         let fill=unique::<ILegacyWallet::Paid>(logs,t.target)?;
-        let network=unique::<ILegacyNetwork::Conversion>(logs,t.network)?;
-        if (fill.payer,fill.recipient,fill.pathHash,fill.source,fill.target)!=(payer,payer,keccak256(path.to_vec().abi_encode()),t.asset(input),t.asset(output)) ||
-            (network.anchor,network.source,network.target,network.trader)!=(path[1],path[0],path[2],t.target) ||
-            network.sourceAmount!=self.maximum || fill.spent!=self.maximum || network.targetAmount<fill.received ||
+        let mut events=logs.iter().filter(|l|l.address()==t.network && l.topic0()==Some(&ILegacyNetwork::Conversion::SIGNATURE_HASH));
+        let mut amount=self.maximum;
+        for leg in path.windows(3).step_by(2) {
+            let log=events.next()?;
+            let c=ILegacyNetwork::Conversion::decode_log_data(&log.inner.data).ok()?;
+            if (c.source,c.anchor,c.target,c.trader)!=(leg[0],leg[1],leg[2],t.target) ||
+                c.sourceAmount!=amount || c.targetAmount.is_zero() {return None;}
+            amount=c.targetAmount;
+        }
+        if events.next().is_some(){return None;}
+        if (fill.payer,fill.recipient,fill.pathHash,fill.source,fill.target)!=(payer,payer,keccak256(path.abi_encode()),t.asset(input),t.asset(output)) ||
+            fill.spent!=self.maximum || amount<fill.received ||
             fill.received<self.minimum {return None;}
         let debits=|token| fill::moved_logs(logs,token,Some(payer),None);
         let credits=|token| fill::moved_logs(logs,token,None,Some(payer));
@@ -117,25 +180,49 @@ mod tests {
         let units=|v:&Value|v.as_str().unwrap().parse::<U256>().unwrap();
         let wrapped=addr(&book["manifest"]["wrapped"]);
         let module=addr(&book["module"]);
-        let mut checked=0;
-        for leg in book["controls"].as_array().unwrap().iter().filter(|r| r["mode"]!="v5" && r["path"].as_array().unwrap().len()==3) {
+        let index_bytes=include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/bancor_v21_ethereum.json.gz");
+        let index:Value=serde_json::from_reader(flate2::read::GzDecoder::new(index_bytes.as_slice())).unwrap();
+        let owner=|anchor|addr(&index["markets"].as_array().unwrap().iter().find(|m|addr(&m["anchor"])==anchor).unwrap()["converter"]);
+        let mut checked=[0,0];
+        for leg in book["controls"].as_array().unwrap().iter().filter(|r| r["mode"]!="v5") {
             let path:Vec<_>=leg["path"].as_array().unwrap().iter().map(addr).collect();
             let normalized=|t|if t==NATIVE {wrapped}else{t};
-            let terms=Terms{target:module,network:addr(&book["manifest"]["network"]),normalized:[normalized(path[0]),normalized(path[2])],
-                reserves:[path[0],path[2]],anchor:path[1],native:leg["mode"]=="native_wallet",module_hash:book["manifest"]["runtimeKeccak"].as_str().unwrap().parse().unwrap()};
+            let output=*path.last().unwrap();
+            let mut sorted=path.clone();
+            if normalized(path[0])>normalized(output){sorted.reverse();}
+            let last=*sorted.last().unwrap();
+            let bridge=(sorted.len()==5).then(||Bridge{middle:sorted[2],anchor:sorted[3],converters:[owner(sorted[1]),owner(sorted[3])]});
+            let terms=Terms{target:module,network:addr(&book["manifest"]["network"]),normalized:[normalized(sorted[0]),normalized(last)],
+                reserves:[sorted[0],last],anchor:sorted[1],bridge,native:leg["mode"]=="native_wallet",module_hash:book["manifest"]["runtimeKeccak"].as_str().unwrap().parse().unwrap()};
             let tx=&leg["tx"]; let data:Bytes=tx["data"].as_str().unwrap().parse().unwrap();
             let signed=ILegacyWallet::executeCall::abi_decode_validate(&data).unwrap();
             let logs:Vec<Log>=serde_json::from_value(leg["logs"].clone()).unwrap();
             let payer=unique::<ILegacyWallet::Paid>(&logs,module).unwrap().payer;
-            let mut proof=Proof{terms,payer,input:terms.normalized[0],output:terms.normalized[1],
+            let saved=Proof{terms,payer,input:normalized(path[0]),output:normalized(output),
                 maximum:signed.order.amount,minimum:signed.order.minimum,deadline:signed.order.deadline};
+            let persisted=serde_json::to_value(&saved).unwrap();
+            assert_eq!(persisted["terms"].get("bridge").is_some(),bridge.is_some());
+            let mut proof:Proof=serde_json::from_value(persisted).unwrap();
             assert_eq!(proof.data(),data);
+            if let Some(b)=bridge {
+                assert!(proof.converter_events(&logs,b));
+                let mut wrong=b;
+                wrong.converters.swap(0,1);
+                assert!(!proof.converter_events(&logs,wrong));
+                let mut swapped=logs.clone();
+                let indices=swapped.iter().enumerate().filter_map(|(i,l)|(l.address()==terms.network && l.topic0()==Some(&ILegacyNetwork::Conversion::SIGNATURE_HASH)).then_some(i)).collect::<Vec<_>>();
+                assert_eq!(indices.len(),2);
+                swapped.swap(indices[0],indices[1]);
+                assert!(proof.amounts(&swapped,payer,proof.input,proof.output).is_none());
+                swapped.remove(indices[0]);
+                assert!(proof.amounts(&swapped,payer,proof.input,proof.output).is_none());
+            }
             assert_eq!(proof.amounts(&logs,payer,proof.input,proof.output),Some((units(&leg["spent"]),units(&leg["received"]))));
             assert_eq!(proof.amounts(&logs,Address::ZERO,proof.input,proof.output),None);
             proof.terms.anchor=Address::ZERO;
             assert_eq!(proof.amounts(&logs,payer,proof.input,proof.output),None);
-            checked+=1;
+            checked[usize::from(bridge.is_some())]+=1;
         }
-        assert_eq!(checked,16);
+        assert_eq!(checked,[16,12]);
     }
 }

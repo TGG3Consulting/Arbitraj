@@ -230,7 +230,7 @@ pub async fn run(
     let all = simulate::run_anchored(ctx, &list, &values, &over, at, hash).await?;
     if let Some(r) = all.iter().find(|r| pc::late(r)) {
         let m = format!(
-            "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
+            "TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время симуляции по сети, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
             r.why()
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));

@@ -104,7 +104,7 @@ async fn fill(
             // Решение 127: бандл — тоже голова + 1 с, как исполнитель (раньше +12 с узла BSC).
             (
                 Built::Many(a.bundle),
-                Base::timed(at, now),
+                Base::for_chain(ctx.chain_id(), at, now),
                 Form::Bundle.text(),
                 None,
             )
@@ -122,7 +122,7 @@ async fn fill(
             .await?;
             let t = format!("цикл: {}", x.form);
             let call = Some((x.call.executor, x.call.data()));
-            (Built::Exec(x), Base::timed(at, now), t, call)
+            (Built::Exec(x), Base::for_chain(ctx.chain_id(), at, now), t, call)
         }
     };
     r.form = Some(form_text.clone());

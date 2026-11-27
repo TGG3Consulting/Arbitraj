@@ -76,7 +76,7 @@ pub async fn judge(ctx: &Ctx, res: &[CallResult], entries: &[&Entry]) -> Gateway
         // (сделки нет, пулы не исключаются, монета не в чёрный список).
         if ur::deadline_passed(&r.return_data, text) {
             let msg = format!(
-                "проба сделки перед отправкой: шаг {i} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
+                "проба сделки перед отправкой: шаг {i} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время симуляции по сети, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла: {}",
                 r.why()
             );
             return Err(ctx.err(ErrorCode::StaleData, msg));

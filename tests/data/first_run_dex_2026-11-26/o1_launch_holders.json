@@ -1,0 +1,74 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "tokens": {
+    "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf": {
+      "payer": "0xa020af27444bd746ed2ee93bce4aaed9dd7fe889",
+      "quantity": "132623078920521850",
+      "transfer": {
+        "address": "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf",
+        "topics": [
+          "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+          "0x0000000000000000000000007ec6c9d993d9832aa654593f2dbc21303650bc6c",
+          "0x000000000000000000000000a020af27444bd746ed2ee93bce4aaed9dd7fe889"
+        ],
+        "data": "0x00000000000000000000000000000000000000000000000001d72bfcd413887a",
+        "blockNumber": "0x3b60dc6",
+        "transactionHash": "0xbfbf474d12f115e017b9e2a5182b237f9e5f1ff7bd813c6042740b7c483dbb4b",
+        "transactionIndex": "0xa",
+        "blockHash": "0x88cd71fc82f48303b423de5884f3dd6ba8d3febb7b7046144f36ed99255c3961",
+        "logIndex": "0x11",
+        "blockTimestamp": "0x6b075628",
+        "removed": false
+      },
+      "balance_call": "0x70a08231000000000000000000000000a020af27444bd746ed2ee93bce4aaed9dd7fe889",
+      "balance_result": "0x00000000000000000000000000000000000000000000000001d72bfcd413887a"
+    },
+    "0xb20000000000000000000016e38fd364d271ba28": {
+      "payer": "0x4446adc0b8136ffc55ddb7a488ba5509ace2a5ef",
+      "quantity": "9038993186",
+      "transfer": {
+        "address": "0xb20000000000000000000016e38fd364d271ba28",
+        "topics": [
+          "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+          "0x0000000000000000000000004446adc0b8136ffc55ddb7a488ba5509ace2a5ef",
+          "0x000000000000000000000000599c4225fe90214795a0be228d20d7680f8ced15"
+        ],
+        "data": "0x000000000000000000000000000000000000000000000000000000000c854d31",
+        "blockNumber": "0x3b60cc4",
+        "transactionHash": "0x5f37527d051d1a9182e83c02504a7d1b86b0847022cde74a012e0aaf6f58817d",
+        "transactionIndex": "0x2",
+        "blockHash": "0x4bf0e846ff60961613508bf72c3f5bb4750512eeeb704548a094fa00db42f9b4",
+        "logIndex": "0x1",
+        "blockTimestamp": "0x6b0755f5",
+        "removed": false
+      },
+      "balance_call": "0x70a082310000000000000000000000004446adc0b8136ffc55ddb7a488ba5509ace2a5ef",
+      "balance_result": "0x000000000000000000000000000000000000000000000000000000021ac41722"
+    },
+    "0xb20000000000000000000078ee7ce2fe4908108c": {
+      "payer": "0x9e683f64917a6e1ca9f09c3eba9008bcdf9e0999",
+      "quantity": "5444516",
+      "transfer": {
+        "address": "0xb20000000000000000000078ee7ce2fe4908108c",
+        "topics": [
+          "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+          "0x0000000000000000000000009e683f64917a6e1ca9f09c3eba9008bcdf9e0999",
+          "0x000000000000000000000000f668e21993f0acd7ab00bb1cfbaed0df28a3c8ec"
+        ],
+        "data": "0x000000000000000000000000000000000000000000000000000000001f88009e",
+        "blockNumber": "0x3b60cf3",
+        "transactionHash": "0x6ef7069559a023a43df30399a9cae81b671a477949e46ede6c2f261579ca10c0",
+        "transactionIndex": "0x6",
+        "blockHash": "0xee8d246fc4ad78f17589bc8e66038651edac8ca5a8eb028e5c91f135172908b4",
+        "logIndex": "0xb",
+        "blockTimestamp": "0x6b0755fe",
+        "removed": false
+      },
+      "balance_call": "0x70a082310000000000000000000000009e683f64917a6e1ca9f09c3eba9008bcdf9e0999",
+      "balance_result": "0x00000000000000000000000000000000000000000000000000000000005313a4"
+    }
+  }
+}

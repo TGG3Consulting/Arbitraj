@@ -66,7 +66,7 @@ pub fn buy_revert(ctx: &Ctx, i: usize, r: &CallResult, quoter: usize) -> Gateway
     // Срок транзакции вышел (TransactionDeadlinePassed) — не свойство монеты: не проверено, повтор (не чёрный список).
     if late(r) {
         let m = format!(
-            "{why} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время головы + 1 с, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла"
+            "{why} — TransactionDeadlinePassed: срок транзакции вышел к симулированному блоку (время симуляции по сети, check/sim_base.rs) — проверьте dex.deadline_s и свежесть узла"
         );
         return Err(ctx.err(ErrorCode::NoRoute, m));
     }

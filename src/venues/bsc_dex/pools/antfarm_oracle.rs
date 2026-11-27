@@ -44,7 +44,9 @@ mod tests {
         };
         let reserves = [U256::from(4), U256::from(2)];
         assert_eq!(observed.rate(reserves, 3799), Some(U256::from(7)));
-        let at = Base::timed(12, 3799).time.unwrap() as u32;
+        let parent = 3788;
+        assert_eq!(observed.rate(reserves, parent + 1), Some(U256::from(7)));
+        let at = Base::for_chain(Some(1), 12, parent as u64).time.unwrap() as u32;
         assert_eq!(observed.rate(reserves, at), Some(U256::from(2) << 112));
         let initializing = Observation {
             first: true,

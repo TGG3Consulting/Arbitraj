@@ -130,7 +130,7 @@ pub(super) async fn once(
         let selected=super::market_plan::Selection::for_leg(leg);
         let (height,time)=q.heads.at(ctx).await?;
         let p=Box::pin(market.plan(ctx,s,h,(wallet,height),req.side==crate::core::types::Side::Buy,selected)).await?;
-        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::timed(height,time)});
+        return Ok(Ready{built:Built::One(p),legs,coins,usdt:paid,form,by_quoter,at:Base::for_chain(ctx.chain_id(), height,time)});
     }
     let deployed = executor::address(ctx)?;
     let takes =
@@ -162,7 +162,7 @@ pub(super) async fn once(
             usdt: paid,
             form,
             by_quoter,
-            at: Base::timed(at, now),
+            at: Base::for_chain(ctx.chain_id(), at, now),
         });
     }
     if is_native && shape == RouteMode::Graph {
@@ -211,6 +211,6 @@ pub(super) async fn once(
         form,
         by_quoter,
         // Решение 127: прямой, умный и графовый (бандл) — голова + 1 с, как исполнитель (раньше +12 с узла BSC).
-        at: Base::timed(at, now),
+        at: Base::for_chain(ctx.chain_id(), at, now),
     })
 }

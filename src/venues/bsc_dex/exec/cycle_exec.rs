@@ -219,7 +219,7 @@ async fn probe(
         to: c.executor,
         input: c.data(),
     };
-    let res = simulate::run(ctx, &[call], Base::timed(at, now)).await?;
+    let res = simulate::run(ctx, &[call], Base::for_chain(ctx.chain_id(), at, now)).await?;
     let r = res
         .first()
         .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "eth_simulateV1: нет итога вызова"))?;

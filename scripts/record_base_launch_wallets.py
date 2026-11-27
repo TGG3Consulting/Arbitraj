@@ -21,6 +21,9 @@ word=lambda n:"0x"+format(n,"064x")
 
 def replay(group,endpoint):
     with gzip.open(DATA/"base_launch_hooks.json.gz") as f:d=json.load(f)
+    holders=json.loads((DATA/"o1_launch_holders.json").read_bytes())
+    if holders["selector"]!=d["selector"]:raise ValueError("держатели на другой высоте")
+    payers={**PAYER,**{t:s["payer"] for t,s in holders["tokens"].items()}}
     at=d["selector"];header=rpc(endpoint,"eth_getBlockByHash",[at["blockHash"],False]);end=int(header["timestamp"],16)+120
     if d["state_root"]!=header["stateRoot"]:raise ValueError("изменилось состояние родителя")
     cfg=next(p["settings"] for p in json.loads((ROOT/"config/first_run_dex.json").read_bytes()) if p["chain_id"]==8453 and p["settings"]["dex.kind"]=="uniswap_v4")
@@ -41,7 +44,12 @@ def replay(group,endpoint):
             return tx(MC,"getEthBalance(address)",["address"],[owner]) if asset==ZERO else tx(asset,"balanceOf(address)",["address"],[owner])
         approvals=[]
         if x!=ZERO:
-            approvals.append(tx(x,"approve(address,uint256)",["address","uint256"],[EXEC if mode=="v5" else permit,qty]))
+            spender=EXEC if mode=="v5" else permit
+            allowance=tx(x,"allowance(address,address)",["address","address"],[owner,spender])
+            checked=simulate(owner,prefix+[allowance],mode)[-1]
+            if checked["status"]!="0x1":return None,dict(input=str(qty),stage="allowance",call=allowance,result=checked)
+            if int(checked["returnData"],16)<qty:
+                approvals.append(tx(x,"approve(address,uint256)",["address","uint256"],[spender,qty]))
             if mode=="router":approvals.append(tx(permit,"approve(address,address,uint160,uint48)",["address","address","uint160","uint48"],[x,router,qty,end]))
         def trade(minimum,deadline):
             if mode=="v5":
@@ -68,11 +76,15 @@ def replay(group,endpoint):
         key=row["key"]
         cash=row["terms"].get("quote") or next((t for t in key[:2] if t in (WETH,USDC)),None)
         item=dict(pool=row["id"],key=key,cash=cash,cases=[]);markets.append(item)
-        owner=PAYER.get(cash)
+        owner=payers.get(cash)
         if not owner:item["reason"]="нет подтверждённого независимого держателя котируемого актива";continue
         if rpc(endpoint,"eth_getCode",[owner,at])!="0x":raise ValueError("пробный держатель не является EOA")
         item["payer"]=owner;asset=next(t for t in key[:2] if t!=cash)
         sizes=[10**12,10**14] if cash in (WETH,ZERO) else ([10**6,10**7] if cash==USDC else [100,1000])
+        if group=="bankr-index-base":
+            sizes += [10**15,10**16] if cash==WETH else [10**8,10**9]
+        if cash=="0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf":
+            sizes=[10**13,10**15]
         for qty in sizes:
             for mode in (["router"] if ZERO in key[:2] else ["router","v5"]):
                 prefix,buy=leg(key,owner,[],mode,cash,asset,qty)

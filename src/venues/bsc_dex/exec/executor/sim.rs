@@ -62,7 +62,7 @@ pub async fn run(
     // Решение 272: продажа нативного BNB (executeNative, wrapIn) — с value вызова; иначе value нет, как раньше.
     let value = c.value();
     let values: &[(usize, U256)] = if value.is_zero() { &[] } else { &[(0, value)] };
-    let res = simulate::run_valued(ctx, &[call], values, simulate::Base::timed(at, now)).await?;
+    let res = simulate::run_valued(ctx, &[call], values, simulate::Base::for_chain(ctx.chain_id(), at, now)).await?;
     let r = res
         .into_iter()
         .next()

@@ -1,7 +1,7 @@
 //! Файл: venues/bsc_dex/check/sim_base.rs
 //! Что делает: базовый блок eth_simulateV1 (check/simulate.rs) — номер и время симулированного блока
 //! (blockOverrides.time). Решение 127: у ВСЕХ симуляций свопа перед отправкой (прямой и умный путь Universal Router,
-//! бандл, исполнитель, цикл DEX ↔ DEX, сухие сделки) и у проб налогов время симулированного блока = время головы + 1 с,
+//! бандл, исполнитель, цикл DEX ↔ DEX, сухие сделки) и у проб налогов на Ethereum используется следующий 12-секундный слот, на BSC время симулированного блока = время головы + 1 с,
 //! а не +12 с узла BSC; один источник — head() (та же голова, на которой идёт симуляция и от которой считан срок).
 //! Кто вызывает: check/{simulate, probe, native_probe, service_tax}.rs, exec/{trade_direct, trade_smart, bundle_send,
 //! bundle_trade, cycle_bundle_trade, cycle_dry, cycle_exec, dry_build}.rs, exec/executor/{sim, trade}.rs.
@@ -33,13 +33,19 @@ pub struct Base {
 }
 
 impl Base {
-    pub(crate) fn next_time(parent:u64)->u64 { parent.saturating_add(NEXT_BLOCK_S) }
+    // Mainnet timestamps advance by whole 12-second beacon slots. A missed slot may delay inclusion further.
+    // https://ethereum.org/developers/docs/blocks/#block-time
+    pub(crate) fn next_time(chain: Option<u64>, parent: u64) -> u64 {
+        parent.saturating_add(if chain == Some(1) { 12 } else { NEXT_BLOCK_S })
+    }
 
-    /// Блок `number` со временем головы `head_time` (секунды): симулированный блок — на NEXT_BLOCK_S позже. Ошибок нет.
     pub fn timed(number: u64, head_time: u64) -> Self {
-        Base {
+        Self::for_chain(None, number, head_time)
+    }
+    pub(crate) fn for_chain(chain: Option<u64>, number: u64, parent: u64) -> Self {
+        Self {
             number,
-            time: Some(Self::next_time(head_time)),
+            time: Some(Self::next_time(chain, parent)),
         }
     }
 }
@@ -51,10 +57,10 @@ impl From<u64> for Base {
 }
 
 /// Общий источник для симуляции перед отправкой (решение 127): свежая голова (node/heads.rs Heads::at — номер и время
-/// одного и того же блока). Возвращает: базовый блок с временем головы + 1 с и время головы (секунды Unix) — от него
+/// одного и того же блока). Возвращает: базовый блок с временем выбранной сети и время головы (секунды Unix) — от него
 /// вызывающий считает срок транзакции (now + dex.deadline_s), так срок и симуляция — от одного блока.
 /// Ошибки: как у Heads::at (StaleData — голова устарела; узел; BadResponse — нет timestamp).
 pub async fn head(ctx: &Ctx, heads: &Heads) -> GatewayResult<(Base, u64)> {
     let (number, time) = heads.at(ctx).await?;
-    Ok((Base::timed(number, time), time))
+    Ok((Base::for_chain(ctx.chain_id(), number, time), time))
 }

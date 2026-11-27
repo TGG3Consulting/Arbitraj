@@ -127,7 +127,7 @@ pub(in crate::venues::bsc_dex) async fn read(
     let market = antfarm::market(ctx, f, pool, edge, &at).await?;
     let mut funding = Vec::new();
     if !market.tokens.contains(&ATF) {
-        let now = Base::next_time(head.timestamp.to()) as u32;
+        let now = Base::next_time(ctx.chain_id(), head.timestamp.to()) as u32;
         for asset in market.tokens {
             let v = cell((head.hash, asset));
             funding.extend(

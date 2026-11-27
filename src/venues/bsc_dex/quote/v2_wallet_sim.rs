@@ -36,6 +36,7 @@ pub(in crate::venues::bsc_dex) struct V5Step {
 pub(in crate::venues::bsc_dex) enum Wire {
     Router02,
     Umbrae(super::super::exec::umbrae::Path),
+    RegisteredV3(super::super::exec::registered_v3_wallet::Market),
     SectorLb(super::super::exec::sectorone::Path),
     Carbon(std::sync::Arc<super::super::exec::carbon_wire::Call>),
     MintClub(super::super::exec::mint_club_wire::Call),
@@ -185,6 +186,10 @@ pub(in crate::venues::bsc_dex) async fn measure(ctx: &Ctx, h: Head, o: Order, bo
     if spent != Some(o.amount) || received.is_zero() || received < o.minimum {
         return Err(fail());
     }
+    if let Wire::RegisteredV3(market)=&o.wire {
+        let proof=super::super::exec::registered_v3_wallet::Proof{market:*market,target:o.target,payer:o.payer,input:o.input,output:o.output,budget:o.amount,minimum:o.minimum,deadline};
+        if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
+    }
     if let Wire::Carbon(c)=&o.wire {
         let proof=super::super::exec::carbon_fact::Proof{call:(**c).clone(),payer:o.payer};
         if proof.measured(&r[n+2].logs)!=Some((o.amount,received)){return Err(fail());}
@@ -280,6 +285,7 @@ fn calldata(o: &Order, deadline: U256, minimum: U256) -> Bytes {
         Wire::Oasis { rebate } => super::super::exec::oasis_direct::swap_data(
             o.input, o.output, o.amount, minimum, o.payer, deadline, *rebate,
         ),
+        Wire::RegisteredV3(market) => market.order(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::Umbrae(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::SectorLb(path) => path.data(o.input,o.output,o.amount,minimum,o.payer,deadline),
         Wire::Router02 => {
@@ -298,7 +304,7 @@ async fn frame(
         calls,
         values,
         &[],
-        Base::timed(h.number.to(), h.timestamp.to()),
+        Base::for_chain(ctx.chain_id(), h.number.to(), h.timestamp.to()),
     );
     req[1] = h.selector();
     #[derive(serde::Deserialize)]

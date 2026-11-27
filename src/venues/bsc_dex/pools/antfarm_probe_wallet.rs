@@ -119,7 +119,7 @@ impl Frame<'_> {
             &calls,
             &[],
             &[],
-            Base::timed(self.h.number.to(), self.h.timestamp.to()),
+            Base::for_chain(self.ctx.chain_id(), self.h.number.to(), self.h.timestamp.to()),
             Some(self.h.hash),
         )
         .await?;

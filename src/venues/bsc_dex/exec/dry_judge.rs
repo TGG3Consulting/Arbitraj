@@ -52,7 +52,7 @@ pub fn judge(
                 "обмен"
             };
             let tail = if ur::deadline_passed(&c.return_data, text) {
-                " — TransactionDeadlinePassed: срок вышел к симулированному блоку (время головы + 1 с, решение 127) — проверьте dex.deadline_s и свежесть узла"
+                " — TransactionDeadlinePassed: срок вышел к симулированному блоку (время симуляции по сети) — проверьте dex.deadline_s и свежесть узла"
             } else {
                 ""
             };

@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import requests
-import rlp
 from eth_abi import decode, encode
 from eth_utils import keccak
 
@@ -64,6 +63,7 @@ def batch(at, calls, network="base"):
 
 
 def capture(network="base"):
+    import rlp
     factory_addr,router_addr,chain=(FACTORY,ROUTER,8453) if network=="base" else (
         "0x2e9e34b5af24b66f12721113c1c8ffcbb7bc8051","0x871af97122d08890193e8d6465015f6d9e2889b2",1)
     read=partial(rpc,network=network)

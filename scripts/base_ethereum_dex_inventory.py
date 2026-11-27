@@ -1795,6 +1795,29 @@ def tables(network, snapshots, profiles):
         ref = r.get("link") or r.get("source")
         candidates = r.get("addresses_from_chain_stanza", [])
         task = f"`T-SOURCE-{network}-{row['id']}`"
+        if str(row["id"]) == "8209":
+            fixture = data_dir / f"aqua_{network}_day.json.gz"
+            book = json.loads(gzip.decompress(fixture.read_bytes()))
+            counts = {event: count for address, event, count in book["counts"] if address in (book["registry"],book["router"])}
+            candidates = [book["registry"],book["router"],book["earlier"]]
+            gated = sum(isinstance(r.get("quote"),dict) and str(r["quote"]["error"].get("data","")).startswith("0x39c4052c") for r in book["directions"])
+            quoted = sum(isinstance(r.get("quote"),str) for r in book["directions"])
+            task = (f"Реестр, SwapVM v1.0.2 и реестр developer release. За 24 часа по блокам "
+                    f"{book['fromBlock']}–{book['through']} было {counts['Swapped']} исполнений, "
+                    f"{counts['Shipped']} регистраций и {counts['Docked']} отзывов. По кассе "
+                    f"{len({r['maker'] for r in book['fills']})} мейкеров и {len({r['hash'] for r in book['fills']})} торговавших стратегий. "
+                    f"Из {len(book['directions'])} направлений {gated} потребовали NFT отправителя и {quoted} "
+                    f"дали цену обычному адресу на конечной высоте. Для стратегий с таким условием владелец проходит "
+                    "проверку резолвера и оформляет credential на конкретный адрес EOA и сеть. "
+                    "Мейкер распоряжается общим остатком собственных стратегий и может отозвать allowance или регистрацию. "
+                    f"[Касса, программы и права](../{fixture.as_posix()}) · "
+                    "[Контракты и доступ](https://business.1inch.com/portal/documentation/aqua/reference/contract-addresses.md).")
+            if base:
+                task += (" Публичная стратегия USDC/MYRC `0x9d0dd4f6a833692f7cbc7596f0c2ddf668a78ae0c8f91f8ccf8f10de961e8ee7` "
+                         "финансирует MYRC внутри обмена. В порядке «сначала выход» 0,9 и 1,8 USDC дали "
+                         "3,694553383839100359 и 7,384439905817121312 MYRC, при обратной продаже получено "
+                         "0,899100 и 1,798202 USDC до газа. Порядок «сначала вход» отклонил обе покупки. "
+                         "[Переводы и предельные суммы](../tests/data/first_run_dex_2026-11-26/aqua_base_wallets.json.gz).")
         if source_scope := registry_entries.get(str(row["id"])):
             assert source_scope["module"] == row["module"] and source_scope["path"] == r["path"]
             start, end = source_scope["lines"]

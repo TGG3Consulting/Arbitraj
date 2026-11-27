@@ -27,7 +27,7 @@ Claude — второй ревьюер и партнёр по проекту. С
 >    каждое расхождение с причиной. Релиз готов только при нуле необъяснённых расхождений и закрытых пунктах R-*.
 >    Я проверяю прогон и только после этого сообщаю владельцу «релиз готов».
 
-Последний просмотренный коммит: `e3cbb230` (27.11.2026).
+Последний просмотренный коммит: `4d104b38` (27.11.2026).
 
 Общее впечатление: Base/Ethereum как профили поверх EVM-адаптера `bsc_dex` — правильный путь (решение 433), ядро от
 адаптеров не зависит, газ OP-stack/EIP-1559 и проверка `eth_chainId` сделаны по официальным источникам. Карта покрытия в
@@ -2149,3 +2149,16 @@ MintClub/Carbon нет, `registered_v3::configured` = false → `false`, пре�
 ### e3cbb230 — проверено
 
 - Только `gladius/quantity.rs` и `routing.rs`: поиск объёма Gladius переписан так, чтобы не держать состояние через `await`. Внутри модуля, BSC не затронут. ✅
+
+### 4d104b38 — проверено (общие загрузка и маршруты — касается BSC)
+
+- Bancor V3 (Ethereum) и Stabull (Base) подключены к расчёту и исполнению. Новые `PoolState::BancorV3` / `core/types/bancor_v3.rs` и вариант `RouterFeeMode::BancorV3` — по образцу прежних типов ядра.
+- **Общие файлы, проверенные на эквивалентность для BSC:**
+  - `quote/direct.rs`: `best` = `best_with(.., BuyWire::Forward)`, а `Forward` вызывает тот же `pool_quote::swap`. Эквивалентно.
+  - `quote/graph_seq.rs`: состояния собраны в `Markets` (`legacy`, `bundles`, `bancor`). Для прочих пулов используется прежний `legacy`. `bancor_sequence::withdrawal` для не-Bancor — `None`, и новое условие общей ликвидности для них ложно. Эквивалентно.
+  - `quote/pool_after.rs`, `steps.rs`, `v2_execution.rs`, `v2_wallet_sim.rs`, `vista_cash.rs`, `module_pricing.rs`: ветки только по `PoolState::BancorV3`, `Wire::BancorV3`, `Wire::Stabull`.
+  - **`pools/load_site::groups`:** из групп «один контракт — много пар» исключены ссылки `Multi` немногомонетных видов из `one_by_one`. Проверил, откуда такие ссылки на BSC. `multi_pair::adopt` строит `Multi` только при `is_multi_coin()` (Curve, Balancer, Saddle, PancakeStable, Wombat), они в группах остаются. WooFi использует строковый ключ справочника (`woo_pairs`), а не `Multi`. Немногомонетные `Multi` — только у новых DEX Base/Ethereum (Dagrow, Surge, Temple, Pendle, PropAMM, Rubicon, V1, Bancor). Раньше они попадали в `load_site::states` и получали ошибку «вид пула не многомонетный», теперь грузятся своим загрузчиком. На BSC без изменений.
+  - `factory_scan` / `created*`: `bancor_directory::scan` и событие `PoolAdded` срабатывают только для семейств `BancorV3`.
+
+  Регрессии BSC нет. ✅
+- Новые настройки — с записями в SETTINGS_CASES. Профили-советы в `first_run_dex.json` сверяются тестом.

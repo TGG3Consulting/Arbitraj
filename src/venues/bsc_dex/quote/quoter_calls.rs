@@ -541,6 +541,7 @@ pub fn request(
 
 /// Выход из ответа квотера. None — ответ не по ABI.
 pub fn decode_input(e: &Entry, out: &[u8], token_in: Address, amount: U256) -> Option<U256> {
+    if e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter {return super::quoter_maverick::full(out,amount);}
     if e.family.variant==super::super::pools::family_variant::Variant::YieldBasis {return (out.len()==32).then(||U256::from_be_slice(out)).filter(|q|!q.is_zero());}
     if let PoolState::BalancerV1(s)=&e.pool.state {let output=if token_in==e.pool.token0{e.pool.token1}else{e.pool.token0};return super::super::pools::balancer_v1::checked_quote(s,[token_in,output],amount,true,out);}
     if matches!(e.pool.state,PoolState::BancorV3(_)){return super::super::pools::bancor_v3::decode(out);}

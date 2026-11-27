@@ -261,7 +261,7 @@ pub fn of(kind: &str) -> Option<ExecKind> {
         | "curve_stableswap_plain"
         | "curve_stableswap_meta"
         | "curve_stableswap_oracle" => ExecKind::Curve,
-        "maverick_v2" => ExecKind::Maverick,
+        "maverick_v2" | "maverick_v2_router" => ExecKind::Maverick,
         "pancake_stableswap" | "lista_stableswap" | "lista_stableswap_proxy" => {
             ExecKind::StableU256
         }

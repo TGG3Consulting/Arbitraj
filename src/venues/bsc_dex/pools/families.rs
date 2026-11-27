@@ -659,7 +659,7 @@ pub fn spec(kind: &str) -> Option<(PoolKind, Proto, bool, bool, bool)> {
         "solidly_v3_module" => (PoolKind::V3, Proto::Slipstream, true, true, true),
         // Maverick V2 (решение 122 F): в графе и сигналах (порт расчёта команды Maverick); исполнение — шаг MAVERICK
         // контракта-исполнителя (exec_kind::via_executor), своего пути через Universal Router нет.
-        "maverick_v2" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
+        "maverick_v2" | "maverick_v2_router" => (PoolKind::TickBin, Proto::Maverick, true, false, false),
         // PancakeSwap Infinity Stable (решение «122 (Infinity Stable)»): в графе и исполним Universal Router своей DEX
         // (tradable, не форк) — пул живёт в синглтоне CLPoolManager; решение 395 — ещё шаг INF_CL исполнителя v3.
         "pancake_infinity_stable" => (
@@ -1262,6 +1262,9 @@ pub fn required(ctx: &Ctx, f: &Family) -> Vec<&'static str> {
             "dex.stable_hooks",
             "dex.quoter",
         ]),
+    }
+    if f.variant==Variant::MaverickTwoRouter {
+        list.extend(["dex.router", "dex.router_exact_tokens", "dex.factory_runtime_hash", "dex.router_runtime_hash"]);
     }
     // Решение 186: виртуальный квотер — квотер DEX не нужен (quote/virtual_quoter.rs).
     if !f.variant.external_algebra_swap()

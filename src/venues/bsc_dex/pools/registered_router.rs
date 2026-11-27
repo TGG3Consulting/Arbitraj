@@ -47,6 +47,7 @@ pub(crate) async fn checked(
         )
     };
     use super::family_variant::Variant;
+    if e.family.variant == Variant::MaverickTwoRouter {return Box::pin(super::maverick_two_router::checked(ctx,e,input,output,at)).await;}
     if e.family.variant == Variant::SlipstreamUniversal {return Box::pin(super::slipstream_ur::checked(ctx,e,input,output,at)).await;}
     if !matches!(e.family.variant, Variant::CypherIntegral | Variant::V2ExactRouter | Variant::RegisteredUniV3 | Variant::VvsV3)
         || !((input, output) == (e.pool.token0, e.pool.token1)

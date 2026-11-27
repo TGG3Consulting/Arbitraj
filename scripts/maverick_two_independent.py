@@ -1,6 +1,5 @@
 """Измеряет два способа оплаты независимо, включая узкие диапазоны и малые резервы."""
 from eth_abi import decode
-from record_base_slipstream_executor import rpc
 from record_diamondswap_base import direct_wallet
 
 
@@ -8,7 +7,8 @@ def independent(c, source, samples, stamp, orders):
     roles = source["roles"]
     router = roles["router"]["address"]
     wrapped = roles["router"]["wrapped"]
-    router_eth = int(rpc(c.endpoint, "eth_getBalance", [router, c.selector]), 16)
+    router_eth, = c.one("0xca11bde05977b3631167028862be2a173976ca11", "getEthBalance(address)",
+                       ["address"], [router], ["uint256"])
     # Проверенные исходники токенов допускают прямое сравнение без перевода ставки и символа между сетями.
     exact = {
         8453: {"0x4ed4e862860bed51a9570b96d89af5e1b0efefed", "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"},

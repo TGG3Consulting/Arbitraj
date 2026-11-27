@@ -185,6 +185,7 @@ pub const DEX_KINDS: &[&str] = &[
     "maverick_v1",
     "maverick_v1_module",
     "maverick_v2",
+    "maverick_v2_router",
     "pancake_infinity_stable",
     "unsupported",
 ];

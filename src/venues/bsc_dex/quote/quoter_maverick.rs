@@ -59,6 +59,12 @@ pub fn request(
     ))
 }
 
+/// Подтверждает полное использование запрошенного входа перед прямой оплатой.
+pub(super) fn full(out: &[u8], amount: U256) -> Option<U256> {
+    let reply=Q::calculateSwapCall::abi_decode_returns(out).ok()?;
+    (reply.amountIn==amount && !reply.amountOut.is_zero()).then_some(reply.amountOut)
+}
+
 /// Выход из ответа calculateSwap. None — ответ не по ABI. Ошибок нет.
 pub fn decode(out: &[u8]) -> Option<U256> {
     Q::calculateSwapCall::abi_decode_returns(out)

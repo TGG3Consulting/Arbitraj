@@ -139,6 +139,7 @@ pub enum Variant {
     Pendle,
     Stabull,
     MaverickOne,
+    MaverickTwoRouter,
     Surge,
     Antfarm,
     Bundles,
@@ -226,7 +227,7 @@ impl Variant {
     pub fn factory_quoter(self)->bool { self == Self::BaseNativeV3 || self.registered_v3() }
     pub fn umbrae(self)->bool { matches!(self,Self::UmbraeDamm|Self::UmbraeDlmm) }
     pub fn wallet_module(self)->bool { matches!(self,Self::Stabull|Self::MaverickOne|Self::UmbraeDlmm|Self::UmbraeDamm|Self::Memebox|Self::RegisteredV3|Self::VvsV3|Self::BunnySwap|Self::CandySwap) }
-    pub(crate) fn exact_router(self)->bool {matches!(self,Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
+    pub(crate) fn exact_router(self)->bool {matches!(self,Self::MaverickTwoRouter|Self::SlipstreamUniversal|Self::CypherIntegral|Self::RegisteredUniV3|Self::VvsV3|Self::SolidlyProxy|Self::SolidlyPairOverride|Self::V2ExactRouter)}
     pub(crate) fn solidly_classic(self)->bool {matches!(self,Self::SolidlyClassic | Self::SolidlyGenerator | Self::SolidlyProxy | Self::SolidlyPairOverride)}
     pub(crate) fn external_algebra_swap(self)->bool {matches!(self, Self::NamiIntegral | Self::SupernovaIntegral)}
 
@@ -329,6 +330,7 @@ pub fn of(kind: &str) -> Variant {
         "antfarm" => Variant::Antfarm,
         "bundles_swap" | "bundles_swap_v5" => Variant::Bundles,
         "stabull" | "stabull_module" => Variant::Stabull,
+        "maverick_v2_router" => Variant::MaverickTwoRouter,
         "maverick_v1" | "maverick_v1_module" => Variant::MaverickOne,
         "surge_native" | "surge_v5" => Variant::Surge,
         "rubicon_classic" => Variant::RubiconClassic,

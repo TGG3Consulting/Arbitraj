@@ -38,7 +38,8 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
     for e in entries {
         let pool = e.pool.reference.address();
         let classic = matches!(e.family.variant,Variant::SolidlyProxy|Variant::SolidlyPairOverride);
-        let router = if (e.family.variant==Variant::SolidlyPairOverride && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,input)) || registered_router::eligible(ctx, e.family.id, input, output) {
+        let prepaid = e.family.variant != Variant::MaverickTwoRouter || ctx.addr("dex.native_wrapped").is_ok_and(|wrapped| input != wrapped);
+        let router = if prepaid && ((e.family.variant==Variant::SolidlyPairOverride && super::super::pools::exact_wallet_tokens::eligible_input(ctx,e.family.id,input)) || registered_router::eligible(ctx, e.family.id, input, output)) {
             match head {
                 Some(h) if classic => Box::pin(super::super::pools::solidly_proxy::router(
                     ctx,
@@ -95,7 +96,7 @@ pub(super) async fn candidates(q: &Quoting, i: &Input, head: Option<Head>) -> Ve
                 use alloy::sol_types::SolValue;
                 let Some(fee)=e.pool.fee_pips else {continue};
                 (0,Bytes::from(fee.abi_encode()))
-            } else {(if classic {3}else if e.family.variant==Variant::CypherIntegral{2}else{1},Bytes::new())};
+            } else {(if e.family.variant == Variant::MaverickTwoRouter {7} else if classic {3}else if e.family.variant==Variant::CypherIntegral{2}else{1},Bytes::new())};
             let wire = Wire::V5(V5Step {
                 kind,
                 pool,

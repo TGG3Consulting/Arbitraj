@@ -353,6 +353,7 @@ pub mod load_maverick;
 pub(crate) mod stabull;
 pub(crate) mod stabull_quotes;
 pub(crate) mod maverick_one;
+pub(crate) mod maverick_two_router;
 pub(crate) mod maverick_one_quotes;
 mod maverick_one_directory;
 pub mod load_metric;

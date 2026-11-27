@@ -37,6 +37,8 @@ pub struct Market {
     pub fee_event: bool,
     #[serde(default, skip_serializing_if = "standard_event")]
     pub wallet_module: bool,
+    #[serde(default, skip_serializing_if = "standard_event")]
+    pub maverick: bool,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub slipstream: Option<(i32,Address)>,
 }
@@ -44,10 +46,11 @@ fn standard_event(extended: &bool) -> bool { !extended }
 impl Market {
     pub(in crate::venues::bsc_dex) fn from_entry(ctx:&Ctx,e: &super::super::pools::registry::Entry) -> Option<Self> {
         let algebra=e.family.variant==super::super::pools::family_variant::Variant::CypherIntegral;
+        let maverick=e.family.variant==super::super::pools::family_variant::Variant::MaverickTwoRouter;
         let deployer=if algebra{Some(super::super::pools::cypher::deployment(ctx,e).ok()?)}else{None};
         Some(Self {
             slipstream: if e.family.variant==super::super::pools::family_variant::Variant::SlipstreamUniversal { Some((e.pool.tick_spacing.filter(|s| *s>0 && *s<=8388607)?,ctx.dex_addr("dex.permit2",e.family.id).ok()?)) } else {None},
-            pool: e.pool.reference.address(), fee: if algebra{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
+            pool: e.pool.reference.address(), maverick, fee: if algebra || maverick{U24::ZERO}else{U24::from(e.pool.fee_pips?)}, wallet_module:false,algebra_deployer:deployer,
             fee_event: e.family.variant == super::super::pools::family_variant::Variant::VvsV3,
         })
     }
@@ -57,6 +60,7 @@ pub trait RouterMarket: Copy {
     fn topics(self, actual: &[B256], signature: B256, target:Address, payer:Address, _input:Address, _output:Address) -> bool {
         actual == [signature, target.into_word(), payer.into_word()]
     }
+    fn parties(self, _data: &[u8], _router: Address, _wallet: Address) -> bool {true}
     fn event(self) -> (&'static str, usize);
     fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool;
     fn order(
@@ -73,7 +77,14 @@ impl RouterMarket for Market {
     fn emitter(self) -> Address {
         self.pool
     }
+    fn topics(self, actual: &[B256], signature: B256, router: Address, wallet: Address, _input: Address, _output: Address) -> bool {
+        if self.maverick { actual == [signature] } else {actual == [signature,router.into_word(),wallet.into_word()]}
+    }
+    fn parties(self, data: &[u8], router: Address, wallet: Address) -> bool {
+        !self.maverick || super::maverick_two_wire::parties(data,router,wallet)
+    }
     fn event(self) -> (&'static str, usize) {
+        if self.maverick {return super::maverick_two_wire::EVENT;}
         if self.algebra_deployer.is_some(){return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint24,uint24)",224)}
         if self.fee_event {
             return ("Swap(address,address,int256,int256,uint160,uint128,int24,uint128,uint128)",224);
@@ -84,6 +95,7 @@ impl RouterMarket for Market {
         )
     }
     fn matches(self, data: &[u8], side: usize, spent: U256, received: U256, budget: U256) -> bool {
+        if self.maverick {return super::maverick_two_wire::amounts(data, side, spent, received, budget);}
         let word = |i: usize| U256::from_be_slice(&data[32 * i..32 * (i + 1)]);
         (!self.wallet_module || spent==budget) && spent <= budget
             && !spent.bit(255)
@@ -100,6 +112,7 @@ impl RouterMarket for Market {
         wallet: Address,
         deadline: U256,
     ) -> Bytes {
+        if self.maverick {return super::maverick_two_wire::order(self.pool,input<output,amount,minimum,wallet,deadline);}
         if let Some((spacing,_))=self.slipstream {
             use alloy::sol_types::SolValue;
             let mut path=Vec::with_capacity(43);
@@ -193,6 +206,7 @@ impl<M: RouterMarket> Proof<M> {
         if hits.next().is_some()
             || !self.market.topics(event.topics(),swap,self.target,wallet,input,output)
             || event.data().data.len() != bytes
+            || !self.market.parties(&event.data().data,self.target,wallet)
         {
             return None;
         }

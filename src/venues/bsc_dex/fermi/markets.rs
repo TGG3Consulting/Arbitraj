@@ -76,6 +76,19 @@ impl Cache {
             .cloned()
             .collect()
     }
+    pub(super) fn contains(&self, book: &Books) -> bool {
+        self.books
+            .lock()
+            .unwrap_or_else(|x| x.into_inner())
+            .iter()
+            .any(|active| {
+                active.revision == book.revision
+                    && active.config.builder == book.config.builder
+                    && active.config.executor == book.config.executor
+                    && active.head.hash == book.head.hash
+                    && super::slot_config::same_frame(&active.frame, &book.frame)
+            })
+    }
     fn replace(&self, new: Vec<Arc<Books>>) -> bool {
         let mut data = self.books.lock().unwrap_or_else(|x| x.into_inner());
         let had = !data.is_empty();

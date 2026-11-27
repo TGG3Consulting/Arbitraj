@@ -144,6 +144,23 @@ pub(super) async fn candidate(
         let estimated = levels.price(c.quote.qty, true)?;
         let raw = super::super::num::to_units(estimated, c.decs.1)?;
         sizes.insert(raw);
+        // Между двумя измеренными выплатами запросим также цену промежуточного бюджета.
+        // Линейная точка служит только кандидатом: минимальная выплата подтверждается отдельным вызовом.
+        let prior = levels.0.iter().rev().find(|(qty, _)| *qty < c.quote.qty);
+        let next = levels.0.iter().find(|(qty, _)| *qty >= c.quote.qty);
+        if let (Some((low, lo_cash)), Some((high, hi_cash))) = (prior, next)
+            && let Some(point) = hi_cash
+                .checked_sub(*lo_cash)
+                .and_then(|spread| spread.checked_mul(c.quote.qty - *low))
+                .and_then(|part| part.checked_div(*high - *low))
+                .and_then(|delta| lo_cash.checked_add(delta))
+            && let Some(units) = super::super::num::to_units(point, c.decs.1)
+        {
+            sizes.insert(units);
+            if let Some(up) = units.checked_add(U256::ONE) {
+                sizes.insert(up);
+            }
+        }
         if let Some(up) = raw.checked_add(U256::ONE) {
             sizes.insert(up);
         }

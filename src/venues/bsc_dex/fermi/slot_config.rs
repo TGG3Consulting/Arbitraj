@@ -183,6 +183,7 @@ impl Config {
 pub(super) fn timely(p: &Parts, b: &super::markets::Books) -> bool {
     p.ctx.settings.generation() == b.revision
         && b.current()
+        && p.slot_markets.contains(b)
         && p.heads
             .fresh(&p.ctx)
             .is_ok_and(|h| h.number == b.head.number.to::<u64>())

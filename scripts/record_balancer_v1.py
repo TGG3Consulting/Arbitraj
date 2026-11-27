@@ -106,7 +106,7 @@ if __name__ == "__main__":
             data = record(url,"https://rpc.mevblocker.io")
             break
         except (requests.RequestException,RuntimeError,ValueError,KeyError) as exc:
-            errors.append((url,str(exc)[:240]))
+            errors.append((url,str(exc)[:950]))
     else:
         raise RuntimeError(errors)
     args.out.write_bytes(json.dumps(data,separators=(",",":")).encode())

@@ -1,4 +1,6 @@
 """Original BPool exact-in/out cash, one-atom rejection and payment in an isolated replay."""
+from eth_abi import decode
+
 from record_base_slipstream_executor import OWNER, simulate_block
 from record_bitswap_ethereum import balance, tx
 from record_ethereum_v2_factories import FUNDING, WETH
@@ -12,7 +14,7 @@ def payments(c,rpc,pool,market,stable,timestamp):
     for source,target in ((WETH,stable),(stable,WETH)):
         src,dst = (market["assets"][t] for t in (source,target))
         for exact in (True,False):
-            for divisor in (10**6,10**5):
+            for divisor in (10**6,10**5,10**3):
                 quantity = int((src if exact else dst)["balance"]) // divisor
                 if not quantity:
                     continue
@@ -43,6 +45,14 @@ def payments(c,rpc,pool,market,stable,timestamp):
                     row["external_funding"] = "unavailable"
                 else:
                     a,b,strict,paid,x,y = frame[len(prep):]
+                    if paid["status"] == "0x0" and strict["status"] == "0x0":
+                        data = paid.get("error",{}).get("data") or paid.get("returnData","")
+                        if isinstance(data,str) and data.startswith("0x08c379a0"):
+                            reason, = decode(["string"],bytes.fromhex(data[10:]))
+                            if reason in {"ERR_MATH_APPROX","ERR_MAX_OUT_RATIO","ERR_MAX_IN_RATIO"}:
+                                row["pool_revert"] = reason
+                                cases.append(row)
+                                continue
                     if strict["status"] != "0x0" or paid["status"] != "0x1" or any(v["status"]!="0x1" for v in (a,b,x,y)):
                         raise ValueError(("limits or wallet",row,strict.get("error"),paid.get("error")))
                     actual = int(a["returnData"],16)-int(x["returnData"],16), int(y["returnData"],16)-int(b["returnData"],16)

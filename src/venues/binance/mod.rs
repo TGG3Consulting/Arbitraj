@@ -5,6 +5,8 @@
 //! От чего зависит: файлы этой папки, gateway, settings, secrets, storage.
 //! Настройки: venue.* с областью «binance», feed.stale_after_ms; секреты binance.api_key, binance.api_secret,
 //! binance.sbe_api_key (решение 425: быстрый стакан SBE — sbe_*.rs, fast.rs).
+//! Расчётный круг Base (USDC ↔ USDT): ордер и вывод с сохранением своего ID до отправки и сверкой — settle.rs,
+//! trade.rs, transfers.rs; прямое зачисление на спот — по решению Тиграна 28.11.2026: «selected wallet» депозита — Spot (supports_settlement_credit = true).
 //!
 //! Только по официальной документации Binance (https://developers.binance.com/legacy-docs/binance-spot-api-docs/ и
 //! Wallet SAPI https://developers.binance.com/docs/wallet/). Ссылки — в шапке каждого файла и в README.md папки.
@@ -50,6 +52,7 @@ pub mod sbe_conn;
 pub mod sbe_pair;
 pub mod sbe_run;
 pub mod sbe_snap;
+pub mod settle;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -130,6 +133,62 @@ impl Binance {
 impl Venue for Binance {
     fn id(&self) -> VenueId {
         self.ctx.venue()
+    }
+
+    /// Расчётный круг Base: отпечаток публичного ключа API торгового счёта (gateway/settlement_intent.rs account).
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Ордер конверсии USDC ↔ USDT: лимитный IOC/FOK (trade.rs) со своим newClientOrderId, сохранённым до отправки,
+    /// сверка только чтением GET /api/v3/order (settle.rs inspect), оборот cummulativeQuoteQty → note_gross
+    /// (order_state.rs result).
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Сохранённая заявка — ордер расчётной пары по справочнику exchangeInfo (settle.rs matches).
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settle::matches(&self.ctx, &self.symbols, p, asset, quote)
+    }
+
+    /// Только GET: окончательный итог сохранённого ордера конверсии (settle.rs inspect).
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settle::inspect(&self.ctx, req, p).await
+    }
+
+    /// Вывод со своим withdrawOrderId, сохранённым до отправки (transfers.rs), сверка после потери ответа — по нему в
+    /// истории выводов (settle.rs withdraw; Withdraw History: «can be used here for query»).
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
+    /// Зачисление депозита сразу на спот (торговый счёт), без второго перевода. Решение Тиграна 28.11.2026 (через
+    /// арбитра): «выбранный кошелёк» депозита в аккаунте бота — Spot. Дока (Withdraw, параметр walletType,
+    /// https://developers.binance.com/docs/wallet/capital/withdraw): «Default walletType is the current "selected
+    /// wallet" under wallet->Fiat and Spot/Funding->Deposit». Прочитать этот выбор по API документация не даёт, поэтому
+    /// флаг держится на решении Тиграна. УСЛОВИЕ: если в кабинете выбрать Funding — флаг вернуть в false (депозит на
+    /// Funding требует второго перевода, fund_move.rs, что контракт расчётного круга запрещает).
+    fn supports_settlement_credit(&self) -> bool {
+        true
+    }
+
+    /// Расчётный круг Base: создан ли вывод с потерянным ответом — по своему withdrawOrderId (settle.rs withdraw).
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        settle::withdraw(&self.ctx, req, p).await
     }
 
     fn kind(&self) -> VenueKind {

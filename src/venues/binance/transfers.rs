@@ -1,7 +1,8 @@
 //! Файл: venues/binance/transfers.rs
 //! Что делает: вывод с Binance и его статус; поиск вывода по своему withdrawOrderId при неизвестном итоге. Запрос
 //! истории выводов очень тяжёлый (вес UID 18000) — между запросами не меньше venue.withdraw_history_min_ms.
-//! Кто вызывает: mod.rs (функции контракта), deposits.rs (transfer).
+//! Кто вызывает: mod.rs (функции контракта), deposits.rs (transfer), settle.rs (find_own — сверка вывода расчётного
+//! круга Base).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: venue.withdraw_wallet [binance] (spot | funding — параметр walletType), venue.withdraw_history_min_ms
 //! [binance] (обе проверяются до отправки вывода: после — поздно); решение 253 — venue.withdraw_unready_window_ms
@@ -15,7 +16,8 @@
 //!   (localentity/withdraw/apply), здесь не реализован — «Проверить подключение» это показывает (account.rs).
 //! - GET /sapi/v1/capital/withdraw/history (вес UID 18000, «10 requests per second» — при пределе UID 180000 в минуту
 //!   это ~10 в минуту) — withdrawOrderId (окно ≤ 7 дней, без дат — последние 7 дней), idList (до 45 id); status: 0 письмо
-//!   отправлено, 2 ждёт подтверждения, 3 отклонён, 4 в обработке, 6 завершён; 1 и 5 в документации не описаны — не
+//!   отправлено, 2 ждёт подтверждения, 3 отклонён, 4 в обработке, 6 завершён (с withdrawOrderId и startTime/endTime —
+//!   окно меньше 7 дней); 1 и 5 в документации не описаны — не
 //!   угадываем (BadResponse с записью). Поля: id, amount, transactionFee, coin, network, txId, info («failure reason»).
 
 use std::sync::LazyLock;
@@ -29,6 +31,7 @@ use tokio::time::Instant;
 
 use crate::core::types::{Asset, Cost, CostKind, Transfer, TransferStatus, WithdrawRequest};
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
+use crate::gateway::pending::PendingRef;
 
 use super::ctx::Ctx;
 use super::errors::{self, Op};
@@ -90,6 +93,14 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     let account = super::withdraw_diag::mark(ctx);
     let snap = super::withdraw_diag::snapshot(account, wallet, &req.asset.ticker);
     let epoch = crate::gateway::addr_book::key_epoch();
+    // Расчётный круг Base (контракт supports_settlement_withdrawal): свой withdrawOrderId сохраняется ядром ДО отправки
+    // (gateway/settlement_intent.rs before_send); после потери ответа вывод ищется по нему (settle.rs resolve_withdraw,
+    // история выводов с withdrawOrderId). Вне расчётного круга — как раньше, без записи.
+    let settling = crate::gateway::settlement_intent::active();
+    let lookup = PendingRef::withdraw(&order_id);
+    if settling {
+        crate::gateway::settlement_intent::before_send(&lookup).await?;
+    }
     let sent = rest::signed(ctx, Method::POST, path, params, Op::Withdraw)
         .await
         .map_err(|e|{
@@ -111,10 +122,12 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     let venue_ref = match sent {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
-            let p = vec![("withdrawOrderId", order_id.clone())];
-            match history(ctx, p).await.ok().and_then(|l| first_id(&l)) {
-                Some(id) => id,
-                None => return Err(e),
+            match find_own(ctx, &order_id).await.ok().flatten() {
+                Some(rec) => match num::text_opt(&rec, "id") {
+                    Some(id) => id,
+                    None => return Err(with_lookup(settling, e, &lookup)),
+                },
+                None => return Err(with_lookup(settling, e, &lookup)),
             }
         }
         Err(e) => return Err(e),
@@ -177,9 +190,31 @@ async fn history(ctx: &Ctx, p: rest::Params) -> GatewayResult<Vec<Value>> {
         .ok_or_else(|| errors::bad("withdraw/history не массив", &data.to_string()))
 }
 
-/// id первой записи. Ошибок нет.
-fn first_id(list: &[Value]) -> Option<String> {
-    list.first().and_then(|r| num::text_opt(r, "id"))
+/// Что делает: своя запись вывода по withdrawOrderId (Withdraw History: «client side id for withdrawal, if provided in
+/// POST /sapi/v1/capital/withdraw/apply, can be used here for query»; без startTime/endTime — «last 7 days records»).
+/// Запись берётся только с тем же withdrawOrderId в ответе (поле «Returned only if one was set») — не «первая в
+/// списке». Принимает: окружение, свой ID. Возвращает: Some(запись); None — записи с этим ID нет.
+/// Ошибки: как у history (настройка, связь, коды, формат).
+pub(super) async fn find_own(ctx: &Ctx, order_id: &str) -> GatewayResult<Option<Value>> {
+    let list = history(ctx, vec![("withdrawOrderId", order_id.to_string())]).await?;
+    Ok(own_record(&list, order_id).cloned())
+}
+
+/// Запись истории выводов с этим withdrawOrderId. Принимает: записи, свой ID. Возвращает: запись или None. Ошибок нет.
+pub fn own_record<'a>(list: &'a [Value], order_id: &str) -> Option<&'a Value> {
+    list.iter()
+        .find(|r| num::text_opt(r, "withdrawOrderId").as_deref() == Some(order_id))
+}
+
+/// Что делает: в расчётном круге прикладывает к ошибке «итог неизвестен» свой withdrawOrderId (решение 231,
+/// gateway/pending.rs). Вне круга ошибка не меняется. Принимает: признак круга, ошибку, «чем найти».
+/// Возвращает: ошибку. Ошибок нет.
+fn with_lookup(settling: bool, e: GatewayError, lookup: &PendingRef) -> GatewayError {
+    if settling && e.pending.is_none() {
+        e.pending(lookup.clone())
+    } else {
+        e
+    }
 }
 
 /// Статус вывода по id Binance (idList). 0, 2, 4 → Pending; 6 → Sent; 3 → отказ с info; иное — BadResponse.

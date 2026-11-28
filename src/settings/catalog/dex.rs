@@ -266,6 +266,8 @@ pub static DEX: &[SettingDef] = &[
     d("Textile FX","textile.trading",K::Bool,L::None,"да/нет",V,"Допустить выбор ранее проверенной заявки Textile, которую владелец явно передал торговому ядру.").optional().dex_venue(),
     d("Textile FX","textile.gas_budget_native",K::Decimal,L::Positive,"монета газа",V,"Предельный расход ETH на расчёт Textile с учётом комиссии публикации.").optional().dex_venue(),
     d("Kipseli", "kipseli.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API Kipseli для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
+    d("Tokenlon PMM", "tokenlon.contracts", K::TextList, L::None, "контракты и хеши", V, "Контракты расчёта PMMV5 и хеши их кода. Строка содержит сеть, роль, адрес и хеш.").optional().dex_venue(),
+    d("Tokenlon PMM", "tokenlon.tokens", K::TextList, L::None, "активы и хеши", V, "Активы расчёта PMMV5 и семантика перевода. Для прокси USDC указываются также адрес и хеш реализации.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.pairs", K::TextList, L::None, "пары и размеры", V, "Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.gas_budget_native", K::Decimal, L::Positive, "ETH", V, "Предел расходов газа Ethereum на исполнение личного ордера.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.min_validity_ms", K::Integer, L::Positive, "мс", V, "Минимальное время до истечения ордера.").optional().dex_venue(),

@@ -7669,6 +7669,14 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Что ставить:** `https://publisher.tokenlon.im/rpc`. Запрос цены доступен при указании официального адреса. [Запись Ethereum](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_taker_auth.json)
 - **Если не задана:** Личная сессия и запросы цен недоступны.
 
+### `tokenlon.contracts`
+
+Контракты расчёта PMMV5 и хеши их кода. Строка содержит сеть, роль, адрес и хеш. Значения первого запуска сняты с Ethereum на блоке 26 494 988. [Проверенные адреса и ответы узла](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json).
+
+### `tokenlon.tokens`
+
+Активы расчёта PMMV5 и семантика перевода. Для прокси USDC указываются также адрес и хеш реализации. Значения первого запуска сняты с Ethereum на блоке 26 494 988. [Проверенные адреса и ответы узла](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json).
+
 ### `tokenlon.pairs`
 
 - **Кейс:** Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта.

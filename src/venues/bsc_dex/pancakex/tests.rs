@@ -187,3 +187,66 @@ fn three_mined_signatures_match_original_owners_and_cash() {
     }
     assert_eq!(count, 3);
 }
+
+#[test]
+fn ethereum_usdt_quotes_bind_original_assets_and_fill_through_the_pinned_reactor() {
+    let body = read(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/pancakex_ethereum_usdt_quotes.json.gz"
+    ));
+    let archive: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/pancakex_profiles.json"
+    ))
+    .unwrap();
+    let profile_rows: Vec<String> =
+        serde_json::from_value(archive["ethereum"]["contracts"].clone()).unwrap();
+    let profile = profile::Profile::from_rows(1, &profile_rows).unwrap();
+    let usdt: Address = "0xdac17f958d2ee523a2206206994597c13d831ec7"
+        .parse()
+        .unwrap();
+    let listed = body["openPage"]["orders"].as_array().unwrap();
+    assert_eq!(listed.len(), 2);
+    assert!(listed.iter().all(|o| o["hasOrder"] == true
+        && o["hasSignature"] == true
+        && field::<Address>(&o["input"]["token"]) == usdt
+        && o["input"]["startAmount"] == "0"
+        && o["input"]["endAmount"] == "0"));
+    let output_limits = [U256::from(59822095056064825u64), U256::from(166311624u64)];
+    let rows = body["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    for (row, minimum) in rows.iter().zip(output_limits) {
+        let b = &row["body"];
+        assert_eq!(b["configs"][0]["useSyntheticQuotes"], false);
+        let offer = client::Offer::read(&row["response"]).unwrap();
+        let request = Request {
+            owner: field(&b["configs"][0]["swapper"]),
+            input: field(&b["tokenIn"]),
+            output: field(&b["tokenOut"]),
+            amount: field(&b["amount"]),
+            minimum,
+            exact_output: false,
+            now: chrono::DateTime::parse_from_rfc2822(row["date"].as_str().unwrap())
+                .unwrap()
+                .timestamp() as u64,
+        };
+        let engine =
+            field(&row["response"]["message"]["bestOrder"]["order"]["orderInfo"]["reactor"]);
+        let quoted_roles = Roles {
+            chain: 1,
+            permit: profile.permit.address,
+            reactor: engine,
+        };
+        let terms = quoted_roles
+            .terms(&offer.version, &offer.encoded, &request)
+            .unwrap();
+        assert_eq!(terms.order_hash, offer.hash);
+        assert_eq!(terms.min_output, minimum);
+        if request.input == usdt {
+            assert_eq!(profile.router.address, engine);
+            assert!(offer.terms(&profile, &request).is_some());
+        } else {
+            assert_eq!(request.output, usdt);
+            assert_ne!(profile.router.address, engine);
+            assert!(offer.terms(&profile, &request).is_none());
+        }
+    }
+}

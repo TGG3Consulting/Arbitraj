@@ -964,6 +964,10 @@ jobs:
         run: |
           python -m pip install --quiet eth-account==0.13.7
           python scripts/record_stelaxis_own.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'pancakex-ethereum-usdt-check'
+        run: |
+          cargo test --locked --lib ethereum_usdt_quotes_bind_original_assets_and_fill_through_the_pinned_reactor
+          printf '%s\n' '{"chain":1,"own_unsigned_quotes":2}' > "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'zeroex-base-rfq'
         run: python scripts/record_base_zeroex_rfq.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'basin-wallet-')

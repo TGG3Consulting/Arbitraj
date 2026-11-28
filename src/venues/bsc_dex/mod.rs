@@ -25,7 +25,7 @@ pub mod hanji;
 mod source_quote;
 mod textile;
 mod zeroex;
-mod tokenlon;
+pub(crate) mod tokenlon;
 mod airswap;
 mod dexalot;
 mod keyed_price;

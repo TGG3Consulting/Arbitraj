@@ -1,6 +1,7 @@
 //! Tokenlon PMMV5: персональная котировка по адресу кошелька и двум контрактам Ethereum.
 mod client;
 mod profile;
+pub(crate) use profile::configured as wallet_pairs;
 pub(super) mod roles;
 pub(super) mod private_node;
 pub(super) mod routing;

@@ -86,7 +86,7 @@
   {#if w.address && c.venue}<HashflowQuote venue={c.venue} trader={w.address} />{/if}
   {#if w.address && c.venue && c.fynd}<SourcePrice venue={c.venue} trader={w.address} />{/if}
   {#if w.address && c.venue && c.zeroex}{#key [c.venue,w.id,w.address].join(':')}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/key}{/if}
-  {#if w.address && c.venue && c.tokenlon}{#key [c.venue,w.id,w.address].join(':')}<TokenlonPrice venue={c.venue} trader={w.address} wallet={w.id} />{/key}{/if}
+  {#if w.address && c.venue && c.tokenlon}{#key [c.venue,w.id,w.address].join(':')}<TokenlonPrice markets={c.tokenlon_pairs ?? []} venue={c.venue} trader={w.address} wallet={w.id} />{/key}{/if}
   {#if w.address && c.venue && c.textile}<TextileSource venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue && c.kipseli}<SourcePrice venue={c.venue} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && c.venue && c.clipper}<ClipperQuote venue={c.venue} trader={w.address} wallet={w.id} />{/if}

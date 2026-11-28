@@ -30,10 +30,12 @@ pub(in crate::venues::bsc_dex) struct Asset {
     pub impl_role: Option<Role>,
 }
 
-fn read_rows(ctx: &Ctx, name: &str) -> Option<Vec<String>> {
-    let setting = ctx
-        .settings
-        .get_exact(name, &Scope::Venue(ctx.place.id.into()))?;
+pub(super) fn read_rows(
+    store: &crate::settings::store::Store,
+    venue: &str,
+    name: &str,
+) -> Option<Vec<String>> {
+    let setting = store.get_exact(name, &Scope::Venue(venue.into()))?;
     setting
         .as_array()?
         .iter()
@@ -52,7 +54,10 @@ fn role(fields: &[&str]) -> Option<Role> {
 
 impl FrozenRoles {
     pub(in crate::venues::bsc_dex) fn read(ctx: &Ctx) -> Option<Self> {
-        Self::from_rows(ctx.chain_id()?, &read_rows(ctx, "tokenlon.contracts")?)
+        Self::from_rows(
+            ctx.chain_id()?,
+            &read_rows(&ctx.settings, ctx.place.id, "tokenlon.contracts")?,
+        )
     }
 
     pub(in crate::venues::bsc_dex) fn from_rows(chain: u64, rows: &[String]) -> Option<Self> {
@@ -155,7 +160,10 @@ pub(super) fn asset_rows(chain: u64, rows: &[String]) -> Option<Vec<Asset>> {
 }
 
 pub(in crate::venues::bsc_dex) fn assets(ctx: &Ctx) -> Option<Vec<Asset>> {
-    asset_rows(ctx.chain_id()?, &read_rows(ctx, "tokenlon.tokens")?)
+    asset_rows(
+        ctx.chain_id()?,
+        &read_rows(&ctx.settings, ctx.place.id, "tokenlon.tokens")?,
+    )
 }
 
 #[cfg(test)]

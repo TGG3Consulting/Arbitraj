@@ -125,7 +125,7 @@
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.fynd}<SourcePrice venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.zeroex}{#key [dex,w.id,w.address].join(':')}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/key}{/if}
-  {#if w.address && dex && w.tokenlon}{#key [dex,w.id,w.address].join(':')}<TokenlonPrice venue={dex} trader={w.address} wallet={w.id} />{/key}{/if}
+  {#if w.address && dex && w.tokenlon}{#key [dex,w.id,w.address].join(':')}<TokenlonPrice markets={w.tokenlon_pairs ?? []} venue={dex} trader={w.address} wallet={w.id} />{/key}{/if}
   {#if w.address && dex && w.textile}<TextileSource venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && dex && w.clipper}<ClipperQuote venue={dex} trader={w.address} wallet={w.id} />{/if}

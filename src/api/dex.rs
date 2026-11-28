@@ -62,12 +62,7 @@ pub async fn tokenlon_quote(
         return Err(ApiError::bad("Для просмотра выберите тот же кошелёк и запросите только расчёт"));
     }
     let dex = super::wallets_dex::dex_for_at(&st, &wallet, Some(&venue)).await?;
-    let mut quote = dex.source_quote("tokenlon", req).await.map_err(ApiError::gateway)?;
-    let area = crate::settings::read::At { venue: Some(&venue), coin: None };
-    quote.details["private_node_entered"] = serde_json::json!(
-        st.settings.text("tokenlon.local_rpc", area).is_ok_and(|v| !v.trim().is_empty())
-    );
-    Ok(Json(quote))
+    dex.source_quote("tokenlon", req).await.map(Json).map_err(ApiError::gateway)
 }
 
 /// Совместимость с прежними адресами ручной проверки в этой ветке.

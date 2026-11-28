@@ -17,6 +17,13 @@ from base_ethereum_source_roles import card_reference, classify_source, describe
 # Сетевые ID, явно отложенные владельцем при суточном обороте менее 5 000 USD.
 DEFERRED_BY_NETWORK = {"base": {"2589", "622", "1447", "7508", "5458", "1700"}, "ethereum": {"4703", "1700"}}
 
+# Уточнения условия владельца о паре с физическим Base USDT для строк решения 7.
+BASE_USDT_EVIDENCE = {
+    "6675": ("На Base учитывается USDC. Покупателю выдаётся NFT на физическую карту; цена выкупа определяется для конкретной карты. "
+             "[Карты, выкуп и погашение NFT](https://docs.collectorcrypt.com/product-info)."),
+}
+
+
 def read(path):
     """Возвращает данные JSON в UTF-8. Неполный или повреждённый снимок прерывает генерацию."""
     return json.loads(path.read_text(encoding="utf8"))
@@ -2572,6 +2579,8 @@ def tables(network, snapshots, profiles):
                 if measured:
                     task = measured
             task = f"{status.rstrip('.')}. {task}" if task else status
+        if base and (detail := BASE_USDT_EVIDENCE.get(str(row["id"]))):
+            task += " " + detail
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")
     direct, provider = coverage_counts["spot"], coverage_counts["provider"]

@@ -253,13 +253,14 @@ mod tests {
         let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
         let num = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
         let extra: Value = serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_intermediate.json.gz").as_slice())).unwrap();
+        let blind: Value = serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_blind.json.gz").as_slice())).unwrap();
         let mut differences = Vec::new();
         let mut latency: [Vec<u128>;2]=[vec![],vec![]]; let mut original_misses=[0;2];
         let mut peak = [0; 2];
         let mut checked = [0; 2];
         for m in archive["markets"].as_array().unwrap() {
             let mut all = m["quotes"].as_array().unwrap().clone();
-            for extra in extra["points"].as_array().unwrap().iter().filter(|x|x[0]==m["pool"]) {
+            for extra in extra["points"].as_array().unwrap().iter().chain(blind["points"].as_array().unwrap()).filter(|x|x[0]==m["pool"]) {
                 all.push(serde_json::json!({"i":extra[1],"dx":extra[2],"dy":extra[3]}));
             }
             let quotes: Vec<_> = all.iter()
@@ -310,7 +311,7 @@ mod tests {
             }
         }
         eprintln!("Spectra: максимум прямых расчётов на архивную цель у legacy {}, у NG {}",peak[0],peak[1]);
-        assert_eq!(checked, [184,124]);
+        assert_eq!(checked, [230,124]);
         for values in &mut latency { values.sort(); } let elapsed=latency.map(|v|[v[v.len()/2],v[v.len()*95/100]]); std::fs::write(std::env::var("SPECTRA_REPORT").unwrap(),serde_json::to_vec(&serde_json::json!({"counts":checked,"peak":peak,"mismatches":differences,"old_misses":original_misses,"debug_elapsed_ns":elapsed})).unwrap()).unwrap();
     }
 }

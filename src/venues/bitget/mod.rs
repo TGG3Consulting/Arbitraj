@@ -128,12 +128,13 @@ impl Venue for Bitget {
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }
-    /// false: на какой счёт Bitget зачисляет депозит, документация Classic не говорит; ни ответ Get Deposit Address,
-    /// ни запись Get Deposit Records поля счёта не содержат; Modify Deposit Account — только запись («auto-transfer
-    /// account type of deposit»), чтения назначения нет. Подтвердить зачисление прямо на spot нечем. Ошибок нет.
-    /// https://www.bitget.com/docs/catalog/classic-spot-account/classic-spot-account (Deposit Address/Records, Modify)
+    /// true — решение Тиграна 28.11.2026. Документация Classic счёт зачисления депозита не называет (ни Get Deposit
+    /// Address, ни Get Deposit Records поля счёта не содержат; Modify Deposit Account — только запись). Поэтому в круге
+    /// Base, как в BSC, ядро после зачисления вызывает deposit_to_trading, а Bitget переводит p2p → spot по
+    /// venue.deposit_to_spot (решение 102, fund_move::to_spot). Ошибок нет.
+    /// https://www.bitget.com/docs/catalog/classic-spot-account/classic-spot-account (Deposit Address/Records, Transfer)
     fn supports_settlement_credit(&self) -> bool {
-        false
+        true
     }
     /// Подготовленный символ проверяется по контракту спотового ордера. https://www.bitget.com/api-doc/spot/trade/Get-Order-Info
     fn matches_settlement_order(

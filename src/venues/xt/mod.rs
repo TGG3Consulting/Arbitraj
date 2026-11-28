@@ -107,9 +107,14 @@ impl Xt {
 
 #[async_trait]
 impl Venue for Xt {
+    /// Счёт зачисления депозита в документации XT не назван (GetDepositHistory, xt4-api: счета SPOT, LEVER, FINANCE,
+    /// FUTURES_U, FUTURES_C). Основание — решение 370 (слово Тиграна 17.11: депозит на XT приходит на торговый счёт),
+    /// не факт документации: подтверждается первой живой сделкой «→ XT».
     fn supports_settlement_credit(&self) -> bool {
         true
     }
+    /// clientOrderId вывода и поиск записи по нему — POST/GET /v4/withdraw
+    /// (https://doc.xt.com/docs/spot/Deposit&Withdrawal/Withdraw, …/WithdrawDetail); сохранение до POST — transfers.rs.
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }

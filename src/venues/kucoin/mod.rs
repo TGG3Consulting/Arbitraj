@@ -11,7 +11,7 @@
 //! for Classic Account trading» (объявление KuCoin API Upgrade 2026-06-03). Счета: депозит — на main (funding), торговля —
 //! на trade, вывод — только с main; переводы main ↔ trade — fund_move.rs. Ссылки — README.md этой папки.
 //! Расчётный круг Base (USDT ↔ USDC): ордер — order_state.rs (inspect), вывод с меткой remark до POST и сверкой —
-//! settle_withdraw.rs, зачисление на торговый счёт — адрес депозита TRADE (deposit_addr.rs).
+//! settle_withdraw.rs, зачисление — адрес депозита как в BSC (deposit_addr.rs), при MAIN — main → trade (решение 102).
 
 pub mod account;
 pub mod account_update;
@@ -195,13 +195,13 @@ impl Venue for Kucoin {
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }
-    /// Расчётный круг Base: зачисление сразу на торговый счёт — только адрес депозита с to = TRADE («TRADE (spot
-    /// trading account)», Get Deposit Address V3 https://www.kucoin.com/docs-new/api-3470140; создание с to = trade —
-    /// Add Deposit Address V3 https://www.kucoin.com/docs-new/api-3470142). deposit_addr::for_deposit отдаёт адрес MAIN
-    /// (а после зачисления — перевод main → trade, fund_move.rs) только при venue.deposit_to_spot = да: тогда прямого
-    /// зачисления на торговый счёт нет — false. Не задана или «нет» — только адрес TRADE, второго перевода нет — true.
+    /// Расчётный круг Base, решение Тиграна 28.11.2026: зачисление поддерживается безусловно. Адрес депозита —
+    /// как в BSC (deposit_addr::for_deposit: TRADE — «TRADE (spot trading account)», Get Deposit Address V3
+    /// https://www.kucoin.com/docs-new/api-3470140; MAIN — только при venue.deposit_to_spot = да). После зачисления
+    /// ядро зовёт deposit_to_trading так же, как в BSC (core/transfer_credit.rs to_trading), и при адресе MAIN KuCoin
+    /// переводит main → trade (решение 102, fund_move::to_trade, Flex Transfer https://www.kucoin.com/docs-new/api-3470147).
     fn supports_settlement_credit(&self) -> bool {
-        !self.ctx.flag("venue.deposit_to_spot").unwrap_or(false)
+        true
     }
     /// Расчётный круг Base: создан ли вывод с потерянным ответом — по метке remark в истории выводов (settle_withdraw.rs).
     async fn resolve_withdraw(

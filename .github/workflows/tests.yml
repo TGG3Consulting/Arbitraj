@@ -1197,6 +1197,11 @@ jobs:
           MARKET: ${{ matrix.market }}
         run: |
           flags=()
+          if [[ "$MARKET" == raindex-base-order-samples ]]; then
+            node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+            python scripts/record_raindex_base_order_samples.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+            exit 0
+          fi
           if [[ "$MARKET" == raindex-base-addresses ]]; then
             python scripts/record_raindex_base_balances.py "$RUNNER_TEMP/market.json"
             exit 0

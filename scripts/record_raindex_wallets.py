@@ -24,7 +24,7 @@ def tx(target,name,types,values,value=0):
     return call(target,data(name,types,values),value,gas=10_000_000)
 
 
-def capture(network,url,artifact,legacy=False,capacity=False,reverse=False):
+def capture(network,url,artifact,legacy=False,capacity=False,reverse=False,*,selected_books=None,additional=None):
     src=json.loads(gzip.decompress((DATA/f"raindex_{network}_quotes.json.gz").read_bytes()))
     tag=src["anchor"];is_base=network=="base";chain=8453 if is_base else 1
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
@@ -37,6 +37,8 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False):
         if child["parentHash"]!=tag["blockHash"] or len(child["calls"])!=len(calls):raise ValueError("child")
         return child["calls"]
     books=([{"book":src["book"],"version":6,"runtime":src["runtime"],"live":src["entries"]}] if is_base else src["books"])
+    if selected_books is not None:
+        books=selected_books
     if legacy:books=[b for b in books if b["version"]==3]
     def module(b):
         book=b["book"]
@@ -105,6 +107,8 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False):
                 if GOOD(bad) or x!=y:raise ValueError("protected bound rollback")
         return setup+[payment],dict(base,stage="paid",paid=str(paid),net=str(net),before=[str(v) for v in be],after=[str(v) for v in af],
                                    action=action,target=where,gas=units({"returnData":op["gasUsed"]}),logs=op["logs"])
+    if additional is not None:
+        return additional(books,seed,run,bal,approve,tx,end,money,identities,tag)
     legs=[]
     for b in books:
         for o in b["live"]:
@@ -129,7 +133,7 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False):
             fixed_size=max(1,scale*10**dt//100)
             if legacy:
                 budget=3_000*10**df;fixed_size=scale*10**dt
-            if both:
+            if both or (selected_books is not None and b["version"]==5):
                 ratio=decimal(l["ratio"])
                 possible=int(Decimal(budget).scaleb(-df)/ratio*Decimal(10**dt)) if ratio>0 else 0
                 fixed_size=max(1,min(possible*9//10,int(decimal(l["cap"])*Decimal(10**dt))))

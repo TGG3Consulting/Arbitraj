@@ -16,18 +16,37 @@ def value(word):
 
 def comparison(src,module,tag,stamp,seed,run,bal,approve,tx,end,identities):
     book=src["book"]
-    offers=[(e,q) for e in src["entries"] for q in e["quotes"] if q.get("live")
-            and value(q["cap"])>0 and value(q["ratio"])>0]
-    def terms(e,q):
+    # Ответ EOA и ответ реального адреса модуля могут различаться даже на том же состоянии.
+    # Перебираем все IO с подтверждённым остатком выхода, включая прежние отказы quote2.
+    indexed=[(e,q) for e in src["entries"] for q in e["quotes"]
+             if USDC in (q["pay"],q["receive"]) and value(q["vault"])>0]
+    def query(e,q):
         o=decode([ORDER],bytes.fromhex(e["order"][2:]))[0]
-        query=call(book,data("quote2",[TAKE],[(o,q["i"],q["j"],[])]))
-        query["from"]=module
-        rows=run([query,tx(q["pay"],"decimals",[],[]),tx(q["receive"],"decimals",[],[])])
-        live,cp,r=decode(["bool","bytes32","bytes32"],bytes.fromhex(rows[0]["returnData"][2:]))
-        cap,ratio="0x"+cp.hex(),"0x"+r.hex()
-        di,do=(int(v["returnData"],16) for v in rows[1:])
-        return dict(order=e["hash"],i=q["i"],j=q["j"],pay=q["pay"],receive=q["receive"],
-                    decimals=[di,do],live=live,cap=cap,ratio=ratio)
+        req=call(book,data("quote2",[TAKE],[(o,q["i"],q["j"],[])]))
+        req["from"]=module
+        return req
+    assets=sorted({q[k] for _,q in indexed for k in ("pay","receive")})
+    decimals={}
+    for i in range(0,len(assets),20):
+        batch=assets[i:i+20]
+        rows=run([tx(token,"decimals",[],[]) for token in batch])
+        decimals.update({token:int(op["returnData"],16) for token,op in zip(batch,rows,strict=True)
+                         if op["status"]=="0x1"})
+    census=[];offers=[]
+    for start in range(0,len(indexed),12):
+        batch=indexed[start:start+12]
+        ops=run([query(e,q) for e,q in batch])
+        for (e,q),op in zip(batch,ops,strict=True):
+            item=dict(order=e["hash"],i=q["i"],j=q["j"],pay=q["pay"],receive=q["receive"],
+                      status=op["status"])
+            if op["status"]=="0x1":
+                live,cp,ratio=decode(["bool","bytes32","bytes32"],bytes.fromhex(op["returnData"][2:]))
+                item.update(live=live,cap="0x"+cp.hex(),ratio="0x"+ratio.hex())
+                if live and value(item["cap"])>0 and value(item["ratio"])>0:
+                    offers.append((e,dict(item,decimals=[decimals[q["pay"]],decimals[q["receive"]]])))
+            else:
+                item["error"]=op.get("error")
+            census.append(item)
     def attempt(prefix,e,t,receive_fixed,size,lo,hi,floor,protected):
         di,do=t["decimals"]; fr,to=t["pay"],t["receive"]; dest=module if protected else book
         action=take(6,e["order"],t["i"],t["j"],size,size,do if receive_fixed else di,
@@ -60,13 +79,13 @@ def comparison(src,module,tag,stamp,seed,run,bal,approve,tx,end,identities):
     for e,q in offers:
         if q["receive"]!=USDC:
             continue
-        t=terms(e,q); token=t["pay"]; di,do=t["decimals"]
+        t=q; token=t["pay"]; di,do=t["decimals"]
         if token not in purchases:
             funding=[];earned=0;chain=None
             for source,sq in offers:
                 if (sq["pay"],sq["receive"])!=(USDC,token):
                     continue
-                ft=terms(source,sq)
+                ft=sq
                 cap=int(value(ft["cap"])*10**di)
                 for size in sorted({cap,max(1,cap//2)},reverse=True):
                     maxpay=ceil(value(ft["ratio"])*size*Fraction(10**do,10**di))
@@ -97,4 +116,4 @@ def comparison(src,module,tag,stamp,seed,run,bal,approve,tx,end,identities):
                     tests.append(observed)
         sales.append(dict(quote=t,available=str(earned),tests=tests))
     return dict(chain=8453,height=src["height"],selector=tag,stamp=stamp,payer=OWNER,book=book,
-                modules=identities,sales=sales,purchases={k:v[0] for k,v in purchases.items()})
+                modules=identities,census=census,sales=sales,purchases={k:v[0] for k,v in purchases.items()})

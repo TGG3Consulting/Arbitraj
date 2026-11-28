@@ -28,6 +28,10 @@ pub struct Saved {
     minimum: U256,
 }
 impl Saved {
+    pub(in crate::venues::bsc_dex) fn signed(&self) -> exec::signed_call::Erc20Call {
+        exec::signed_call::Erc20Call { chain: self.chain, payer: self.order.payer, module: self.module, calldata: self.calldata }
+    }
+    pub(in crate::venues::bsc_dex) fn digest(&self) -> B256 { self.order.digest }
     pub(in crate::venues::bsc_dex) fn matches(&self, r: &Receipt) -> Option<U256> {
         self.order
             .received(&r.logs, Some(self.module))
@@ -44,7 +48,7 @@ impl Saved {
         nonce: u64,
         r: &Receipt,
     ) -> GatewayResult<()> {
-        exec::signed_call::Erc20Call{chain:self.chain,payer:self.order.payer,module:self.module,calldata:self.calldata}.included(ctx,hash,nonce,r).await?;
+        self.signed().included(ctx,hash,nonce,r).await?;
         let fail=||ctx.err(ErrorCode::OutcomeUnknown,"Квитанция не подтвердила условия Native RFQ");
         if r.status.to::<u64>() == 1 && self.matches(r).is_none() {
             return Err(fail());
@@ -70,6 +74,8 @@ pub(in crate::venues::bsc_dex) async fn trade(
     };
     let who = wallet::signer::address(ctx)?;
     let profile = Profile::read(ctx)?;
+    if matches!(req.route.as_ref().map(|r|r.mode),Some(crate::core::types::RouteMode::NativeRfqSettlement(_)))
+        && !profile.supports_settlement() { return Err(reject()); }
     let module = profile.module.ok_or_else(reject)?.address;
     let q = &t.checked.firm;
     let o = &q.proof;
@@ -136,6 +142,8 @@ pub(in crate::venues::bsc_dex) async fn trade(
     parse.who = Some(super::LABEL.into());
     let raw = exec::txs::send(&env, &slot, module, data, U256::ZERO, false, Some(hold));
     let d = hashflow::native_send(p, &req, q.expiry, t.generation, &parse, raw).await?;
+    exec::market_receipt::check_module_cancel(ctx, &parse, &d).await
+        .map_err(|e| parse.attach(e.with_tx(d.chain.clone())))?;
     if matches!(d.chain.outcome, TxOutcome::Included | TxOutcome::Reverted) {
         let receipt = d.receipt.as_ref().ok_or_else(|| {
             parse.attach(
@@ -152,7 +160,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
             .map_err(|e| parse.attach(e.with_tx(d.chain.clone())))?;
     }
     exec::result::by(
-        exec::result::result(ctx, req, d, who, pair, t.decs, &[]).map_err(|e| parse.attach(e)),
+        exec::result::with_native_fact(ctx, req, d, who, pair, t.decs, &[], Some(&parse)).map_err(|e| parse.attach(e)),
         super::LABEL,
     )
 }

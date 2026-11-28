@@ -16,11 +16,11 @@ EVENT = "0x" + keccak(text="RFQTrade(address,address,address,uint256,uint256,byt
 ALLOWED = {"eth_chainId", "eth_getBlockByNumber", "eth_getBlockByHash", "eth_getCode", "eth_getBalance", "eth_getTransactionCount", "eth_simulateV1", "eth_call"}
 
 
-def read(method, params, until=None):
+def read(method, params, until=None, *, endpoints=ENDPOINTS):
     if method not in ALLOWED:
         raise ValueError(method)
     errors = []
-    for url in ENDPOINTS:
+    for url in endpoints:
         if until is not None and time.time() >= until:
             return None
         try:
@@ -41,8 +41,8 @@ def positive_int(value):
     return value
 
 
-def current_offer(src, dst, qty):
-    params = dict(src_chain="ethereum", dst_chain="ethereum",token_in=src,token_out=dst,amount_wei=str(qty),from_address=OWNER,beneficiary_address=OWNER,allow_multihop="false",version="6")
+def current_offer(src, dst, qty, slug):
+    params = dict(src_chain=slug, dst_chain=slug,token_in=src,token_out=dst,amount_wei=str(qty),from_address=OWNER,beneficiary_address=OWNER,allow_multihop="false",version="6")
     res=requests.get(BASE+"firm-quote",params=params,timeout=10)
     res.raise_for_status()
     return res.json()
@@ -66,10 +66,10 @@ def protected_calls(artifact, roles, src, dst, qty, minimum, deadline, signed, f
     return before + controls + checks + [op] + checks, len(before), len(checks), module
 
 
-def leg(roles, src, dst, qty, artifact=None):
+def leg(roles, src, dst, qty, artifact=None, *, slug='ethereum', reader=read, funding=None, strict_from_offer=False):
     router,pool=[r["address"] for r in roles]
     row=dict(source=src,target=dst,requested=qty)
-    offer=current_offer(src,dst,qty)
+    offer=current_offer(src,dst,qty,slug)
     if offer.get("success") is not True or len(offer.get("orders",[]))!=1:
         return {**row,"status":"no single order","reason":offer.get("message") or offer.get("errorMessage")}
     o=offer["orders"][0];order=offer["txRequest"];recipient=OWNER.lower()
@@ -87,26 +87,32 @@ def leg(roles, src, dst, qty, artifact=None):
         return {**row,"status":"unknown V6 layout"}
     row.update(quoteId=o["quoteId"],maker=o["signer"],minimum=minimum,deadline=end,offer_digest="0x"+keccak(signed).hex())
     # Только последняя опубликованная голова во время действия полученного предложения.
-    head=read("eth_getBlockByNumber",["latest",False],end)
+    head=reader("eth_getBlockByNumber",["latest",False],end)
     if not head or int(head["timestamp"],16)>=end:return {**row,"status":"expired before simulation"}
     tag={"blockHash":head["hash"],"requireCanonical":True};row["head"]={k:head[k] for k in ("number","hash","timestamp")}
     for role in roles:
-        code=read("eth_getCode",[role["address"],tag],end)
+        code=reader("eth_getCode",[role["address"],tag],end)
         if code is None:return {**row,"status":"expired during checks"}
         if "0x"+keccak(hexstr=code).hex()!=role["runtime"]:return {**row,"status":"changed deployment"}
-    owner_code=read("eth_getCode",[OWNER,tag],end);owner_balance=read("eth_getBalance",[OWNER,tag],end)
+    owner_code=reader("eth_getCode",[OWNER,tag],end);owner_balance=reader("eth_getBalance",[OWNER,tag],end)
     if owner_code is None or owner_balance is None:return {**row,"status":"expired during checks"}
     if owner_code!="0x" or int(owner_balance,16)!=0:raise ValueError("адрес исследования уже финансирован")
-    fund=tx(WETH,"deposit()",value=qty) if src==WETH else tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[qty,[WETH,src],OWNER,end],10**17)
+    if funding is not None:
+        fund=funding(src,qty,end)
+    elif src==WETH:
+        fund=tx(WETH,"deposit()",value=qty)
+    else:
+        fund=tx(FUNDING,"swapETHForExactTokens(uint256,address[],address,uint256)",["uint256","address[]","address","uint256"],[qty,[WETH,src],OWNER,end],10**17)
     reads=[balance(t,OWNER) for t in (src,dst)]
     order_call={"from":OWNER,"to":router,"data":order["calldata"],"value":"0x0","gas":hex(3_000_000)}
     calls=[fund,approval(src,router,qty),*reads,order_call,*reads]
     if artifact is not None:
-        own_nonce=read("eth_getTransactionCount",[OWNER,tag],end)
+        own_nonce=reader("eth_getTransactionCount",[OWNER,tag],end)
         if own_nonce is None:return {**row,"status":"expired before constructor"}
         if int(own_nonce,16)!=0:raise ValueError("ненулевой исходный nonce собственного адреса")
-        calls, controls, width, module = protected_calls(artifact,roles,src,dst,qty,minimum,end,signed,fund)
-    child=read("eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(10**18)}},"calls":calls}]},tag],end)
+        initial_strict=positive_int(o["buyerTokenAmount"])+1 if strict_from_offer else None
+        calls, controls, width, module = protected_calls(artifact,roles,src,dst,qty,minimum,end,signed,fund,initial_strict)
+    child=reader("eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(10**18)}},"calls":calls}]},tag],end)
     if child is None:return {**row,"status":"expired before simulation"}
     if len(child)!=1 or child[0]["parentHash"]!=tag["blockHash"]:raise ValueError("другой head")
     result=child[0]["calls"];row["child_timestamp"]=int(child[0]["timestamp"],16)
@@ -133,17 +139,18 @@ def leg(roles, src, dst, qty, artifact=None):
         if (dg,si,so,sp,nt)!=(keccak(signed),src,dst,qty,post[1]-pre[1]):raise ValueError("денежное событие модуля")
         # Измеренный выход может быть выше подписанного минимума. На той же ещё текущей голове
         # проверяем именно чистый приход + 1, с действующей котировкой и обычным временем узла.
-        live=read("eth_getBlockByNumber",["latest",False],end)
-        if not live or live["hash"]!=head["hash"]:return {**row,"status":"current head advanced before strict bound"}
-        strict_calls,_,_,_=protected_calls(artifact,roles,src,dst,qty,minimum,end,signed,fund,nt+1)
-        strict_result=read("eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(10**18)}},"calls":strict_calls}]},tag],end)
-        if not strict_result:return {**row,"status":"expired before strict bound"}
-        if len(strict_result)!=1 or strict_result[0]["parentHash"]!=head["hash"] or strict_result[0]["timestamp"]!=child[0]["timestamp"]:
-            return {**row,"status":"current child advanced before strict bound"}
-        second=strict_result[0]["calls"]
-        if len(second)!=len(result) or any(r["status"]!="0x1" for r in second[:controls]) or second[controls]["status"]!="0x0" or second[index]["status"]!="0x1":
-            return {**row,"status":"strict bound not reproduced"}
-        if balances(second[controls+2:index])!=pre or balances(second[index+1:])!=post:raise ValueError("иная выплата при проверке minimum+1")
+        if initial_strict != nt + 1:
+            live=reader("eth_getBlockByNumber",["latest",False],end)
+            if not live or live["hash"]!=head["hash"]:return {**row,"status":"current head advanced before strict bound"}
+            strict_calls,_,_,_=protected_calls(artifact,roles,src,dst,qty,minimum,end,signed,fund,nt+1)
+            strict_result=reader("eth_simulateV1",[{"blockStateCalls":[{"stateOverrides":{OWNER:{"balance":hex(10**18)}},"calls":strict_calls}]},tag],end)
+            if not strict_result:return {**row,"status":"expired before strict bound"}
+            if len(strict_result)!=1 or strict_result[0]["parentHash"]!=head["hash"] or strict_result[0]["timestamp"]!=child[0]["timestamp"]:
+                return {**row,"status":"current child advanced before strict bound"}
+            second=strict_result[0]["calls"]
+            if len(second)!=len(result) or any(r["status"]!="0x1" for r in second[:controls]) or second[controls]["status"]!="0x0" or second[index]["status"]!="0x1":
+                return {**row,"status":"strict bound not reproduced"}
+            if balances(second[controls+2:index])!=pre or balances(second[index+1:])!=post:raise ValueError("иная выплата при проверке minimum+1")
         row.update(module=module, runtime="0x"+keccak(hexstr=result[0]["returnData"]).hex(),
                    module_before=pre[2:],module_after=post[2:],strict=nt+1,rollback=rollback)
         result=[result[1],result[2],*result[controls-width:controls-width+2],swap,*result[index+1:index+3]]

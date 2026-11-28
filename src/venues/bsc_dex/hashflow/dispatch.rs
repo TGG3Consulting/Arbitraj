@@ -19,7 +19,7 @@ pub(super) struct Dispatch {
 
 pub(super) enum Gate {
     Hashflow(String),
-    Native(u64),
+    Native { generation: u64, mixed: bool },
     Textile(u64),
     Dexalot(u64),
     AirSwap(u64),
@@ -34,7 +34,7 @@ impl Dispatch {
             Gate::Dexalot(_) => "dexalot.gas_budget_native",
             Gate::AirSwap(_) => "airswap.gas_budget_native",
             Gate::Textile(_) => "textile.gas_budget_native",
-            Gate::Native(_) => "native_rfq.gas_budget_native",
+            Gate::Native { .. } => "native_rfq.gas_budget_native",
             Gate::Epsilon { .. } => "epsilon.gas_budget_native",
             Gate::Raindex { .. } => "raindex.gas_budget_native",
             Gate::Gladius(_) => "gladius.gas_budget_native",
@@ -57,7 +57,7 @@ impl Dispatch {
             Gate::Dexalot(g) => super::super::dexalot::enabled(ctx) && ctx.settings.generation()==*g && super::super::dexalot::timely(ctx,self.expiry),
             Gate::AirSwap(g) => super::super::airswap::enabled(ctx) && ctx.settings.generation()==*g && super::super::airswap::timely(ctx,self.expiry),
             Gate::Textile(g) => super::super::textile::enabled(ctx) && ctx.settings.generation()==*g && super::super::textile::current(self.expiry),
-            Gate::Native(g) => {
+            Gate::Native { generation:g, .. } => {
                 super::super::native_rfq::enabled(ctx)
                     && ctx.settings.generation() == *g
                     && super::super::native_rfq::routing::timely(ctx, self.expiry)
@@ -77,11 +77,11 @@ pub(in crate::venues::bsc_dex) fn marker(
 ) -> GatewayResult<Option<PendingRef>> {
     DISPATCH
         .try_with(|d| {
-            if matches!(d.gate, Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. }) && (
+            if matches!(d.gate, Gate::Native { mixed: true, .. } | Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. }) && (
                 intent::current_key().as_deref() != Some(d.key.as_str()) ||
                 ready.is_empty() || ready.iter().any(|r| r.method != SendMethod::Single)
             ) {
-                return Err(ctx.err(ErrorCode::NoRoute,"Ключ денежного шага или состав каналов Raindex изменились"));
+                return Err(ctx.err(ErrorCode::NoRoute,"Ключ денежного шага или состав каналов источника изменились"));
             }
             if need > d.cap(ctx)? || !d.active(ctx) || send::tip(ready).is_some() {
                 return Err(ctx.err(
@@ -193,10 +193,10 @@ where
     let db = ctx.journal.db();
     let k = dispatch.key.clone();
     let parse = dispatch.parse.clone();
-    let mixed = matches!(dispatch.gate, Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. });
+    let mixed = matches!(dispatch.gate, Gate::Native { mixed: true, .. } | Gate::Raindex { mixed: true, .. } | Gate::Epsilon { mixed: true, .. });
     let sent = if mixed {
-        if intent::current_key().as_deref() != Some(k.as_str()) || (parse.raindex.is_none() && parse.epsilon.is_none()) {
-            return Err(routing::no(p,"Нет исходного ключа денежной книги Raindex"));
+        if intent::current_key().as_deref() != Some(k.as_str()) || (parse.raindex.is_none() && parse.epsilon.is_none() && parse.native_rfq.is_none()) {
+            return Err(routing::no(p,"Нет исходного ключа денежного свопа"));
         }
         DISPATCH.scope(dispatch, send).await
     } else {
@@ -234,15 +234,15 @@ pub(in crate::venues::bsc_dex) async fn native_send<F>(
 where
     F: std::future::Future<Output = GatewayResult<exec::txs::Done>>,
 {
-    let mixed = req.route.as_ref().is_some_and(|r|super::super::raindex::routing::mixed_ticket(r).is_some() || super::super::epsilon::routing::mixed_ticket(r).is_some());
+    let mixed = req.route.as_ref().is_some_and(|r|matches!(r.mode,crate::core::types::RouteMode::NativeRfqSettlement(Some(_))) || super::super::raindex::routing::mixed_ticket(r).is_some() || super::super::epsilon::routing::mixed_ticket(r).is_some());
     let dispatch = Dispatch {
         key: if mixed {
-            intent::current_key().ok_or_else(|| routing::no(p,"Денежный ордер Raindex требует действующего ключа"))?
+            intent::current_key().ok_or_else(|| routing::no(p,"Денежный своп требует действующего ключа"))?
         } else {
             super::execute::key(p, req)?
         },
         expiry,
-        gate: if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native(generation)},
+        gate: if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native { generation, mixed }},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

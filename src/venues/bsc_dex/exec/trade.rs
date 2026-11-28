@@ -93,6 +93,7 @@ pub async fn trade(
 /// иначе прямой. Ошибок нет (адрес не читается — подпись бандла, сама сделка вернёт ошибку настройки).
 fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'static str {
     match route.mode {
+        RouteMode::NativeRfqSettlement(_) => super::super::native_rfq::LABEL,
         RouteMode::Rfq(_) | RouteMode::RfqIndicative => {
             // У первых маршрутов Hashflow отсутствовал маркер источника. Для отправленного
             // обмена восстановление берёт первоначальное имя исполнителя из SwapCtx.who.

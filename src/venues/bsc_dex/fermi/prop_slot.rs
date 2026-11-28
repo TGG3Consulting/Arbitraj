@@ -74,6 +74,7 @@ impl Order {
                 self.minimum
             },
             leg: self.leg,
+            bop: None,
             prop: Some(Box::new(prop_wallet::Proof {
                 terms: self.terms,
                 payer: self.payer,
@@ -149,7 +150,7 @@ pub(super) async fn simulate(
 pub(super) async fn candidate(
     ctx: &Ctx,
     c: &super::indicative::Candidate,
-    t: prop_wallet::Terms,
+    t: super::prop_levels::Quoted,
     leg: B256,
 ) -> Option<slot::Proof> {
     let b = &c.book;
@@ -202,6 +203,20 @@ pub(super) async fn candidate(
     )
     .await
     .ok()?;
+    if let super::prop_levels::Quoted::Bop(path) = t {
+        // Every preliminary amount is an exact-input estimate. Lock the wallet's observed terminal net.
+        for (spent, _) in rows {
+            let floor = if buy { wanted } else { U256::ONE };
+            let probe = path.proof(c, leg, spent, floor);
+            if let Ok((_, net, _)) = simulate(ctx, &b.head, &b.frame, &probe, None).await {
+                return Some(path.proof(c, leg, spent, if buy { wanted } else { net }));
+            }
+        }
+        return None;
+    }
+    let super::prop_levels::Quoted::Prop(t) = t else {
+        return None;
+    };
     let (spent, output) = rows.into_iter().find(|(_, out)| !buy || *out >= wanted)?;
     Some(
         Order {

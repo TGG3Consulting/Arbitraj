@@ -98,3 +98,40 @@ fn builder_names_authorize_only_one_venue_and_require_an_unambiguous_choice() {
     assert!(builders(vec!["old".into(), "titan".into()]).is_empty());
     assert!(builders(vec!["titan".into(), "titan".into()]).is_empty());
 }
+
+#[test]
+fn funded_bop_cash_competes_with_an_actual_usdt_payout_after_gas() {
+    let rows = fixture(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_wallet.json.gz"
+    ));
+    let number = |v: &Value| v.as_str().unwrap().parse::<i128>().unwrap();
+    let mut wins = [0; 2];
+    for frame in rows["frames"].as_array().unwrap() {
+        let sale = &frame["cases"][0];
+        assert_eq!(
+            sale["input"].as_str().unwrap().parse::<Address>().unwrap(),
+            super::super::bop_binding::Identity::issued()
+                .unwrap()
+                .cash
+                .weth
+                .address
+        );
+        let amount = number(&sale["amount"]);
+        let lambda = &sale["lambda"];
+        let original = number(&lambda["received"]);
+        let scored = |trial: &Value| {
+            // На каждом кадре курс ETH/gas измерен этим же точным обменом WETH в физический USDT.
+            let fee = trial["gas"].as_i64().unwrap() as i128 * number(&frame["gas_price_wei"]);
+            let whole = number(&trial["received"]) * amount - fee * original;
+            rust_decimal::Decimal::from_i128_with_scale(whole, 18)
+        };
+        let baseline = scored(lambda);
+        for (index, key) in ["nested_module", "compound"].iter().enumerate() {
+            assert_eq!(sale[*key]["outcome"], "paid");
+            if improves(Side::Sell, scored(&sale[*key]), Some(baseline)) {
+                wins[index] += 1;
+            }
+        }
+    }
+    assert_eq!(wins, [0, 4]);
+}

@@ -63,6 +63,7 @@ impl Books {
 pub(in crate::venues::bsc_dex) struct Cache {
     books: Arc<Mutex<Vec<Arc<Books>>>>,
     pub(super) funds: availability::Cache,
+    pub(super) bop_roles: super::bop_cache::Cache,
     pub(super) tickets: super::routing::Tickets,
 }
 impl Cache {
@@ -85,6 +86,7 @@ impl Cache {
                 active.revision == book.revision
                     && active.config.builder == book.config.builder
                     && active.config.executor == book.config.executor
+                    && active.config.same_path(&book.config)
                     && active.head.hash == book.head.hash
                     && super::slot_config::same_frame(&active.frame, &book.frame)
             })

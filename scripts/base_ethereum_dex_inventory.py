@@ -2315,6 +2315,7 @@ def tables(network, snapshots, profiles):
                     f"Во всех {alternate} проверках с физическим USDT платёж прошёл у LambdaClass через Uniswap V3. "
                     "В маппинге кошелька кнопка «Проверить цену bopAMM» сверяет выбранного строителя, слот и "
                     "актуальный канонический блок. Для проверки чистого минимума нужен собственный BopAmmWallet. "
+                    "Семь адресов и хеши `bopamm.cash_path` сверяются с [двумя родителями слотов](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_roles.json.gz). При явном разрешении строителя bopAMM конкурирует с обычным маршрутом по физическому USDT с учётом газа. Из 16 опытов 12 завершились выплатой через USDC, 3 — напрямую в bopAMM. Начальная вложенная версия проиграла по газу на всех четырёх продажах 0,5 WETH; итоговый модуль проверен на тех же входах. [Касса двух маршрутов](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_wallet.json.gz). "
                     "[Результаты на публичных кадрах](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_published.json.gz) · "
                     "[Реестр и контроль Uniswap](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum.json.gz) · "
                     "[Оплаты и границы слота](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_wallets.json.gz).")

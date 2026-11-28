@@ -2,31 +2,38 @@
 //! https://docs.titanbuilder.xyz/propamms · https://buildernet.org/docs/api
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
+mod bop_binding;
+mod bop_cache;
+mod bop_cash;
+mod bop_makers;
+mod bop_order;
+mod bop_receipt;
+mod bop_versions;
 pub(super) mod bopamm;
 pub(super) mod bopamm_profile;
-pub(super) mod prop_market;
-pub(super) mod prop_profile;
-mod prop_oracle;
 mod deployment;
 mod frame;
 pub(super) mod markets;
+pub(super) mod prop_market;
+mod prop_oracle;
+pub(super) mod prop_profile;
 pub(super) mod routing;
-pub(super) use execute::{trade,trade_settlement};
+pub(super) use execute::{trade, trade_settlement};
 pub(super) use recovery::reconcile;
 mod dispatch;
 mod execute;
-mod indicative;
-mod prop_slot;
-mod slot_checks;
-mod slot_config;
-mod slot_feed;
-mod prop_levels;
 mod firm;
+mod indicative;
 mod levels;
 mod missed;
+mod prop_levels;
+mod prop_slot;
 mod receipt;
 mod recovery;
 mod slot;
+mod slot_checks;
+mod slot_config;
+mod slot_feed;
 #[cfg(test)]
 mod tests;
 use super::{ctx::Ctx, node::rpc};
@@ -209,6 +216,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     let (received, gas_used) = if let Some(executor) = executor {
         let leg = keccak256((head.hash, who, req.input, req.output, amount).abi_encode());
         let proof = slot::Proof {
+            bop: None,
             prop: None,
             builder: builder.name().into(),
             parent: head.hash,

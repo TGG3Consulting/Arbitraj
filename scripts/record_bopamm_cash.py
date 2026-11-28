@@ -74,7 +74,7 @@ def run(reader,base,probe,frame,cache,production=False):
         mid=v[-4]
         if mid["status"]=="0x0":
             assert before==after
-            return {"outcome":"reverted","reason":str(mid.get("error",{}).get("message",""))[:130]}
+            return {"outcome":"reverted","revert_data":mid.get("returnData"),"gas":int(mid["gasUsed"],16),"reason":str(mid.get("error",{}).get("message",""))[:130]}
         spent=before[0]-after[0];received=after[1]-before[1]
         assert spent==size and received>=bound and before[2]==after[2]
         if production:

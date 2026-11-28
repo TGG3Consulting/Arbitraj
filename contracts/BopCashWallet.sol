@@ -68,6 +68,9 @@ contract BopCashWallet is BopAmmWallet {
         o.leg=keccak256(abi.encode(msg.sender,o.leg));
         move(a,abi.encodeCall(IBopCashToken.approve,(address(this),amount)));
         (uint256 paid,uint256 received)=this.execute(o);
+        // WETH9 skips allowance consumption when the sender and spender coincide.
+        if(IBopCashToken(a).allowance(address(this),address(this))!=0)
+            move(a,abi.encodeCall(IBopCashToken.approve,(address(this),0)));
         if(paid!=amount || received==0 || IBopCashToken(a).allowance(address(this),address(this))!=0) revert InvalidFill();
         return received;
     }

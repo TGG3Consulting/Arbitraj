@@ -8,7 +8,8 @@
 //! Только по официальной документации Bybit V5 (https://bybit-exchange.github.io/docs/v5/intro; исходник —
 //! github.com/bybit-exchange/docs). Ссылки — в шапке каждого файла и в README.md этой папки. Фьючерсов, маржи и
 //! опционов нет: каждый запрос — category=spot, ордер — isLeverage=0, ключ с правами деривативов не проходит проверку.
-//! Расчётный круг Base: ордер конверсии — да (settlement.rs); вывод и зачисление на торговый счёт — нет (см. флаги).
+//! Расчётный круг Base: ордер конверсии (settlement.rs), вывод (requestId до POST, сверка совпадением — resolve.rs) и
+//! зачисление на UNIFIED (решение Тиграна 28.11 о настройке аккаунта) — см. флаги ниже.
 //! Счёт: единый торговый (UNIFIED) — торговля и балансы; депозит — на UNIFIED по настройке кабинета (решение 136, Тигран
 //! 04.11), запасной вариант — перевод FUND → UNIFIED (fund_move.rs, venue.deposit_to_spot).
 
@@ -154,22 +155,26 @@ impl Venue for Bybit {
         settlement::inspect(&self.ctx, req, p).await
     }
 
-    /// НЕ поддерживается (false): «Set Deposit Account» https://bybit-exchange.github.io/docs/v5/asset/deposit/set-deposit-acct
-    /// — «Your funds will be deposited into FUND wallet by default. You can set the wallet for auto-transfer after
-    /// deposit»: зачисление на UNIFIED — авто-перевод после депозита (в журнале UTA это TRANSFER_IN, enum
-    /// type(uta-translog)); запроса текущей настройки и признака «авто-перевод выполнен» у записи депозита
-    /// (GET /v5/asset/deposit/query-record) в документации нет. Прямое зачисление на торговый счёт не подтверждено.
+    /// Поддерживается по решению арбитра 28.11.2026 на основании слов Тиграна (28.11.2026): в аккаунте Bybit бота
+    /// депозит зачисляется на торговый счёт UNIFIED; факт бота — venue.deposit_to_spot [bybit] не задан, перевод
+    /// FUND → UNIFIED бот не делает, а монеты сделок BSC продаются на Bybit после зачисления.
+    /// Документация «Set Deposit Account» https://bybit-exchange.github.io/docs/v5/asset/deposit/set-deposit-acct:
+    /// «Your funds will be deposited into FUND wallet by default. You can set the wallet for auto-transfer after
+    /// deposit» — зачисление на UNIFIED держится на этой настройке аккаунта; запроса её текущего значения в документации
+    /// нет. УСЛОВИЕ: если зачисление в аккаунте переключат на FUND — флаг вернуть в false.
     fn supports_settlement_credit(&self) -> bool {
-        false
+        true
     }
 
-    /// НЕ поддерживается (false): requestId вывода (POST /v5/asset/withdraw/create, «used for idempotent verification»)
-    /// сохраняется до POST (transfers.rs), но найти вывод по нему нельзя — у GET /v5/asset/withdraw/query-record нет ни
-    /// параметра, ни поля requestId (https://bybit-exchange.github.io/docs/v5/asset/withdraw/withdraw-record); ответ на
-    /// повтор того же requestId не описан. Сверка после потери ответа — только совпадением монета/сеть/адрес/сумма
-    /// (resolve.rs), это не документированный способ.
+    /// Поддерживается по решению арбитра 28.11.2026. Свой requestId (POST /v5/asset/withdraw/create
+    /// https://bybit-exchange.github.io/docs/v5/asset/withdraw — «Customised ID, globally unique, it is used for
+    /// idempotent verification»: идемпотентность — по документации) сохраняется до POST (transfers.rs). Поиска по
+    /// requestId в истории выводов в документации НЕТ (у GET /v5/asset/withdraw/query-record нет ни параметра, ни поля
+    /// requestId, https://bybit-exchange.github.io/docs/v5/asset/withdraw/withdraw-record): сверка после потери ответа —
+    /// совпадением монета + сеть + адрес + сумма с момента отправки (resolve.rs, тот же путь, что у BSC): ровно одна
+    /// запись — вывод найден; ни одной — пока не найден; две и больше — не выбирается, разбирает человек.
     fn supports_settlement_withdrawal(&self) -> bool {
-        false
+        true
     }
 
     fn id(&self) -> VenueId {

@@ -73,7 +73,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "feeType": 1,
         "requestId": request_id,
     });
-    // Расчётный шаг: свой requestId сохраняется до POST (вне шага ничего не делает; флаг вывода у Bybit — false, mod.rs).
+    // Расчётный шаг: свой requestId сохраняется до POST (вне расчётного шага ничего не делает).
     if crate::gateway::settlement_intent::active() {
         crate::gateway::settlement_intent::before_send(&lookup(&request_id, sent_ms)).await?;
     }

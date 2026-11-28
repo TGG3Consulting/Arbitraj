@@ -45,7 +45,7 @@
 | `deposit_addr.rs` | Адрес депозита (master), tag — «не поддерживается»; решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита по txID |
 | `transfers.rs` | Вывод (forceChain=1, feeType=1, requestId, accountType = venue.withdraw_account), статус, поиск при неизвестном итоге ; расчётный шаг — requestId и время отправки сохраняются до POST (`settlement_intent::before_send`) |
-| `settlement.rs` | Расчётный круг Base (USDC ↔ USDT): сверка символа заявки (baseCoin + quoteCoin — факт записанного instruments-info) и окончательный ордер только чтением по своему orderLinkId (realtime → history). Флаги: ордер — да; вывод — нет (в истории выводов нет requestId); зачисление на торговый счёт — нет (депозит по умолчанию на FUND, на UNIFIED — авто-перевод, признака его завершения нет) |
+| `settlement.rs` | Расчётный круг Base (USDC ↔ USDT): сверка символа заявки (baseCoin + quoteCoin — факт записанного instruments-info) и окончательный ордер только чтением по своему orderLinkId (realtime → history). Флаги (решение арбитра 28.11): ордер — да; вывод — да (requestId идемпотентен по документации и сохраняется до POST; поиска по requestId в истории нет — сверка совпадением монета/сеть/адрес/сумма, `resolve.rs`, ровно одна запись); зачисление на торговый счёт — да по решению Тиграна 28.11 (депозит аккаунта настроен на UNIFIED; переключат на FUND — флаг вернуть в false) |
 | `fund_move.rs` | FUND → UNIFIED после зачисления (venue.deposit_to_spot) |
 | `withdrawable.rs` | Решение 166: удержание вывода — `GET /v5/asset/withdraw/withdrawable-amount` (availableBalance − withdrawableAmount по счетам venue.withdraw_account); 131085 у вывода («delayed withdrawal») → WithdrawLocked (errors.rs) |
 | `account.rs` | Балансы UNIFIED, баланс одной монеты, «Проверить подключение» (права, master, UTA, IP) |
@@ -81,3 +81,5 @@
   соединение backup-N с теми же парами и другой глубиной («Supports different depths»; seq — «compare different levels
   orderbook data»). Сторожу ядра не показывается; окна пишут кадры основного. Та же глубина дважды в документации не
   описана — запрещена. Равный seq двух глубин = одно состояние книги — не подтверждено живой записью (docs/TASKS.md).
+
+Факт бота (28.11.2026): `venue.withdraw_account` [bybit] = `UTA` — вывод с единого торгового счёта (Bybit сам переводит на Funding, документация Withdraw, accountType); `venue.deposit_to_spot` [bybit] не задан — депозит зачисляется на UNIFIED настройкой аккаунта.

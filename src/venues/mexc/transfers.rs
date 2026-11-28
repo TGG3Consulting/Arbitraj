@@ -1,6 +1,7 @@
 //! Файл: venues/mexc/transfers.rs
 //! Что делает: вывод с MEXC (новый эндпоинт) и его статус; поиск вывода по своему withdrawOrderId при неизвестном
-//! итоге (решение 118, А-🟠5). Статус депозита — deposits.rs.
+//! итоге (решение 118, А-🟠5). Статус депозита — deposits.rs. Расчётный круг USDC Base: в его шаге свой
+//! withdrawOrderId сохраняется до POST (settlement_intent::before_send), сверка — resolve.rs по истории выводов.
 //! Кто вызывает: mod.rs (функции контракта), deposits.rs (hash, transfer).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, core/types.
 //! Настройки: нет своих.
@@ -64,6 +65,10 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ("address", req.address.clone()),
         ("amount", amount.clone()),
     ];
+    // Расчётный круг USDC Base: свой withdrawOrderId сохраняется ядром ДО отправки (вне круга — ничего не делает).
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&PendingRef::withdraw(&order_id)).await?;
+    }
     let sent = rest::signed(
         ctx,
         Method::POST,

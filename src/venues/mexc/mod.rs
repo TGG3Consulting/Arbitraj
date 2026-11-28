@@ -6,7 +6,13 @@
 //! Настройки: venue.* с областью «mexc», feed.stale_after_ms; секреты mexc.api_key, mexc.api_secret.
 //!
 //! Только по официальной документации MEXC (https://www.mexc.com/api-docs/spot-v3/introduction). Ссылки — в шапке
-//! каждого файла и в README.md этой папки. Фондового счёта у MEXC в документации нет: депозит сразу на споте.
+//! каждого файла и в README.md этой папки. Фондового счёта у MEXC в документации API нет. Счёт зачисления депозита —
+//! выбор пользователя в аккаунте: Spot или Futures (справка MEXC «What is a Crypto Deposit?»,
+//! https://www.mexc.com/support/articles/17827791509026: «You can choose to deposit tokens into either your Spot Account
+//! or Futures Account»); в Spot V3 API этот выбор не читается — поэтому supports_settlement_credit = false.
+//!
+//! Расчётный круг USDC Base (gateway/contract.rs): ордер конверсии — trade.rs + settle_order.rs, вывод —
+//! transfers.rs + resolve.rs; зачисление на торговый счёт API не подтверждает (см. выше).
 
 pub mod account;
 pub mod account_update;
@@ -46,6 +52,7 @@ pub mod proto;
 pub mod reply;
 pub mod resolve;
 pub mod rest;
+pub mod settle_order;
 pub mod subs;
 pub mod symbols;
 pub mod symbols_parse;
@@ -125,6 +132,52 @@ impl Mexc {
 
 #[async_trait]
 impl Venue for Mexc {
+    /// Отпечаток публичного ключа mexc.api_key — идентичность торгового счёта (gateway/settlement_intent.rs).
+    /// Ошибки: NotConfigured — ключ не задан.
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Ордер конверсии: свой newClientOrderId сохраняется до POST (trade.rs), итог — по GET /api/v3/order
+    /// (settle_order.rs), точный cumulativeQuoteQty — ядру (order_state::result).
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Символ заявки равен символу пары asset/quote из exchangeInfo (settle_order::matches).
+    /// https://www.mexc.com/api-docs/spot-v3/market-data-endpoints/exchange-information
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settle_order::matches(&self.ctx, &self.symbols, p, asset, quote)
+    }
+
+    /// Только GET: окончательный ордер по orderId / origClientOrderId (settle_order.rs).
+    /// https://www.mexc.com/api-docs/spot-v3/spot-account-trade/query-order
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settle_order::inspect(&self.ctx, req, p).await
+    }
+
+    /// Вывод: свой withdrawOrderId (параметр POST /api/v3/capital/withdraw) сохраняется до POST (transfers.rs);
+    /// после потери ответа — поиск по полю withdrawOrderId ответа GET /api/v3/capital/withdraw/history (resolve.rs).
+    /// https://www.mexc.com/api-docs/spot-v3/wallet-endpoints/withdrawnew
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
+    /// Нет: счёт зачисления депозита (Spot или Futures) выбирается в аккаунте MEXC и через Spot V3 API не читается
+    /// (шапка файла). Без подтверждения ядро MEXC в расчётный круг не пускает.
+    fn supports_settlement_credit(&self) -> bool {
+        false
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }
@@ -274,7 +327,8 @@ impl Venue for Mexc {
         asset: &Asset,
         amount: rust_decimal::Decimal,
     ) -> GatewayResult<Option<String>> {
-        // Фондового счёта у MEXC в документации нет: депозит зачисляется на спот, переводить нечего.
+        // Фондового счёта у MEXC в документации API нет, переводить нечего. Счёт зачисления (Spot или Futures) —
+        // выбор в аккаунте MEXC (шапка файла); внутреннего перевода бот не делает (поведение прежнее).
         let _ = (asset, amount);
         Ok(None)
     }

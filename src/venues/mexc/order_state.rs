@@ -5,9 +5,11 @@
 //! повторами ещё venue.order_final_wait_ms. «Итог неизвестен» — только если итог не прочитан и после отмены.
 //! Ордер, итог постановки которого неизвестен, ищется по своему ID; не найден — отмена по нему же и снова поиск
 //! (решение 118, А-🟠4). Комиссия — fills.rs.
-//! Кто вызывает: trade.rs.
+//! Кто вызывает: trade.rs, resolve.rs, settle_order.rs (расчётный круг: query, is_final, result).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, fills.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms; venue.my_trades_limit (fills.rs).
+//! Расчётный круг USDC Base: result передаёт cumulativeQuoteQty ядру (settlement_intent::note_gross), в круге
+//! комиссия без commissionAsset — BadResponse.
 //!
 //! Официальная документация:
 //! - GET /api/v3/order (symbol, orderId | origClientOrderId; вес 2, SPOT_DEAL_READ) https://www.mexc.com/api-docs/spot-v3/spot-account-trade/query-order
@@ -140,6 +142,8 @@ pub async fn result(
     let quote = num::dec_opt(s, "cumulativeQuoteQty")?
         .or(num::dec_opt(s, "cummulativeQuoteQty")?)
         .ok_or_else(|| super::errors::bad("нет cumulativeQuoteQty", &s.to_string()))?;
+    // Расчётный круг USDC Base: точная сумма котируемой монеты из того же окончательного ответа (вне круга — no-op).
+    crate::gateway::settlement_intent::note_gross(Some(quote));
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
     } else if filled < orig {
@@ -157,6 +161,15 @@ pub async fn result(
     } else {
         fills::commission(ctx, symbol, &order_id, filled).await?
     };
+    // В расчётном круге комиссия без монеты не принимается: ядро сверяет списания по валютам.
+    if crate::gateway::settlement_intent::capturing()
+        && fees
+            .iter()
+            .any(|f| f.asset.is_empty() && !f.amount.is_zero())
+    {
+        let m = "комиссия сделок ордера без commissionAsset";
+        return Err(ctx.tag(super::errors::bad(m, &s.to_string())));
+    }
     Ok(TradeResult {
         request: req,
         status,
@@ -177,13 +190,17 @@ async fn cancel(ctx: &Ctx, symbol: &str, id: (&'static str, &str)) -> GatewayRes
 }
 
 /// Запрос состояния по orderId или origClientOrderId. Ошибки: как у rest::signed (вызывающий решает, что делать).
-async fn query(ctx: &Ctx, symbol: &str, id: (&'static str, &str)) -> GatewayResult<Value> {
+pub(super) async fn query(
+    ctx: &Ctx,
+    symbol: &str,
+    id: (&'static str, &str),
+) -> GatewayResult<Value> {
     let q = vec![("symbol", symbol.to_string()), (id.0, id.1.to_string())];
     rest::signed(ctx, Method::GET, "/api/v3/order", q, Op::Other).await
 }
 
-/// Состояние окончательное.
-fn is_final(s: &Value) -> bool {
+/// Состояние окончательное. Ошибок нет.
+pub(super) fn is_final(s: &Value) -> bool {
     num::text_opt(s, "status").is_some_and(|st| FINAL.contains(&st.as_str()))
 }
 

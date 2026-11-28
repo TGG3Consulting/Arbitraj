@@ -5,6 +5,8 @@
 //! покупкой (решение 134). Пробного ордера перед настоящим (покупка и продажа) нет — решение 412 (Тигран 19.11): он
 //! только в проверке без исполнения (order_rules::check, venue.order_test_first).
 //! Кто вызывает: mod.rs (trade из контракта).
+//! Расчётный круг USDC Base: в его шаге (settlement_intent::active) свой ID ордера сохраняется до POST
+//! (settlement_intent::before_send); сверка после потери ответа — settle_order.rs.
 //! Решение 268: тот же путь постановки и итога — у рыночной продажи (market_sell.rs передаёт готовый ордер, prepared).
 //! От чего зависит: order_rules.rs (правила), rest.rs, symbols.rs, num.rs, ctx.rs, order_state.rs.
 //! Настройки: venue.order_type [mexc] (в orderTypes пары; IOC/FOK — при LIMIT, решение 133);
@@ -47,6 +49,11 @@ pub async fn trade(
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
+    let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
+    // Расчётный круг USDC Base: свой newClientOrderId сохраняется ядром ДО отправки (вне круга — ничего не делает).
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&pending).await?;
+    }
     let placed = rest::signed(ctx, Method::POST, "/api/v3/order", p.params, Op::Trade).await;
     // Решение 118, А-🟠3: HTTP успешен, а orderId нет — итог неизвестен (не обычный сбой: повтор дал бы второй ордер).
     let placed = placed.and_then(|r| {
@@ -62,8 +69,7 @@ pub async fn trade(
             .with_raw(r.to_string())
         })
     });
-    // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
-    let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
+    // Решение 231: «чем найти» (pending) — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
     let order_id = match placed {
         Ok(id) => id,
         // Итог неизвестен — поиск по своему ID; не найден — отмена по нему и снова поиск (А-🟠4).

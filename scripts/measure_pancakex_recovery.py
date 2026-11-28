@@ -12,7 +12,7 @@ directory = Path(sys.argv[1])
 records = map(json.loads, (directory / "pancakex-build.jsonl").read_text().splitlines())
 binary, = (r["executable"] for r in records if r.get("executable") and r["profile"]["test"])
 groups = {
-    "venues::bsc_dex::pancakex::prior_tests::": 4,
+    "venues::bsc_dex::pancakex::prior_tests::": 5,
     "venues::bsc_dex::pools::ambient_head::tests::registry_paths::": 2,
 }
 listed = subprocess.check_output([binary, "--list"], text=True, timeout=15).splitlines()

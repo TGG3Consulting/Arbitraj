@@ -1,6 +1,7 @@
 """Fund a pair on an archived, empty verified V2 factory in an isolated EVM block."""
 import argparse
 import json
+import os
 import gzip
 from pathlib import Path
 
@@ -162,12 +163,15 @@ def capture(url, network, mars=False, zero_flat=False, sector=False, changed_fee
 
 if __name__=="__main__":
     cli=argparse.ArgumentParser(description=__doc__);cli.add_argument("network",choices=("ethereum","base"));cli.add_argument("out",type=Path);cli.add_argument("--mars", action="store_true");cli.add_argument("--sector", action="store_true");args=cli.parse_args()
-    for url in BASE_ENDPOINTS if args.network=="base" else (ENDPOINT,"https://ethereum-rpc.publicnode.com"):
+    # Архивный узел из секрета Actions ETH_ARCHIVE_RPC (если задан) — первым для Ethereum; адрес в выводе заменяется меткой.
+    archive=os.environ.get("ETH_ARCHIVE_RPC","").strip()
+    hide=lambda text: text.replace(archive,"ETH_ARCHIVE_RPC") if archive else text
+    for url in BASE_ENDPOINTS if args.network=="base" else (archive,)*bool(archive)+(ENDPOINT,"https://ethereum-rpc.publicnode.com"):
         try:
             record=capture(url,args.network,args.mars,sector=args.sector)
             if args.sector:record["changed_fee"]=capture(url,args.network,sector=True,changed_fee=True)
             if args.mars:record["synthetic_zero_flat"]=capture(url,args.network,True,True)
             break
-        except (RuntimeError,OSError) as err: print(str(err)[:180])
+        except (RuntimeError,OSError) as err: print(hide(str(err))[:180])
     else: raise RuntimeError("archive unavailable")
     args.out.write_text(json.dumps(record,separators=(",",":")),encoding="utf8")

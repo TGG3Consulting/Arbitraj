@@ -2,6 +2,7 @@
 import argparse
 import gzip
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -170,13 +171,16 @@ if __name__ == "__main__":
     p.add_argument("--stress",action="store_true")
     p.add_argument("--native",action="store_true")
     args=p.parse_args()
-    for endpoint in [ENDPOINT,"https://ethereum-rpc.publicnode.com","https://mainnet.gateway.tenderly.co"]:
+    # Архивный узел из секрета Actions ETH_ARCHIVE_RPC (если задан) — первым; адрес в выводе заменяется меткой.
+    archive=os.environ.get("ETH_ARCHIVE_RPC","").strip()
+    hide=lambda text: text.replace(archive,"ETH_ARCHIVE_RPC") if archive else text
+    for endpoint in [archive]*bool(archive)+[ENDPOINT,"https://ethereum-rpc.publicnode.com","https://mainnet.gateway.tenderly.co"]:
         try:
             evidence=run(endpoint,args.shard,args.stress,args.native)
             break
         except (OSError, RuntimeError, KeyError, ValueError) as exc:
             if isinstance(exc, ValueError) and isinstance(exc.args[0],tuple): raise
-            print(endpoint, str(exc)[:220])
+            print(hide(endpoint), hide(str(exc))[:220])
     else: raise RuntimeError("no archive RPC supplied complete canonical calls")
     args.out.write_text(json.dumps(evidence,separators=(",",":")),encoding="utf8")
     print(len(evidence["cases"]), "market, amount and settlement combinations")

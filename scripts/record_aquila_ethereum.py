@@ -1,6 +1,7 @@
 """Reconcile Ethereum Aquila's factory with its deployed pair and replay a funded fork."""
 import argparse
 import json
+import os
 from pathlib import Path
 
 import requests
@@ -100,12 +101,15 @@ if __name__ == "__main__":
     cli=argparse.ArgumentParser(description=__doc__)
     cli.add_argument("output",type=Path)
     path=cli.parse_args().output
-    for endpoint in (ENDPOINT,"https://ethereum-rpc.publicnode.com","https://eth.drpc.org"):
+    # Архивный узел из секрета Actions ETH_ARCHIVE_RPC (если задан) — первым; адрес в выводе заменяется меткой.
+    archive=os.environ.get("ETH_ARCHIVE_RPC","").strip()
+    hide=lambda text: text.replace(archive,"ETH_ARCHIVE_RPC") if archive else text
+    for endpoint in (archive,)*bool(archive)+(ENDPOINT,"https://ethereum-rpc.publicnode.com","https://eth.drpc.org"):
         try:
             data=capture(endpoint)
             break
         except (requests.RequestException,RuntimeError) as error:
-            print(endpoint, str(error)[:180], flush=True)
+            print(hide(endpoint), hide(str(error))[:180], flush=True)
     else:
         raise RuntimeError("no canonical archive available")
     path.write_text(json.dumps(data,separators=(",",":")),encoding="utf-8")

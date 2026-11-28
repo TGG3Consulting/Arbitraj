@@ -72,7 +72,7 @@ def capture(artifact):
         for qty in amounts:
             for protected in (False,True):
                 result=leg(roles,source,target,qty,artifact if protected else None,
-                           slug="base",reader=node,funding=fund)
+                           slug="base",reader=node,funding=fund,strict_from_offer=True)
                 samples.append(dict(mode="module" if protected else "router",**result))
     return dict(source=BASE,payer=OWNER,block=header["number"],block_hash=header["hash"],roles=roles,
                 pamm=dict(registered=listed,pairs=engines),createGas=int(op["gasUsed"],16),card=card,

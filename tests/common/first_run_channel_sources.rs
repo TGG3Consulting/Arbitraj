@@ -23,6 +23,7 @@ const FAMILIES: &[&str] = &[
     "raindex",
     "ryze",
     "textile",
+    "tokenlon",
     "zeroex",
 ];
 const SHARED_MODULES: &[&str] = &[
@@ -35,7 +36,6 @@ const SHARED_MODULES: &[&str] = &[
     "umia",
     "stelaxis",
     "homelander",
-    "tokenlon",
     "ondo",
 ];
 

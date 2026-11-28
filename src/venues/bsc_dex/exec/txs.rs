@@ -23,7 +23,7 @@
 //!
 //! eth_estimateGas, legacy-транзакция EIP-155 — ссылки в send/tx.rs; трекер и отмена — send/track.rs, send/cancel.rs.
 
-use alloy_primitives::{B256, Bytes, TxKind, U256};
+use alloy_primitives::{Address, B256, Bytes, TxKind, U256};
 use serde_json::{Map, Value};
 
 use crate::core::types::{ChainTx, SendMethod, TxOutcome};
@@ -116,10 +116,48 @@ pub async fn send_capped(
 pub async fn send_tipped(
     env: &Env,
     slot: &Slot,
-    (to, data, value): (impl Into<TxKind>, Bytes, U256),
+    call: (impl Into<TxKind>, Bytes, U256),
     with_tip: bool,
     keep: Option<SwapGuard>,
     cap: Option<U256>,
+    fees: (Option<u128>, Option<&Map<String, Value>>),
+) -> GatewayResult<Done> {
+    send_with_gas(env, slot, call, with_tip, keep, GasSource::Node(cap), fees).await
+}
+
+use super::super::tokenlon::private_node::Measurement;
+enum GasSource<'a> {
+    Node(Option<U256>),
+    Tokenlon(&'a Measurement),
+}
+
+/// Оплата собственной заявки Tokenlon. Подписанные условия проверяет только личный узел кошелька.
+pub(in crate::venues::bsc_dex) async fn send_tokenlon(
+    env: &Env,
+    slot: &Slot,
+    call: (Address, Bytes, U256),
+    keep: SwapGuard,
+    measured: &Measurement,
+) -> GatewayResult<Done> {
+    send_with_gas(
+        env,
+        slot,
+        call,
+        false,
+        Some(keep),
+        GasSource::Tokenlon(measured),
+        (None, None),
+    )
+    .await
+}
+
+async fn send_with_gas(
+    env: &Env,
+    slot: &Slot,
+    (to, data, value): (impl Into<TxKind>, Bytes, U256),
+    with_tip: bool,
+    keep: Option<SwapGuard>,
+    gas_source: GasSource<'_>,
     (gas_tip, known): (Option<u128>, Option<&Map<String, Value>>),
 ) -> GatewayResult<Done> {
     let ctx = &env.ctx;
@@ -129,7 +167,9 @@ pub async fn send_tipped(
     let chain = super::super::node::chain_seen::ensure(ctx).await?;
     let ready = send::select(ctx, &env.stats)?;
     let price = super::tx_fee::price(env, &ready, gas_tip).await?;
-    if let Some(c) = cap.filter(|c| price.cap() > *c) {
+    if let GasSource::Node(Some(c)) = gas_source
+        && price.cap() > c
+    {
         let why = format!(
             "цена газа транзакции {price} wei выше предела пары maxGasPrice {c} wei — своп не отправлен"
         );
@@ -138,7 +178,12 @@ pub async fn send_tipped(
     let from = slot.from;
     let to: TxKind = to.into();
     let nonce = slot.nonce(ctx).await?;
-    let gas = tx::limit(ctx, from, to, &data, value).await?;
+    let gas = match gas_source {
+        GasSource::Tokenlon(measured) => {
+            measured.gas_limit(ctx, chain, from, (to, &data, value), price.cap())?
+        }
+        GasSource::Node(_) => tx::limit(ctx, from, to, &data, value).await?,
+    };
     // Решение 398: подписант — до отправки (кошелёк счёта и ключ); им же трекер подписывает отмены (Watch::key) — после
     // отправки ключ и маппинг кошельков не читаются.
     ctx.bound()?;
@@ -152,8 +197,9 @@ pub async fn send_tipped(
     let sign = |nonce: u64, gas: u64, call: (TxKind, U256, Bytes)| {
         price.sign(ctx, &key, "Подпись транзакции", chain, nonce, gas, call)
     };
-    let oracle = (super::super::send::gas_mode::read(ctx)?
-        == super::super::send::gas_mode::GasMode::OpStack)
+    let oracle = (matches!(gas_source, GasSource::Node(_))
+        && super::super::send::gas_mode::read(ctx)?
+            == super::super::send::gas_mode::GasMode::OpStack)
         .then(|| super::super::node::op_fees::Oracle::read(ctx))
         .transpose()?;
     let extra = if let Some(oracle) = oracle {
@@ -186,7 +232,9 @@ pub async fn send_tipped(
     // channel.cond_time_window_s нет — None, узел не спрашивается.
     let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
     if crate::gateway::settlement_intent::active() {
-        let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need)?;
+        let fee_only =
+            super::gas_fund::need_wei(U256::ZERO, price.cap(), gas, tip_cost).saturating_add(extra);
+        let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need, fee_only)?;
         let other = rfq.is_none();
         let hanji = super::super::hanji::execute::marker(ctx, signed.hash, nonce, &ready, need)?;
         let marker = rfq

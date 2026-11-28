@@ -50,6 +50,21 @@ pub async fn source_quote(
         .map_err(ApiError::gateway)
 }
 
+/// Персональная котировка Tokenlon привязана к выбранному Ethereum-кошельку уже при запросе курса.
+pub async fn tokenlon_quote(
+    State(st): State<AppState>,
+    Path((wallet, venue)): Path<(String, String)>,
+    Json(req): Json<crate::gateway::source_quote::Request>,
+) -> Result<Json<crate::gateway::source_quote::Preview>, ApiError> {
+    if let Some(terms) = &req.firm
+        && (terms.wallet != wallet || terms.allow_trade)
+    {
+        return Err(ApiError::bad("Для просмотра выберите тот же кошелёк и запросите только расчёт"));
+    }
+    let dex = super::wallets_dex::dex_for_at(&st, &wallet, Some(&venue)).await?;
+    dex.source_quote("tokenlon", req).await.map(Json).map_err(ApiError::gateway)
+}
+
 /// Совместимость с прежними адресами ручной проверки в этой ветке.
 pub async fn legacy_source_quote(
     st: State<AppState>,

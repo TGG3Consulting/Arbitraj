@@ -1309,6 +1309,16 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - if: matrix.market == 'textile-create-base'
         run: cargo test --locked --lib textile::tests
+      - if: matrix.market == 'tokenlon-ethereum-wallet'
+        run: |
+          npm ci --prefix ui --no-audit --no-fund
+          node --test ui/tests/tokenlonQuote.test.js
+          npm --prefix ui run build
+          python scripts/record_tokenlon_roles.py
+          git diff --exit-code -- tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json
+          cargo test --locked --lib tokenlon::
+          cargo test --locked --test settings_cases_guard
+          printf '%s\n' '{"chain":1,"source":"tokenlon"}' > "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'zeroex-wallet-ethereum'
         uses: dtolnay/rust-toolchain@stable
       - if: matrix.market == 'zeroex-wallet-ethereum'

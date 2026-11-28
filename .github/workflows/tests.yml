@@ -946,6 +946,10 @@ jobs:
           cmp "$RUNNER_TEMP/market.json" <(gzip -dc tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz)
       - if: matrix.market == 'ondo-ethereum-settlement'
         run: python scripts/record_ondo_ethereum_settlement.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'tokenlon-proof-o75'
+        run: |
+          cargo test --locked --lib expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots
+          echo '{"orders":101,"historical_balance_controls":8}' > "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'stelaxis-slot-tests'
         run: |
           npm ci --prefix ui --ignore-scripts --no-audit --no-fund

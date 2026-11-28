@@ -22,7 +22,11 @@ def capture(row):
     chain = int(read(url, "eth_chainId", []), 16)
     transaction = read(url, "eth_getTransactionByHash", [hash_])
     receipt = read(url, "eth_getTransactionReceipt", [hash_])
+    if transaction is None or receipt is None:
+        raise ValueError("Узел не вернул историческую транзакцию и квитанцию")
     block = read(url, "eth_getBlockByNumber", [receipt["blockNumber"], False])
+    if block is None:
+        raise ValueError("Узел не вернул канонический блок квитанции")
     assert chain == row["chain_id"]
     assert transaction["hash"] == receipt["transactionHash"] == hash_
     assert transaction["blockHash"] == receipt["blockHash"] == block["hash"] == row["block_hash"]
@@ -39,6 +43,26 @@ def capture(row):
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == "--ethereum":
+        original = next(row for row in json.loads(FILE.read_bytes()) if row["chain_id"]==1)
+        reverse = json.loads(FILE.with_name("ethereum_reverse.json").read_bytes())
+        observed = []
+        from urllib.error import URLError
+        for row in (original, reverse):
+            for rpc in dict.fromkeys(("https://mainnet.gateway.tenderly.co", row["rpc"], "https://ethereum-rpc.publicnode.com")):
+                trial = dict(row, rpc=rpc)
+                try:
+                    capture(trial)
+                except (URLError, OSError, ValueError, KeyError):
+                    continue
+                row = trial
+                break
+            else:
+                raise RuntimeError("Публичные узлы не вернули исходную транзакцию на " + row["block_hash"])
+            observed.append({key:row[key] for key in ("transaction_hash","block_hash","nonce","receipt")})
+        Path(sys.argv[2]).write_text(json.dumps(observed,separators=(",",":")),encoding="utf8")
+        sys.exit(0)
     rows = json.loads(FILE.read_text("utf8"))
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=len(rows)) as pool:

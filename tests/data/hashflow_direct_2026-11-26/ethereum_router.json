@@ -1,0 +1,37 @@
+{
+  "chainId": 1,
+  "source": "https://mainnet.gateway.tenderly.co",
+  "blockHash": "0x6453c4deaee12ea2b79b7332615fd3a1096472cf148d67a5ba3bd80662049160",
+  "tx": "0xafe6f9081a9bb73249d74c5c035de39d4696f69f20f1115aea7acda8a9bbd147",
+  "router": "0x55084ee0fef03f14a305cd24286359a35d735151",
+  "pool": "0x51199be500a8c59262478b621b1096f17638dc6f",
+  "runtime": "0x8fefab668813417df92b63415ae50420cb8b896a4d2ba760e5e31355485221a3",
+  "roles": [
+    {
+      "params": [
+        {
+          "to": "0x55084ee0fef03f14a305cd24286359a35d735151",
+          "data": "0xe816b39300000000000000000000000051199be500a8c59262478b621b1096f17638dc6f"
+        },
+        {
+          "blockHash": "0x6453c4deaee12ea2b79b7332615fd3a1096472cf148d67a5ba3bd80662049160",
+          "requireCanonical": true
+        }
+      ],
+      "result": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "params": [
+        {
+          "to": "0x51199be500a8c59262478b621b1096f17638dc6f",
+          "data": "0xf887ea40"
+        },
+        {
+          "blockHash": "0x6453c4deaee12ea2b79b7332615fd3a1096472cf148d67a5ba3bd80662049160",
+          "requireCanonical": true
+        }
+      ],
+      "result": "0x00000000000000000000000055084ee0fef03f14a305cd24286359a35d735151"
+    }
+  ]
+}

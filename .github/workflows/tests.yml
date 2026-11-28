@@ -1266,6 +1266,8 @@ jobs:
         run: |
           npm ci --prefix ui --no-audit --no-fund
           npm --prefix ui run build
+          python scripts/record_tokenlon_roles.py
+          git diff --exit-code -- tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json
           cargo test --locked --lib tokenlon::
           cargo test --locked --test settings_cases_guard
           printf '%s\n' '{"chain":1,"source":"tokenlon"}' > "$RUNNER_TEMP/market.json"

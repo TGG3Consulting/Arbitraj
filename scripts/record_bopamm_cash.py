@@ -23,7 +23,7 @@ def node_tx(to,name,types=(),values=(),value=0):
 def read_balance(t):
     return node_tx(t,"balanceOf(address)",["address"],[PAYER])
 
-def run(reader,base,probe,frame,cache):
+def run(reader,base,probe,frame,cache,production=False):
     tag={"blockHash":frame["parent"],"requireCanonical":True}
     height=frame["target"]
     slot_time=1606824023+frame["slot"]*12
@@ -46,7 +46,7 @@ def run(reader,base,probe,frame,cache):
     create2={"from":PAYER,"data":"0x"+probe["creation"]+encode(["address"],[base_addr]).hex(),"gas":"0x4c4b40"}
     patch={REGISTRY:{"stateDiff":frame["stateDiff"]}}
     def measure(source,target,size,bound,compound):
-        spender=probe_addr if compound else ROUTER
+        spender=base_addr if production else probe_addr if compound else ROUTER
         grants=[node_tx(source,"approve(address,uint256)",["address","uint256"],[spender,0]),
                 node_tx(source,"approve(address,uint256)",["address","uint256"],[spender,size])]
         if source==WETH:
@@ -56,10 +56,18 @@ def run(reader,base,probe,frame,cache):
         o=(leg,bytes.fromhex(tag["blockHash"][2:]),height,slot_time,source,target,size,bound)
         swap=(node_tx(probe_addr,"execute("+ORDER+",uint24)",[ORDER,"uint24"],[o,FEE]) if compound else
             node_tx(ROUTER,"swapViaVenueV1(address,address,address,uint256,uint256,address,uint256)",["address","address","address","uint256","uint256","address","uint256"],[AMM,source,target,size,bound,PAYER,slot_time]))
-        calls=[create1,create2,*grants,*reads,swap,*reads]
+        creates=[create1] if production else [create1,create2]
+        if production:
+            method="executeCash" if compound else "execute"
+            swap=node_tx(base_addr,method+"("+ORDER+")",[ORDER],[o])
+        tail=[swap] if production else []
+        calls=[*creates,*grants,*reads,swap,*reads,*tail]
         req={"blockStateCalls":[{"blockOverrides":{"time":hex(slot_time)},"stateOverrides":patch,"calls":calls}]}
         h,=reader.one("eth_simulateV1",[req,tag]);assert h["parentHash"]==frame["parent"] and int(h["number"],16)==height
         v=h["calls"];assert len(v)==len(calls)
+        if production:
+            assert v[-1]["status"]=="0x0"
+            v=v[:-1]
         assert all(c["status"]=="0x1" for c in v[:-4]+v[-3:])
         before=[int(x["returnData"],16) for x in v[-7:-4]]
         after=[int(x["returnData"],16) for x in v[-3:]]
@@ -69,24 +77,34 @@ def run(reader,base,probe,frame,cache):
             return {"outcome":"reverted","reason":str(mid.get("error",{}).get("message",""))[:130]}
         spent=before[0]-after[0];received=after[1]-before[1]
         assert spent==size and received>=bound and before[2]==after[2]
+        if production:
+            assert decode(["uint256","uint256"],bytes.fromhex(mid["returnData"][2:]))==(spent,received)
         if compound:
-            assert decode(["uint256"],bytes.fromhex(mid["returnData"][2:]))==(received,)
+            if not production: assert decode(["uint256"],bytes.fromhex(mid["returnData"][2:]))==(received,)
             b_in,b_out=(USDC,WETH) if source==USDT else (WETH,USDC)
             pair,=[x for x in mid["logs"] if x["address"].lower()==pool and x["topics"][:1]==[SWAP]]
             a0,a1,*_=decode(["int256","int256","uint160","uint128","int24"],bytes.fromhex(pair["data"][2:]))
             inter=-a0 if source==USDT else a0
             assert inter>0 and (a1==size if source==USDT else -a1==received)
-            fills=maker_fills(mid["logs"],b_in,b_out,probe_addr,inter if source==USDT else size,received if source==USDT else inter)
+            fills=maker_fills(mid["logs"],b_in,b_out,base_addr if production else probe_addr,inter if source==USDT else size,received if source==USDT else inter)
             venue=AMM
+        elif production:
+            venue=AMM
+            fills=maker_fills(mid["logs"],source,target,PAYER,spent,received) 
         else:
             amount,venue=decode(["uint256","address"],bytes.fromhex(mid["returnData"][2:]))
             assert amount==received
             fills=[]
         return {"outcome":"paid","spent":str(spent),"received":str(received),"gas":int(mid["gasUsed"],16),
-                "approval_gas":int(v[1+len(grants)]["gasUsed"],16),"venue":venue,"maker_fills":fills}
+                **({"logs":mid["logs"],"data":swap["data"],"runtime":v[0]["returnData"],"executor":base_addr,"leg":"0x"+leg.hex(),"minimum":str(bound),"duplicate_reverted":True} if production else {}),
+                "approval_gas":int(v[len(creates)+len(grants)-1]["gasUsed"],16),"venue":venue,"maker_fills":fills}
     rows=[]
     for source,target,size in [(WETH,USDT,5*10**17),(USDT,WETH,1000*10**6),(WETH,USDT,5*10**18),(USDT,WETH,10_000*10**6)]:
         combo=measure(source,target,size,1,True);direct=measure(source,target,size,1,False)
+        if production and direct["outcome"]=="paid":
+            floor=int(direct["received"])
+            assert measure(source,target,size,floor+1,False)["outcome"]=="reverted"
+            direct=measure(source,target,size,floor,False)
         if combo['outcome']=='paid':
             exact=int(combo['received'])
             assert measure(source,target,size,exact+1,True)['outcome']=='reverted'
@@ -110,5 +128,5 @@ if __name__=="__main__":
             frame=next(v[builder] for v in archive if v[builder].get("same_live_parent") and
                 v[builder].get("parent")==published_frame["parent"] and v[builder].get("stateDiff"))
             assert frame["registry"]==REGISTRY and frame["target"]==published_frame["target"] and frame["other_patched_accounts"]==0
-            results.append({"builder":builder,**run(reader,base,probe,frame,cache)})
+            results.append({"builder":builder,**run(reader,base,probe,frame,cache,production="--production" in sys.argv[4:])})
     Path(sys.argv[3]).write_text(json.dumps(results,separators=(",",":")))

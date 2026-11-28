@@ -29,7 +29,11 @@ STATE=["int256","int256","int256","address","int256","uint256","uint256","uint25
 
 def rpc(session,url,method,params):
     r=session.post(url,json={"id":1,"jsonrpc":"2.0","method":method,"params":params},timeout=40)
-    r.raise_for_status();v=r.json()
+    try:r.raise_for_status()
+    except requests.HTTPError as e:
+        # Только текст ошибки: к статусу добавляется тело ответа узла (адрес из ETH_ARCHIVE_RPC скрыт меткой, до 300 символов).
+        raise requests.HTTPError(f"{hide(str(e))}; тело ответа: {hide(r.text)[:300]}",response=r) from None
+    v=r.json()
     if "error" in v:raise ValueError((method,v["error"]))
     return v["result"]
 

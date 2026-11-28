@@ -138,7 +138,10 @@ pub async fn send_tipped(
     let from = slot.from;
     let to: TxKind = to.into();
     let nonce = slot.nonce(ctx).await?;
-    let gas = tx::limit(ctx, from, to, &data, value).await?;
+    let gas = match super::super::tokenlon::private_node::gas_limit(ctx,from,to,&data,value)? {
+        Some(measured)=>measured,
+        None=>tx::limit(ctx, from, to, &data, value).await?,
+    };
     // Решение 398: подписант — до отправки (кошелёк счёта и ключ); им же трекер подписывает отмены (Watch::key) — после
     // отправки ключ и маппинг кошельков не читаются.
     ctx.bound()?;

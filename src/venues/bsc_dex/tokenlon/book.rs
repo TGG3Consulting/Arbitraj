@@ -3,6 +3,7 @@ use super::{client, profile, routing::Ticket};
 use crate::{core::types::Side,gateway::events::{MarketEvent,SourceId},venues::bsc_dex::{parts::Parts,wallet}};
 use alloy_primitives::{Address,B256};
 use chrono::Utc;
+use futures_util::{stream,StreamExt};
 use rust_decimal::Decimal;
 use std::{collections::{BTreeMap,BTreeSet,HashMap},sync::{Arc,Mutex},time::{Duration,Instant}};
 use tokio::sync::mpsc;
@@ -70,7 +71,7 @@ pub(in crate::venues::bsc_dex) async fn run(p:Parts,out:mpsc::Sender<MarketEvent
     let mut settings=p.ctx.settings.subscribe();
     loop {
         let rev=p.ctx.settings.generation();
-        let config=super::enabled(&p.ctx).then(||{
+        let config=(super::enabled(&p.ctx) && super::private_node::configured(&p.ctx)).then(||{
             Some((profile::markets(&p.ctx)?,p.tokens.usdt(&p.ctx).ok()?,p.ctx.int("feed.stale_after_ms").ok()?.max(1)))
         }).flatten();
         let Some((markets,cash,age))=config else{
@@ -81,25 +82,40 @@ pub(in crate::venues::bsc_dex) async fn run(p:Parts,out:mpsc::Sender<MarketEvent
         let wallets:BTreeSet<_>=p.ctx.settings.accounts().rows().into_iter()
             .filter(|(row,_)|row!=crate::settings::accounts::ROW_PROBE).map(|(_,id)|id).collect();
         let clock=Instant::now();
-        for wallet_id in wallets {
-            let bound=p.ctx.with_account(&wallet_id);
-            let Ok(signer)=wallet::signer::signer(&bound) else{continue};
-            for market in markets.iter().filter(|m|m.quote_token==cash) {
-                let Ok(base_dec)=p.tokens.decimals(&bound,market.base_token).await else{continue};
-                for qty in &market.sizes {
-                    for (side,input,output) in [(Side::Buy,cash,market.base_token),(Side::Sell,market.base_token,cash)] {
-                        if p.ctx.settings.generation()!=rev {break;}
-                        let key=Key {wallet:wallet_id.clone(),base:market.base_token,quote:cash,buy:side==Side::Buy,qty:*qty};
-                        let query=client::Query {base:market.base.clone(),quote:market.quote.clone(),side,amount:*qty,base_dec,input,output};
-                        let at=Instant::now();
-                        let response=tokio::time::timeout(Duration::from_millis(age),client::rate(&bound,&signer,&query)).await;
-                        if rev!=p.ctx.settings.generation(){break;}
-                        if let Ok(Ok(rate))=response && rate>Decimal::ZERO && at.elapsed()<Duration::from_millis(age) {
-                            p.tokenlon.0.lock().unwrap_or_else(|e|e.into_inner()).rates.insert(key,Entry {generation:rev,at,rate});
-                            if out.send(p.tokenlon.event(&p,cash,age)).await.is_err(){return;}
-                        }
+        // Один клиент сериализует обращения каждого кошелька в своей STOMP-сессии.
+        // Перемежаем кошельки в очереди: медленный аккаунт не задерживает публикацию остальных.
+        let mut accounts=Vec::new();
+        for id in wallets {
+            if p.ctx.settings.generation()!=rev {break;}
+            let ctx=p.ctx.with_account(&id);
+            if let Ok(signer)=wallet::signer::signer(&ctx){accounts.push((id,ctx,Arc::new(signer)));}
+        }
+        let mut tasks=Vec::new();
+        for market in markets.iter().filter(|m|m.quote_token==cash){
+            let Ok(base_dec)=p.tokens.decimals(&p.ctx,market.base_token).await else {continue};
+            for qty in &market.sizes {
+                for (side,input,output) in [(Side::Buy,cash,market.base_token),(Side::Sell,market.base_token,cash)]{
+                    for (id,c,signer) in &accounts{
+                        let k=Key{wallet:id.clone(),base:market.base_token,quote:cash,buy:side==Side::Buy,qty:*qty};
+                        let q=client::Query{base:market.base.clone(),quote:market.quote.clone(),side,amount:*qty,base_dec,input,output};
+                        tasks.push((k,q,c.clone(),Arc::clone(signer)));
                     }
                 }
+            }
+        }
+        if !tasks.is_empty(){let _=p.gas.fees(&p.ctx,&p.heads).await;}
+        let mut completed=stream::iter(tasks).map(|(key,query,ctx,signer)|async move{
+            if ctx.settings.generation()!=rev || !super::enabled(&ctx) {return None;}
+            let at=Instant::now();
+            let rate=tokio::time::timeout(Duration::from_millis(age),client::rate(&ctx,&signer,&query)).await.ok()?.ok()?;
+            (ctx.settings.generation()==rev && rate>Decimal::ZERO && at.elapsed()<Duration::from_millis(age))
+                .then_some((key,Entry{generation:rev,at,rate}))
+        }).buffer_unordered(4);
+        while let Some(response)=completed.next().await{
+            if p.ctx.settings.generation()!=rev{break;}
+            if let Some((key,entry))=response{
+                p.tokenlon.0.lock().unwrap_or_else(|e|e.into_inner()).rates.insert(key,entry);
+                if out.send(p.tokenlon.event(&p,cash,age)).await.is_err(){return;}
             }
         }
         if let Ok(mut s)=p.tokenlon.0.lock() {

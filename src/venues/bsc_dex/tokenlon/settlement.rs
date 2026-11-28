@@ -50,25 +50,29 @@ pub(in crate::venues::bsc_dex) async fn trade(p:&Parts,req:TradeRequest,t:&Ticke
         || (coin==wire::WETH)!=exec::native::is_native(c,&req.asset) || req.remeasure.as_ref().is_some_and(|r|!r.any_executor) {return Err(fail());}
     let cost=req.qty.checked_mul(req.worst_price).ok_or_else(fail)?;
     let (coin_dec,cash_dec)=t.decs;
+    let mut proof=t.proof.clone();
     if buy {
         if num::to_decimal(terms.spent,cash_dec).is_none_or(|v|v>cost) || num::to_decimal(t.proof.net,coin_dec).is_none_or(|v|v<req.qty) {return Err(fail());}
+        proof.terms.minimum=super::super::quote::direct::ceil_units(req.qty,coin_dec).ok_or_else(fail)?;
     } else {
         let minimum=req.remeasure.as_ref().map_or(cost,|v|v.floor.max(cost));
         if num::to_decimal(terms.spent,coin_dec)!=Some(req.qty) || num::to_decimal(t.proof.net,cash_dec).is_none_or(|v|v<minimum) {return Err(fail());}
+        proof.terms.minimum=super::super::quote::direct::ceil_units(minimum,cash_dec).ok_or_else(fail)?;
     }
     let env=p.env();
     let hold=env.inflows.swap(c,pair.1,&|text|env.stats.emit(MarketEvent::Notice{
         venue:c.venue(),code:"dex.swap_waits_inflow".into(),text})).await?;
     let slot=p.nonces.acquire(c).await?;
     if slot.from!=owner || !valid(){return Err(fail());}
-    sim::run(c,&t.proof,&t.data).await?;
+    let (_,gas)=sim::run(c,&proof,&t.data).await?;
     if !valid(){return Err(fail());}
-    let saved=Saved{order:t.proof.clone(),calldata:keccak256(&t.data)};
+    let saved=Saved{order:proof,calldata:keccak256(&t.data)};
     let mut parse=exec::swap_ctx::SwapCtx::swap(owner,pair,t.decs,&[],None,None);
     parse.tokenlon=Some(Box::new(saved.clone()));
     parse.who=Some(super::LABEL.into());
     let raw=exec::txs::send(&env,&slot,wire::USER_PROXY,t.data.clone(),sim::value(&t.proof),false,Some(hold));
-    let done=hashflow::native_send(p,&req,t.proof.expiry,t.revision,&parse,raw).await?;
+    let measured=super::private_node::Measurement{owner,digest:saved.calldata,value:sim::value(&saved.order),gas};
+    let done=super::private_node::MEASUREMENT.scope(measured,hashflow::native_send(p,&req,t.proof.expiry,t.revision,&parse,raw)).await?;
     exec::market_receipt::check_module_cancel(c,&parse,&done).await.map_err(|e|parse.attach(e.with_tx(done.chain.clone())))?;
     if matches!(done.chain.outcome,TxOutcome::Included|TxOutcome::Reverted){
         let r=done.receipt.as_ref().ok_or_else(||parse.attach(c.err(ErrorCode::OutcomeUnknown,"Нет собственной квитанции Tokenlon").with_tx(done.chain.clone())))?;

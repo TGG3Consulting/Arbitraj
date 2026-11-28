@@ -41,7 +41,7 @@ fn signed(raw:&serde_json::Value,key:&PrivateKeySigner,i:Address,o:Address)->Opt
 }
 
 pub(in crate::venues::bsc_dex) async fn consider(p:&Parts,asset:&Asset,side:Side,qty:Decimal,old:GatewayResult<Quote>)->GatewayResult<Quote>{
-    if !super::enabled(&p.ctx) || qty<=Decimal::ZERO || quote_stage::settlement()
+    if !super::enabled(&p.ctx) || !super::private_node::configured(&p.ctx) || qty<=Decimal::ZERO || quote_stage::settlement()
         || old.as_ref().is_err_and(|e|e.code!=ErrorCode::NoRoute){return old;}
     let cutoff=if let Some(v)=old.as_ref().ok().filter(|q|q.qty==qty && q.fillable_qty==qty &&
         (!quote_stage::is_final() || q.route.as_ref().is_none_or(|r|r.executable))){
@@ -53,31 +53,33 @@ pub(in crate::venues::bsc_dex) async fn consider(p:&Parts,asset:&Asset,side:Side
 }
 async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Decimal>)->Option<Quote>{
     let c=&p.ctx;
+    if send::gas_mode::read(c).ok()?!=send::gas_mode::GasMode::Ethereum{return None;}
     let rev=c.settings.generation();
     let (base,quote)=market(p,asset)?;
     let depth=p.tokenlon.rates(p,base,quote,side);
     if depth.is_empty(){return None;}
     let buy=side==Side::Buy;
-    let taxes=direct::taxes(&p.quoting(),asset).ok()?;
-    let _=taxes;
+    direct::taxes(&p.quoting(),asset).ok()?;
     let head=p.heads.fresh(c).ok()?;
     p.lag.check(c).ok()?;
     let cap=c.dec("tokenlon.gas_budget_native").ok()?;
-    if cap<=Decimal::ZERO || send::tip(&send::select(c,&p.stats).ok()?).is_some(){return None;}
+    let ready=send::select(c,&p.stats).ok()?;
+    if cap<=Decimal::ZERO || ready.is_empty() || send::tip(&ready).is_some(){return None;}
     let ticker=gas_ticker::read(c).ok()?;
     let comparison=|net:Decimal|cutoff.is_none_or(|x|if buy {net<x} else {net>x});
+    let (i,o)=if buy {(quote,base)}else{(base,quote)};
+    let estimate=if quote_stage::is_final(){Decimal::ZERO}else{super::gas::indicative(p,head.number,i,o)?};
     // Лестница SDK хранит только измеренные размеры; окончательный запрос допускает и новый размер.
     let observed=depth.into_iter().find_map(|(n,rate)|(n==qty).then_some(rate));
     if !quote_stage::is_final() && observed.is_none(){return None;}
     let mut q=Quote {venue:c.venue(),asset:asset.clone(),side,qty,fillable_qty:qty,
         avg_price:observed.and_then(|r|if buy {Decimal::ONE.checked_div(r)}else{Some(r)}).unwrap_or(Decimal::ZERO),
-        costs:vec![Cost::new(CostKind::Gas,cap,ticker.clone(),false)],signal_route:None,at:Utc::now(),pick:Some(super::LABEL.into()),
+        costs:vec![Cost::new(CostKind::Gas,estimate,ticker.clone(),false)],signal_route:None,at:Utc::now(),pick:Some(super::LABEL.into()),
         route:Some(DexRoute {mode:RouteMode::RfqIndicative,legs:vec![],block:head.number,gas_units:0,executable:false,exec_note:Some(super::LABEL.into())})};
     if !quote_stage::is_final(){return comparison(hashflow::routing::total(p,&q).await?).then_some(q);}
     c.bound().ok()?;
     let key=wallet::signer::signer(c).ok()?;
     let m=profile::markets(c)?.into_iter().find(|m|m.base_token==base && m.quote_token==quote)?;
-    let (i,o)=if buy {(quote,base)}else{(base,quote)};
     let (db,dc)=tokio::try_join!(p.tokens.decimals(c,base),p.tokens.decimals(c,quote)).ok()?;
     let target=direct::ceil_units(qty,db)?;
     if num::to_decimal(target,db)?!=qty{return None;}
@@ -85,8 +87,7 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     let issued=client::firm(c,&key,&req).await.ok()?;
     let (mut proof,mut data)=signed(&issued.raw_order,&key,i,o)?;
     if buy && proof.net<target {
-        let denominator=10000u16.checked_sub(proof.fee)?;
-        let next=target.checked_mul(U256::from(10000))?.div_ceil(U256::from(denominator));
+        let next=gross_for_net(target,proof.fee)?;
         req.amount=num::to_decimal(next,db)?;
         if num::to_units(req.amount,db)?!=next{return None;}
         let fresh=client::firm(c,&key,&req).await.ok()?;
@@ -94,6 +95,14 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     }
     if (buy && proof.net<target) || (!buy && proof.terms.spent!=target) || !super::timely(c,proof.expiry){return None;}
     let (block,gas)=sim::run(c,&proof,&data).await.ok()?;
+    let gas_limit=send::tx::with_margin(c,gas.into(),c.dec("send.gas_limit_margin_pct").ok()?).ok()?;
+    let price=exec::tx_fee::price(&p.env(),&ready,None).await.ok()?;
+    let max_fee=exec::gas_fund::need_wei(U256::ZERO,price.cap(),gas_limit,None);
+    if max_fee>num::to_units(cap,18)? {return None;}
+    let native_value=sim::value(&proof);
+    let need=exec::gas_fund::need_wei(native_value,price.cap(),gas_limit,None);
+    let need=exec::gas_fund::add_native_reserve(c,native_value,need).ok()?;
+    exec::gas_fund::ensure(c,key.address(),need).await.ok()?;
     let mut pricing=p.quoting();
     pricing.gas=pricing.gas.for_quote(c,&p.heads).await.ok()?;
     let unit=exec::cycle_gas::priced(&pricing,key.address(),(wire::USER_PROXY,data.clone())).await.ok()?;
@@ -107,4 +116,27 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     if !comparison(hashflow::routing::total(p,&q).await?) || rev!=c.settings.generation() || !super::timely(c,proof.expiry) {return None;}
     p.tokenlon.save(Ticket{proof,data,qty,side,decs:(db,dc),revision:rev});
     Some(q)
+}
+
+fn gross_for_net(net:U256, fee:u16)->Option<U256>{
+    if fee>=10000 || net.is_zero(){return None;}
+    Some(net.checked_mul(U256::from(10000))?.div_ceil(U256::from(10000-fee)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn buy_gross_covers_requested_net_by_exactly_one_minimal_unit() {
+        for (target,fee) in [(40_000_000_000_000_000u64,30u16),(1_000_000_000,4),(101,30),(1,9999),(100,0)] {
+            let want=U256::from(target);
+            let gross=gross_for_net(want,fee).unwrap();
+            let paid=|v:U256| v*U256::from(10000-fee)/U256::from(10000);
+            assert!(paid(gross)>=want);
+            assert!(paid(gross-U256::from(1))<want);
+        }
+        assert_eq!(gross_for_net(U256::ZERO,10),None);
+        assert_eq!(gross_for_net(U256::from(100),10000),None);
+        assert_eq!(gross_for_net(U256::MAX,30),None);
+    }
 }

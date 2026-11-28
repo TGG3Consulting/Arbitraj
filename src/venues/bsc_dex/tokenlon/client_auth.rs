@@ -87,7 +87,7 @@ pub(super) async fn websocket(
         result: Option<&'a str>,
     }
     let reply: Session<'_> = serde_json::from_str(&body).map_err(|_| Failure::Credentials)?;
-    if reply.id != 1 || ctx.chain_id() != Some(1) {
+    if reply.id != 1 || !super::super::publisher_network(ctx.chain_id()) {
         return Err(Failure::Credentials);
     }
     socket_url(reply.result.ok_or(Failure::Credentials)?)

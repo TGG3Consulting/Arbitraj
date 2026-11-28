@@ -132,7 +132,7 @@ pub(super) async fn request(
     q: &Query,
     firm: bool,
 ) -> GatewayResult<Value> {
-    if ctx.chain_id() != Some(1) || !auth::allowed(&ctx.text("tokenlon.publisher_url")?) {
+    if !super::super::publisher_network(ctx.chain_id()) || !auth::allowed(&ctx.text("tokenlon.publisher_url")?) {
         return Err(Failure::Endpoint.error(ctx));
     }
     let owner = key.address();

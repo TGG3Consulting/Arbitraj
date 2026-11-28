@@ -204,7 +204,7 @@ fn tokenlon_pairs(st:&AppState, venue:&str)->Option<serde_json::Value> {
 
 fn tokenlon_configured(st: &AppState, venue: &str) -> bool {
     let at = crate::settings::read::At { venue: Some(venue), coin: None };
-    st.settings.integer("dex.evm_chain_id", at).is_ok_and(|chain| chain == crate::settings::evm_profiles::ETHEREUM_MAINNET)
+    crate::venues::bsc_dex::tokenlon::publisher_network(st.settings.integer("dex.evm_chain_id", at).ok())
         && st.settings.text("tokenlon.publisher_url", at).is_ok_and(|url| url == "https://publisher.tokenlon.im/rpc")
 }
 

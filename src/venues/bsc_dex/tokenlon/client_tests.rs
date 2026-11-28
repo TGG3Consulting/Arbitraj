@@ -14,6 +14,10 @@ fn capture() -> Value {
 
 #[test]
 fn ethereum_wallet_auth_signs_only_the_sdk_timestamp() {
+    let source = capture();
+    assert!(super::super::publisher_network(source["chain"].as_u64()));
+    assert!(!super::super::publisher_network(crate::settings::evm_profiles::profile("base_dex").map(|p|p.evm_chain_id)));
+    assert!(!super::super::publisher_network(None));
     let key = PrivateKeySigner::random();
     let timestamp = 1_795_778_236;
     let msg = auth::signed(timestamp, &key).unwrap();

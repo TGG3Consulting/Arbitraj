@@ -24,8 +24,12 @@ use rust_decimal::Decimal;
 use serde_json::json;
 
 pub(super) const LABEL: &str = "Tokenlon PMMV5";
+/// Сессия официального PMMV5 использует адреса Ethereum. В теме STOMP сеть не передаётся.
+pub(crate) fn publisher_network(chain: Option<u64>) -> bool {
+    chain == Some(crate::settings::evm_profiles::ETHEREUM_MAINNET)
+}
 pub(super) fn enabled(c:&super::ctx::Ctx)->bool {
-    c.chain_id()==Some(1) && c.flag("tokenlon.trading").unwrap_or(false)
+    publisher_network(c.chain_id()) && c.flag("tokenlon.trading").unwrap_or(false)
 }
 pub(super) fn timely(c:&super::ctx::Ctx,expiry:u64)->bool {
     c.int("tokenlon.min_validity_ms").is_ok_and(|n|n>0 && super::hashflow::routing::expiry_ok(expiry,n))

@@ -478,6 +478,15 @@ jobs:
           assert card["runtimeKeccak"] == evidence["runtime_keccak"]
           assert card["sourceBlock"] == evidence["block_hash"]
           PY
+      - name: Verify Base Raindex V6 wallet card from the pinned compiler and the captured constructor
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          node contracts/verify-raindex-base-card.mjs --check "$RUNNER_TEMP/raindex/RaindexWallet.json" ui/src/assets/raindex-base-create.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raindex-wallet-compiler
+          path: ${{ runner.temp }}/raindex/RaindexWallet.json
+          if-no-files-found: error
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
@@ -1191,7 +1200,18 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/epsilon" EpsilonWallet
           python scripts/record_epsilon_base.py "$RUNNER_TEMP/epsilon/EpsilonWallet.json" "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'raindex-')
+      - if: matrix.market == 'raindex-card-base'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          node contracts/verify-raindex-base-card.mjs --capture "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'raindex-card-base'
+        uses: actions/upload-artifact@v4
+        with:
+          name: raindex-base-create-compiler
+          path: ${{ runner.temp }}/raindex/RaindexWallet.json
+          if-no-files-found: error
+      - if: startsWith(matrix.market, 'raindex-') && matrix.market != 'raindex-card-base'
         shell: bash
         env:
           MARKET: ${{ matrix.market }}

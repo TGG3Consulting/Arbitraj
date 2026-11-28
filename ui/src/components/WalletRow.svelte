@@ -27,6 +27,7 @@
   import CheckConnection from './CheckConnection.svelte';
   import HashflowQuote from './HashflowQuote.svelte';
   import ClipperQuote from './ClipperQuote.svelte';
+  import TextileSource from './TextileSource.svelte';
   import SourcePrice from './SourcePrice.svelte';
   import AirSwapSource from './AirSwapSource.svelte';
   import HanjiSource from './HanjiSource.svelte';
@@ -116,7 +117,7 @@
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.fynd}<SourcePrice venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}
-  {#if w.address && dex && w.textile}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="textile" label="Textile FX" />{/if}
+  {#if w.address && dex && w.textile}<TextileSource venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && dex && w.clipper}<ClipperQuote venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.bopamm}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}

@@ -77,6 +77,12 @@ fn time(v: &Value) -> Option<u64> {
         .ok()
 }
 
+/// Выдача в целых токенах за один проданный токен с учётом комиссии расчёта.
+pub(super) fn output_per_input(paid: U256, di: u8, received: U256, dout: u8) -> Option<rust_decimal::Decimal> {
+    let units = crate::venues::bsc_dex::num::to_decimal;
+    units(received, dout)?.checked_div(units(paid, di)?)
+}
+
 pub(super) fn amounts(v: &Value, qty: U256, exact_out: bool) -> Option<(U256, U256, U256)> {
     let debit = uint(&v["takerPays"])?;
     let credit = uint(&v["buyAmount"])?;

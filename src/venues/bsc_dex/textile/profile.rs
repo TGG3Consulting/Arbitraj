@@ -18,10 +18,15 @@ pub(super) struct Profile {
     pub bps: U256,
     pub protected: bool,
 }
-pub(super) async fn at(ctx: &Ctx, h: Head, owner: Address) -> Option<Profile> {
-    let chain = ctx.chain_id()?;
+/// Строка прежнего wallet действует как общий выбор владельца площадки.
+pub(super) fn roles(
+    rows: &[String],
+    chain: u64,
+    owner: Address,
+) -> Option<HashMap<&str, (Address, B256)>> {
     let mut roles = HashMap::new();
-    for row in ctx.settings.list("textile.contracts", ctx.at()).ok()? {
+    let mut wallets = HashMap::new();
+    for row in rows {
         let mut x = row.split_whitespace();
         if x.next()?.parse::<u64>().ok()? != chain {
             return None;
@@ -29,16 +34,35 @@ pub(super) async fn at(ctx: &Ctx, h: Head, owner: Address) -> Option<Profile> {
         let role = x.next()?;
         let address = x.next()?.parse::<Address>().ok()?;
         let hash = x.next()?.parse::<B256>().ok()?;
-        if !matches!(role, "reactor" | "fee" | "permit2" | "wallet")
-            || address.is_zero()
-            || hash.is_zero()
-            || hash == keccak256([])
-            || x.next().is_some()
-            || roles.insert(role.to_string(), (address, hash)).is_some()
+        if address.is_zero() || hash.is_zero() || hash == keccak256([]) {
+            return None;
+        }
+        if role == "wallet" {
+            let payer = match x.next() {
+                Some(word) => Some(word.parse::<Address>().ok().filter(|a| !a.is_zero())?),
+                None => None,
+            };
+            if wallets.insert(payer, (address, hash)).is_some() {
+                return None;
+            }
+        } else if !matches!(role, "reactor" | "fee" | "permit2")
+            || roles.insert(role, (address, hash)).is_some()
         {
             return None;
         }
+        if x.next().is_some() {
+            return None;
+        }
     }
+    if let Some(&selected) = wallets.get(&Some(owner)).or_else(|| wallets.get(&None)) {
+        roles.insert("wallet", selected);
+    }
+    Some(roles)
+}
+pub(super) async fn at(ctx: &Ctx, h: Head, owner: Address) -> Option<Profile> {
+    let chain = ctx.chain_id()?;
+    let rows = ctx.settings.list("textile.contracts", ctx.at()).ok()?;
+    let roles = roles(&rows, chain, owner)?;
     let (reactor, hash) = *roles.get("reactor")?;
     let fee = roles.get("fee")?.0;
     let permit = roles.get("permit2")?.0;

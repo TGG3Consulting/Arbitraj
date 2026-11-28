@@ -110,6 +110,7 @@ async fn post(ctx: &Ctx, firm: bool, q: &Query, profile: Option<&Profile>) -> Ga
         .push("rfq")
         .push(if firm { "request" } else { "preview" });
     let mut req = client.post(url).json(&body);
+    let auth_requested = auth.is_some();
     if let Some(value) = auth {
         req = req.header(reqwest::header::AUTHORIZATION, value);
     }
@@ -123,6 +124,17 @@ async fn post(ctx: &Ctx, firm: bool, q: &Query, profile: Option<&Profile>) -> Ga
                 fail(ctx, "Нет полного ответа Textile. Статус запроса неизвестен")
             }
         })?;
+    if firm && matches!(status.as_u16(), 401 | 403) {
+        let detail = if auth_requested {
+            "проверьте ключ основной сети, trades:write и согласованные права rfq:aggregator для модуля"
+        } else {
+            "проверьте подтверждение контроля выбранного кошелька"
+        };
+        return Err(fail(
+            ctx,
+            &format!("Textile HTTP {}: {detail}", status.as_u16()),
+        ));
+    }
     if !status.is_success() {
         return Err(fail(
             ctx,

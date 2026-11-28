@@ -74,8 +74,8 @@ pub(in crate::venues::bsc_dex) async fn trade(
     };
     let who = wallet::signer::address(ctx)?;
     let profile = Profile::read(ctx)?;
-    if matches!(req.route.as_ref().map(|r|r.mode),Some(crate::core::types::RouteMode::NativeRfqSettlement(_)))
-        && !profile.supports_settlement() { return Err(reject()); }
+    let mixed = matches!(req.route.as_ref().map(|r|r.mode), Some(crate::core::types::RouteMode::NativeRfqSettlement(_)));
+    if !profile.accepts_trade(mixed) { return Err(reject()); }
     let module = profile.module.ok_or_else(reject)?.address;
     let q = &t.checked.firm;
     let o = &q.proof;

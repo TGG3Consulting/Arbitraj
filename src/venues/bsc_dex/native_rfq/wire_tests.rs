@@ -75,6 +75,13 @@ fn protected_receipt_needs_saved_digest_maker_and_wallet_credits() {
     let payer = addr(&archive["payer"]).unwrap();
     let rows = archive["observed"].as_array().unwrap();
     assert_eq!(rows.len(), 12);
+    use super::super::{profile::Profile, routing};
+    use crate::{core::types::Side, settings::recommendations::venue_value};
+    let cash: Address = venue_value("dex.settlement_contract","eth_dex").unwrap().parse().unwrap();
+    assert_eq!(venue_value("venue.quote_asset","eth_dex"),Some("USDT"));
+    let configured=venue_value("native_rfq.roles","eth_dex").unwrap();
+    let roles: Vec<_> = configured.split(',').collect();
+    let mut cash_legs=0;
     for r in rows {
         let p = Proof {
             pool,
@@ -88,6 +95,23 @@ fn protected_receipt_needs_saved_digest_maker_and_wallet_credits() {
             digest: r["offer_digest"].as_str().unwrap().parse().unwrap(),
         };
         let module = addr(&r["module"]).unwrap();
+        let role=format!("module {module} {}",r["runtime"].as_str().unwrap());
+        let mut full=roles.clone();
+        full.push(&role);
+        let selected=Profile::parse(&serde_json::json!(full)).unwrap();
+        assert!(selected.accepts_trade(false) && selected.accepts_trade(true));
+        if p.input == cash || p.output == cash {
+            let (coin,side)=if p.input==cash {(p.output,Side::Buy)} else {(p.input,Side::Sell)};
+            assert_eq!(routing::direction(coin,cash,side,false),Some((p.input,p.output)));
+            cash_legs+=1;
+        }
+        // В архиве есть хеш firm; отдельный тестовый хеш представляет поле подписанного внешнего вызова.
+        let outer=keccak256(b"Native Ethereum signed-call journal field");
+        let stored=serde_json::json!({"native_rfq":{"order":p,"module":module,"chain":1,
+            "calldata":outer,"minimum":p.minimum}});
+        let restored:crate::venues::bsc_dex::exec::swap_ctx::SwapCtx=serde_json::from_value(stored).unwrap();
+        let signed=restored.module_order().unwrap();
+        assert_eq!((signed.chain,signed.payer,signed.module,signed.calldata),(1,payer,module,outer));
         let logs: Vec<Log> = serde_json::from_value(r["logs"].clone()).unwrap();
         let received = quantity(&r["net"]).unwrap();
         assert_eq!(p.received(&logs, Some(module)), Some(received));
@@ -113,4 +137,5 @@ fn protected_receipt_needs_saved_digest_maker_and_wallet_credits() {
         assert!(p.received(&missing, Some(module)).is_none());
         assert!(p.received(&logs, Some(Address::ZERO)).is_none());
     }
+    assert_eq!(cash_legs,8);
 }

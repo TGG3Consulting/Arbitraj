@@ -151,8 +151,10 @@ pub(super) fn buy(
     let mut pcts = vec![Decimal::ZERO; n];
     // Нужный ВЫХОД текущего хопа (в его токене выхода): у последнего (отдаёт монету) — qty, иначе — вход следующего.
     let mut need_out = qty;
+    let mut check_forward = false;
     for i in (0..n).rev() {
         let leg = &legs[i];
+        check_forward |= i > 0 && buy_forward::legacy_spectra(leg);
         // keep выхода хопа: крючок пула всегда; у последнего хопа (монета) — ещё налог покупки монеты.
         let tax = if i == n - 1 { tax_keep } else { Decimal::ONE };
         let (pct, s) = match first.filter(|_| i == n - 1) {
@@ -165,7 +167,7 @@ pub(super) fn buy(
     }
     let mut swaps = complete(ctx, swaps)?;
     let budget = swaps[0].amount_in;
-    if legs.iter().skip(1).any(buy_forward::legacy_spectra) {
+    if check_forward {
         buy_forward::reconcile(ctx, legs, &mut swaps, &mut pcts)?;
     }
     let last = &swaps[n - 1];

@@ -6,18 +6,41 @@ use std::cell::Cell;
 
 #[test]
 fn earlier_paid_input_is_rechecked_on_the_current_state() {
-    let wanted=U256::from(10);
-    let spend=U256::from(12);
-    let cap=U256::from(100);
-    let hint=Some(spend);
-    let measured=|x| (x==spend).then_some(wanted);
-    assert_eq!(bounded_input(hint,cap,wanted,measured,|limit| {
-        assert_eq!(limit,spend); None
-    }),Some((spend,wanted)));
-    assert!(bounded_input(hint,cap,wanted,|_|Some(wanted-U256::ONE),|limit| {
-        assert_eq!(limit,cap); None
-    }).is_none());
-    assert!(bounded_input(hint,spend-U256::ONE,wanted,|_|panic!("outside cap"),|_|None).is_none());
+    let wanted = U256::from(10);
+    let spend = U256::from(12);
+    let cap = U256::from(100);
+    let hint = Some(spend);
+    let measured = |x| (x == spend).then_some(wanted);
+    assert_eq!(
+        bounded_input(hint, cap, wanted, measured, |limit| {
+            assert_eq!(limit, spend);
+            None
+        }),
+        Some((spend, wanted))
+    );
+    assert!(
+        bounded_input(
+            hint,
+            cap,
+            wanted,
+            |_| Some(wanted - U256::ONE),
+            |limit| {
+                assert_eq!(limit, cap);
+                None
+            }
+        )
+        .is_none()
+    );
+    assert!(
+        bounded_input(
+            hint,
+            spend - U256::ONE,
+            wanted,
+            |_| panic!("outside cap"),
+            |_| None
+        )
+        .is_none()
+    );
 }
 
 #[test]
@@ -67,9 +90,13 @@ fn recorded_targets_bound_the_forward_calls_for_both_pool_families() {
         "../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_intermediate.json.gz"
     ).as_slice())).unwrap();
     assert_eq!(extra["selector"], archive["selector"]);
-    let blind: Value = serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!(
-        "../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_blind.json.gz"
-    ).as_slice())).unwrap();
+    let blind: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+        include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_blind.json.gz"
+        )
+        .as_slice(),
+    ))
+    .unwrap();
     assert_eq!(blind["selector"], archive["selector"]);
     let mut peak = [0; 2];
     let mut checked = [0; 2];
@@ -163,8 +190,9 @@ fn recorded_targets_bound_the_forward_calls_for_both_pool_families() {
             assert!(paid <= num(&q["dx"]) && net >= target, "{} {q}", m["pool"]);
             peak[family] = peak[family].max(n.get());
             let known = num(&q["dx"]);
-            let (from_known, credit) = bounded_input(Some(known),U256::MAX-balances[i],target,payout,solve).unwrap();
-            assert!(from_known<=known && credit>=target, "{} {q}",m["pool"]);
+            let (from_known, credit) =
+                bounded_input(Some(known), U256::MAX - balances[i], target, payout, solve).unwrap();
+            assert!(from_known <= known && credit >= target, "{} {q}", m["pool"]);
             checked[family] += 1;
         }
     }

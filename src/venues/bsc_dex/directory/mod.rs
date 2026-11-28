@@ -8,6 +8,7 @@
 //! Настройки: index.* [bsc_dex] — docs/SETTINGS.md, раздел «Справочник пулов».
 
 pub mod banned_now;
+pub mod boot;
 pub mod check;
 pub mod due;
 pub mod fetch;
@@ -89,6 +90,8 @@ pub struct Snap {
     pub pool_twins: HashMap<String, Vec<(Address, Address)>>,
     /// Решение 295: развёрнутые пары многомонетных пулов по монете (multi_pair::expand) — источник справочника.
     pub multi: HashMap<Address, Vec<IndexedPool>>,
+    /// С2 (арбитр 28.11.2026): первый проход справочника подписки — индексатор и поиск по фабрикам (boot.rs).
+    pub boot: boot::Boot,
 }
 
 /// Справочник пулов. Дешёво клонируется.

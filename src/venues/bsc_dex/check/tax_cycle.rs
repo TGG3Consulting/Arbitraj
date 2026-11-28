@@ -144,6 +144,9 @@ pub async fn taxes(
             // Свои пулы дочитались или появился глубокий пул, пока шла прошлая проверка (сигнал «пул готов» пришёл без
             // ждущего и потерян — notify_waiters) — сразу. Живой бот 28.11.2026 (base_dex): пулы от поиска по фабрикам
             // дочитывались во время проверки, промежуточные WETH и cbBTC в Why::NoPool ждали до ручного «Перепроверить».
+            // С2: первый проход справочника мог окончиться без новой проверки (поиск по фабрикам ничего не нашёл) —
+            // сводка первого прохода не ждёт следующего итога монеты.
+            settle(&p, &Pass::default(), &mut sum).await;
             let pending = |a: Address| p.loading.pending(&p, a);
             let mut now = tax_wait::due_now(&waiting, pending, |a| has_deep(&p, &a));
             // Отметка «отстают» уже снята — ждавшие её сразу (сигнал мог прийти до постановки в ожидание).
@@ -214,8 +217,10 @@ async fn sleep_opt(d: Option<Duration>) {
 /// Учитывает проход в сводке первого прохода; пора — одна сводка в журнал и CheckPass ядру (core/first_pass.rs — одно
 /// сводное уведомление). Ошибок нет.
 async fn settle(p: &Pools, pass: &Pass, sum: &mut First) {
+    // С2: не раньше конца первого прохода справочника подписки (directory/boot.rs).
+    let ready = super::super::directory::boot::complete(&p.ctx);
     let Some([ok, failed, waiting, not_configured, loading]) =
-        sum.tally(pass, |a| p.loading.stuck_only(p, a))
+        sum.tally_when(pass, |a| p.loading.stuck_only(p, a), ready)
     else {
         return;
     };

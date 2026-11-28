@@ -15,6 +15,8 @@ use crate::settings::live::Watch;
 pub(super) struct Retry {
     coins: HashSet<Address>,
     at: Option<Instant>,
+    /// С2: сколько сообщений канала забрано с начала подписки (directory/boot.rs handled).
+    received: u64,
 }
 
 /// Настройки требуют проверить весь справочник, событие монеты или повтор — только указанное множество.
@@ -48,6 +50,11 @@ impl Retry {
         if self.coins.is_empty() {
             self.at = None;
         }
+    }
+
+    /// С2: сколько сообщений канала «монета обновлена» забрано с начала подписки. Ошибок нет.
+    pub(super) fn received(&self) -> u64 {
+        self.received
     }
 
     /// Если интервал не задан, повтор разбудит изменение настроек. Уже назначенный срок сохраняется.
@@ -89,9 +96,11 @@ impl Retry {
             change = changes.next_batch() => change.map(|_| Work::All),
             first = rx.recv() => {
                 let mut coins = HashSet::from([first?]);
+                self.received += 1;
                 // Новые поступления не продлевают сбор пачки бесконечно.
                 for _ in 0..rx.len() {
                     let Ok(c) = rx.try_recv() else { break };
+                    self.received += 1;
                     coins.insert(c);
                 }
                 Some(Work::Coins(coins))

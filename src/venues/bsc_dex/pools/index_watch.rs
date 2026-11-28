@@ -4,6 +4,7 @@
 //! (вид DEX, адреса, включатель — без перезапуска; пачка изменений — одна перепроверка, решение 279). Если узел не
 //! ответил на часть проверки, её монеты повторяются через dex.verify_retry_s. Своя комиссия пар V2 — в реестр;
 //! её же перечитывает сверка с квотером (refresh_fees).
+//! С2 (ревью 28.11.2026): после обработки — счёт забранных монет в первый проход справочника (directory/boot.rs handled).
 //! Кто вызывает: pools/market.rs (watch), check/quoter_cycle.rs (refresh_fees).
 //! От чего зависит: ctx.rs, index.rs, verify.rs, attach.rs, created.rs (Watch), discover.rs, families.rs,
 //! directory (pool_key), settings/live.rs, check/recheck.rs.
@@ -16,7 +17,7 @@ use crate::settings::live::Watch as Changes;
 use crate::storage::journal::Level;
 
 use super::super::check::recheck::Recheck;
-use super::super::directory::pool_key;
+use super::super::directory::{boot, pool_key};
 use super::attach::attach;
 use super::created::Watch;
 use super::discover::{Found, against};
@@ -47,6 +48,8 @@ pub(super) async fn watch(
             Err(e) => {
                 let msg = format!("Справочник: проверка пулов не выполнена: {}", e.message);
                 p.ctx.log(Level::Warn, "dex.index", msg, None).await;
+                // С2: монеты забраны и обработаны (неудача — повтор по изменению настроек), счёт первого прохода.
+                boot::handled(&p.ctx, retry.received());
                 continue;
             }
         };
@@ -67,6 +70,8 @@ pub(super) async fn watch(
         if n > 0 {
             wake.new_pools();
         }
+        // С2: отправленные источниками монеты обработаны — пулы в «загружаются» (directory/boot.rs).
+        boot::handled(&p.ctx, retry.received());
     }
 }
 

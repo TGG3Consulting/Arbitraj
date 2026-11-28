@@ -77,6 +77,8 @@ pub async fn subscribe(
     let all = market_mids::with_mids(&coins, &mid_list);
     // Справочник пулов от индексатора (решение 58): сохранённый — проверка на узле до первого поиска, обновления — задачей.
     // Поиск по фабрикам на своём узле (решение 121, C3) — вторая задача справочника, тот же канал «монета обновлена».
+    // С2 (арбитр 28.11.2026): первый проход справочника этой подписки — заново; окончен — «пул готов» (directory/boot.rs).
+    super::super::directory::boot::start(&p.ctx, p.signals.ready.clone());
     let (refresh, dir_rx, retry_coins) = index::begin(&p.ctx, &all, usdt, &mid_list).await;
     let mut retry = super::index_retry::Retry::default();
     retry.checked(&p.ctx, None, retry_coins);

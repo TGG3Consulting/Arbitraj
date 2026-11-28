@@ -10,6 +10,7 @@
 //! стирается (пары у фабрики не удаляются); выключили — справочник фабрик очищается (подключённые пулы слушаются).
 //! Ревью 28.11.2026 (Б4): найденное сохраняется в SQLite (directory/store_factory.rs) и восстанавливается при старте
 //! подписки до стартовой проверки на узле (directory/refresh.rs restore).
+//! С2 (ревью 28.11.2026): конец прохода и отправленные монеты — в счёт первого прохода справочника (directory/boot.rs).
 //! Решение 449: начало прохода — в итоге (FactoryScan.started) и в журнал: список DEX и их настройки читаются в начале
 //! прохода, итог (at, заметки) пишется в конце — без времени начала заметка «не подключена» у DEX, подключённой во
 //! время долгого прохода, выглядела как ошибка настроек. Изменение dex.* во время прохода даёт следующий проход.
@@ -34,6 +35,7 @@ use crate::settings::live::Watch;
 use crate::storage::journal::Level;
 
 use super::super::ctx::Ctx;
+use super::super::directory::boot;
 use super::super::directory::gt_parse::IndexedPool;
 use super::super::node::call;
 use super::factory_ask::{Q, decode_q};
@@ -54,6 +56,9 @@ pub async fn run(
     let mut w = Watch::new(ctx.settings.subscribe(), names);
     loop {
         let retry = pass(&ctx, &coins, &quotes, &tx).await;
+        // С2: проход поиска по фабрикам окончен (найдено, выключен или не выполнен) — первый проход справочника его больше
+        // не ждёт (directory/boot.rs).
+        boot::source_done(&ctx, boot::Source::Factory);
         let pause = async {
             match retry {
                 Some(d) => tokio::time::sleep(d).await,
@@ -227,7 +232,7 @@ async fn pass(
     );
     ctx.log(Level::Info, "dex.index", msg, None).await;
     for coin in fresh {
-        let _ = tx.send(coin);
+        boot::send(ctx, tx, coin);
     }
     if no_answer > 0 {
         return ctx.int("dex.verify_retry_s").ok().map(Duration::from_secs);

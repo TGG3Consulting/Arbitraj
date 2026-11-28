@@ -1,0 +1,143 @@
+{
+  "chain_id": 8453,
+  "height": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "hook": "0x752e82933b1629cdf1a50f4d71f8d1c9eb1c7a80",
+  "rpc": "https://mainnet.base.org",
+  "runtime_bytes": 7543,
+  "runtime_keccak256": "0x09b665d8d7abf5fdad1f2b3bac6eb4229fbd25df1278ebc363fbaec46c1aa4a9",
+  "code_excluding_metadata_bytes": 7490,
+  "solidity_metadata_cbor_hex": "a26469706673582212204301b7def98180f6f5aa359606077799d8d0e007860f1a9dc0cddbbde5c58d4464736f6c634300081a",
+  "ipfs_metadata_cidv0": "QmSrDYZLnUtR83QLFwwdGofNo76wzJrofeAsSLfRpt4gk3",
+  "compiler_version_from_trailer": "0.8.26",
+  "runtime_appearance": {
+    "before": {
+      "block": 50401540,
+      "hash": "0xfd4bd6ec81ffc22da4fa89f915a2f259656b00d7c3db892cb707cd41ed43a96e",
+      "code_bytes": 0
+    },
+    "after": {
+      "block": 50401541,
+      "hash": "0x8d7dbd7cd942cc12ac7c0230fa989653b5774cb8e370611cd4aafeba3be87e57",
+      "timestamp": 1787592429,
+      "code_keccak256": "0x09b665d8d7abf5fdad1f2b3bac6eb4229fbd25df1278ebc363fbaec46c1aa4a9"
+    },
+    "log_endpoint": "https://base.gateway.tenderly.co",
+    "logs_emitted_by_hook": [
+      {
+        "transaction_hash": "0x06f5cdae3897d29892021f71ae2f155e059ed579115128b275fa0daeba44d802",
+        "index": 2033,
+        "topics": [
+          "0x3cd5ec01b1ae7cfec6ca1863e2cd6aa25d6d1702825803ff2b7cc95010fffdc2"
+        ],
+        "data": "0x0000000000000000000000000b7b28aea291c1d759e0208f2757ee0d9c49a8f0000000000000000000000000498581ff718922c3f8e6a244956af099b2652b2b"
+      }
+    ],
+    "event_transaction": {
+      "hash": "0x06f5cdae3897d29892021f71ae2f155e059ed579115128b275fa0daeba44d802",
+      "from": "0x81a1566dddf4ce0705ae6d09571561e3f3825fde",
+      "to": "0x752e82933b1629cdf1a50f4d71f8d1c9eb1c7a80",
+      "transactionIndex": "0x162",
+      "blockHash": "0x8d7dbd7cd942cc12ac7c0230fa989653b5774cb8e370611cd4aafeba3be87e57",
+      "status": "0x1"
+    }
+  },
+  "source_checks": {
+    "sourcify": {
+      "url": "https://sourcify.dev/server/v2/contract/8453/0x752e82933b1629cdf1a50f4d71f8d1c9eb1c7a80",
+      "status": 404,
+      "body": {
+        "match": null,
+        "creationMatch": null,
+        "runtimeMatch": null,
+        "chainId": "8453",
+        "address": "0x752E82933B1629Cdf1A50F4D71F8D1C9Eb1C7A80"
+      }
+    },
+    "blockscout_bytecode_db": {
+      "url": "https://eth-bytecode-db.services.blockscout.com/api/v2/bytecodes/sources:search",
+      "method": "POST",
+      "bytecode_type": "DEPLOYED_BYTECODE",
+      "submitted_runtime_keccak256": "0x09b665d8d7abf5fdad1f2b3bac6eb4229fbd25df1278ebc363fbaec46c1aa4a9",
+      "status": 200,
+      "response": {
+        "sources": []
+      }
+    },
+    "ipfs_provider_lookup": {
+      "url": "https://delegated-ipfs.dev/routing/v1/providers/QmSrDYZLnUtR83QLFwwdGofNo76wzJrofeAsSLfRpt4gk3",
+      "status": 200,
+      "providers_returned": 0
+    },
+    "public_umia_repository": {
+      "url": "https://github.com/umiafinance/protocol",
+      "branches_and_tags": {
+        "tags/v1.2.1": "3165f5a5bdaa23a83fbfd4894523e7ca84d53a14",
+        "tags/v1.2.0": "a9896916d61506f188df0ff3d026a86f9dcf503a",
+        "tags/v1.1.0": "ac59fdff2c8603ad642f2e73772871e6e0b79807",
+        "tags/v1.0.0": "14db0636ac3b4c01c545369d27dcef6ad9d39953",
+        "branches/main": "3165f5a5bdaa23a83fbfd4894523e7ca84d53a14",
+        "branches/sync/20260915-154354-303e96631": "00f851e55a046a16fa75219686e9f530fb62c868",
+        "branches/sync/20261029-142709-d6d366fcc": "4fe97df91c2a0b0f20b30908472e8898f28cffb4",
+        "branches/sync/20261029-171312-ff54fa235": "c2c9f1e62721a62a7ef132324b1c8488448c1499",
+        "branches/sync/20261119-143750-edf96a0ff": "0c9a78a4742813f48c6abd037336843665937589",
+        "branches/sync/20261123-124031-9b11b1e11": "74ed1ad2da635b768d43b3d903290972e04cbf81"
+      },
+      "hook_source_blobs_by_commit": {
+        "ac59fdff2c8603ad642f2e73772871e6e0b79807": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d"
+        },
+        "c2c9f1e62721a62a7ef132324b1c8488448c1499": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        },
+        "74ed1ad2da635b768d43b3d903290972e04cbf81": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        },
+        "14db0636ac3b4c01c545369d27dcef6ad9d39953": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d"
+        },
+        "00f851e55a046a16fa75219686e9f530fb62c868": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d"
+        },
+        "3165f5a5bdaa23a83fbfd4894523e7ca84d53a14": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        },
+        "a9896916d61506f188df0ff3d026a86f9dcf503a": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        },
+        "0c9a78a4742813f48c6abd037336843665937589": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        },
+        "4fe97df91c2a0b0f20b30908472e8898f28cffb4": {
+          "src/periphery/UmiaHook.sol": "a9b9f403039154f6f65b9345fafc89d751661e1d",
+          "src/periphery/UmiaHookV2.sol": "35ca1b87618a33af5a2b076e684a13344ef0d3f9"
+        }
+      },
+      "compared_builds": "umia_base_sources.json",
+      "early_hook_matches": []
+    },
+    "scope": "Public verification services and release source comparison. No published source linked to this runtime was established. An unresolved IPFS CID is not a source match."
+  },
+  "pools": [
+    {
+      "name": "Koi3 TEST",
+      "venture": "0x815a39eb6ec71b64a1866af8ab356fb0cc6fae1e",
+      "pool_id": "0xca963dba58b361b7d4133e81531c09303173ef8266f3e3d9bcc5df092de73fb5",
+      "liquidity_raw": "0"
+    },
+    {
+      "name": "Koi3 TEST",
+      "venture": "0x8a4db349159b99608ad04704705b14b27ad9116c",
+      "pool_id": "0xdf98c75848d226c7e0581e11540f89b1a1d575ddc12fb7dcbd41472055fe4988",
+      "liquidity_raw": "0"
+    }
+  ]
+}

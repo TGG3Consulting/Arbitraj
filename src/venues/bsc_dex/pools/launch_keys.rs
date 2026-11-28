@@ -82,6 +82,22 @@ fn shape(f: &Family, key: &PoolKey) -> bool {
         }
 }
 
+/// Полный ABI PoolKey из профиля, проверенный по форме этой семьи.
+pub(super) fn decode(f: &Family, raw: &[u8]) -> Option<PoolKey> {
+    if raw.len() != 160 {
+        return None;
+    }
+    let k = IPositionManagerKeys::poolKeysCall::abi_decode_returns_validate(raw).ok()?;
+    let key = PoolKey::Uniswap(UniswapPoolKeyData {
+        currency0: k.currency0,
+        currency1: k.currency1,
+        fee: k.fee.to(),
+        tick_spacing: k.tickSpacing,
+        hooks: k.hooks,
+    });
+    shape(f, &key).then_some(key)
+}
+
 pub(super) fn configured(ctx: &Ctx, f: &Family, id: B256) -> GatewayResult<PoolKey> {
     let mut selected = None;
     for s in ctx.dex_list("dex.launch_pool_keys", f.id)? {
@@ -89,22 +105,13 @@ pub(super) fn configured(ctx: &Ctx, f: &Family, id: B256) -> GatewayResult<PoolK
         if keccak256(&raw) != id {
             continue;
         }
-        if selected.is_some() || raw.len() != 160 {
+        if selected.is_some() {
             return Err(invalid(ctx));
         }
-        let k = IPositionManagerKeys::poolKeysCall::abi_decode_returns_validate(&raw)
-            .map_err(|_| invalid(ctx))?;
-        selected = Some(PoolKey::Uniswap(UniswapPoolKeyData {
-            currency0: k.currency0,
-            currency1: k.currency1,
-            fee: k.fee.to(),
-            tick_spacing: k.tickSpacing,
-            hooks: k.hooks,
-        }));
+        selected = Some(decode(f, &raw).ok_or_else(|| invalid(ctx))?);
     }
     selected
-        .or_else(|| super::deli_keys::preimage(id))
-        .filter(|k| shape(f, k))
+        .or_else(|| super::deli_keys::preimage(id).filter(|k| shape(f, k)))
         .ok_or_else(|| invalid(ctx))
 }
 

@@ -96,3 +96,41 @@ fn hub_spot_vaults_and_wallets_match_physical_currencies() {
         assert_eq!(accepted.iter().filter(|p| p.0 == spot["id"]).count(), 16);
     }
 }
+
+#[test]
+fn first_run_routes_match_canonical_spot_pools_and_payments() {
+    let profiles: Value = serde_json::from_str(include_str!("../config/first_run_dex.json")).unwrap();
+    let profile = profiles.as_array().unwrap().iter()
+        .find(|p| p["id"] == "umia-base").unwrap();
+    let cfg = &profile["settings"];
+    let directory = archive(include_bytes!("data/first_run_dex_2026-11-26/umia_base_directory.json.gz"));
+    let history = archive(include_bytes!("data/first_run_dex_2026-11-26/umia_base_history.json.gz"));
+    let payments = archive(include_bytes!("data/first_run_dex_2026-11-26/umia_base_wallets.json.gz"));
+    assert_eq!(profile["chain_id"], directory["chain_id"]);
+    assert_eq!(cfg["dex.factory"], directory["hub"]);
+    for role in ["dex.pool_manager", "dex.state_view", "dex.universal_router", "dex.permit2", "dex.quoter"] {
+        assert_eq!(cfg[role], payments["roles"][role], "{role}");
+    }
+    let registered: BTreeSet<_> = directory["rows"].as_array().unwrap().iter()
+        .chain(history["retired"].as_array().unwrap())
+        .filter_map(|r| r["id"].as_str()).collect();
+    let keys = cfg["dex.launch_pool_keys"].as_array().unwrap();
+    let configured: BTreeSet<String> = keys.iter().map(|k| {
+        let key: alloy_primitives::Bytes = k.as_str().unwrap().parse().unwrap();
+        assert_eq!(key.len(), 5 * 32);
+        alloy_primitives::keccak256(key).to_string()
+    }).collect();
+    assert_eq!(keys.len(), registered.len());
+    assert_eq!(registered, configured.iter().map(String::as_str).collect());
+    for role in cfg["dex.launch_roles"].as_array().unwrap() {
+        let parts: Vec<_> = role.as_str().unwrap().split('@').collect();
+        let [_, address, hash] = parts.as_slice() else { panic!("invalid role {role}") };
+        let deployed = if *address == history["retired"][0]["vault"].as_str().unwrap() {
+            &history["retired"][0]["code"]
+        } else {
+            &directory["contracts"][*address]
+        };
+        assert!(deployed["bytes"].as_u64().unwrap() > 0);
+        assert_eq!(deployed["keccak256"].as_str().unwrap(), *hash);
+    }
+}

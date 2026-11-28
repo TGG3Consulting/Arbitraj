@@ -294,6 +294,7 @@ mod basestonk_directory;
 #[cfg(test)]
 mod basestonk_tests;
 mod umia;
+mod umia_seeds;
 mod launch_ladder;
 pub(super) mod deli_cl;
 mod deli_keys;

@@ -116,6 +116,7 @@ async fn pass(
     Box::pin(super::ambient_directory::scan(ctx,coins,&quote_list,&mut extra)).await;
     super::euler_directory::extend(ctx,coins,&quote_list,&mut extra);
     super::infinity_seeds::extend(ctx, coins, &quote_list, &mut extra);
+    super::umia_seeds::extend(ctx, coins, &quote_list, &mut extra);
     for (coin, list) in extra.found {
         found.entry(coin).or_default().extend(list);
     }

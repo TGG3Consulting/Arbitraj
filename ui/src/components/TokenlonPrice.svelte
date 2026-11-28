@@ -40,6 +40,7 @@
   {#if error}<p role="alert">{error}</p>{/if}
   {#if answer}
     <p role="status">Расход {answer.spent_raw} ({answer.input}). К получению {answer.received_raw} ({answer.output}). Суммы в минимальных единицах активов.</p>
+    {#if answer.details?.private_node_entered === false}<p>Для автоматической оплаты укажите собственный узел Ethereum в tokenlon.local_rpc.</p>{/if}
     {#if answer.details?.stage === 'indicative'}<p>Предварительная цена. Для суммы после комиссии запросите условия маркетмейкера.</p>{/if}
     {#if answer.details?.stage === 'maker_order'}<p>Маркетмейкер подписал условия. Комиссия Tokenlon — {answer.fee?.amount_raw} минимальных единиц получаемого актива. Фактическое исполнение ещё предстоит.</p>{/if}
     {#if answer.details?.native_input}<p>Оплата с баланса ETH этого кошелька.</p>{:else if answer.details?.native_output}<p>Выплата поступает на баланс ETH этого кошелька.</p>{/if}

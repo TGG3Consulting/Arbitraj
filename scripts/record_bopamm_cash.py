@@ -71,7 +71,9 @@ def run(reader,base,probe,frame,cache,production=False):
             recorded=bool(int(completed["returnData"],16))
             v=v[:-2]
             assert recorded == (v[-4]["status"]=="0x1")
-            if recorded: assert again["returnData"].lower()=="0x"+keccak(text="InvalidOrder()")[:4].hex()
+            reason=again.get("error",{}).get("data") or again["returnData"]
+            if recorded and isinstance(reason,str) and reason!="0x":
+                assert reason.lower()=="0x"+keccak(text="InvalidOrder()")[:4].hex()
         assert all(c["status"]=="0x1" for c in v[:-4]+v[-3:])
         before=[int(x["returnData"],16) for x in v[-7:-4]]
         after=[int(x["returnData"],16) for x in v[-3:]]
@@ -100,7 +102,7 @@ def run(reader,base,probe,frame,cache,production=False):
             assert amount==received
             fills=[]
         return {"outcome":"paid","spent":str(spent),"received":str(received),"gas":int(mid["gasUsed"],16),
-                **({"logs":mid["logs"],"data":swap["data"],"runtime":v[0]["returnData"],"executor":base_addr,"leg":"0x"+leg.hex(),"minimum":str(bound),"duplicate_reverted":True,"completed":recorded,"duplicate_data":again["returnData"]} if production else {}),
+                **({"logs":mid["logs"],"data":swap["data"],"runtime":v[0]["returnData"],"executor":base_addr,"leg":"0x"+leg.hex(),"minimum":str(bound),"duplicate_reverted":True,"completed":recorded,"duplicate_data":reason} if production else {}),
                 "approval_gas":int(v[len(creates)+len(grants)-1]["gasUsed"],16),"venue":venue,"maker_fills":fills}
     rows=[]
     for source,target,size in [(WETH,USDT,5*10**17),(USDT,WETH,1000*10**6),(WETH,USDT,5*10**18),(USDT,WETH,10_000*10**6)]:

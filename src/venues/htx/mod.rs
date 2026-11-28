@@ -122,9 +122,17 @@ impl Htx {
 
 #[async_trait]
 impl Venue for Htx {
+    /// Зачисление депозита на spot account. Документация (https://huobiapi.github.io/docs/spot/v1/en/): состояние
+    /// депозита confirmed — «the user can transfer and trade» (#search-for-existed-withdraws-and-deposits); тип deposit
+    /// есть в истории счёта по account-id (#get-account-history); фондового счёта среди типов счетов нет (Glossary).
+    /// Прямой фразы «депозит зачисляется на spot» в документации нет — открытый вопрос Тиграну (README.md). Возвращает
+    /// true, ошибок нет.
     fn supports_settlement_credit(&self) -> bool {
         true
     }
+    /// Вывод со своим client-order-id («idempotent verification will be performed», POST /v1/dw/withdraw/api/create),
+    /// сохранённым до POST вместе с условиями (transfers.rs), и поиском GET /v1/query/withdraw/client-order-id
+    /// (https://huobiapi.github.io/docs/spot/v1/en/#create-a-withdraw-request). Возвращает true, ошибок нет.
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }
@@ -147,6 +155,10 @@ impl Venue for Htx {
     fn settlement_account(&self) -> GatewayResult<String> {
         crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
     }
+    /// Ордер конверсии: buy-ioc / sell-ioc со своим client-order-id (trade.rs, before_send до POST); сверка — только
+    /// GET /v1/order/orders/getClientOrder (order_state::inspect; «within 8 hours», отменённый — 2 часа); сумма
+    /// котируемой — filled-cash-amount «The filled total in quote currency»
+    /// (https://huobiapi.github.io/docs/spot/v1/en/#get-the-order-detail-of-an-order-based-on-client-order-id).
     fn supports_settlement_order(&self) -> bool {
         true
     }

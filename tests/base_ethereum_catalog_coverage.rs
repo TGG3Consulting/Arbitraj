@@ -40,10 +40,12 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
             assert!(id.parse::<u64>().is_ok() && ids.insert(id), "{key} {id}");
             let volume = cells.nth(1).unwrap();
             let decision = row.rsplit('|').nth(1).unwrap().trim();
-            if decision.starts_with("спот") {
+            // Статус шага 4 стоит перед исходной классификацией сбора; счётчики ниже — по ней.
+            let class = source_class(decision);
+            if class.starts_with("спот") {
                 spot += 1;
-                provider += usize::from(decision.starts_with("спот через провайдера"));
-                if let Some(suffix) = decision.strip_prefix("спот · профиль `") {
+                provider += usize::from(class.starts_with("спот через провайдера"));
+                if let Some(suffix) = class.strip_prefix("спот · профиль `") {
                     let profile = suffix.split_once('`').unwrap().0;
                     assert!(profiles
                         .iter()
@@ -113,6 +115,21 @@ fn coverage_preserves_each_catalog_row_and_distinguishes_missing_from_zero_volum
         assert!(table.contains(&summary), "{key}: {summary}");
         assert!(table.contains(&format!("Для {nonspot} указан статус")));
     }
+}
+
+/// Отделяет статус шага 4 (решение 7) от исходной классификации строки сбора.
+/// Принимает последнюю ячейку строки, возвращает классификацию без статуса; ошибок нет.
+fn source_class(decision: &str) -> String {
+    if let Some(rest) = decision.strip_prefix("подключён · профиль `") {
+        return format!("спот · профиль `{rest}");
+    }
+    if let Some(rest) = decision.strip_prefix("оборот < 5 000 USD, отложено · ") {
+        return rest.to_string();
+    }
+    if let Some(rest) = decision.strip_prefix("данных об обороте за сутки нет — отложено · ") {
+        return rest.split_once(") · ").map_or(rest, |(_, class)| class).to_string();
+    }
+    decision.to_string()
 }
 
 #[test]

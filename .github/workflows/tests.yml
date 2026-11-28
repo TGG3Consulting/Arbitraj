@@ -13,7 +13,7 @@ jobs:
         with:
           shared-key: tests
           save-if: false
-      - run: cargo test --locked --lib raindex::
+      - run: 'cargo test --locked --lib raindex::'
       - run: cargo test --locked --test base_raindex_settlement
   wallet:
     runs-on: ubuntu-latest

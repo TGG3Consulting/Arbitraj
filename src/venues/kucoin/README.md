@@ -45,7 +45,7 @@
 | `delist_ann.rs` | Решение 226 (уточнение 08.11): анонсы GET /api/v3/announcements?annType=delistings&lang=en_US&startTime (вес 20, 15 на странице): спотовые делистинги (в заголовке «delist», без futures-announcements и Earn); монеты — из «KuCoin Will Delist A and B on …» или со страницы annUrl («Название (ТИКЕР)», «Multiple Tokens»); время — из annDesc «at 8:00 on November 5, 2026 (UTC)», иначе со страницы |
 | `sign.rs` | Подпись: Base64(HMAC-SHA256(timestamp+METHOD+путь?запрос+тело)), passphrase — HMAC-SHA256 секретом, KC-API-KEY-VERSION |
 | `rest.rs` | REST: публичные и подписанные запросы, GET/DELETE — строка запроса (подпись до кодирования), POST — тело JSON; резерв только при сбое сети |
-| `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод не ищется — однозначного способа в документации нет, исход выясняет человек |
+| `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод вне расчётного круга не ищется (исход выясняет человек), в круге Base — `settle_withdraw.rs` |
 | `reply.rs` | Разбор ответа {code, data, msg}; 429000/HTTP 429 — пауза ресурсного пула (Public, Spot, Management) на окно 30 с |
 | `errors.rs` | Коды KuCoin → единые коды (400001–400006, 400007, 411100, 429000, 200004, 115007, 260210, 500000, 230005 …). Отказы вывода (решение 253, дополнение t82): 110003 (суточный лимит) → WithdrawLimit (дополнение t85); 260210 (монета или аккаунт) — как раньше; дополнение t85: у вывода 411100/400700/200009 → AccountRestricted |
 | `num.rs` | Числа и поля без потери точности |
@@ -56,6 +56,7 @@
 | `deposit_addr.rs` | Адрес депозита `GET /api/v3/deposit-addresses` (кэш; memo — не поддерживается; счёт зачисления MAIN/TRADE); решение 411 — память под отпечатком ключа API (gateway/addr_book.rs), режимы «только память» / «только биржа» |
 | `deposits.rs` | Статус депозита `GET /api/v1/deposits` по хешу |
 | `transfers.rs` | Вывод `POST /api/v3/withdrawals` (feeDeductType INTERNAL, метка попытки в remark), статус `GET /api/v1/withdrawals/{id}`, поиск по remark |
+| `settle_withdraw.rs` | Расчётный круг Base (USDC): метка попытки вывода (remark) сохраняется до POST через `gateway/settlement_intent.rs`; после потери ответа — поиск в `GET /api/v1/withdrawals?currency=&pageSize=500` по remark + currency + chain (`Venue::resolve_withdraw`). Клиентского ID у Withdraw (V3) нет. Вне круга — без изменений |
 | `fund_move.rs` | Перевод main ↔ trade (Flex Transfer) |
 | `withdraw_quota.rs` | Решение 166: удержание вывода — `GET /api/v1/withdrawals/quotas` по котируемой монете, lockedAmount; 115008 у вывода → WithdrawLocked (errors.rs). Перед выводом на main переводится только недостающее (повтор вывода, fund_move.rs) |
 | `account.rs` | Балансы trade (все и одной монеты), «Проверить подключение» (версия ключа, права; Margin/Futures/Unified — предупреждение, решение 243; IP, HF-счёт) |
@@ -87,3 +88,14 @@
   стакана в памяти (`book_print.rs`; `venue.depth_levels` > 100 — подтверждения нет, NotConfigured). Переподписка пары —
   unsubscribe + subscribe ВСЕЙ темы, в которой она подписана (до 100 пар): отписка одной пары из темы с несколькими
   символами в прочитанной документации не описана — вопрос в docs/TASKS.md. Запрос — вес 2 пула Public (по IP).
+
+## Расчётный круг Base (USDT ↔ USDC)
+
+- `supports_settlement_order` — ордер по clientOid, окончательное состояние только GET (`order_state.rs` inspect), оборот
+  в USDT — `dealFunds` (`settlement_intent::note_gross`).
+- `supports_settlement_withdrawal` — Withdraw (V3) без клиентского ID; своя метка попытки — `remark`, сохраняется до POST,
+  ищется в истории выводов (`settle_withdraw.rs`). Перед выводом USDC с trade на main — `venue.withdraw_from_trade`.
+- `supports_settlement_credit` — true, только пока `venue.deposit_to_spot` не «да»: тогда адрес депозита — только `to =
+  TRADE` («TRADE (spot trading account)», создаётся Add Deposit Address V3 с `to: trade`), второго перевода нет. При
+  `venue.deposit_to_spot = да` допускается адрес MAIN с переводом main → trade — флаг false.
+- Сеть Base — `venue.base_network` (у KuCoin chainId `base`).

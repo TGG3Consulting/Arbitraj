@@ -1,9 +1,9 @@
 //! Файл: venues/kucoin/resolve.rs
 //! Что делает: решение 231 — исход ордера «неизвестен» по «чем найти» из ошибки (gateway/pending.rs): по orderId, если
 //! был, иначе по своему clientOid (order_state::recover: поиск; не найден — отмена по clientOid и поиск до
-//! venue.order_final_wait_ms), затем обычное доведение (settle) и итог (result). Вывод не ищется: своего ID у вывода
-//! KuCoin нет (transfers.rs: «Своего ID вывода (clientOid) у вывода нет») — исход вывода выясняет человек (контракт по
-//! умолчанию — NotApplicable).
+//! venue.order_final_wait_ms), затем обычное доведение (settle) и итог (result). Вывод здесь не ищется: своего ID у
+//! вывода KuCoin нет; в расчётном круге Base вывод ищется по метке remark, сохранённой до POST (settle_withdraw.rs,
+//! Venue::resolve_withdraw), — вне круга «чем найти» к ошибке вывода не прикладывается, исход выясняет человек.
 //! Кто вызывает: mod.rs (Venue::resolve_trade) — ядро core/outcome_resolve.rs.
 //! От чего зависит: order_state.rs, ctx.rs, errors.rs, gateway/pending.rs.
 //! Настройки: через order_state.rs (venue.order_poll_ms, venue.order_final_wait_ms).

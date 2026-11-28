@@ -1,6 +1,7 @@
 //! Tokenlon PMMV5: персональная котировка по адресу кошелька и двум контрактам Ethereum.
 mod client;
 mod profile;
+pub(super) mod roles;
 pub(super) mod private_node;
 pub(super) mod routing;
 pub(super) mod book;
@@ -73,7 +74,8 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
         let issued = client::firm(ctx,&key,&query).await?;
         let spent = quantity(&issued.raw_order["takerAssetAmount"])
             .filter(|spent| maximum.is_none_or(|cap| *spent <= cap)).ok_or_else(|| bad("Расход firm Tokenlon превышает предел или отсутствует"))?;
-        let terms = wire::Terms {payer, recipient:payer, input:req.input, output:req.output, spent, minimum:min};
+        let roles=roles::FrozenRoles::read(ctx).ok_or_else(||bad("Для Tokenlon не указан профиль контрактов"))?;
+        let terms = wire::Terms {roles,payer, recipient:payer, input:req.input, output:req.output, spent, minimum:min};
         // Без подписи taker, отправки и регистрации торгового поручения.
         let now = u64::try_from(chrono::Utc::now().timestamp()).map_err(|_| bad("Некорректное время запроса"))?;
         let proof = wire::prepare(&issued.raw_order,&terms,U256::ZERO,now)

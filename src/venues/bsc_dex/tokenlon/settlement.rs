@@ -1,5 +1,5 @@
 //! Собственный nonce и хеш calldata сохраняются до первого канала отправки. Подпись не сохраняется в журнале.
-use super::{receipt::Proof,routing::Ticket,sim,wire};
+use super::{receipt::Proof,routing::Ticket,sim};
 use crate::{
     core::types::{Side,TradeRequest,TradeResult,TxOutcome},
     gateway::{errors::{ErrorCode,GatewayResult},events::MarketEvent},
@@ -17,10 +17,10 @@ pub(in crate::venues::bsc_dex) struct Saved {
 }
 impl Saved {
     pub(in crate::venues::bsc_dex) fn wallet(&self,ctx:&Ctx)->bool {
-        ctx.chain_id()==Some(1) && wallet::signer::address(ctx).ok()==Some(self.order.terms.payer)
+        ctx.chain_id()==Some(self.order.terms.roles.chain) && wallet::signer::address(ctx).ok()==Some(self.order.terms.payer)
     }
     pub(in crate::venues::bsc_dex) fn signed(&self)->exec::signed_call::Erc20Call {
-        exec::signed_call::Erc20Call{chain:1,payer:self.order.terms.payer,module:wire::USER_PROXY,calldata:self.calldata}
+        exec::signed_call::Erc20Call{chain:self.order.terms.roles.chain,payer:self.order.terms.payer,module:self.order.terms.roles.user_proxy.address,calldata:self.calldata}
     }
     pub(in crate::venues::bsc_dex) fn amounts(&self,logs:&[alloy::rpc::types::Log])->Option<(U256,U256)> {
         let mut accounting=self.order.clone();
@@ -52,7 +52,7 @@ pub(in crate::venues::bsc_dex) async fn trade(p:&Parts,req:TradeRequest,t:&Ticke
     let terms=&t.proof.terms;
     if !valid() || owner!=terms.payer || req.venue!=c.venue() || req.qty!=t.qty || req.side!=t.side
         || pair!=(terms.input,terms.output) || req.worst_price<=Decimal::ZERO
-        || (coin==wire::WETH)!=exec::native::is_native(c,&req.asset) || req.remeasure.as_ref().is_some_and(|r|!r.any_executor) {return Err(fail());}
+        || (coin==terms.roles.weth.address)!=exec::native::is_native(c,&req.asset) || req.remeasure.as_ref().is_some_and(|r|!r.any_executor) {return Err(fail());}
     let cost=req.qty.checked_mul(req.worst_price).ok_or_else(fail)?;
     let (coin_dec,cash_dec)=t.decs;
     let mut proof=t.proof.clone();
@@ -75,8 +75,8 @@ pub(in crate::venues::bsc_dex) async fn trade(p:&Parts,req:TradeRequest,t:&Ticke
     let mut parse=exec::swap_ctx::SwapCtx::swap(owner,pair,t.decs,&[],None,None);
     parse.tokenlon=Some(Box::new(saved.clone()));
     parse.who=Some(super::LABEL.into());
-    let raw=exec::txs::send(&env,&slot,wire::USER_PROXY,t.data.clone(),sim::value(&t.proof),false,Some(hold));
-    let measured=super::private_node::Measurement{owner,digest:saved.calldata,value:sim::value(&saved.order),gas};
+    let raw=exec::txs::send(&env,&slot,terms.roles.user_proxy.address,t.data.clone(),sim::value(&t.proof),false,Some(hold));
+    let measured=super::private_node::Measurement{owner,chain:terms.roles.chain,target:terms.roles.user_proxy.address,digest:saved.calldata,value:sim::value(&saved.order),gas};
     let done=super::private_node::MEASUREMENT.scope(measured,hashflow::native_send(p,&req,t.proof.expiry,t.revision,&parse,raw)).await?;
     exec::market_receipt::check_module_cancel(c,&parse,&done).await.map_err(|e|parse.attach(e.with_tx(done.chain.clone())))?;
     if matches!(done.chain.outcome,TxOutcome::Included|TxOutcome::Reverted){

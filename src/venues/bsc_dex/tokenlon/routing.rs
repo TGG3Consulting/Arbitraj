@@ -18,8 +18,9 @@ pub(in crate::venues::bsc_dex) struct Ticket {
 
 fn market(p:&Parts,asset:&Asset)->Option<(Address,Address)>{
     let base=asset.contract?;
+    let weth=p.ctx.addr("dex.native_wrapped").ok()?;
     let quote=p.tokens.usdt(&p.ctx).ok()?;
-    (base!=quote && (base==wire::WETH)==exec::native::is_native(&p.ctx,asset)).then_some((base,quote))
+    (base!=quote && (base==weth)==exec::native::is_native(&p.ctx,asset)).then_some((base,quote))
 }
 pub(in crate::venues::bsc_dex) fn available(p:&Parts,asset:&Asset,side:Side)->bool{
     super::enabled(&p.ctx) && market(p,asset).is_some_and(|(b,q)|!p.tokenlon.rates(p,b,q,side).is_empty())
@@ -29,9 +30,10 @@ pub(in crate::venues::bsc_dex) fn breaks(p:&Parts,asset:&Asset,side:Side,max:Dec
     market(p,asset).map(|(b,q)|p.tokenlon.rates(p,b,q,side).into_iter().filter_map(|(n,_)|(n<=max).then_some(n)).collect()).unwrap_or_default()
 }
 
-fn signed(raw:&serde_json::Value,key:&PrivateKeySigner,i:Address,o:Address)->Option<(Proof,Bytes)> {
+fn signed(c:&super::super::ctx::Ctx,raw:&serde_json::Value,key:&PrivateKeySigner,i:Address,o:Address)->Option<(Proof,Bytes)> {
     let mut salt=[0u8;32];getrandom::fill(&mut salt).ok()?;
-    let terms=wire::Terms {payer:key.address(),recipient:key.address(),input:i,output:o,
+    let roles=super::roles::FrozenRoles::read(c)?;
+    let terms=wire::Terms {roles,payer:key.address(),recipient:key.address(),input:i,output:o,
         spent:super::quantity(&raw["takerAssetAmount"])?,minimum:U256::from(1)};
     let now=u64::try_from(Utc::now().timestamp()).ok()?;
     let prepared=wire::prepare(raw,&terms,U256::from_be_bytes(salt),now)?;
@@ -85,13 +87,13 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     if num::to_decimal(target,db)?!=qty{return None;}
     let mut req=client::Query{base:m.base,quote:m.quote,side,amount:qty,base_dec:db,input:i,output:o};
     let issued=client::firm(c,&key,&req).await.ok()?;
-    let (mut proof,mut data)=signed(&issued.raw_order,&key,i,o)?;
+    let (mut proof,mut data)=signed(c,&issued.raw_order,&key,i,o)?;
     if buy && proof.net<target {
         let next=gross_for_net(target,proof.fee)?;
         req.amount=num::to_decimal(next,db)?;
         if num::to_units(req.amount,db)?!=next{return None;}
         let fresh=client::firm(c,&key,&req).await.ok()?;
-        (proof,data)=signed(&fresh.raw_order,&key,i,o)?;
+        (proof,data)=signed(c,&fresh.raw_order,&key,i,o)?;
     }
     if (buy && proof.net<target) || (!buy && proof.terms.spent!=target) || !super::timely(c,proof.expiry){return None;}
     let (block,gas)=sim::run(c,&proof,&data).await.ok()?;
@@ -105,7 +107,7 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     exec::gas_fund::ensure(c,key.address(),need).await.ok()?;
     let mut pricing=p.quoting();
     pricing.gas=pricing.gas.for_quote(c,&p.heads).await.ok()?;
-    let unit=exec::cycle_gas::priced(&pricing,key.address(),(wire::USER_PROXY,data.clone())).await.ok()?;
+    let unit=exec::cycle_gas::priced(&pricing,key.address(),(proof.terms.roles.user_proxy.address,data.clone())).await.ok()?;
     let bill=exec::cycle_gas::simulated(&pricing,unit,gas,0,0).ok()?;
     let cost=num::to_decimal(bill.wei(),18)?;
     if cost>cap{return None;}

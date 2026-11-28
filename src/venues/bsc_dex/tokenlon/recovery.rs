@@ -1,6 +1,6 @@
 //! Relayer может оплатить то же подписанное ERC20-поручение из другой внешней транзакции.
 //! Отсутствие выплаты доказывается на финализированном блоке после срока, по всем четырём темам PMM.
-use super::{settlement::Saved,wire};
+use super::settlement::Saved;
 use crate::{
     core::types::{ChainTx,Fee,Side,TradeRequest,TradeResult,TradeStatus,TxOutcome},
     gateway::{errors::{ErrorCode,GatewayResult},pending::PendingRef,settlement_intent},
@@ -38,9 +38,9 @@ async fn lookup(c:&Ctx,o:&Saved)->GatewayResult<Payment>{
     while cursor<=hi {
         let last=cursor.saturating_add(size-1).min(hi);
         let rows:Vec<Log>=rpc::call(c,"eth_getLogs",json!([{"fromBlock":U64::from(cursor),"toBlock":U64::from(last),
-            "address":wire::PMM,"topics":o.order.fill_topics()}])).await?;
+            "address":o.order.terms.roles.pmm.address,"topics":o.order.fill_topics()}])).await?;
         for row in rows {
-            if row.removed || row.address()!=wire::PMM || row.topics()!=o.order.fill_topics() ||
+            if row.removed || row.address()!=o.order.terms.roles.pmm.address || row.topics()!=o.order.fill_topics() ||
                 row.block_number.is_none_or(|n|n<cursor || n>last) || found.is_some(){return Err(bad());}
             found=Some(row.transaction_hash.ok_or_else(bad)?);
         }
@@ -52,7 +52,7 @@ async fn lookup(c:&Ctx,o:&Saved)->GatewayResult<Payment>{
 }
 pub(in crate::venues::bsc_dex) async fn expired_unspent(c:&Ctx,s:&Saved)->bool{
     // При msg.value деньги с владельца может снять только его собственный внешний вызов.
-    s.order.terms.input==wire::WETH || matches!(lookup(c,s).await,Ok(Payment::None))
+    s.order.terms.input==s.order.terms.roles.weth.address || matches!(lookup(c,s).await,Ok(Payment::None))
 }
 
 pub(in crate::venues::bsc_dex) async fn actual(c:&Ctx,s:&Saved,tx:&ChainTx,reference:&str)->GatewayResult<(U256,U256)>{
@@ -63,7 +63,7 @@ pub(in crate::venues::bsc_dex) async fn actual(c:&Ctx,s:&Saved,tx:&ChainTx,refer
     // Минимум сохранён в исходном поручении. Для учёта измеряется и действительный недобор.
     paid.terms.minimum=U256::from(1);
     if id==tx.hash {return paid.included(c,id,tx.nonce,s.calldata,&receipt).await;}
-    if s.order.terms.input==wire::WETH{return Err(bad());}
+    if s.order.terms.input==s.order.terms.roles.weth.address{return Err(bad());}
     let (ours,cancel)=match tx.outcome{
         TxOutcome::Reverted=>(tx.hash,false),
         TxOutcome::NotIncluded=>(tx.cancel_hash.ok_or_else(bad)?,true),
@@ -99,7 +99,7 @@ pub(in crate::venues::bsc_dex) async fn recover(p:&Parts,req:&TradeRequest,pend:
     let mut own=parse.chain.clone().ok_or_else(unknown)?;
     if !s.wallet(c) || pend.nonce!=Some(own.nonce) || pend.venue_ref.as_ref()!=Some(&own.hash.to_string())
         || req.route.as_ref().is_none_or(|q|q.mode!=crate::core::types::RouteMode::Rfq(s.order.tx_hash)){return Err(unknown());}
-    if s.order.terms.input==wire::WETH{return Ok(None);}
+    if s.order.terms.input==s.order.terms.roles.weth.address{return Ok(None);}
     if let Some(r)=send::receipt::read(c,own.hash).await? {
         s.order.transaction_matches(c,own.hash,own.nonce,s.calldata,&r).await?;
         if r.status!=U64::ZERO{return Ok(None);}

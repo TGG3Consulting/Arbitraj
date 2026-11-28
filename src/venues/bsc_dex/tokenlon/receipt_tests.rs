@@ -1,7 +1,7 @@
 //! Исчерпаны исходные поручения PMM за 7200 Ethereum-блоков. Входы истекли; тест читает только архивы.
 use super::*;
 use crate::venues::bsc_dex::tokenlon::wire::{
-    self, Prepared, USER_PROXY,
+    self, Prepared,
     abi::{fillCall, fillOrKillOrderCall, toPMMCall},
 };
 use alloy::sol_types::SolCall;
@@ -28,6 +28,16 @@ pub(super) fn logs(data: &Value) -> Vec<Log> {
         })
         .collect()
 }
+pub(in crate::venues::bsc_dex::tokenlon) fn archived_roles()
+-> crate::venues::bsc_dex::tokenlon::roles::FrozenRoles {
+    use crate::venues::bsc_dex::tokenlon::roles::FrozenRoles;
+    let doc: Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json"
+    ))
+    .unwrap();
+    let rows: Vec<String> = serde_json::from_value(doc["roles"].clone()).unwrap();
+    FrozenRoles::from_rows(doc["chain"].as_u64().unwrap(), &rows).unwrap()
+}
 fn api(o: &fillOrKillOrderCall, t: &Terms) -> Value {
     let a = &o.order;
     json!({"protocol":"PMMV5","makerAddress":a.makerAddress,"takerAddress":a.takerAddress,
@@ -35,11 +45,12 @@ fn api(o: &fillOrKillOrderCall, t: &Terms) -> Value {
         "takerFee":a.takerFee.to_string(),"salt":a.salt.to_string(),"feeFactor":(a.salt & U256::from(u16::MAX)).to::<u16>(),
         "makerAssetAddress":t.output,"takerAssetAddress":t.input,"makerAssetData":a.makerAssetData,"takerAssetData":a.takerAssetData,
         "makerAssetAmount":a.makerAssetAmount.to_string(),"takerAssetAmount":a.takerAssetAmount.to_string(),
-        "makerWalletSignature":o.signature,"expirationTimeSeconds":a.expirationTimeSeconds.to_string(),"exchangeAddress":ZERO_EXCHANGE})
+        "makerWalletSignature":o.signature,"expirationTimeSeconds":a.expirationTimeSeconds.to_string(),"exchangeAddress":t.roles.zero_exchange.address})
 }
 
 #[test]
 fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
+    let roles = archived_roles();
     let history = archive(include_bytes!(
         "../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz"
     ));
@@ -55,9 +66,10 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
         let tx = &row["tx"];
         let data: Bytes = tx["input"].as_str().unwrap().parse().unwrap();
         let logs = logs(&row["logs"]);
-        let pay = unique::<FillOrder>(&logs, PMM).unwrap();
+        let pay = unique::<FillOrder>(&logs, roles.pmm.address).unwrap();
         let at = row["timestamp"].as_u64().unwrap();
         let terms = Terms {
+            roles,
             payer: pay.userAddr,
             recipient: pay.receiverAddr,
             input: pay.takerAssetAddr,
@@ -67,6 +79,17 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
         };
         let expected = Prepared::from_calldata(&data, &terms, at).unwrap();
         let proof = &expected.proof;
+        if controls == 0 {
+            let mut old = serde_json::to_value(proof).unwrap();
+            old["terms"].as_object_mut().unwrap().remove("roles");
+            // Историческая форма служит только для сверки. Отдельные Terms новой заявки требуют свой профиль.
+            assert!(serde_json::from_value::<Terms>(old["terms"].clone()).is_err());
+            let restored = serde_json::from_value::<Proof>(old.clone()).unwrap();
+            assert_eq!(&restored, proof);
+            assert_eq!(restored.terms.roles, roles);
+            old["terms"]["roles"] = Value::Null;
+            assert!(serde_json::from_value::<Proof>(old).is_err());
+        }
         let outer = toPMMCall::abi_decode(&data).unwrap();
         let inner = fillCall::abi_decode(&outer.payload).unwrap();
         let order = fillOrKillOrderCall::abi_decode(&inner.data).unwrap();
@@ -99,11 +122,17 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
             ..terms.clone()
         };
         assert!(Prepared::from_calldata(&data, &high, at).is_none());
+        let mut relocated = terms.clone();
+        std::mem::swap(&mut relocated.roles.pmm, &mut relocated.roles.zero_exchange);
+        assert!(Prepared::from_calldata(&data, &relocated, at).is_none());
+        let mut wrong_market = proof.clone();
+        wrong_market.terms.roles = relocated.roles;
+        assert!(wrong_market.amounts(&logs).is_none());
         let (spent, received) = proof.amounts(&logs).unwrap();
         assert_eq!((spent, received), (terms.spent, pay.settleAmount));
         assert_eq!(
             tx["to"].as_str().unwrap().parse::<Address>().unwrap(),
-            USER_PROXY
+            roles.user_proxy.address
         );
         assert_eq!(
             serde_json::from_value::<U256>(tx["value"].clone()).unwrap(),
@@ -137,7 +166,7 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
         assert_eq!(delivered.matches(proof, relay, keccak256(&data), at), other);
         assert!(!delivered.matches(proof, relay, B256::ZERO, at));
         if other {
-            assert_ne!(terms.input, WETH);
+            assert_ne!(terms.input, roles.weth.address);
             assert!(logs.iter().any(|l| l.topics() == proof.fill_topics()));
             assert!(!delivered.matches(
                 proof,

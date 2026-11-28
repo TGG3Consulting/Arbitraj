@@ -1,6 +1,6 @@
 //! Привязка денежного результата к исходной собственной транзакции и её месту в каноническом блоке.
-use super::super::wire::{Prepared, USER_PROXY};
-use super::{Proof, WETH};
+use super::super::wire::Prepared;
+use super::Proof;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{
     ctx::Ctx,
@@ -9,7 +9,7 @@ use crate::venues::bsc_dex::{
     send::{canonical_receipt, track::Receipt},
     wallet::signer,
 };
-use alloy_primitives::{Address, B256, Bytes, U64, U256, address, b256, keccak256};
+use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
 use serde::Deserialize;
 use serde_json::json;
 
@@ -40,13 +40,15 @@ impl Tx {
                 self.from == proof.terms.payer && self.nonce == U64::from(nonce)
             }
             Sender::Relay => {
-                !self.from.is_zero() && self.from != proof.terms.payer && proof.terms.input != WETH
+                !self.from.is_zero()
+                    && self.from != proof.terms.payer
+                    && proof.terms.input != proof.terms.roles.weth.address
             }
         };
         authorized
             && proof.terms.recipient == proof.terms.payer
-            && self.chain_id == U64::from(crate::settings::evm_profiles::ETHEREUM_MAINNET)
-            && self.to == USER_PROXY
+            && self.chain_id == U64::from(proof.terms.roles.chain)
+            && self.to == proof.terms.roles.user_proxy.address
             && self.value == proof.value()
             && keccak256(&self.input) == digest
             && Prepared::from_calldata(&self.input, &proof.terms, at)
@@ -82,7 +84,7 @@ impl Proof {
                 "Tokenlon: не подтверждены исходная операция и обе выплаты PMM",
             )
         };
-        if ctx.chain_id() != Some(crate::settings::evm_profiles::ETHEREUM_MAINNET)
+        if ctx.chain_id() != Some(self.terms.roles.chain)
             || self.terms.recipient != self.terms.payer
             || signer::address(ctx).ok() != Some(self.terms.payer)
             || r.status > U64::from(1)
@@ -146,7 +148,7 @@ impl Proof {
             ctx,
             hash,
             r,
-            (self.terms.output == WETH).then_some(self.terms.recipient),
+            (self.terms.output == self.terms.roles.weth.address).then_some(self.terms.recipient),
         )
         .await
     }
@@ -163,13 +165,26 @@ impl Proof {
                 "Tokenlon: исходная квитанция не подтверждает направления и суммы",
             )
         };
+        let roles = self.terms.roles;
         let code = Code {
-            shell: b256!("abf73cab47631c9363fa11b421585b9edc25458176a4e00292846ed8a45b3c1a"),
-            implementation: address!("0b9f13ffab8448089f50073cf24bbe5c7bd8675a"),
-            runtime: b256!("db3bf7e4d3bea9449bdaaf049140386c9c0d57c1d9fcb962a88310b002fc70a5"),
+            shell: roles.user_proxy.runtime,
+            implementation: roles.proxy_impl.address,
+            runtime: roles.proxy_impl.runtime,
         };
-        code.at_transaction(ctx, USER_PROXY, hash, r, own_native)
-            .await?;
+        let tag = json!({"blockHash":r.block_hash.ok_or_else(fail)?,"requireCanonical":true});
+        use crate::venues::bsc_dex::pools::solidly_classic_factory::plain;
+        tokio::try_join!(
+            code.at_transaction(ctx, roles.user_proxy.address, hash, r, own_native),
+            plain(ctx, roles.pmm.address, roles.pmm.runtime, &tag),
+            plain(
+                ctx,
+                roles.zero_exchange.address,
+                roles.zero_exchange.runtime,
+                &tag
+            ),
+            plain(ctx, roles.weth.address, roles.weth.runtime, &tag)
+        )
+        .map_err(|_| fail())?;
         self.amounts(&r.logs).ok_or_else(fail)
     }
 }

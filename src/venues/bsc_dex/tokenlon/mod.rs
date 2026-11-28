@@ -54,6 +54,7 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
     let market = profile::markets(ctx).and_then(|v| v.into_iter()
         .find(|m| m.base_token == base && m.quote_token == quote))
         .ok_or_else(|| ctx.err(ErrorCode::NotConfigured,"Пара адресов не найдена в tokenlon.pairs площадки Ethereum"))?;
+    let roles=roles::FrozenRoles::read(ctx).ok_or_else(||bad("Для Tokenlon не указан профиль контрактов"))?;
     let key = wallet::signer::signer(ctx)?;
     let payer = key.address();
     if req.trader != Some(payer) {
@@ -74,19 +75,19 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
         let issued = client::firm(ctx,&key,&query).await?;
         let spent = quantity(&issued.raw_order["takerAssetAmount"])
             .filter(|spent| maximum.is_none_or(|cap| *spent <= cap)).ok_or_else(|| bad("Расход firm Tokenlon превышает предел или отсутствует"))?;
-        let terms = wire::Terms {payer, recipient:payer, input:req.input, output:req.output, spent, minimum:min};
+        let terms = wire::Terms {roles,payer, recipient:payer, input:req.input, output:req.output, spent, minimum:min};
         // Без подписи taker, отправки и регистрации торгового поручения.
         let now = u64::try_from(chrono::Utc::now().timestamp()).map_err(|_| bad("Некорректное время запроса"))?;
         let proof = wire::prepare(&issued.raw_order,&terms,U256::ZERO,now)
             .ok_or_else(|| bad("Firm Tokenlon не прошёл проверку PMMV5, срока, условий кошелька или минимума"))?.proof;
         (spent,proof.net,Some(Fee{asset:req.output,amount_raw:(proof.gross-proof.net).to_string()}),
-            Some(proof.expiry),json!({"native_input":req.input==wire::WETH,"native_output":req.output==wire::WETH,"stage":"maker_order","maker":proof.maker,"orderHash":proof.order_hash,"moneySimulated":false}))
+            Some(proof.expiry),json!({"native_input":req.input==roles.weth.address,"native_output":req.output==roles.weth.address,"stage":"maker_order","maker":proof.maker,"orderHash":proof.order_hash,"moneySimulated":false}))
     } else {
         let rate = client::rate(ctx,&key,&query).await?;
         let other = indicative(side, amount, rate, quote_dec)
             .ok_or_else(|| bad("Ставка Tokenlon не даёт положительной суммы в пределах точности"))?;
         let (spent,received) = match side {Side::Sell=>(amount_raw,other),Side::Buy=>(other,amount_raw)};
-        (spent,received,None,None,json!({"native_input":req.input==wire::WETH,"native_output":req.output==wire::WETH,"stage":"indicative","rate":rate,"moneySimulated":false}))
+        (spent,received,None,None,json!({"native_input":req.input==roles.weth.address,"native_output":req.output==roles.weth.address,"stage":"indicative","rate":rate,"moneySimulated":false}))
     };
     details["localSimulationConfigured"]=json!(private_node::configured(ctx));
     details["automaticTradingEnabled"]=json!(enabled(ctx));

@@ -5,24 +5,16 @@ mod hash;
 mod signature;
 use signature::{maker_signature, vrs};
 
-use super::receipt::Proof;
+use super::{receipt::Proof, roles::FrozenRoles};
 use abi::{Order, fillCall, fillOrKillOrderCall, toPMMCall};
 use alloy::sol_types::{SolCall, SolValue};
-use alloy_primitives::{Address, B256, Bytes, Signature, U256, address};
+use alloy_primitives::{Address, B256, Bytes, Signature, U256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-pub(in crate::venues::bsc_dex) const PMM: Address =
-    address!("8d90113a1e286a5ab3e496fbd1853f265e5913c6");
-pub(in crate::venues::bsc_dex) const USER_PROXY: Address =
-    address!("03f34be1bf910116595db1b11e9d1b2ca5d59659");
-pub(in crate::venues::bsc_dex) const ZERO_EXCHANGE: Address =
-    address!("080bf510fcbf18b91105470639e9561022937712");
-pub(in crate::venues::bsc_dex) const WETH: Address =
-    address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2");
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) struct Terms {
+    pub roles: FrozenRoles,
     pub payer: Address,
     pub recipient: Address,
     pub input: Address,
@@ -63,7 +55,7 @@ pub(in crate::venues::bsc_dex) fn prepare(
     let bytes = |k: &str| raw[k].as_str()?.parse::<Bytes>().ok();
     if t.recipient != t.payer
         || raw["protocol"] != "PMMV5"
-        || addr("exchangeAddress")? != ZERO_EXCHANGE
+        || addr("exchangeAddress")? != t.roles.zero_exchange.address
         || addr("makerAssetAddress")? != t.output
         || addr("takerAssetAddress")? != t.input
     {
@@ -97,7 +89,9 @@ pub(in crate::venues::bsc_dex) fn prepare(
 impl Prepared {
     fn new(inner: fillOrKillOrderCall, t: &Terms, user_salt: U256, now: u64) -> Option<Self> {
         let o = &inner.order;
-        let order_hash = hash::order(o);
+        let domain = hash::domain(t.roles.zero_exchange.address);
+        let order_hash = hash::order(domain, o);
+        let pmm = t.roles.pmm.address;
         let fee = (o.salt & U256::from(u16::MAX)).to::<u16>();
         if t.payer.is_zero()
             || t.recipient.is_zero()
@@ -107,9 +101,9 @@ impl Prepared {
             || t.spent.is_zero()
             || t.minimum.is_zero()
             || o.makerAddress.is_zero()
-            || [t.payer, PMM].contains(&o.makerAddress)
-            || o.takerAddress != PMM
-            || o.senderAddress != PMM
+            || [t.payer, pmm].contains(&o.makerAddress)
+            || o.takerAddress != pmm
+            || o.senderAddress != pmm
             || o.feeRecipientAddress != t.payer
             || o.takerAssetAmount != t.spent
             || inner.takerAssetFillAmount != t.spent
@@ -128,7 +122,7 @@ impl Prepared {
             return None;
         }
         let data: Bytes = inner.abi_encode().into();
-        let tx_hash = hash::transaction(user_salt, &data);
+        let tx_hash = hash::transaction(domain, pmm, user_salt, &data);
         Some(Self {
             proof: Proof {
                 terms: t.clone(),

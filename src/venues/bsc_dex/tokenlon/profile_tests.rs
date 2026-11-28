@@ -2,10 +2,7 @@
 use super::Market;
 use crate::{
     settings::recommendations,
-    venues::bsc_dex::{
-        num,
-        tokenlon::{wire::PMM, wire::abi::FillOrder},
-    },
+    venues::bsc_dex::{num, tokenlon::wire::abi::FillOrder},
 };
 use alloy::{rpc::types::Log, sol_types::SolEvent};
 use alloy_primitives::Address;
@@ -28,9 +25,17 @@ fn tokenlon_extra_usdt_markets_match_personal_rates_and_onchain_base_sizes() {
     ))
     .unwrap();
     let configured = recommendations::venue_value("tokenlon.pairs", "eth_dex").unwrap();
+    let record: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json"
+    ))
+    .unwrap();
+    let rows: Vec<String> = serde_json::from_value(record["roles"].clone()).unwrap();
+    let roles =
+        super::super::roles::FrozenRoles::from_rows(record["chain"].as_u64().unwrap(), &rows)
+            .unwrap();
     let markets: BTreeMap<_, _> = configured
         .split(',')
-        .map(|s| Market::parse(s).unwrap())
+        .map(|s| Market::parse(s, roles.weth.address).unwrap())
         .map(|m| (m.base.clone(), m))
         .collect();
     let tokens = snapshot["tokens"].as_array().unwrap();
@@ -93,7 +98,9 @@ fn tokenlon_extra_usdt_markets_match_personal_rates_and_onchain_base_sizes() {
                     inner: serde_json::from_value(raw.clone()).unwrap(),
                     ..Default::default()
                 };
-                if l.address() != PMM || l.topics().first() != Some(&FillOrder::SIGNATURE_HASH) {
+                if l.address() != roles.pmm.address
+                    || l.topics().first() != Some(&FillOrder::SIGNATURE_HASH)
+                {
                     continue;
                 }
                 let f = FillOrder::decode_log_data_validate(&l.inner.data).unwrap();

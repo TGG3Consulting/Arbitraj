@@ -9,17 +9,17 @@ use super::wire;
 use alloy::sol_types::SolCall;
 
 #[derive(Clone,Copy)]
-pub(super) struct Measurement {pub owner:Address,pub digest:B256,pub value:U256,pub gas:u64}
+pub(super) struct Measurement {pub owner:Address,pub chain:u64,pub target:Address,pub digest:B256,pub value:U256,pub gas:u64}
 tokio::task_local!{pub(super) static MEASUREMENT:Measurement;}
 pub(in crate::venues::bsc_dex) fn gas_limit(ctx:&Ctx,from:Address,to:TxKind,data:&Bytes,value:U256)->GatewayResult<Option<u64>>{
-    if to!=TxKind::Call(wire::USER_PROXY) || data.get(..4)!=Some(wire::abi::toPMMCall::SELECTOR.as_slice()) || ctx.chain_id()!=Some(1) {
+    if data.get(..4)!=Some(wire::abi::toPMMCall::SELECTOR.as_slice()) {
         return Ok(None);
     }
     use crate::venues::bsc_dex::send::{gas_mode::{self,GasMode},tx};
     let denied=||ctx.err(ErrorCode::NotApplicable,"Tokenlon требует собственной симуляции текущего поручения и модели газа Ethereum");
     if gas_mode::read(ctx)?!=GasMode::Ethereum {return Err(denied());}
     let m=MEASUREMENT.try_with(|m|*m).map_err(|_|denied())?;
-    if m.owner!=from || m.digest!=keccak256(data) || m.value!=value || m.gas==0{return Err(denied());}
+    if ctx.chain_id()!=Some(m.chain) || to!=TxKind::Call(m.target) || m.owner!=from || m.digest!=keccak256(data) || m.value!=value || m.gas==0{return Err(denied());}
     tx::with_margin(ctx,U64::from(m.gas),ctx.dec("send.gas_limit_margin_pct")?).map(Some)
 }
 

@@ -34,6 +34,8 @@ async fn fresh_events_reach_the_reader_while_deployment_backfill_is_still_runnin
         ("dex.chain",scope.clone(),json!("base")), ("dex.evm_chain_id",scope.clone(),json!(8453)),
         ("bsc.node_http_url",scope.clone(),json!(endpoint)), ("bsc.node_http_rps",scope.clone(),json!(1000)),
         ("dex.logs_block_batch",scope.clone(),json!(batch)), ("http.timeout_ms",Scope::Global,json!(3000)),
+        ("http.body_idle_ms",Scope::Global,json!(5000)), ("http.total_ms",Scope::Global,json!(8000)),
+        ("http.max_body_bytes",Scope::Global,json!(2_000_000)),
         ("raindex.trading",scope.clone(),json!(true)), ("raindex.books",scope.clone(),json!([row])),
     ] {p.ctx.settings.set(k,s,Some(v),"test").await.unwrap();}
     assert!(active(&p.ctx,(profile,from)));

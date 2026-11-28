@@ -44,6 +44,17 @@ impl Cache {
         self.state.lock().ok()?.tickets.remove(&(who, id))
     }
 }
+type Updates = Vec<(Address, Option<Vec<Live>>)>;
+struct Batch {
+    generation: u64,
+    started: Instant,
+    ttl: Duration,
+    cash: Address,
+    books: Updates,
+}
+
+#[path = "book_publish.rs"]
+mod publication;
 #[path = "book_refresh.rs"]
 mod refresh;
 
@@ -51,7 +62,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
     let (tx, rx) = mpsc::channel(1);
     tokio::select! {
         _ = refresh::read(&p, tx) => {},
-        _ = refresh::publish(&p, rx, out) => {},
+        _ = publication::publish(&p, rx, out) => {},
     }
 }
 

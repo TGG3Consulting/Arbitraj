@@ -121,7 +121,7 @@ fn rate_order_and_final_decline_follow_separate_subscriptions() {
     }
     let rate = &observed["ws-probe"]["responses"]["q0"];
     assert_eq!(
-        rate_value(rate, Decimal::ONE),
+        rate_value(rate, Decimal::ONE).map(|r| r.price),
         Ok(Decimal::from_str("1724.3331434598999294").unwrap())
     );
     assert_eq!(rate_value(rate, Decimal::from(3000)), Err(Failure::NoOffer));

@@ -10,28 +10,43 @@ use tokio::sync::mpsc;
 
 #[derive(Clone,Eq,PartialEq,Hash)]
 struct Key {wallet:String,base:Address,quote:Address,buy:bool,qty:Decimal}
-struct Entry { generation:u64, at:Instant, rate:Decimal }
+struct Entry { generation:u64, at:Instant, rate:client::Rate }
 #[derive(Default)]
-struct State {rates:HashMap<Key,Entry>, tickets:HashMap<(Address,B256),Arc<Ticket>>}
+struct State {requests:HashMap<(String,Address,Address,bool),Decimal>, rates:HashMap<Key,Entry>, tickets:HashMap<(Address,B256),Arc<Ticket>>}
 #[derive(Default,Clone)]
 pub(in crate::venues::bsc_dex) struct Cache(Arc<Mutex<State>>);
 
 impl Cache {
-    pub(super) fn rates(&self,p:&Parts,base:Address,quote:Address,side:Side)->Vec<(Decimal,Decimal)> {
+    pub(super) fn rates(&self,p:&Parts,base:Address,quote:Address,side:Side)->Vec<(Decimal,client::Rate)> {
         let Ok(age)=p.ctx.int("feed.stale_after_ms") else{return vec![]};
         let buy=side==Side::Buy;
         let Ok(state)=self.0.lock() else{return vec![]};
         // Не привязанный к счёту предварительный расчёт видит лучшую наблюдавшуюся ставку.
         // Подтверждение и отправка проверяют исключительно ключ конкретного кошелька.
-        let mut rates=BTreeMap::<Decimal,Decimal>::new();
+        let mut rates=BTreeMap::<Decimal,client::Rate>::new();
         let generation=p.ctx.settings.generation();
         for (key,entry) in &state.rates {
             if key.base==base && key.quote==quote && key.buy==buy && p.ctx.account.as_ref().is_none_or(|w|w==&key.wallet)
                 && entry.generation==generation && entry.at.elapsed()<Duration::from_millis(age) {
-                rates.entry(key.qty).and_modify(|r|*r=(*r).max(entry.rate)).or_insert(entry.rate);
+                rates.entry(key.qty).and_modify(|r|{if entry.rate.price>r.price {*r=entry.rate}}).or_insert(entry.rate);
             }
         }
         rates.into_iter().collect()
+    }
+    /// Один дополнительный размер на кошелёк, пару и сторону за проход монитора.
+    /// Количество должно попасть в границы свежего ответа именно этого кошелька.
+    pub(super) fn request_size(&self,p:&Parts,base:Address,quote:Address,side:Side,qty:Decimal) {
+        let Ok(age)=p.ctx.int("feed.stale_after_ms") else{return};
+        let Some(dec)=p.tokens.decimals_known(base) else{return};
+        if qty <= Decimal::ZERO || qty.normalize().scale()>u32::from(dec) {return;}
+        let rev=p.ctx.settings.generation();
+        let mut state=self.0.lock().unwrap_or_else(|e|e.into_inner());
+        let buy=side==Side::Buy;
+        let wallets:BTreeSet<_>=state.rates.iter().filter(|(k,e)|
+            (k.base,k.quote,k.buy)==(base,quote,buy) && p.ctx.account.as_ref().is_none_or(|w|w==&k.wallet)
+            && e.generation==rev && e.at.elapsed()<Duration::from_millis(age)
+            && qty>=e.rate.min && qty<=e.rate.max).map(|(k,_)|k.wallet.clone()).collect();
+        for wallet in wallets {state.requests.entry((wallet,base,quote,buy)).or_insert(qty);}
     }
     pub(super) fn save(&self,t:Ticket) {
         let mut s=self.0.lock().unwrap_or_else(|e|e.into_inner());
@@ -62,7 +77,7 @@ impl Cache {
 pub(in crate::venues::bsc_dex) async fn clear(p:&Parts,out:&mpsc::Sender<MarketEvent>) {
     let had={
         let mut s=p.tokenlon.0.lock().unwrap_or_else(|e|e.into_inner());
-        let had=!s.rates.is_empty();s.rates.clear();s.tickets.clear();had
+        let had=!s.rates.is_empty();s.rates.clear();s.requests.clear();s.tickets.clear();had
     };
     if had {let _=out.send(p.tokenlon.event(p,Address::ZERO,0)).await;}
 }
@@ -90,27 +105,39 @@ pub(in crate::venues::bsc_dex) async fn run(p:Parts,out:mpsc::Sender<MarketEvent
             let ctx=p.ctx.with_account(&id);
             if let Ok(signer)=wallet::signer::signer(&ctx){accounts.push((id,ctx,Arc::new(signer)));}
         }
-        let mut tasks=Vec::new();
+        let mut tasks=BTreeMap::new();
+        let mut requests=std::mem::take(&mut p.tokenlon.0.lock().unwrap_or_else(|e|e.into_inner()).requests);
         for market in markets.iter().filter(|m|m.quote_token==cash){
             let Ok(base_dec)=p.tokens.decimals(&p.ctx,market.base_token).await else {continue};
-            for qty in &market.sizes {
-                for (side,input,output) in [(Side::Buy,cash,market.base_token),(Side::Sell,market.base_token,cash)]{
+            for (side,input,output) in [(Side::Buy,cash,market.base_token),(Side::Sell,market.base_token,cash)]{
+                let buy=side==Side::Buy;
+                // Перемежаем аккаунты и сохраняем настроенные наблюдения при новых запросах ядра.
+                for size in 0..=market.sizes.len() {
                     for (id,c,signer) in &accounts{
-                        let k=Key{wallet:id.clone(),base:market.base_token,quote:cash,buy:side==Side::Buy,qty:*qty};
-                        let q=client::Query{base:market.base.clone(),quote:market.quote.clone(),side,amount:*qty,base_dec,input,output};
-                        tasks.push((k,q,c.clone(),Arc::clone(signer)));
+                        let qty=match market.sizes.get(size) {
+                            Some(qty)=>*qty,
+                            None=>match requests.remove(&(id.clone(),market.base_token,cash,buy)) {
+                                Some(qty) if !market.sizes.contains(&qty)=>qty,
+                                _=>continue,
+                            }
+                        };
+                        let k=Key{wallet:id.clone(),base:market.base_token,quote:cash,buy,qty};
+                        let q=client::Query{base:market.base.clone(),quote:market.quote.clone(),side,amount:qty,base_dec,input,output};
+                        tasks.entry(id.clone()).or_insert_with(Vec::new).push((k,q,c.clone(),Arc::clone(signer)));
                     }
                 }
             }
         }
         if !tasks.is_empty(){let _=p.gas.fees(&p.ctx,&p.heads).await;}
-        let mut completed=stream::iter(tasks).map(|(key,query,ctx,signer)|async move{
+        let completed=stream::iter(tasks.into_values()).flat_map_unordered(client::rate_parallelism(&p.ctx),|tasks|
+            Box::pin(stream::iter(tasks).then(move |(key,query,ctx,signer)|async move{
             if ctx.settings.generation()!=rev || !super::enabled(&ctx) {return None;}
             let at=Instant::now();
             let rate=tokio::time::timeout(Duration::from_millis(age),client::rate(&ctx,&signer,&query)).await.ok()?.ok()?;
-            (ctx.settings.generation()==rev && rate>Decimal::ZERO && at.elapsed()<Duration::from_millis(age))
+            (ctx.settings.generation()==rev && at.elapsed()<Duration::from_millis(age))
                 .then_some((key,Entry{generation:rev,at,rate}))
-        }).buffer_unordered(4);
+        })));
+        tokio::pin!(completed);
         while let Some(response)=completed.next().await{
             if p.ctx.settings.generation()!=rev{break;}
             if let Some((key,entry))=response{

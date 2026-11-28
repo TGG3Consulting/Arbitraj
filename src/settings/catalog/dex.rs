@@ -271,6 +271,7 @@ pub static DEX: &[SettingDef] = &[
     d("Tokenlon PMM", "tokenlon.pairs", K::TextList, L::None, "пары и размеры", V, "Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.gas_budget_native", K::Decimal, L::Positive, "ETH", V, "Предел расходов газа Ethereum на исполнение личного ордера.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.min_validity_ms", K::Integer, L::Positive, "мс", V, "Минимальное время до истечения ордера.").optional().dex_venue(),
+    d("Tokenlon PMM", "tokenlon.rate_parallelism", K::Integer, L::Positive, "запросов", V, "Одновременные фоновые запросы ставки по разным кошелькам. Для личной заявки зарезервировано ещё одно место.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.quote_budget_ms", K::Integer, L::Positive, "мс", V, "Бюджет личной котировки и симуляции.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.local_rpc", K::Text, L::None, "локальный узел", V, "Собственный узел Ethereum для изолированной денежной симуляции. Абсолютный путь Unix IPC либо числовой loopback HTTP с портом.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.publisher_url", K::Url, L::None, "URL", V, "Официальный сервис личных котировок PMMV5 для кошелька Ethereum.").optional().dex_venue(),

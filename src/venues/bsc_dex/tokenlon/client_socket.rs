@@ -1,4 +1,4 @@
-//! Одна SockJS/STOMP-сессия PMMV5 на площадку и плательщика. Публикации сопоставляются с подпиской.
+//! Отдельные последовательные SockJS/STOMP-сессии личных заявок и фоновых ставок на плательщика. Публикации сопоставляются с подпиской.
 //! https://github.com/consenlabs/tokenlon-v5-sdk · подписки Quoter, X-SEND-BY-RELAYER=false.
 use super::{Failure, Query, Stage, auth, pmm_order};
 use crate::{
@@ -22,8 +22,36 @@ use tokio_tungstenite::{
 
 type Stream = WebSocketStream<MaybeTlsStream<TcpStream>>;
 type Slot = Arc<AsyncMutex<Option<Session>>>;
-type Sessions = HashMap<(&'static str, Address), (Instant, Slot)>;
+type Sessions = HashMap<(&'static str, Address, bool), (Instant, Slot)>;
 static SESSIONS: LazyLock<Mutex<Sessions>> = LazyLock::new(Default::default);
+
+// Один дополнительный слот сохраняется за firm на всю площадку, свободные фоновые слоты доступны firm.
+type Active = HashMap<&'static str,(usize,usize)>;
+static ACTIVE: LazyLock<Mutex<Active>> = LazyLock::new(Default::default);
+
+struct Permit(&'static str,bool);
+impl Permit {
+    fn reserve(counts:&mut (usize,usize),background:usize,firm:bool)->bool {
+        let total=counts.0.saturating_add(counts.1);
+        if total>=background.saturating_add(1) || (!firm && counts.0>=background) {return false;}
+        if firm {counts.1+=1;} else {counts.0+=1;}
+        true
+    }
+    fn acquire(ctx:&Ctx,firm:bool)->Result<Self,Failure> {
+        let limit=super::rate_parallelism(ctx);
+        let mut active=ACTIVE.lock().unwrap_or_else(|e|e.into_inner());
+        Self::reserve(active.entry(ctx.place.id).or_default(),limit,firm)
+            .then(||Self(ctx.place.id,firm)).ok_or(Failure::Throttle)
+    }
+}
+impl Drop for Permit {
+    fn drop(&mut self) {
+        let mut active=ACTIVE.lock().unwrap_or_else(|e|e.into_inner());
+        if let Some(counts)=active.get_mut(self.0) {
+            if self.1 {counts.1-=1;} else {counts.0-=1;}
+        }
+    }
+}
 
 struct Session {
     stream: Stream,
@@ -144,13 +172,16 @@ pub(super) async fn request(
         peers
             .retain(|_, (last, slot)| last.elapsed() < limits.total || Arc::strong_count(slot) > 1);
         let pair = peers
-            .entry((ctx.place.id, owner))
+            .entry((ctx.place.id, owner, firm))
             .or_insert_with(|| (Instant::now(), Arc::default()));
         pair.0 = Instant::now();
         Arc::clone(&pair.1)
     };
     timeout(limits.total, async {
-        let mut cached = slot.lock().await;
+        let mut cached = if firm {
+            slot.try_lock().map_err(|_|Failure::Throttle)?
+        } else {slot.lock().await};
+        let _permit=Permit::acquire(ctx,firm)?;
         // После отмены запроса соединение с незавершённой подпиской закрывается.
         let mut session = match cached.take() {
             Some(s) => s,
@@ -174,4 +205,21 @@ pub(super) async fn request(
     .await
     .map_err(|_| Failure::Timeout.error(ctx))?
     .map_err(|e| e.error(ctx))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Permit;
+    #[test]
+    fn saturated_monitor_leaves_one_slot_for_firm_and_firm_can_borrow_idle_slots() {
+        let mut active=(0,0);
+        assert!(Permit::reserve(&mut active,2,false));
+        assert!(Permit::reserve(&mut active,2,false));
+        assert!(!Permit::reserve(&mut active,2,false));
+        assert!(Permit::reserve(&mut active,2,true));
+        assert!(!Permit::reserve(&mut active,2,true));
+        active.0-=1;
+        assert!(Permit::reserve(&mut active,2,true));
+        assert!(!Permit::reserve(&mut active,2,false));
+    }
 }

@@ -4109,6 +4109,15 @@ rationale = "Минимальное время до истечения орде�
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
+name = "tokenlon.rate_parallelism"
+area = "Venue eth_dex"
+unit = "запросов"
+value = "4"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_additional_rates.json"
+rationale = "Прежняя ширина монитора — четыре. Записанные персональные ставки WBTC и UNI занимали 584–1672 мс. Сравнивать частоту свежих ставок и отказов издателя. Для firm зарезервировано отдельное место."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
 name = "tokenlon.quote_budget_ms"
 area = "Venue eth_dex"
 unit = "мс"

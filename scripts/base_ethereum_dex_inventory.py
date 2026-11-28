@@ -29,6 +29,8 @@ BASE_USDT_EVIDENCE = {
              "[Набор и способ расчёта](https://www.top.market/packs/1)."),
     "534": ("Собственный AMM Overtime предлагает ликвидность для ставок на исход. Билет и право на выигрыш не образуют валютную пару. "
              "[Устройство AMM](https://docs.overtime.io/learn-about-overtime/how-overtime-works) · [Расчёт исходов](https://docs.overtime.io/learn-about-overtime/market-creation-and-trading)."),
+    "4196": ("На H=62262756 у OrderProcessor V1 приём заявок приостановлен, Base USDT отключён, USDC разрешён. У V2 за 43 201 блок — 17 заявок (11 с USDC, 6 с нулевым адресом платежа) и 11 событий расчёта. За 50 000 блоков заявок с Base USDT не найдено. Отдельный USD+ Minter отклонил расчёт для 1 USDT, для 1 USDC вернул 999874 raw USD+. "
+             "[Брокерские заявки](https://docs.dinari.com/docs/placing-orders) · [Снимок Base](../tests/data/first_run_dex_2026-11-26/dinari_base_usdt_checks.json.gz)."),
 }
 
 

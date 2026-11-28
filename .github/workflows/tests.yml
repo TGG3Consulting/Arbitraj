@@ -1135,7 +1135,7 @@ jobs:
       - if: startsWith(matrix.market, 'sector-v2-')
         env:
           MARKET: ${{ matrix.market }}
-          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RPC }}
+          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RP }}
         run: python scripts/record_docswap.py "${MARKET#sector-v2-}" "$RUNNER_TEMP/market.json" --sector
       - if: matrix.market == 'rubicon-classic-base'
         run: |
@@ -1237,7 +1237,7 @@ jobs:
         run: python scripts/record_aquila_base.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'rubicon-aquila-ethereum'
         env:
-          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RPC }}
+          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RP }}
         run: python scripts/record_aquila_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'mars-empty-base'
         run: python scripts/record_docswap.py base "$RUNNER_TEMP/market.json" --mars
@@ -1260,7 +1260,7 @@ jobs:
       - if: startsWith(matrix.market, 'ranges-ethereum-')
         env:
           MARKET: ${{ matrix.market }}
-          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RPC }}
+          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RP }}
         run: python scripts/record_ranges_wallets.py "$RUNNER_TEMP/market.json" "${MARKET##*-}"
       - if: matrix.market == 'pendle-wallets-ethereum'
         run: python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json"

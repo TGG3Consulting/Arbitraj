@@ -942,6 +942,8 @@ jobs:
           python scripts/record_zeroex_base_payments.py "$RUNNER_TEMP/payments.json.gz"
           gzip -dc "$RUNNER_TEMP/payments.json.gz" > "$RUNNER_TEMP/market.json"
           cmp "$RUNNER_TEMP/market.json" <(gzip -dc tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz)
+      - if: matrix.market == 'ondo-ethereum-settlement'
+        run: python scripts/record_ondo_ethereum_settlement.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'zeroex-base-rfq'
         run: python scripts/record_base_zeroex_rfq.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'basin-wallet-')

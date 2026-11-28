@@ -1125,6 +1125,7 @@ jobs:
       - if: matrix.market == 'treble-spot-registry'
         env:
           TREBLE_GRAPH_API_KEY: ${{ secrets.TREBLE_GRAPH_API_KEY }}
+          BASE_ARCHIVE_RPC: ${{ secrets.BASE_ARCHIVE_RPC }}
         run: python scripts/record_treble_spot_registry.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'treble-spot-base'
         run: python scripts/record_base_algebra_markets.py treble-spot "$RUNNER_TEMP/market.json"

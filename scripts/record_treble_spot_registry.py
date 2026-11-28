@@ -27,6 +27,14 @@ TOPICS = ["0x" + keccak(text=m).hex() for m in ("Pool(address,address,address)",
 PAGE = 9000
 ZERO = "0x" + "00" * 20
 MC = "0xca11bde05977b3631167028862be2a173976ca11"
+# Узел Base из секрета Actions BASE_ARCHIVE_RPC (если задан и не пуст) — первым; LOGS/STATE остаются запасными.
+ARCHIVE = os.environ.get("BASE_ARCHIVE_RPC", "").strip()
+SKIP = set()  # методы, на которых узел из переменной уже отказал: дальше сразу прежний узел
+
+
+def hide(text):
+    """Принимает текст вывода; возвращает его с адресом из BASE_ARCHIVE_RPC, заменённым меткой. Ошибок нет."""
+    return text.replace(ARCHIVE, "BASE_ARCHIVE_RPC") if ARCHIVE else text
 
 def call(sig, types=(), values=()):
     return "0x" + (keccak(text=sig)[:4] + encode(types,values)).hex()
@@ -38,11 +46,20 @@ def batch(session, method, args):
         group = args[start:start+size]
         payload = [dict(id=i,jsonrpc="2.0",method=method,params=p) for i,p in enumerate(group)]
         time.sleep(0.5)
-        endpoint = LOGS if method == 'eth_getLogs' else STATE
-        resp = session.post(endpoint,json=payload[0] if size==1 else payload,timeout=22)
-        resp.raise_for_status()
-        body = resp.json()
-        replies = body if isinstance(body,list) else [body]
+        primary = LOGS if method == 'eth_getLogs' else STATE
+        for endpoint in [ARCHIVE]*(bool(ARCHIVE) and method not in SKIP)+[primary]:
+            resp = None
+            try:
+                resp = session.post(endpoint,json=payload[0] if size==1 else payload,timeout=22)
+                resp.raise_for_status()
+                body = resp.json()
+                replies = body if isinstance(body,list) else [body]
+                if endpoint != primary and any("error" in row for row in replies): raise ValueError(replies)
+                break
+            except (requests.RequestException, ValueError) as exc:
+                if endpoint == primary: raise
+                SKIP.add(method)
+                print("BASE_ARCHIVE_RPC", method, hide(str(exc))[:300], hide(resp.text if resp is not None else "")[:300], flush=True)
         rows = {row["id"]:row for row in replies}
         rejected = next((row["error"] for row in replies if "error" in row), None)
         if rejected: raise ValueError((method,start,rejected))

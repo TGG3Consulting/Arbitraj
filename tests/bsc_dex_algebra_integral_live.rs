@@ -14,6 +14,8 @@
 //! От чего зависит: tests/algebra_integral_common (запись, разбор, состояние пула), arb::venues::bsc_dex::math::swap_algebra.
 
 mod algebra_integral_common;
+#[path = "algebra_integral_common/homelander.rs"]
+mod homelander;
 mod native_common;
 
 use alloy_primitives::U256;

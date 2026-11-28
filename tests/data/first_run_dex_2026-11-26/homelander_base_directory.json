@@ -1,0 +1,1951 @@
+{
+  "chain_id": 8453,
+  "height": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "source": "https://raw.githubusercontent.com/DefiLlama/dimension-adapters/be9967c3f0d3ccd06c871bab0d16beb3304de719/fees/homelander/shared.ts",
+  "sdk_cache_key_source": "https://github.com/DefiLlama/defillama-sdk/blob/27d966744de2d2aa321e4a8d16efac42c741b5cc/src/util/logs.ts",
+  "rpc": "https://mainnet.base.org",
+  "multicall3": "0xca11bde05977b3631167028862be2a173976ca11",
+  "event_signature": "PluginCreated(address indexed pool,address plugin)",
+  "topic0": "0x5f4a087552a21f3d5dc85ceb55e82eb19071c94cf9e51d0e5505093a80e69ec2",
+  "registries": [
+    {
+      "address": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "from_block": 42314036,
+      "to_block": 62262756,
+      "events": 11,
+      "cache_url": "https://defillama-datasets.llama.fi/zlib-1.0/event-logs/base/0xa8dd4c05796801c734e99d5582e90e3a8bd88194-0x5f4a087552a21f3d5dc85ceb55e82eb19071c94cf9e51d0e5505093a80e69ec2",
+      "cache_sha256": "fab2898838c37ba14e746bc702b91642bc0f8c51f06ea24f4e8fbccd3e44be6a",
+      "cache_version": "v3",
+      "cache_ranges": [
+        [
+          42314026,
+          63150123
+        ]
+      ],
+      "cache_log_rows": 11
+    },
+    {
+      "address": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "from_block": 46026550,
+      "to_block": 62262756,
+      "events": 32,
+      "cache_url": "https://defillama-datasets.llama.fi/zlib-1.0/event-logs/base/0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce-0x5f4a087552a21f3d5dc85ceb55e82eb19071c94cf9e51d0e5505093a80e69ec2",
+      "cache_sha256": "1f2997e472068416f67be0a87c28fe2a102883428fb27548076369da7ba26623",
+      "cache_version": "v3",
+      "cache_ranges": [
+        [
+          42314026,
+          63150123
+        ]
+      ],
+      "cache_log_rows": 32
+    }
+  ],
+  "evidence": {
+    "directory": "Public SDK cache, metadata covers both deployment-to-H intervals without gaps. Every event is independently verified in a successful transaction receipt, including block hash, log position, indexed pool, plugin and registry.",
+    "state": "EIP-1898 requireCanonical=true at H, Multicall3 aggregate3. pool.factory(), plugin(), token0(), token1(), each registry.pluginByPool(pool), then factory.poolByPair(token0,token1) and configured customPoolByPair where present.",
+    "crosscheck": "Six original pools cross-checked against homelander_base.json; identity of additional pools is not an execution, profit or liquidity measurement.",
+    "verified_event_blocks": 43,
+    "verified_receipts": 43,
+    "pool_state": "EIP-1898 tag, Multicall3 aggregate3: liquidity() -> uint128 in-range units, globalState() -> (uint160 sqrtPriceX96,int24 tick,uint16 lastFee,uint8 pluginConfig,uint16 communityFee,bool unlocked). unlocked reports a pool lock bit at this block; the ABI does not expose a separate pause switch.",
+    "quickswap_plugin": {
+      "adapter": "src/venues/bsc_dex/pools/quickswap_plugin.rs::check and proxy_matches",
+      "profile": "quickswap-v4-base",
+      "default_plugin_factory": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "beacon_slot": "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50",
+      "expected_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+      "beacon_implementation": "0x7a937e89018298c03b3343c7d3228f64856ea697",
+      "expected_implementation": "0x7a937e89018298c03b3343c7d3228f64856ea697",
+      "immutable_pool_byte_offset": 75,
+      "expected_normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+      "description": "For each pool: listed active plugin in pinned factory; historical plugin runtime with its exact 32-byte pool immutable at offset zeroed for template hash; historical EIP-1967 beacon storage and current implementation at the configured beacon. These checks are required but do not measure swap output."
+    }
+  },
+  "events": [
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 42935047,
+      "log_index": 88,
+      "transaction_hash": "0x81abf3817169142c0b919de668525caa7aa51f771b1aa87b744d683a74ecd8a4",
+      "pool": "0xee58348059c9ad6ac345be79c399da0c200627ed",
+      "plugin": "0xf825dae61d8c3d157ef09f41a60a1f2bb27d9e9f",
+      "block_hash": "0x64dd8d02fc1f0ba78ff97e0c26b8d3b04655c57012a233ccc1acc5aafe183a81"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 43277692,
+      "log_index": 679,
+      "transaction_hash": "0xa23a3091165f8aff7c070841a656c984b9d31bab168bfc67146fdd7576ccfb4d",
+      "pool": "0xb20f018dde5a6fe7f93c31da05a5da9efbc52772",
+      "plugin": "0xb984c1e2ccaa7de48a7e7d8c5465f0c0d45efaa3",
+      "block_hash": "0x5c4815f4b4aa9463752d0b69a26b20656ed5387affb1d1f6fede77f39926068e"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 43277863,
+      "log_index": 513,
+      "transaction_hash": "0xbdd16582ec9a86b88968a3f0a56cdb8354c4f54c51cf4ce7abb08ab3e3e62817",
+      "pool": "0x434355f7eafcf3a5b8a6ef755505b845682f906b",
+      "plugin": "0x8d8f34b251941d2d25e6257cb94736bfddd87551",
+      "block_hash": "0x5c34cfa6135c784b6a211958a3b9d5f5f643c2cd6552d3c8d013d80026db5b37"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 43277956,
+      "log_index": 617,
+      "transaction_hash": "0xdd75183b8b7e063a935a156f356f19d6268f91d1c1e8a2a5d4fab2056c0acbef",
+      "pool": "0xc142affc7191aa77ef644a790da10a9aa8b01f7e",
+      "plugin": "0xe3e8a21d1297a557e65a1d72eefeae3f4c8c4945",
+      "block_hash": "0x52836517561b3938e1b0dce5e6f7910406d5d6e58fcbd2bed2919a924d285112"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 44096963,
+      "log_index": 427,
+      "transaction_hash": "0xf0523e662283f5e6d7a4c0374de00991f63065bc7359a95584615be3c01e4317",
+      "pool": "0x855fcfc162d89bb4930c746d01f25d255de5f772",
+      "plugin": "0xca704eed83dbd8b0aa0542dd3797d1ca2aa785d4",
+      "block_hash": "0xd81984e655a3e80829d15c1d8468c66d8c3bc19fcb62384b09a9b53964874bd9"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 44097785,
+      "log_index": 550,
+      "transaction_hash": "0xa9b129bc3384827732e1a652a66ea4b678e800ea3fab14b80a282c59b3ad8fcb",
+      "pool": "0x82dbe18346a8656dbb5e76f74bf3ae279cc16b29",
+      "plugin": "0xf5cbff5c671379836c431ee0941feb42b1d0e0dd",
+      "block_hash": "0xa4ade0b0529f3ac87b7cdbaf7e2e96d8d069f893eca9845905d19882baab5e4e"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 45085423,
+      "log_index": 36,
+      "transaction_hash": "0x9a335c0f1678be25832ce521d3b82965355aa5e759d59ef632ca4f72a670b17f",
+      "pool": "0xfe4d6560d04fed2c9b6b163cb88979d7cce3874a",
+      "plugin": "0xfc9c81ed99c376fb1fe1ed41ae8292f05d4a6748",
+      "block_hash": "0xcc3da5237919e08a3ab2f3e48a3f7bc3bda4ccc8b18cad6b07687da5535c4d31"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 45085489,
+      "log_index": 20,
+      "transaction_hash": "0x589512c26d41fe40237f7bdfb420746dd2a1f3073f454334ff224cda4ddff77f",
+      "pool": "0x0ba69825c4c033e72309f6ac0bde0023b15cc97c",
+      "plugin": "0xce28d45c1a218a45460664283586f6a0a02afe99",
+      "block_hash": "0x515d1fa06de6c215d269940e8f00f09affbeebb76f96c54a2902eb56e174a24e"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 45085522,
+      "log_index": 525,
+      "transaction_hash": "0x1e41ff3ce69bc4dbd27cc51ee910a865857998e99d17621aa79b1b706b1e9380",
+      "pool": "0x3f9b863ef4b295d6ba370215bcca3785fcc44f44",
+      "plugin": "0x8c89ab9250bd4fa9d6a54628902db584fee779c4",
+      "block_hash": "0x0757a288d50c46962931e5a44b73ea15e2460d0b55db7e4ba93336f4d69c6a1c"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 45085557,
+      "log_index": 312,
+      "transaction_hash": "0xeba7627a696d29ed489f1cf36aace9518c5003ac2d86f8ccec8b1414ee3fa8af",
+      "pool": "0x89f29dd355d74e57389374a2aa5f9518a1e497ac",
+      "plugin": "0x9fb06c9c72c6355bb9ec8841e2a6eb3551fb378d",
+      "block_hash": "0xf7c5b8c9f075c51321d2a32a11fbb29dbdf6f1d50b52eec02b194a5b23db89b7"
+    },
+    {
+      "registry": "0xa8dd4c05796801c734e99d5582e90e3a8bd88194",
+      "block": 45085585,
+      "log_index": 67,
+      "transaction_hash": "0xf110f5cd733541633c91d00779732c0a7a29b048a3915996752bea585f38630d",
+      "pool": "0x51f0b932855986b0e621c9d4db6eee1f4644d3d2",
+      "plugin": "0xe33a242990780ab872ae986ad68206478fc85ae1",
+      "block_hash": "0xf924b2ea126ed9f65aef77d99e133549f2b60d10e0855bfc30a5655ead3d66cf"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157302,
+      "log_index": 95,
+      "transaction_hash": "0xf3b9663acdeac4fd9c173a28d1a42e61e8a5fc8dff1809d48678ea571f886388",
+      "pool": "0xf52fa13e8eaa457aa48229d0617f59d39c4f0be8",
+      "plugin": "0xafa01257aedf76d6f5562912d7163a4913eb23ec",
+      "block_hash": "0xdeece6f0bfb4233d4311b07d0b931b3173be7dbf204051701d1c6d5437c29f4f"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157318,
+      "log_index": 562,
+      "transaction_hash": "0xcccbe6d1b009ba54bfcff81d0bdc4463e28d063014db6942f24daf1479c45f22",
+      "pool": "0xd30b9fa98713425c0302593d7f8f094be31e9710",
+      "plugin": "0x5a41d2f58a6a3a7ff7d6d52d10a93bf65aa35a1e",
+      "block_hash": "0x3e818eb20795e237c6d7910e17b629de3a170814306614c602800b9336c0fd0d"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157337,
+      "log_index": 700,
+      "transaction_hash": "0xfe639a2d4d08129bc2a13eb4afb8ccc69ba762054c232c2699819ac2f4c0f268",
+      "pool": "0x5a9ad2bb92b0b3e5c571fdd5125114e04e02be1a",
+      "plugin": "0xa6ef2fea1347e6380f0e5c0d5eab41486abee1ae",
+      "block_hash": "0xe6e2e778d0d765c47d2c1f498c8d56de067b531fb9b019e8e4c5ce981d5be7a2"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157360,
+      "log_index": 298,
+      "transaction_hash": "0x9552a99b45dfedf3def12dc79c802a5d384dabe8aefdfa69ab19a578d9f7663e",
+      "pool": "0x74a4bf2cad1b172cdc82a5da7130c7a59eb5460b",
+      "plugin": "0xa921d5e43606ce696ae6db74c450e77881b2a641",
+      "block_hash": "0x9ac9646ca4f1285d569257dbd937a8d079d2bccde5c92c1047508a3cd460e391"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157406,
+      "log_index": 588,
+      "transaction_hash": "0x2d97746b18c4598a91a3d0759b5a4ce3b6886323d8a39cb993eefffd8653fa5d",
+      "pool": "0x03122fc0c902d6fe9cf019e16a406eac8efa7fdd",
+      "plugin": "0xd7a3b3c6b19a545deb804e072792f960b77b71e3",
+      "block_hash": "0xa24fb60da51fe7dfbb03295d193d7619a13e90270d2c3d68ef5bc060925ebd80"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157422,
+      "log_index": 545,
+      "transaction_hash": "0x16e868d6c343b8765411b242c7d6f896d2ede121e73d01c3201639bd46cc60b3",
+      "pool": "0xacc2874ed22e811afdc47979c7b7985cced53b29",
+      "plugin": "0x596aa5258eed1ae17f8c578b4ec80a215edad9f5",
+      "block_hash": "0x08202feaacdeb5398e1127fe4168d01a42b96620d2e39f1f112b3c6494fc106f"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157439,
+      "log_index": 963,
+      "transaction_hash": "0x554d26a2185c6c71e147e99a8c66223249a4e6480e8dcd1531637555dfbf2e95",
+      "pool": "0xd800b7e8c0949dffbd59e3df9527a22e311c0e7b",
+      "plugin": "0xba2175732dd459e994b902c5718b34a8edcb3be2",
+      "block_hash": "0x39d621f947b08b412196b916726d9bca417bfd491e474510fa3e2a345a444bdd"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157503,
+      "log_index": 194,
+      "transaction_hash": "0x38c075b1cd403e76ad0830cb3e706a0b21a0e798d39bd156453bf8f1d0879c87",
+      "pool": "0xe716634679af01f6511df3facf130a130927ee8c",
+      "plugin": "0xa89a599fb576d48f2b01ae9df58a49baa3668f2d",
+      "block_hash": "0x23ab36c0ffb06a306c9ec3aea75fefc86c3348f9456f344459e42b9001b73b27"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157520,
+      "log_index": 671,
+      "transaction_hash": "0x066b59ae0255a498fe0537964a537a19520287777ebefcdede3ef15e29f8038c",
+      "pool": "0xbe50cc9cf0905cac4f8f8453bb6c9798898658bd",
+      "plugin": "0xd13a160df5fb8dd915e00432ee0cf0b734c25efa",
+      "block_hash": "0xd7194cbd05846a8a1387f18aad5c6acf54b3e894e4cc2c5592266f8a438ec5af"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157546,
+      "log_index": 80,
+      "transaction_hash": "0x3e61951291db17c2a114f7cfa065b9ae52bdb8d7925779d7d97ad60b19a772e1",
+      "pool": "0xeb58703922961813c19fa755e83f1396ff9c99b0",
+      "plugin": "0xd4675c0583ac53c7255d5a300e650c9b650db72b",
+      "block_hash": "0xbb6e4411b07e2c66a54d4cd7aafa5f089faa9a5c4aec8b9f293fb04f7d6fd454"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157558,
+      "log_index": 560,
+      "transaction_hash": "0xee234e1a9d36c2ce4e51c8d36cabff3f9be50fa15e3775382e006f83c46cab21",
+      "pool": "0xc07fcce40b3afd2f795a5cb451a3f80737539983",
+      "plugin": "0xe0de597ea1d7fccfe935336e453ba97c91e642ec",
+      "block_hash": "0x32ec62ba450a655839d3a1d4434b0240303c2b14d4599069ccf0aeb90f5e6d7b"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47157570,
+      "log_index": 463,
+      "transaction_hash": "0x7c65cdeb952e8d18cd163c055771f46194655006f74030bc2812614f545363e2",
+      "pool": "0x7b2b36840a9c74d9c55bf2fdf10ea879f0066a9f",
+      "plugin": "0x4821334efb5c6f3aa2291dffa65ec19c5e1d4676",
+      "block_hash": "0x8cea11fc686a82481e2715527d0ac837a452f6741ced85e2000c5819e78fb997"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47439272,
+      "log_index": 707,
+      "transaction_hash": "0xe7966a9b9c54cbbd617ffcc54aeac5a5ae4cbd1eb011e4fd176e84c133ed96a4",
+      "pool": "0x1b30b28ae62d3103c78841a4dc0849c02c29a069",
+      "plugin": "0x1af6d002167b1b9fffc54766f5a2828b154b0f81",
+      "block_hash": "0x1374a2e306e8e5bf50556af65689328c76f2a34a80f7ad7b5008d7d24ecca935"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47440124,
+      "log_index": 384,
+      "transaction_hash": "0xae2eef53e73712999092f0d4de836a5650905c6cef767c22368f23196c2ce823",
+      "pool": "0x34069d40921abc416f1be481e87a3e3a8c4edf66",
+      "plugin": "0x4a65aba6e922ba2d16c5abafcc88af52b1a0c5f6",
+      "block_hash": "0x288ab23f9e1e747f5ed57b8badf6c78cf87cbf92a4727dc65922ab413896f8b5"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 47667949,
+      "log_index": 246,
+      "transaction_hash": "0x9c9b02f79e6d47178db431209ea232a75c62d4d1816296089dfeb14f90604d53",
+      "pool": "0x82ebc4d4b10c72423f200b84eb9fea5444042e59",
+      "plugin": "0x11acad3499521004c8feae973b5271bf2bb3e1cf",
+      "block_hash": "0x61208e144e94b35a73766497cd479d43e480146e2a1ef81d2ede9b3199ae34fa"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48008010,
+      "log_index": 788,
+      "transaction_hash": "0x4462d08311744c039998cc56ae09f3ab2cd1dd4e3444cc25571480c5635c578a",
+      "pool": "0x60a3054b0877ee617a6b23b602e2e6988bb57e7e",
+      "plugin": "0x5f08ffc5696a1b3f8a306bb5847cba606426da61",
+      "block_hash": "0x7a05d9d7ed8c23541e39096a5c66d2d013fdba1d9b517cdcd41aa49201d1e109"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48022046,
+      "log_index": 9,
+      "transaction_hash": "0x1f1ab24ac4b2cb77e15f5c5c8ac71c8a30feae4d1fdce0693cceeb010199ae83",
+      "pool": "0x0ced1345bf11471cbb0060369fa3a2ea7b653d13",
+      "plugin": "0x7526d95d66a610977cfaf5a0cf8ec30563370a39",
+      "block_hash": "0x64edd6c9966a60456a39388d8651652b39d895633323e1d3b76a93281246893d"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48022443,
+      "log_index": 421,
+      "transaction_hash": "0x89ef3d6f45aa71822722b7537345b72c01b4d180f69fa24266ad1c61c2ea3866",
+      "pool": "0x7a04475ba30e9e0b8f150d8e671bee6d7f6c9dc3",
+      "plugin": "0xa2157409ef0f8d152260d94651ef67791a5e2c7f",
+      "block_hash": "0x0eacfb120cf46e4041f94c6d1ff009176f856be44baa447d916e7fbc5826259b"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48424414,
+      "log_index": 27,
+      "transaction_hash": "0xe79f469659976bccaf1181c1ff3bd25d6e4eb353fc2aa46ded64ee53e44b2d8a",
+      "pool": "0x3a9b6feed79d45f5ddd7eedcc526f7d5a01b60fa",
+      "plugin": "0xf715aa2dc0b41f6552acd4a99ca96e8fd83f61bf",
+      "block_hash": "0xdbc80415fbce9c8ea75abfc08fd8dc4c6be439d1915f8a2799c1ee03e4852b25"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48461562,
+      "log_index": 437,
+      "transaction_hash": "0xe72a9e43c3da887d66e3a3e1762d50365adc995596927eb5f2a3c6ed4b56e0f8",
+      "pool": "0x6ee8992c7b9b94ac8a236a6ef185e7abb1490183",
+      "plugin": "0xdc677a1aab29665e90c68ee52940c5553f933381",
+      "block_hash": "0x7a162765a76bcf635d8f2492ff3683e717496ac60773ca99f8b98d411dd2b978"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 48749970,
+      "log_index": 549,
+      "transaction_hash": "0x35d2b1e2123d548565fb213497841db769c05b942ed624ea8b77655248ac4155",
+      "pool": "0x982a372ff0ce223df31217a1c833ec35f1830343",
+      "plugin": "0xd02f28cebfadd1c3a6c70ff18867eba5fb90f6c1",
+      "block_hash": "0x72313435207e5cd171bb4e1bad194480d95f2ab8bd07c4e0d1048dc73b18008b"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49368780,
+      "log_index": 388,
+      "transaction_hash": "0xb4431590905a843294a2e1a744018c243e7aee0e6fb10aa9f248d6a0b3b68d77",
+      "pool": "0xc2557d9fab0b2813188e8f69dd3704a44d42d7be",
+      "plugin": "0x3d84705073f722907d3169aab237f7200c746c42",
+      "block_hash": "0x52264e358bb58787740a04819b316c29933c4a1fe8a6f542dbd3cb6e12d7c384"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49407815,
+      "log_index": 305,
+      "transaction_hash": "0xb85d2ded1a8de1e20f5ac19240bf3889a056729a4fcfc33a69e1d7f995412094",
+      "pool": "0x34fce72ec1fdf3c1286381daf7c0166a7e28e4a3",
+      "plugin": "0xec718ed642c8ac412cc9842e5a3456239a8841dd",
+      "block_hash": "0x1cfa0219ec9118682533791707a2f5a21ad786a0fdc7bb3a5a32d6cb40cf7858"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49606499,
+      "log_index": 458,
+      "transaction_hash": "0xa8286cda5d7c92a64f7df1825baba34037364fc32010e9ba54961d07d597c63b",
+      "pool": "0x3c054e1498857d5c904ff818c876f174a87f1fe0",
+      "plugin": "0x7f19efb080e4eb488d8e30338a52550a9e3e9bf9",
+      "block_hash": "0xf17de929609083e8981d1e24259dbfe9797c00042f2604a9a2b696ac10a72d0b"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49611077,
+      "log_index": 123,
+      "transaction_hash": "0x4c385fb2bb096c7f2df4697be0a5a8113f2f86938c115fee82081586eba11e97",
+      "pool": "0x185d2910cf52ff2a4e33701c3336355cdf996e40",
+      "plugin": "0xf2bd04dca7d180988ab3bd0cf2ac1a8b18b1b7e5",
+      "block_hash": "0xa392b030b9bc9e8570ec021e3cea0cc376a57119f0407be3816c37c8d7a282e0"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49611346,
+      "log_index": 682,
+      "transaction_hash": "0xcc2c9d05254b1ddd0a0686fefab79b34f0e965f81aab0bd430e8da12282422ef",
+      "pool": "0x389d135a96103a4cfda22a257aa6a15434bd0d71",
+      "plugin": "0xe947026a6b75be8e657b06481aba22ae40a2ce40",
+      "block_hash": "0x0d2f56c260b4aac93df44098fc65f513908c8278dec7dc52b4bbfe8c6cddac47"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 49788264,
+      "log_index": 218,
+      "transaction_hash": "0x7d461f9f220aca72d33a808e55aa8bf745a2be4eb7425efc4bb1232eeb59d322",
+      "pool": "0x8f49706beb729c40846fd1a253b7943a071d79c1",
+      "plugin": "0xd9f9bddaa96ca5a886aa2ba9486c23b34e24405e",
+      "block_hash": "0x789a30585c5416b8ea19fac72050506a3fbda38485dfb67d389d3e9ecf04ef31"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 50604390,
+      "log_index": 262,
+      "transaction_hash": "0x545fa2fb2cad03d48eea883ea2cbe1071624d2ca1bc72619f1371f130aed9819",
+      "pool": "0x94a34d276ba15bd34538b32b3c6dc38fcb02c51a",
+      "plugin": "0x03ebf477a4b1afcd50c4c7d4d21c5caa369a65c9",
+      "block_hash": "0x5f8d67e6251c251a7db8e0153befb8ebafb83c9e6d23f9365e35a1e5a2e3a714"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 51984514,
+      "log_index": 610,
+      "transaction_hash": "0x553220c0a3e4fcb3d35f952fa5cfb25c7613b80386362c14a47ed844100be738",
+      "pool": "0x4a675f1b97fd5b2290700f03eca092745c398a54",
+      "plugin": "0x126e113df4d7650a2fa42dd8521f2758b2261897",
+      "block_hash": "0x049ef873beb6334ee47ab26585b06ed12c27d3311c0243c33d65083b578e47f9"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 53089745,
+      "log_index": 39,
+      "transaction_hash": "0x9636e972dccbf89f78db80f78af04f3e2f347b8d4902122a77b8d90c9c167fda",
+      "pool": "0x8bc201bcaf0717af33df3359d3e366492643e6aa",
+      "plugin": "0x438476bcab000c6781547fb0822c4f0821c2fb39",
+      "block_hash": "0xcdda063514075d1279d16cf286a5a4528b0b5e3888bbf95d0c2dec8e76eb58bc"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 53276541,
+      "log_index": 50,
+      "transaction_hash": "0xa96de44064f1756e006f9b24fe277120d3ecb379f10e749624c0d2f7abecbb52",
+      "pool": "0x2a8c9947c2231d4d149eb7b2b0b6f72a28f992c4",
+      "plugin": "0x53e99f52f1f34641df70d569e4a4aedeee2f5698",
+      "block_hash": "0x8a857b17c4440d8a331cc109682d8e702f236b149a0e8dcf35181a70b11b6a39"
+    },
+    {
+      "registry": "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce",
+      "block": 61910240,
+      "log_index": 165,
+      "transaction_hash": "0x6348630ea875ca5d5ace56b8fa548a07da90bdf67611be70150c6740e897a8e4",
+      "pool": "0x361899a2e6aab89a8153a13cd6396740938602d8",
+      "plugin": "0x732189956793399cae167604010d1271ad3a5c6f",
+      "block_hash": "0xe8d870a55f5ff32fd86f126f90c4f7a41e171ca33e74dbfc780b209ed3ef224e"
+    }
+  ],
+  "markets": [
+    {
+      "pool": "0x03122fc0c902d6fe9cf019e16a406eac8efa7fdd",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0xc1cba3fcea344f92d9239c08c0568f6f2f0ee452",
+      "active_plugin": "0xd7a3b3c6b19a545deb804e072792f960b77b71e3",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xd7a3b3c6b19a545deb804e072792f960b77b71e3"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x03122fc0c902d6fe9cf019e16a406eac8efa7fdd"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "971486928943147909526",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "70867880342795657151080979943",
+        "tick": -2231,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x964de2ae246aaf57b42620630d19031c098ffd5638ec6b8644f06068b028e5c4",
+        "embedded_word": "0x00000000000000000000000003122fc0c902d6fe9cf019e16a406eac8efa7fdd",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x0ba69825c4c033e72309f6ac0bde0023b15cc97c",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0xce28d45c1a218a45460664283586f6a0a02afe99",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xce28d45c1a218a45460664283586f6a0a02afe99",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0x0ba69825c4c033e72309f6ac0bde0023b15cc97c"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2981020568",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3226767556338930476222089422",
+        "tick": -64021,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x0ced1345bf11471cbb0060369fa3a2ea7b653d13",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x9ccd163a68e56d1079d16b25fbd69d464f657b07",
+      "active_plugin": "0x7526d95d66a610977cfaf5a0cf8ec30563370a39",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x7526d95d66a610977cfaf5a0cf8ec30563370a39"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x0ced1345bf11471cbb0060369fa3a2ea7b653d13"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "1461446703485210103287273052203988822378723970341",
+        "tick": 887271,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x8d27e3fd4f9a9ddc9efa81d36bd2f1b2f382cdf20b1d7cbd0a0432f1e1088ad3",
+        "embedded_word": "0x0000000000000000000000000ced1345bf11471cbb0060369fa3a2ea7b653d13",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x185d2910cf52ff2a4e33701c3336355cdf996e40",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x715324e1567bf6c59d917edca0dea2f235a6320f",
+      "token1": "0x83f31af747189c2fa9e5deb253200c505eff6ed2",
+      "active_plugin": "0xf2bd04dca7d180988ab3bd0cf2ac1a8b18b1b7e5",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xf2bd04dca7d180988ab3bd0cf2ac1a8b18b1b7e5"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x185d2910cf52ff2a4e33701c3336355cdf996e40"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "75164906657171924084475161033",
+        "tick": -1053,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x218254cba0829de81717718f3d41cf696c2dc8ca0514bad3be70c73b08237521",
+        "embedded_word": "0x000000000000000000000000185d2910cf52ff2a4e33701c3336355cdf996e40",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x1b30b28ae62d3103c78841a4dc0849c02c29a069",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x2878cfc54aabdadd9bb5d70dd24d6b91485afba3",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x1af6d002167b1b9fffc54766f5a2828b154b0f81",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x1af6d002167b1b9fffc54766f5a2828b154b0f81"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x1b30b28ae62d3103c78841a4dc0849c02c29a069"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "71387023857797371035",
+        "tick": -416571,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x071599be4e3a80589c2c863f598e65d3f5c38feef16d247cca20554ddda20b41",
+        "embedded_word": "0x0000000000000000000000001b30b28ae62d3103c78841a4dc0849c02c29a069",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x2a8c9947c2231d4d149eb7b2b0b6f72a28f992c4",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x6790e3e974d35c5235ab45d10ab693d9834e40d2",
+      "token1": "0xe0b62a2a9ebe8cf78a4f385c1f553f4dfc038028",
+      "active_plugin": "0x53e99f52f1f34641df70d569e4a4aedeee2f5698",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x53e99f52f1f34641df70d569e4a4aedeee2f5698"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x2a8c9947c2231d4d149eb7b2b0b6f72a28f992c4"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "324086802904863882418147483587",
+        "tick": 28175,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xb676f0f29e0c3f6ef6da8bc649700705c62e839153d05a9817588394646e330d",
+        "embedded_word": "0x0000000000000000000000002a8c9947c2231d4d149eb7b2b0b6f72a28f992c4",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x34069d40921abc416f1be481e87a3e3a8c4edf66",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x096746e984e57ae9a2922a08fc969bbe76963a72",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x4a65aba6e922ba2d16c5abafcc88af52b1a0c5f6",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x4a65aba6e922ba2d16c5abafcc88af52b1a0c5f6"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x34069d40921abc416f1be481e87a3e3a8c4edf66"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "1003240265713250127598",
+        "tick": -363711,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x262266138e4ad936e18b935d5de1d1e6ac0e11b5b9101349de39451e718ca3ea",
+        "embedded_word": "0x00000000000000000000000034069d40921abc416f1be481e87a3e3a8c4edf66",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x34fce72ec1fdf3c1286381daf7c0166a7e28e4a3",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x3ea5fe422379c143a030ca12a82efeb81cedba67",
+      "token1": "0xa4ec5895bdcd4b48a86839aaf0a263125eab997d",
+      "active_plugin": "0xec718ed642c8ac412cc9842e5a3456239a8841dd",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xec718ed642c8ac412cc9842e5a3456239a8841dd"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x34fce72ec1fdf3c1286381daf7c0166a7e28e4a3"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "4295128740",
+        "tick": -887272,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x07b0a3a3eafb6076decd9a3407ebec7c0c2544dbb9dff247a3b0049650affc1d",
+        "embedded_word": "0x00000000000000000000000034fce72ec1fdf3c1286381daf7c0166a7e28e4a3",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x361899a2e6aab89a8153a13cd6396740938602d8",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0x8c6bd57e2b893144c66865ef95cf1a6d0f82054d",
+      "active_plugin": "0x732189956793399cae167604010d1271ad3a5c6f",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x732189956793399cae167604010d1271ad3a5c6f"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x361899a2e6aab89a8153a13cd6396740938602d8"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2217147515624",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "856943306514841381263396289959226846",
+        "tick": 323947,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x1dbe946a7bab78151121362f6fd6d22177c6e540625355e8eaaddbd536d69c67",
+        "embedded_word": "0x000000000000000000000000361899a2e6aab89a8153a13cd6396740938602d8",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x389d135a96103a4cfda22a257aa6a15434bd0d71",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x584fbca587e2bbea9bec6cac60370f6ed20a49c4",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xe947026a6b75be8e657b06481aba22ae40a2ce40",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xe947026a6b75be8e657b06481aba22ae40a2ce40"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x389d135a96103a4cfda22a257aa6a15434bd0d71"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "4295128740",
+        "tick": -887272,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x3b65ad91ec45913f025457997ca0107b75233f005c325af3b7583871badf3f81",
+        "embedded_word": "0x000000000000000000000000389d135a96103a4cfda22a257aa6a15434bd0d71",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x3a9b6feed79d45f5ddd7eedcc526f7d5a01b60fa",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0xae35ff1bc4fbb45aaeef9768a3d9610786cac98b",
+      "token1": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+      "active_plugin": "0xf715aa2dc0b41f6552acd4a99ca96e8fd83f61bf",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xf715aa2dc0b41f6552acd4a99ca96e8fd83f61bf"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x3a9b6feed79d45f5ddd7eedcc526f7d5a01b60fa"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "41624529711",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3174468271354194007727333",
+        "tick": -202510,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x0cfc46d0f1d02a77643777c06477c7d49ea82fa67ecabde81a91301b6ddf8132",
+        "embedded_word": "0x0000000000000000000000003a9b6feed79d45f5ddd7eedcc526f7d5a01b60fa",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x3c054e1498857d5c904ff818c876f174a87f1fe0",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x584fbca587e2bbea9bec6cac60370f6ed20a49c4",
+      "token1": "0xcb35efff26f7e812541c6136785ce7617daeb8fa",
+      "active_plugin": "0x7f19efb080e4eb488d8e30338a52550a9e3e9bf9",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x7f19efb080e4eb488d8e30338a52550a9e3e9bf9"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x3c054e1498857d5c904ff818c876f174a87f1fe0"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "1577798622581035596776823880",
+        "tick": -78330,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xb4228792cb4e26744ed1c953a64b7a65bcdb56e6e5c73f043eaa4223045ebbff",
+        "embedded_word": "0x0000000000000000000000003c054e1498857d5c904ff818c876f174a87f1fe0",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x3f9b863ef4b295d6ba370215bcca3785fcc44f44",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0x8c89ab9250bd4fa9d6a54628902db584fee779c4",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x8c89ab9250bd4fa9d6a54628902db584fee779c4",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0x3f9b863ef4b295d6ba370215bcca3785fcc44f44"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "47541689512057",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "132621292553686212532140",
+        "tick": -266021,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x434355f7eafcf3a5b8a6ef755505b845682f906b",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0x8d8f34b251941d2d25e6257cb94736bfddd87551",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x8d8f34b251941d2d25e6257cb94736bfddd87551",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x434355f7eafcf3a5b8a6ef755505b845682f906b"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "29407063662990",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "791377805902035071282146",
+        "tick": -230293,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x4a675f1b97fd5b2290700f03eca092745c398a54",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x7094c27f342dbadfbbed005b219431595e33b305",
+      "token1": "0x920e753d8d7d5b598063c89b6f06288803448d06",
+      "active_plugin": "0x126e113df4d7650a2fa42dd8521f2758b2261897",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x126e113df4d7650a2fa42dd8521f2758b2261897"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x4a675f1b97fd5b2290700f03eca092745c398a54"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "493807668570294290326575510733",
+        "tick": 36598,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x8e15b1327a919ddbdff046b4c4d07ff5b29d67cded025ff19344d9668ba5bb1c",
+        "embedded_word": "0x0000000000000000000000004a675f1b97fd5b2290700f03eca092745c398a54",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x51f0b932855986b0e621c9d4db6eee1f4644d3d2",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x00000e7efa313f4e11bfff432471ed9423ac6b30",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xe33a242990780ab872ae986ad68206478fc85ae1",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xe33a242990780ab872ae986ad68206478fc85ae1",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x51f0b932855986b0e621c9d4db6eee1f4644d3d2"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "1531961841832359126",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "8831163227670776793077",
+        "tick": -320208,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x5a9ad2bb92b0b3e5c571fdd5125114e04e02be1a",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xa6ef2fea1347e6380f0e5c0d5eab41486abee1ae",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xa6ef2fea1347e6380f0e5c0d5eab41486abee1ae"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0x5a9ad2bb92b0b3e5c571fdd5125114e04e02be1a"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2049108845156892",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3255819941509847788787055",
+        "tick": -202003,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x4d6605fe59e3d0ce58ae998bf9f60fb14b42a62ce191b08e751144fd9af151a1",
+        "embedded_word": "0x0000000000000000000000005a9ad2bb92b0b3e5c571fdd5125114e04e02be1a",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x60a3054b0877ee617a6b23b602e2e6988bb57e7e",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x1396aa964c6f8c8c860ce6268a7c9bafb914e753",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x5f08ffc5696a1b3f8a306bb5847cba606426da61",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x5f08ffc5696a1b3f8a306bb5847cba606426da61"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x60a3054b0877ee617a6b23b602e2e6988bb57e7e"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "5356607712318458979529",
+        "tick": -330207,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xf9b128f2facda51a4ee581fba35b0deeeb50b9efd92919912c69f0e92c0ffe6a",
+        "embedded_word": "0x00000000000000000000000060a3054b0877ee617a6b23b602e2e6988bb57e7e",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x6ee8992c7b9b94ac8a236a6ef185e7abb1490183",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x24d621b1f5f1cf295313c88dc331012140e52d54",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xdc677a1aab29665e90c68ee52940c5553f933381",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xdc677a1aab29665e90c68ee52940c5553f933381"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x6ee8992c7b9b94ac8a236a6ef185e7abb1490183"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2998295279681",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "9107170463028783092331",
+        "tick": -319592,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xb9921f18cd5b964f7c143d9a8b44b644b3799321ee853fbcc5b190ed143e888f",
+        "embedded_word": "0x0000000000000000000000006ee8992c7b9b94ac8a236a6ef185e7abb1490183",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x74a4bf2cad1b172cdc82a5da7130c7a59eb5460b",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x2ae3f1ec7f1f5012cfeab0185bfc7aa3cf0dec22",
+      "token1": "0x4200000000000000000000000000000000000006",
+      "active_plugin": "0xa921d5e43606ce696ae6db74c450e77881b2a641",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xa921d5e43606ce696ae6db74c450e77881b2a641"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x74a4bf2cad1b172cdc82a5da7130c7a59eb5460b"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "30452532260593304239223",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "84765181383983319647944900772",
+        "tick": 1351,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x37e65b5e3cb48fd67fb3ec476714be4fe290dbf17350077217afc8be4cdabf91",
+        "embedded_word": "0x00000000000000000000000074a4bf2cad1b172cdc82a5da7130c7a59eb5460b",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x7a04475ba30e9e0b8f150d8e671bee6d7f6c9dc3",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0x9ccd163a68e56d1079d16b25fbd69d464f657b07",
+      "active_plugin": "0xa2157409ef0f8d152260d94651ef67791a5e2c7f",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xa2157409ef0f8d152260d94651ef67791a5e2c7f"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x7a04475ba30e9e0b8f150d8e671bee6d7f6c9dc3"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "73824930565840",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "5886847122718672084329512336635660664001",
+        "tick": 500653,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x558689e509f7f2c4d2f28ac60d8e9061e47e2d4e2070c868a460064d2b6676da",
+        "embedded_word": "0x0000000000000000000000007a04475ba30e9e0b8f150d8e671bee6d7f6c9dc3",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x7b2b36840a9c74d9c55bf2fdf10ea879f0066a9f",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x7094c27f342dbadfbbed005b219431595e33b305",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x4821334efb5c6f3aa2291dffa65ec19c5e1d4676",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x4821334efb5c6f3aa2291dffa65ec19c5e1d4676"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x7b2b36840a9c74d9c55bf2fdf10ea879f0066a9f"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "10395012990702",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "4277757521222156612529",
+        "tick": -334706,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xb9e8c6635e2658ae5963a459a7897e80f05dd76ee29a71d573022f0d58051c2f",
+        "embedded_word": "0x0000000000000000000000007b2b36840a9c74d9c55bf2fdf10ea879f0066a9f",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x82dbe18346a8656dbb5e76f74bf3ae279cc16b29",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xf5cbff5c671379836c431ee0941feb42b1d0e0dd",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xf5cbff5c671379836c431ee0941feb42b1d0e0dd",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0x82dbe18346a8656dbb5e76f74bf3ae279cc16b29"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "37038163338188",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3257091818376912898304381",
+        "tick": -201996,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x82ebc4d4b10c72423f200b84eb9fea5444042e59",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+      "token1": "0xf11d5ad2d7a8261e72e549ed0971c5207c049bc6",
+      "active_plugin": "0x11acad3499521004c8feae973b5271bf2bb3e1cf",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x11acad3499521004c8feae973b5271bf2bb3e1cf"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x82ebc4d4b10c72423f200b84eb9fea5444042e59"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "1593746770206588345222",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "52267074247659823012008148326320",
+        "tick": 129842,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x04b48618f80f062985a34e7ab7ed16b6d1d295c22498ae90c1f391786c915848",
+        "embedded_word": "0x00000000000000000000000082ebc4d4b10c72423f200b84eb9fea5444042e59",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x855fcfc162d89bb4930c746d01f25d255de5f772",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xca704eed83dbd8b0aa0542dd3797d1ca2aa785d4",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xca704eed83dbd8b0aa0542dd3797d1ca2aa785d4",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x855fcfc162d89bb4930c746d01f25d255de5f772"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2223363",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "82888167800948808325517264612",
+        "tick": 903,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x89f29dd355d74e57389374a2aa5f9518a1e497ac",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x00000e7efa313f4e11bfff432471ed9423ac6b30",
+      "token1": "0x4200000000000000000000000000000000000006",
+      "active_plugin": "0x9fb06c9c72c6355bb9ec8841e2a6eb3551fb378d",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x9fb06c9c72c6355bb9ec8841e2a6eb3551fb378d",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x89f29dd355d74e57389374a2aa5f9518a1e497ac"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "483309562337136104363",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "215603926167516368718305131",
+        "tick": -118139,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0x8bc201bcaf0717af33df3359d3e366492643e6aa",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0xcd2f22236dd9dfe2356d7c543161d4d260fd9bcb",
+      "active_plugin": "0x438476bcab000c6781547fb0822c4f0821c2fb39",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x438476bcab000c6781547fb0822c4f0821c2fb39"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x8bc201bcaf0717af33df3359d3e366492643e6aa"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "467408185169935876",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "14835220631425048072389020624097",
+        "tick": 104653,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x9cd18cff07e308315fa577f5cc7c67c1153d241d3791f7e55175a2ac3d414297",
+        "embedded_word": "0x0000000000000000000000008bc201bcaf0717af33df3359d3e366492643e6aa",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x8f49706beb729c40846fd1a253b7943a071d79c1",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0xd89d90d26b48940fa8f58385fe84625d468e057a",
+      "active_plugin": "0xd9f9bddaa96ca5a886aa2ba9486c23b34e24405e",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xd9f9bddaa96ca5a886aa2ba9486c23b34e24405e"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x8f49706beb729c40846fd1a253b7943a071d79c1"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "716263655462285225",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "2206042389329297053920781058451894762",
+        "tick": 342859,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xc0d6b05547e4cbbcace7fb002b51ad123a40cb0e3989d2c9628fd2fd7ed6341c",
+        "embedded_word": "0x0000000000000000000000008f49706beb729c40846fd1a253b7943a071d79c1",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x94a34d276ba15bd34538b32b3c6dc38fcb02c51a",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x7f5c2b379b88499ac2b997db583f8079503f25b9",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x03ebf477a4b1afcd50c4c7d4d21c5caa369a65c9",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x03ebf477a4b1afcd50c4c7d4d21c5caa369a65c9"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x94a34d276ba15bd34538b32b3c6dc38fcb02c51a"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "72323565809502156660969709254",
+        "tick": -1824,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x56740436b0f36822614f1f4a486069f9befa8c6b024eacf2e2e8fce2645f9156",
+        "embedded_word": "0x00000000000000000000000094a34d276ba15bd34538b32b3c6dc38fcb02c51a",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0x982a372ff0ce223df31217a1c833ec35f1830343",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "token1": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+      "active_plugin": "0xd02f28cebfadd1c3a6c70ff18867eba5fb90f6c1",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xd02f28cebfadd1c3a6c70ff18867eba5fb90f6c1"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0x982a372ff0ce223df31217a1c833ec35f1830343"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "2001503128756493614442022723439",
+        "tick": 64589,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x8b9eaf4335bb7a65ee80ab77da6d536f464a66f7c0a5e02e0dbae2fbb4dced94",
+        "embedded_word": "0x000000000000000000000000982a372ff0ce223df31217a1c833ec35f1830343",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xacc2874ed22e811afdc47979c7b7985cced53b29",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0x596aa5258eed1ae17f8c578b4ec80a215edad9f5",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x596aa5258eed1ae17f8c578b4ec80a215edad9f5"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0xacc2874ed22e811afdc47979c7b7985cced53b29"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "2698916315",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3227194229278182235983223632",
+        "tick": -64018,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x518ab2d3e08cf459747737ef0944cdd975f0169cfc9c09ced72dd332b58c5944",
+        "embedded_word": "0x000000000000000000000000acc2874ed22e811afdc47979c7b7985cced53b29",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xb20f018dde5a6fe7f93c31da05a5da9efbc52772",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+      "active_plugin": "0xb984c1e2ccaa7de48a7e7d8c5465f0c0d45efaa3",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xb984c1e2ccaa7de48a7e7d8c5465f0c0d45efaa3",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xb20f018dde5a6fe7f93c31da05a5da9efbc52772"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "20454505703349",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3109349190926336923690011",
+        "tick": -202924,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0xbe50cc9cf0905cac4f8f8453bb6c9798898658bd",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x7094c27f342dbadfbbed005b219431595e33b305",
+      "active_plugin": "0xd13a160df5fb8dd915e00432ee0cf0b734c25efa",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xd13a160df5fb8dd915e00432ee0cf0b734c25efa"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xbe50cc9cf0905cac4f8f8453bb6c9798898658bd"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "18987601052632726887378",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "60645036340954873864351444866338",
+        "tick": 132815,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x1030b0643cee9742b1ef1979ee6895ce135732c35d30b3e3c4f37d7a85d99f8f",
+        "embedded_word": "0x000000000000000000000000be50cc9cf0905cac4f8f8453bb6c9798898658bd",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xc07fcce40b3afd2f795a5cb451a3f80737539983",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0xe0de597ea1d7fccfe935336e453ba97c91e642ec",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xe0de597ea1d7fccfe935336e453ba97c91e642ec"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xc07fcce40b3afd2f795a5cb451a3f80737539983"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "624634590139",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "83003008533101227099473644593",
+        "tick": 930,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x2d059b2616525735cbf7f619abcd26daddd676d56ba6b4714be0ee9a41f99a33",
+        "embedded_word": "0x000000000000000000000000c07fcce40b3afd2f795a5cb451a3f80737539983",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xc142affc7191aa77ef644a790da10a9aa8b01f7e",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b",
+      "token1": "0x4200000000000000000000000000000000000006",
+      "active_plugin": "0xe3e8a21d1297a557e65a1d72eefeae3f4c8c4945",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xe3e8a21d1297a557e65a1d72eefeae3f4c8c4945",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xc142affc7191aa77ef644a790da10a9aa8b01f7e"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "46384339917683577043",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "1148066905232610902986686159",
+        "tick": -84690,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0xc2557d9fab0b2813188e8f69dd3704a44d42d7be",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x36785bb0396d3717ae3ddec61a4f562b7fcd9a37",
+      "token1": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "active_plugin": "0x3d84705073f722907d3169aab237f7200c746c42",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x3d84705073f722907d3169aab237f7200c746c42"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xc2557d9fab0b2813188e8f69dd3704a44d42d7be"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "0",
+      "liquidity_class": "zero",
+      "global_state": {
+        "sqrt_price_x96": "4295128740",
+        "tick": -887272,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x74eb3dc33b38aa26f329c0654f5ef56d0bab08f66f4b6a97ca3cc133a6065e26",
+        "embedded_word": "0x000000000000000000000000c2557d9fab0b2813188e8f69dd3704a44d42d7be",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xd30b9fa98713425c0302593d7f8f094be31e9710",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "token1": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+      "active_plugin": "0x5a41d2f58a6a3a7ff7d6d52d10a93bf65aa35a1e",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x5a41d2f58a6a3a7ff7d6d52d10a93bf65aa35a1e"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": true,
+      "factory_lookup": {
+        "poolByPair": "0xd30b9fa98713425c0302593d7f8f094be31e9710"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "40464521233686",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "79281638577615483872846531483",
+        "tick": 13,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xfcffe97388fc3fdac98ec0f79a276f3bd0d570d46fb5759a6a169feaa597c684",
+        "embedded_word": "0x000000000000000000000000d30b9fa98713425c0302593d7f8f094be31e9710",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xd800b7e8c0949dffbd59e3df9527a22e311c0e7b",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0xba2175732dd459e994b902c5718b34a8edcb3be2",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xba2175732dd459e994b902c5718b34a8edcb3be2"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xd800b7e8c0949dffbd59e3df9527a22e311c0e7b"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "217216188577988",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "132617991473007044952170",
+        "tick": -266021,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xf220098701f0faa014be6cd025a816ba93576bc2dc108afadc54f80177f71ef8",
+        "embedded_word": "0x000000000000000000000000d800b7e8c0949dffbd59e3df9527a22e311c0e7b",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xe716634679af01f6511df3facf130a130927ee8c",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x9bba915f036158582c20b51113b925f243a1a1a1",
+      "active_plugin": "0xa89a599fb576d48f2b01ae9df58a49baa3668f2d",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xa89a599fb576d48f2b01ae9df58a49baa3668f2d"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xe716634679af01f6511df3facf130a130927ee8c"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "70132826761058191",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "105833455651247184681495729370439",
+        "tick": 143953,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x8e64be149215e97182a5aec262629519035da820bb219ad7301a894ad1c72236",
+        "embedded_word": "0x000000000000000000000000e716634679af01f6511df3facf130a130927ee8c",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xeb58703922961813c19fa755e83f1396ff9c99b0",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x236aa50979d5f3de3bd1eeb40e81137f22ab794b",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0xd4675c0583ac53c7255d5a300e650c9b650db72b",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xd4675c0583ac53c7255d5a300e650c9b650db72b"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xeb58703922961813c19fa755e83f1396ff9c99b0"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "290718973577228",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "791305293983085479446421",
+        "tick": -230295,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0xeec65098ddc3eb14578c04d6d67f0da5a0de6f5ca07235b9ff306f8178b0eb7d",
+        "embedded_word": "0x000000000000000000000000eb58703922961813c19fa755e83f1396ff9c99b0",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xee58348059c9ad6ac345be79c399da0c200627ed",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0xcb585250f852c6c6bf90434ab21a00f02833a4af",
+      "active_plugin": "0xf825dae61d8c3d157ef09f41a60a1f2bb27d9e9f",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xf825dae61d8c3d157ef09f41a60a1f2bb27d9e9f",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xee58348059c9ad6ac345be79c399da0c200627ed"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "60869277096233",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3352827181698161956353300",
+        "tick": -201416,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    },
+    {
+      "pool": "0xf52fa13e8eaa457aa48229d0617f59d39c4f0be8",
+      "amm_factory": "0xc5396866754799b9720125b104ae01d935ab9c7b",
+      "known_parent_profile": "quickswap-v4-base",
+      "token0": "0x4200000000000000000000000000000000000006",
+      "token1": "0x920e753d8d7d5b598063c89b6f06288803448d06",
+      "active_plugin": "0xafa01257aedf76d6f5562912d7163a4913eb23ec",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0x0000000000000000000000000000000000000000",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0xafa01257aedf76d6f5562912d7163a4913eb23ec"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xf52fa13e8eaa457aa48229d0617f59d39c4f0be8"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "21521554822723891814",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "394274517757997468462054315085116",
+        "tick": 170257,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 150,
+        "unlocked": true
+      },
+      "quickswap_plugin_check": {
+        "code_bytes": 405,
+        "code_hash": "0x0414a65c5d5c03e56e08061834f673fb2d8d7ff519ad6cc5d2459b907773534e",
+        "embedded_word": "0x000000000000000000000000f52fa13e8eaa457aa48229d0617f59d39c4f0be8",
+        "normalized_runtime_hash": "0xb98e9ecd492a849a01a727b796337558e32dd5ae038cecadc494f9b0f919b08a",
+        "storage_beacon": "0x4d46d3f1afaab2901bc0d0b955a79f1184aee0b9",
+        "matches_adapter_checks": true,
+        "failed_checks": []
+      }
+    },
+    {
+      "pool": "0xfe4d6560d04fed2c9b6b163cb88979d7cce3874a",
+      "amm_factory": "0x36077d39cdc65e1e3fb65810430e5b2c4d5fa29e",
+      "known_parent_profile": "hydrex-integral",
+      "token0": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+      "token1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+      "active_plugin": "0xfc9c81ed99c376fb1fe1ed41ae8292f05d4a6748",
+      "registries": {
+        "0xa8dd4c05796801c734e99d5582e90e3a8bd88194": "0xfc9c81ed99c376fb1fe1ed41ae8292f05d4a6748",
+        "0xc3f2be91360d9ffc874e35b111780ccfb1a3ebce": "0x0000000000000000000000000000000000000000"
+      },
+      "matches_active": true,
+      "previous_payment_fixture": false,
+      "factory_lookup": {
+        "poolByPair": "0xfe4d6560d04fed2c9b6b163cb88979d7cce3874a"
+      },
+      "factory_lookup_matches": true,
+      "liquidity_raw": "798745",
+      "liquidity_class": "positive",
+      "global_state": {
+        "sqrt_price_x96": "3403740598637766704248248674",
+        "tick": -62953,
+        "last_fee": 500,
+        "plugin_config": 215,
+        "community_fee": 1000,
+        "unlocked": true
+      }
+    }
+  ]
+}

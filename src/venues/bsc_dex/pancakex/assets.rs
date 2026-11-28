@@ -9,7 +9,7 @@ use crate::{
         ryze::tokens::Token,
     },
 };
-use alloy_primitives::{Address, Bytes, keccak256};
+use alloy_primitives::{Address, Bytes, U256, keccak256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -22,6 +22,7 @@ alloy::sol! {
     function isAuthorized(uint64 id,address account) view returns(bool);
     function paused() view returns(bool);
     function deprecated() view returns(bool);
+    function maximumFee() view returns(uint256);
     function basisPointsRate() view returns(uint256);
     function isBlackListed(address account) view returns(bool);
 }
@@ -35,6 +36,7 @@ pub enum AssetCode {
         registry: Address,
     },
     TetherInput(Role),
+    TetherNet(Role),
 }
 impl AssetCode {
     pub fn parse(row: &str, chain: u64) -> Option<Self> {
@@ -55,6 +57,19 @@ impl AssetCode {
         match (*kind, extra) {
             ("exact", []) => Some(Self::Exact(r)),
             ("tether-input", []) => Some(Self::TetherInput(r)),
+            ("tether-net", [])
+                if chain == 1
+                    && r.address
+                        == alloy_primitives::address!(
+                            "dac17f958d2ee523a2206206994597c13d831ec7"
+                        )
+                    && r.runtime
+                        == alloy_primitives::b256!(
+                            "b44fb4e949d0f78f87f79ee46428f23a2a5713ce6fc6e0beb3dda78c2ac1ea55"
+                        ) =>
+            {
+                Some(Self::TetherNet(r))
+            }
             ("fiat", [imp, ih, adm]) => Some(Self::Fiat(Token::parse(&format!(
                 "{address}/{hash}/{imp}/{ih}/{adm}"
             ))?)),
@@ -74,9 +89,23 @@ impl AssetCode {
     }
     pub fn address(&self) -> Address {
         match self {
-            Self::Exact(t) | Self::TetherInput(t) | Self::B20 { token: t, .. } => t.address,
+            Self::Exact(t)
+            | Self::TetherInput(t)
+            | Self::TetherNet(t)
+            | Self::B20 { token: t, .. } => t.address,
             Self::Fiat(t) => t.address,
         }
+    }
+    /// The taker signs a Dutch order before the filler pays. The issuer can change fees
+    /// within this interval. setParams enforces <20 bps and <50 whole USDT on this runtime.
+    pub fn guaranteed_net(&self, amount: U256) -> U256 {
+        if !matches!(self, Self::TetherNet(_)) {
+            return amount;
+        }
+        let divisor = U256::from(10_000);
+        let rate = U256::from(19);
+        let fee = (amount / divisor) * rate + ((amount % divisor) * rate) / divisor;
+        amount - fee.min(U256::from(49_000_000u64))
     }
     pub fn can_receive(&self) -> bool {
         !matches!(self, Self::TetherInput(_))
@@ -88,6 +117,7 @@ impl AssetCode {
         from: Address,
         to: Address,
         executor: Address,
+        output: bool,
     ) -> GatewayResult<()> {
         let token = self.address();
         let bad = || {
@@ -99,16 +129,22 @@ impl AssetCode {
         match self {
             Self::Exact(r) => plain(ctx, token, r.runtime, at).await,
             Self::Fiat(t) => t.verify(ctx, at, &[from, to, executor]).await,
-            Self::TetherInput(r) => {
-                let (_, stopped, changed, rate, a, b) = tokio::try_join!(
+            Self::TetherInput(r) | Self::TetherNet(r) => {
+                let (_, stopped, changed, rate, cap, a, b) = tokio::try_join!(
                     plain(ctx, token, r.runtime, at),
                     canonical(ctx, at, token, pausedCall {}),
                     canonical(ctx, at, token, deprecatedCall {}),
                     canonical(ctx, at, token, basisPointsRateCall {}),
+                    canonical(ctx, at, token, maximumFeeCall {}),
                     canonical(ctx, at, token, isBlackListedCall { account: from }),
                     canonical(ctx, at, token, isBlackListedCall { account: to })
                 )?;
-                if stopped || changed || !rate.is_zero() || a || b {
+                let valid_fee = if output && matches!(self, Self::TetherNet(_)) {
+                    rate <= U256::from(19) && cap <= U256::from(49_000_000u64)
+                } else {
+                    rate.is_zero() || cap.is_zero()
+                };
+                if stopped || changed || !valid_fee || a || b {
                     return Err(bad());
                 }
                 Ok(())

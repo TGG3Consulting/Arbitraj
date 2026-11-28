@@ -28,6 +28,10 @@ def profile(net):
     for kind, name in [("permit", "permit2()"), ("v1", "exclusiveDutchReactor()"), ("v3", "v3DutchReactor()")]:
         role = roles["facets_and_permit"][name]
         contracts.append(f"{chain} {kind} {role['address']} {role['runtime']}")
+    if net == "ethereum":
+        direct = "0x35db01d1425685789dcc9228d47c7a5c049388d8"
+        assert addr(reader.view(direct, call_data("permit2()"), at)) == roles["facets_and_permit"]["permit2()"]["address"]
+        contracts.append(f"{chain} standalone-v1 {direct} {runtime(reader, direct, at)}")
     permit = roles["facets_and_permit"]["permit2()"]["address"]
     domain = reader.view(permit, call_data("DOMAIN_SEPARATOR()"), at)
     assert domain == hashed(encode(["bytes32", "bytes32", "uint256", "address"],
@@ -55,7 +59,7 @@ def profile(net):
             impl = slot("implementation")
             tokens.append(f"{chain} fiat {token} {code} {impl} {runtime(reader, impl, at)} {slot('admin')}")
         else:
-            kind = "tether-input" if token.startswith("0xdac17f") else "exact"
+            kind = "tether-net" if chain == 1 and token == "0xdac17f958d2ee523a2206206994597c13d831ec7" else "exact"
             tokens.append(f"{chain} {kind} {token} {code}")
     return {"block": height, "selector": at, "contracts": contracts, "tokens": tokens, "permit_domain": domain, "cancellation_read": {"owner": owner, "order": order_hash, "cancelled": int(cancelled, 16)}}
 

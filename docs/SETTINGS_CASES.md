@@ -7554,7 +7554,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `pancakex.tokens`
 
 - **Кейс:** Физические контракты входа и получаемой валюты.
-- **Что ставить:** Укажите chainId exact|tether-input адрес хеш, chainId fiat адрес хеш implementation implementationHash admin или chainId b20 адрес хеш factory policyRegistry. Для Tether проверяется только направление оплаты.
+- **Что ставить:** Укажите chainId exact|tether-input|tether-net адрес хеш, chainId fiat адрес хеш implementation implementationHash admin или chainId b20 адрес хеш factory policyRegistry. tether-net допускает приём оригинального Ethereum USDT с учётом предела комиссии. Старый tether-input разрешает только расход.
 - **Источник:** [PancakeSwap X, интеграция обмена](https://developer.pancakeswap.finance/contracts/pcsx/swap-integration).
 - **Если не задана:** Создание новых подписей PancakeSwap X для этой площадки выключено. Восстановление ранее сохранённой подписи продолжается.
 

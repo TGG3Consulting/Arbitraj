@@ -28,6 +28,34 @@ impl Terms {
         native: &[NativePayment],
         uses_fill_data: bool,
     ) -> Option<Cash> {
+        self.cash_bound(logs, native, uses_fill_data, self.min_output, false)
+    }
+    pub(super) fn cash_net(
+        &self,
+        logs: &[Log],
+        native: &[NativePayment],
+        uses_fill_data: bool,
+        output: &super::assets::AssetCode,
+    ) -> Option<Cash> {
+        if !matches!(output, super::assets::AssetCode::TetherNet(_)) {
+            return self.cash(logs, native, uses_fill_data);
+        }
+        self.cash_bound(
+            logs,
+            native,
+            uses_fill_data,
+            output.guaranteed_net(self.min_output),
+            true,
+        )
+    }
+    fn cash_bound(
+        &self,
+        logs: &[Log],
+        native: &[NativePayment],
+        uses_fill_data: bool,
+        net_floor: U256,
+        tether: bool,
+    ) -> Option<Cash> {
         let roles = self.roles;
         let r = self.request;
         let mut fills = logs.iter().filter(|l| {
@@ -73,7 +101,7 @@ impl Terms {
             }
             receipt.value
         };
-        if received < self.min_output {
+        if received < net_floor {
             return None;
         }
         let mut data = logs.iter().filter(|l| {
@@ -89,7 +117,14 @@ impl Terms {
                 }
                 let mut owner = d.outputs.iter().filter(|o| o.recipient == r.owner);
                 let bound = owner.next()?;
-                if owner.next().is_some() || bound.token != r.output || bound.amount != received {
+                if owner.next().is_some()
+                    || bound.token != r.output
+                    || if tether {
+                        bound.amount < self.min_output || bound.amount < received
+                    } else {
+                        bound.amount != received
+                    }
+                {
                     return None;
                 }
             }

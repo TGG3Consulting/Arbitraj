@@ -66,14 +66,27 @@ pub(super) async fn paid(
     if h.hash != tx.block_hash || history::expired(h.timestamp.to(), t.deadline) {
         return Err(bad());
     }
-    let cash = t.cash(&receipt.logs, &[], true).ok_or_else(bad)?;
+    let cash = t
+        .cash_net(
+            &receipt.logs,
+            &[],
+            t.roles.reactor == c.p.router.address,
+            &c.output,
+        )
+        .ok_or_else(bad)?;
     let at = h.selector();
     tokio::try_join!(
-        c.p.check(ctx, h, &tk.offer.version),
-        c.input
-            .verify(ctx, &at, tk.req.owner, cash.filler, c.p.permit.address),
+        c.p.check(ctx, h, &tk.offer.version, t.roles.reactor),
+        c.input.verify(
+            ctx,
+            &at,
+            tk.req.owner,
+            cash.filler,
+            c.p.permit.address,
+            false
+        ),
         c.output
-            .verify(ctx, &at, cash.filler, tk.req.owner, c.p.router.address)
+            .verify(ctx, &at, cash.filler, tk.req.owner, t.roles.reactor, true)
     )?;
     let changes:Vec<alloy::rpc::types::Log>=rpc::call(ctx,"eth_getLogs",json!([{"blockHash":h.hash,"address":[c.p.router.address,tk.req.input,tk.req.output],"topics":[alloy_primitives::keccak256("Upgraded(address)".as_bytes())]}])).await?;
     if !changes.is_empty() {

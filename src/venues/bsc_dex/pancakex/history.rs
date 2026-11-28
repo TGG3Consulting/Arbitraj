@@ -25,6 +25,11 @@ pub(super) struct Events {
 pub(super) fn fill_filter(who: Address) -> Value {
     json!([Fill::SIGNATURE_HASH, null, null, who.into_word()])
 }
+/// A second reactor may consume the same owner's Permit2 bitmap bit.
+pub(super) fn original_fill(expected: &Terms, emitter: Address, fill: &Fill) -> Option<bool> {
+    (fill.swapper == expected.request.owner && fill.nonce == expected.nonce)
+        .then_some(emitter == expected.roles.reactor && fill.orderHash == expected.order_hash)
+}
 pub(super) fn expired(timestamp: u64, deadline: u64) -> bool {
     timestamp > deadline
 }
@@ -85,7 +90,7 @@ pub(super) async fn scan(
     let mut out = Events::default();
     while start <= end {
         let hi = start.saturating_add(999).min(end);
-        let query = |addr: Address, topics: Value| {
+        let query = |addr: Value, topics: Value| {
             rpc::call::<Vec<Log>>(
                 ctx,
                 "eth_getLogs",
@@ -93,17 +98,29 @@ pub(super) async fn scan(
             )
         };
         let (fills, cancels, permits) = tokio::try_join!(
-            query(p.router.address, fill_filter(who)),
             query(
-                p.router.address,
-                json!([
-                    OrderCancelled::SIGNATURE_HASH,
-                    who.into_word(),
-                    t.order_hash
-                ])
+                p.standalone_v1.map_or_else(
+                    || json!(p.router.address),
+                    |r| json!([p.router.address, r.address])
+                ),
+                fill_filter(who)
             ),
+            async {
+                if t.roles.reactor != p.router.address {
+                    return Ok(Vec::new());
+                }
+                query(
+                    json!(p.router.address),
+                    json!([
+                        OrderCancelled::SIGNATURE_HASH,
+                        who.into_word(),
+                        t.order_hash
+                    ]),
+                )
+                .await
+            },
             query(
-                p.permit.address,
+                json!(p.permit.address),
                 json!([UnorderedNonceInvalidation::SIGNATURE_HASH, who.into_word()])
             )
         )?;
@@ -114,13 +131,17 @@ pub(super) async fn scan(
             let id = log.transaction_hash.ok_or_else(bad)?;
             let own = if log.topics().first() == Some(&Fill::SIGNATURE_HASH) {
                 let a = Fill::decode_log_data(&log.inner.data).map_err(|_| bad())?;
-                if log.address() != p.router.address || a.swapper != who {
+                if a.swapper != who
+                    || (log.address() != p.router.address
+                        && p.standalone_v1
+                            .is_none_or(|role| role.address != log.address()))
+                {
                     return Err(bad());
                 }
-                if a.nonce != t.nonce {
+                let Some(own) = original_fill(t, log.address(), &a) else {
                     continue;
-                }
-                a.orderHash == t.order_hash
+                };
+                own
             } else if log.topics().first() == Some(&OrderCancelled::SIGNATURE_HASH) {
                 let a = OrderCancelled::decode_log_data(&log.inner.data).map_err(|_| bad())?;
                 if log.address() != p.router.address
@@ -161,7 +182,19 @@ pub(super) async fn scan(
             if Some(h.hash) != receipt.block_hash {
                 return Err(bad());
             }
-            p.check(ctx, h, &m.ticket.offer.version).await?;
+            if log.topics().first() == Some(&Fill::SIGNATURE_HASH)
+                && log.address() != t.roles.reactor
+            {
+                // Both Dutch versions of the common router spend the same Permit2.
+                // A canonical competing fill excludes this intent only after that nonce bit is spent.
+                p.check(ctx, h, "v1", log.address()).await?;
+                if p.unused(ctx, h, who, t.nonce).await? {
+                    return Err(bad());
+                }
+            } else {
+                p.check(ctx, h, &m.ticket.offer.version, t.roles.reactor)
+                    .await?;
+            }
             if own {
                 if out.original.replace(id).is_some() {
                     return Err(bad());

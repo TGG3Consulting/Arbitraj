@@ -49,7 +49,14 @@ impl Offer {
         (s.encoded.len() <= 4000 && !s.hash.is_zero()).then_some(s)
     }
     pub fn terms(&self, p: &Profile, r: &Request) -> Option<Terms> {
-        let t = p.roles().terms(&self.version, &self.encoded, r)?;
+        let roles = p.roles();
+        let t = roles.terms(&self.version, &self.encoded, r).or_else(|| {
+            if self.version != "v1" {
+                return None;
+            }
+            let reactor = p.standalone_v1?.address;
+            super::Roles { reactor, ..roles }.terms("v1", &self.encoded, r)
+        })?;
         (self.hash == t.order_hash).then_some(t)
     }
 }

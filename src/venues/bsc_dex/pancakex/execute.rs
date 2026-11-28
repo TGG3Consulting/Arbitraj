@@ -39,7 +39,10 @@ fn fits(r: &TradeRequest, t: &Ticket, terms: &Terms) -> Option<()> {
     let (amount, stable) = if buy {
         (terms.min_output, terms.maximum_input)
     } else {
-        (terms.maximum_input, terms.min_output)
+        (
+            terms.maximum_input,
+            t.cfg.output.guaranteed_net(terms.min_output),
+        )
     };
     let qty = num::to_decimal(amount, t.decimals.0)?;
     let cash = num::to_decimal(stable, t.decimals.1)?;

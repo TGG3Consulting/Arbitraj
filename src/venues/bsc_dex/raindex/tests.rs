@@ -7,6 +7,11 @@ use alloy::{
 use flate2::read::GzDecoder;
 use serde_json::{Value, from_value};
 
+#[path = "capacity_tests.rs"]
+mod capacity;
+#[path = "reverse_tests.rs"]
+mod reverse;
+
 fn amount(row: &Value, field: &str) -> U256 {
     row[field].as_str().unwrap().parse().unwrap()
 }

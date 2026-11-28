@@ -5,14 +5,15 @@
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
 
-  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,wrapped}=$props();
+  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,wrapped,book,bookModule}=$props();
   const rows=$derived(store.values[setting+'|Venue|'+venue] ?? (shared ? null : []));
+  const configured=$derived(book ? bookModule : (shared ? rows : null));
   const storageKey=$derived(sourceDeploymentKey(source,venue,chain,version,wallet,shared));
   let busy=$state(false),error=$state(''),message=$state(''),priced=$state(null),hash=$state('');
   let mounted=true;
   onDestroy(()=>{mounted=false;});
   const current=()=>mounted && {id:wallet.toLowerCase(),venue,kind,key:storageKey,
-    settings:{kind,wallet,chainId:chain,rows,wrapped},router:shared ? rows : null};
+    settings:{kind,wallet,chainId:chain,rows,wrapped,book},router:configured};
   const action=()=>deploymentScope(localStorage,current);
   const provider=()=>{
     if (!window.ethereum?.request) throw Error('Подключите кошелёк в браузере.');
@@ -79,12 +80,13 @@
 <details ontoggle={(e)=>{if(e.currentTarget.open) reopen();}}>
   <summary>Модуль {label}</summary>
   {#if shared}
-    <p>Общий исполнитель для кошельков площадки <code>{venue}</code>. Плательщик размещения <code>{wallet}</code>. Сеть {chain}, WETH <code>{wrapped ?? 'не задан'}</code>.</p>
-    {#if rows}<p>Заданный адрес <code>{rows}</code></p>{/if}
+    <p>Общий исполнитель для кошельков площадки <code>{venue}</code>. Плательщик размещения <code>{wallet}</code>.
+      Сеть {chain}. {#if book}Книга <code>{book}</code>.{:else}WETH <code>{wrapped ?? 'не задан'}</code>.{/if}</p>
+    {#if configured}<p>Заданный адрес <code>{configured}</code></p>{/if}
   {:else}
     <p>Плательщик и получатель <code>{wallet}</code>. Сеть {chain}. Модуль проверяет фактическую выплату по подписанной цене.</p>
   {/if}
-  <button disabled={busy} onclick={()=>run(price)}>{shared && rows ? 'Проверить настроенный адрес' : 'Оценить газ'}</button>
+  <button disabled={busy} onclick={()=>run(price)}>{configured ? 'Проверить настроенный адрес' : 'Оценить газ'}</button>
   {#if priced}
     {#if shared}
       <p>Исполнение на Base потребует примерно {priced.gas} gas ({priced.fee} wei). Перед подписью проверьте также плату за публикацию в L1.</p>

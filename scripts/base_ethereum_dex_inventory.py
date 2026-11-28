@@ -23,6 +23,8 @@ BASE_USDT_EVIDENCE = {
              "[Карты, выкуп и погашение NFT](https://docs.collectorcrypt.com/product-info)."),
     "9146": ("Фасилитатор x402 на Base проводит платёж USDC поставщику услуги. "
              "[Расчёт за услуги](https://centralcity.ai/faq)."),
+    "7214": ("Trading API с ключом позволяет владельцу указать кошелёк, `quoteTokenAddress` и `poolAddress`. Пулы продукта Launchpad учитываются отдельно. "
+             "[Trading API](https://docs.o1.exchange/api/trading.md) · [Отдельная статистика Terminal, Swap и Launchpad](https://o1.exchange/analytics)."),
 }
 
 

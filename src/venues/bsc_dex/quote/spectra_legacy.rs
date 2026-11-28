@@ -49,14 +49,15 @@ pub(super) fn crypto_input(
             }
         }
     }
+    let mut roots = [U256::MAX; 3];
     let mut nearest_short = None;
     let mut previous = U256::ZERO;
     for k in 1..=40u64 {
-        // Входы на единицах ERC-20 и по окрестности первой нормировки с более частыми пробами около уже подтверждённой границы.
+        // Входы на единицах ERC-20 и по окрестности первой нормировки.
         let delta = if k <= 8 {
             U256::from(k)
         } else {
-            full_math::mul_div_up(window, U256::from((k - 8).pow(2)), U256::from(32u64.pow(2)))?
+            full_math::mul_div_up(window, U256::from(k - 8), U256::from(32))?
         };
         if delta <= previous || delta >= start {
             continue;
@@ -64,6 +65,13 @@ pub(super) fn crypto_input(
         previous = delta;
         let x = start - delta;
         if x < best && let Some(y) = payout(x) {
+            // Чем больше прямая выплата на единицу входа, тем дешевле предполагаемый вход.
+            // Берём несколько различных оценок; каждая требует реального прямого расчёта.
+            if let Some(root) = full_math::mul_div_up(x, wanted, y)
+                && root < best && !roots.contains(&root) {
+                let at=roots.partition_point(|v|*v<root);
+                if at<roots.len() { roots[at..].rotate_right(1); roots[at]=root; }
+            }
             if y >= wanted { (best,out)=(x,y); }
             else if nearest_short.is_none_or(|(_,previous)| y>previous) { nearest_short=Some((x,y)); }
         }
@@ -79,6 +87,11 @@ pub(super) fn crypto_input(
                     (best,out)=(x,y);
                 }
             }
+        }
+    }
+    for root in roots.into_iter().filter(|p|*p!=U256::MAX) {
+        for x in [root,root.saturating_sub(U256::ONE),root.saturating_add(U256::ONE)] {
+            if !x.is_zero() && x<best && let Some(y)=payout(x).filter(|y|*y>=wanted) { (best,out)=(x,y); }
         }
     }
     // Если у найденной точки работает и предшествующий атом, сужаем цену за счёт известных выплат.

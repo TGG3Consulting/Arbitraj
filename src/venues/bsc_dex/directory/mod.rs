@@ -16,6 +16,7 @@ pub mod gt_parse;
 pub mod limit;
 pub mod refresh;
 pub mod store;
+pub mod store_factory;
 pub mod view;
 
 pub use view::snapshot;

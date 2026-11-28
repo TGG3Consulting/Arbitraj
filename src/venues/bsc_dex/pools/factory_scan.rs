@@ -8,6 +8,8 @@
 //! Проход — при старте подписки и после изменения index.factory_scan или dex.* (без опроса; пачка изменений — один
 //! проход по итоговым настройкам, решение 279); часть без ответа узла — повтор через dex.verify_retry_s. Найденное не
 //! стирается (пары у фабрики не удаляются); выключили — справочник фабрик очищается (подключённые пулы слушаются).
+//! Ревью 28.11.2026 (Б4): найденное сохраняется в SQLite (directory/store_factory.rs) и восстанавливается при старте
+//! подписки до стартовой проверки на узле (directory/refresh.rs restore).
 //! Решение 449: начало прохода — в итоге (FactoryScan.started) и в журнал: список DEX и их настройки читаются в начале
 //! прохода, итог (at, заметки) пишется в конце — без времени начала заметка «не подключена» у DEX, подключённой во
 //! время долгого прохода, выглядела как ошибка настроек. Изменение dex.* во время прохода даёт следующий проход.
@@ -178,7 +180,7 @@ async fn pass(
     notes.extend(dag.notes);no_answer+=dag.no_answer;
     let n_calls = bv1.calls + bancor.calls + integral.calls + plaza.calls + dag.calls + temple.calls + carbon.calls + plan.calls.len() + extra.calls + metric.calls + woo_calls;
     let total: usize = found.values().map(Vec::len).sum();
-    let fresh = ctx.index.with(|s| {
+    let (fresh, keep) = ctx.index.with(|s| {
         let mut fresh = Vec::new();
         for (coin, list) in found {
             // Решение 295: у DEX в режиме dex.multi_pair строки одного пула с разными парами — разные (dir_key); у
@@ -209,8 +211,16 @@ async fn pass(
             notes,
             error: None,
         };
-        fresh
+        // Б4: полный список монет с новыми пулами — в SQLite (directory/store_factory.rs).
+        let keep: Vec<_> = fresh
+            .iter()
+            .filter_map(|c| s.factory.get(c).map(|l| (*c, l.clone())))
+            .collect();
+        (fresh, keep)
     });
+    if let Err(e) = super::super::directory::store_factory::save(ctx, keep).await {
+        ctx.log(Level::Error, "dex.index", e.message, None).await;
+    }
     let msg = format!(
         "Поиск пулов по фабрикам: вызовов {n_calls}, пулов в ответах {total}, монет с новыми пулами {}, без ответа узла {no_answer}",
         fresh.len()

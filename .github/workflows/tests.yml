@@ -1200,6 +1200,10 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/epsilon" EpsilonWallet
           python scripts/record_epsilon_base.py "$RUNNER_TEMP/epsilon/EpsilonWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'raindex-legacy-holder-base'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          python scripts/record_raindex_base_v5_holder.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'raindex-legacy-five-base'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
@@ -1218,7 +1222,7 @@ jobs:
             ${{ runner.temp }}/raindex/raindex_base_v6_codes.json.gz
             ${{ runner.temp }}/raindex/raindex_base_v5_codes.json.gz
           if-no-files-found: error
-      - if: startsWith(matrix.market, 'raindex-') && matrix.market != 'raindex-card-base' && matrix.market != 'raindex-legacy-five-base'
+      - if: startsWith(matrix.market, 'raindex-') && matrix.market != 'raindex-card-base' && matrix.market != 'raindex-legacy-five-base' && matrix.market != 'raindex-legacy-holder-base'
         shell: bash
         env:
           MARKET: ${{ matrix.market }}

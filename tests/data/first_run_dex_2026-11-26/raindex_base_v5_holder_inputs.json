@@ -1,0 +1,32 @@
+{
+  "height": 62262756,
+  "anchor": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "method": "Independent replay of archived public holder balances, no signatures or submission. These balances are not the project wallet.",
+  "cases": [
+    {
+      "asset": "0x470b06815a2e286df8c38c9c73280e0760088623",
+      "holder": "0x18a62a3ac2ca9f775a4a12380eda03245270b73e",
+      "origin": {
+        "tx": "0x6adf2d1e6dfc6c18b77c756c591373f5a79733bf538501d487a5ae2bc8490e82",
+        "block": 39566676,
+        "log_index": 126,
+        "hash": "0x75eec951ab3241f965c63c2965dd75e90a86ead4beabcd4fd1638b3411eed7c5"
+      },
+      "asset_balance_raw": "10182000000000000"
+    },
+    {
+      "asset": "0x69fca9f7fad46a7eef3acef5beac9df5b7eca73b",
+      "holder": "0x29566e4affd4403b09f43b1b38348e52612bf867",
+      "origin": {
+        "tx": "0x04c89e46e25929db2b7dc355382f418fbeded6970d9a15e032b2fa5e4f5512a7",
+        "block": 39007965,
+        "log_index": 752,
+        "hash": "0x5d2d90191955c846f54721daa7d39b4ed3adebf0266082ba5efdce8f1a9a027c"
+      },
+      "asset_balance_raw": "50251728299379982"
+    }
+  ]
+}

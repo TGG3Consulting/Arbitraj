@@ -190,6 +190,10 @@ fn unknown(ctx: &Ctx, order_id: &str, why: &str) -> GatewayError {
 }
 
 /// Чтение итоговой заявки. Использует только GET; открытый ордер возвращается на следующую сверку.
+/// Символ сверяется без учёта регистра: справочник пар отдаёт «pepe_usdt» (tests/data/xt_live_2026-11-06), а пример
+/// Query single — «BTC_USDT» (https://doc.xt.com/docs/spot/Order/QuerySingle); живого ответа ордера в записях нет.
+/// Принимает: запрос ядра, «чем найти» (symbol, clientOrderId). Возвращает: Some(итог) — окончательный ордер с теми же
+/// реквизитами; None — не окончательный или реквизиты расходятся. Ошибки: связь, коды XT, разбор полей.
 pub(super) async fn inspect(
     ctx: &Ctx,
     req: TradeRequest,
@@ -208,7 +212,7 @@ pub(super) async fn inspect(
     )
     .await?;
     if !is_final(&s)
-        || num::text_opt(&s, "symbol").as_deref() != Some(symbol)
+        || !num::text_opt(&s, "symbol").is_some_and(|v| v.eq_ignore_ascii_case(symbol))
         || num::text_opt(&s, "clientOrderId").as_deref() != Some(client)
     {
         return Ok(None);

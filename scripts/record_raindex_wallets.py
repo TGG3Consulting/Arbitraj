@@ -24,7 +24,7 @@ def tx(target,name,types,values,value=0):
     return call(target,data(name,types,values),value,gas=10_000_000)
 
 
-def capture(network,url,artifact,legacy=False,capacity=False):
+def capture(network,url,artifact,legacy=False,capacity=False,reverse=False):
     src=json.loads(gzip.decompress((DATA/f"raindex_{network}_quotes.json.gz").read_bytes()))
     tag=src["anchor"];is_base=network=="base";chain=8453 if is_base else 1
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
@@ -67,6 +67,11 @@ def capture(network,url,artifact,legacy=False,capacity=False):
     def bal(token,owner=OWNER):return tx(token,"balanceOf",["address"],[owner])
     def approve(token,to,v):return tx(token,"approve",["address","uint256"],[to,v])
     def units(row):return int(row["returnData"],16)
+    if reverse:
+        from record_raindex_reverse import comparison
+        if not is_base or not artifact or legacy:
+            raise ValueError("Base V6 protected module required")
+        return comparison(src,module(books[0]),tag,stamp,seed,run,bal,approve,tx,end,identities)
     if capacity:
         from record_raindex_capacity import comparison
         if not is_base or not artifact or legacy:
@@ -168,12 +173,12 @@ def capture(network,url,artifact,legacy=False,capacity=False):
 
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);p.add_argument("--legacy",action="store_true");p.add_argument("--capacity",action="store_true");args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);p.add_argument("--legacy",action="store_true");p.add_argument("--capacity",action="store_true");p.add_argument("--reverse",action="store_true");args=p.parse_args()
     urls=(["https://base.drpc.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"] if args.network=="base" else ["https://eth.drpc.org","https://mainnet.gateway.tenderly.co","https://ethereum-rpc.publicnode.com"])
     errors=[]
     for url in urls:
         try:
-            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None,args.legacy,args.capacity)
+            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None,args.legacy,args.capacity,args.reverse)
             args.out.write_text(json.dumps(archive,separators=(",",":")),encoding="utf8");break
         except (requests.RequestException,ValueError,KeyError) as error:errors.append(str(error)[:200])
     else:raise ValueError(errors)

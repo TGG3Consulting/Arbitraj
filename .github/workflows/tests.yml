@@ -1210,6 +1210,7 @@ jobs:
             node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
+          if [[ "$MARKET" == raindex-protected-reverse-base ]]; then flags+=(--reverse); fi
           if [[ "$MARKET" == raindex-protected-capacity-base ]]; then flags+=(--capacity); fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
       - if: matrix.market == 'zora-base-directory'

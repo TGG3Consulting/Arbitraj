@@ -15,7 +15,10 @@
 //!   (вопрос Тиграну, проверить малым выводом).
 //! - Get Withdrawal Records GET /api/v2/spot/wallet/withdrawal-records — orderId / clientOid («when passed, other
 //!   parameters are ignored»; startTime и endTime всё равно обязательны); status «pending: Pending preliminary
-//!   examination», «fail», «success»; tradeId — хеш при dest = on_chain; fee.
+//!   examination», «fail», «success»; tradeId — хеш при dest = on_chain; fee. Поле chain записи — в формате chain
+//!   GET /api/v2/spot/public/coins (Classic changelog 16.06.2026) — то же имя сети, что venue.base_network.
+//! - Расчётный круг Base: clientOid («Client-defined unique ID») сохраняется до отправки через settlement_intent;
+//!   сверка после потери ответа — тот же поиск по clientOid в истории выводов (resolve.rs).
 
 use chrono::Utc;
 use reqwest::Method;
@@ -48,10 +51,16 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
     }
     // Урок 7: поиск вывода после отправки нужен окну — проверяется до денег.
     records::window(ctx)?;
+    let client_oid = order_rules::client_oid('w', &req.deal_id);
+    // Расчётный круг Base (gateway/settlement_intent.rs): свой clientOid сохраняется ДО любых действий с деньгами —
+    // и до перевода spot → p2p, и до POST. Только выигравший запись идёт дальше; повтор шага ядро ведёт сверкой по
+    // этому clientOid (resolve.rs), а не новым выводом и не вторым переводом. Вне круга порядок прежний.
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&PendingRef::withdraw(&client_oid)).await?;
+    }
     if let Some(m) = fund_move::to_funding(ctx, &req.asset.ticker, req.amount).await? {
         ctx.log(Level::Info, "venue.transfer", m).await;
     }
-    let client_oid = order_rules::client_oid('w', &req.deal_id);
     let body = json!({
         "coin": req.asset.ticker,
         "transferType": "on_chain",

@@ -66,6 +66,18 @@
 | `depth.rs`, `ws.rs`, `ws_conn.rs`, `book.rs` | Стаканы books1/5/15 снимками, отсев по seq (решение 109), ping, котировка; решение 202 — учёт свежести для сторожа ядра (gateway/feed_reg.rs), переподписка одной пары (unsubscribe + subscribe) и переподключение одного соединения по команде сторожа |
 | `book_decided.rs` | Решение 217: снимок стакана для `quote_snapshot` — тот же, по которому котировали (поток или снимок REST котировки исполнения у пары без потока, решение 201; не старше feed.stale_after_ms), без запросов |
 
+## Расчётный круг USDC Base (gateway/contract.rs)
+
+- `supports_settlement_order` = true (Codex): IOC-ордер USDT↔USDC, точный оборот — `quoteVolume` Get Order Info
+  (`settlement_intent::note_gross`), сверка — только GET по clientOid (`order_state::inspect`).
+- `supports_settlement_withdrawal` = true: свой clientOid сохраняется через `settlement_intent::before_send` ДО перевода
+  spot → p2p (`venue.withdraw_from_trade`) и до POST вывода — повтор шага ведёт сверка по clientOid в истории выводов
+  (`resolve.rs`), а не второй перевод и второй вывод. Сеть — `venue.base_network` (у Bitget `BASE`).
+- `supports_settlement_credit` = **false**: на какой счёт зачисляется депозит, документация Classic не говорит; поля
+  счёта нет ни в Get Deposit Address, ни в Get Deposit Records; Modify Deposit Account
+  (`POST /api/v2/spot/wallet/modify-deposit-account`, «auto-transfer account type of deposit») — только запись, чтения
+  назначения нет. Подтвердить зачисление прямо на spot через API нечем — Bitget в круг Base не входит.
+
 ## Чего нет и почему (вопросы Тиграну)
 
 - **Поток аккаунта (баланс по WS, решение 76)** — страница приватного канала баланса спота Classic не читается

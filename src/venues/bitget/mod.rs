@@ -122,6 +122,19 @@ impl Venue for Bitget {
     fn supports_settlement_order(&self) -> bool {
         true
     }
+    /// Вывод USDC по Base: свой clientOid сохраняется до перевода и POST (transfers.rs), сверка после потери ответа —
+    /// по clientOid в GET /api/v2/spot/wallet/withdrawal-records (resolve.rs). Ошибок нет.
+    /// https://www.bitget.com/docs/catalog/classic-spot-account/classic-spot-account (Withdraw, Get Withdrawal Records)
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+    /// false: на какой счёт Bitget зачисляет депозит, документация Classic не говорит; ни ответ Get Deposit Address,
+    /// ни запись Get Deposit Records поля счёта не содержат; Modify Deposit Account — только запись («auto-transfer
+    /// account type of deposit»), чтения назначения нет. Подтвердить зачисление прямо на spot нечем. Ошибок нет.
+    /// https://www.bitget.com/docs/catalog/classic-spot-account/classic-spot-account (Deposit Address/Records, Modify)
+    fn supports_settlement_credit(&self) -> bool {
+        false
+    }
     /// Подготовленный символ проверяется по контракту спотового ордера. https://www.bitget.com/api-doc/spot/trade/Get-Order-Info
     fn matches_settlement_order(
         &self,

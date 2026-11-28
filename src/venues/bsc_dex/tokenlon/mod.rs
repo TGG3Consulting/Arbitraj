@@ -83,7 +83,7 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
         (spent,proof.net,Some(Fee{asset:req.output,amount_raw:(proof.gross-proof.net).to_string()}),
             Some(proof.expiry),json!({"native_input":req.input==roles.weth.address,"native_output":req.output==roles.weth.address,"stage":"maker_order","maker":proof.maker,"orderHash":proof.order_hash,"moneySimulated":false}))
     } else {
-        let rate = client::rate(ctx,&key,&query).await?;
+        let rate = client::rate(ctx,&key,&query).await?.price;
         let other = indicative(side, amount, rate, quote_dec)
             .ok_or_else(|| bad("Ставка Tokenlon не даёт положительной суммы в пределах точности"))?;
         let (spent,received) = match side {Side::Sell=>(amount_raw,other),Side::Buy=>(other,amount_raw)};

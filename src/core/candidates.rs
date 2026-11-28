@@ -259,6 +259,8 @@ async fn calc_one(core: &Core, d: &Direction, queued_at: Instant) {
         .filter(|_| !audit && matches!(mode, Mode::Live))
         .and_then(|ms| from.checked_add(Duration::from_millis(ms)));
     let work = super::final_depth::before_order(deadline, Box::pin(work));
+    let end = limit.and_then(|ms| from.checked_add(Duration::from_millis(ms))).map(Into::into);
+    let work = crate::gateway::quote_stage::with_calc_deadline(end, work);
     let (verdict, remaining_depth) = match limit {
         Some(ms) => match timeout(Duration::from_millis(ms), work).await {
             Ok(v) => v,

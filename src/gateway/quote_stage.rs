@@ -19,10 +19,23 @@ use crate::settings::read::At;
 use crate::settings::store::Store;
 
 tokio::task_local! {
+    static CALC_DEADLINE: tokio::time::Instant;
     static FINAL: bool;
     static SETTLEMENT: ();
     static BUY_BUDGET: Option<(VenueId, alloy_primitives::Address, rust_decimal::Decimal)>;
 
+}
+
+/// Общий срок расчёта кандидата, включая обе ноги.
+pub async fn with_calc_deadline<F: Future>(deadline: Option<tokio::time::Instant>, work: F) -> F::Output {
+    match deadline {
+        Some(end) => CALC_DEADLINE.scope(end, work).await,
+        None => work.await,
+    }
+}
+
+pub fn calc_deadline() -> Option<tokio::time::Instant> {
+    CALC_DEADLINE.try_with(|end| *end).ok()
 }
 
 /// Выполняет работу как финальную котировку расчёта. Принимает: работу. Возвращает: её результат. Ошибок нет.

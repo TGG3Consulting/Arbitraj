@@ -21,6 +21,14 @@ mod socket;
 #[path = "client_tests.rs"]
 mod tests;
 
+/// Границы в единицах base. Ставка измерена только для отправленного количества.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct Rate {
+    pub price: Decimal,
+    pub min: Decimal,
+    pub max: Decimal,
+}
+
 pub(super) struct Query {
     pub base: String,
     pub quote: String,
@@ -146,7 +154,13 @@ impl Failure {
         ctx.err(code, message)
     }
 }
-pub(super) async fn rate(ctx: &Ctx, key: &PrivateKeySigner, q: &Query) -> GatewayResult<Decimal> {
+/// Старые профили без отдельного предела ведут один последовательный монитор.
+pub(super) fn rate_parallelism(ctx:&Ctx)->usize {
+    ctx.int("tokenlon.rate_parallelism").ok().and_then(|n|usize::try_from(n).ok())
+        .filter(|n|*n>0).unwrap_or(std::num::NonZeroUsize::MIN.get())
+}
+
+pub(super) async fn rate(ctx: &Ctx, key: &PrivateKeySigner, q: &Query) -> GatewayResult<Rate> {
     let v = socket::request(ctx, key, q, false).await?;
     rate_value(&v, q.amount).map_err(|e| e.error(ctx))
 }

@@ -1,5 +1,5 @@
 //! Проверка суммы, сторон рынка, получателя и срока ответа издателя PMMV5.
-use super::{Failure, Query};
+use super::{Failure, Query, Rate};
 use crate::core::types::Side;
 use alloy_primitives::{Address, U256};
 use rust_decimal::Decimal;
@@ -24,16 +24,18 @@ fn decimal(v: &Value) -> Option<Decimal> {
         .or_else(|_| Decimal::from_scientific(&s))
         .ok()
 }
-pub(super) fn rate_value(response: &Value, amount: Decimal) -> Result<Decimal, Failure> {
+pub(super) fn rate_value(response: &Value, amount: Decimal) -> Result<Rate, Failure> {
     available(response)?;
     let min = decimal(&response["minAmount"]).ok_or(Failure::BadMessage)?;
     let max = decimal(&response["maxAmount"]).ok_or(Failure::BadMessage)?;
-    if amount < min || amount > max {
+    if min < Decimal::ZERO || min > max { return Err(Failure::BadMessage); }
+    if amount <= Decimal::ZERO || amount < min || amount > max {
         return Err(Failure::NoOffer);
     }
-    decimal(&response["rate"])
+    let price = decimal(&response["rate"])
         .filter(|v| *v > Decimal::ZERO)
-        .ok_or(Failure::BadMessage)
+        .ok_or(Failure::BadMessage)?;
+    Ok(Rate { price, min, max })
 }
 pub(super) fn pmm_order(
     response: Value,

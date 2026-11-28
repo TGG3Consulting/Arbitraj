@@ -224,51 +224,53 @@ impl Venue for BscDex {
             let baseline=super::fermi::routing::consider(&self.p,asset,side,qty,baseline).await;
             return super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await;
         }
-        let baseline = async {
-            // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
-            // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
-            // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
-            if crate::gateway::quote_stage::is_final()
-                && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
-            {
-                // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
-                if super::best_of::enabled(&self.p.ctx) {
-                    return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty)
-                        .await;
-                }
-                match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
-                    Err(e) if e.code == ErrorCode::NoRoute => {}
-                    Err(e) => return Err(e),
-                    Ok(mut q) => {
-                        // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
-                        q.venue = self.p.ctx.venue();
-                        return Ok(q);
+        let ordinary = async {
+            let baseline = async {
+                // Решение 95: финальная котировка расчёта кандидата (ядро пересчитывает найденный оптимум) при exec.via_kyber —
+                // цена KyberSwap, того, кто исполнит обмен; по ней ядро решает «торговать или нет». У KyberSwap нет маршрута
+                // (пул, которого он не знает) — наша котировка: исполнит наш собственный сборщик (откат в trade()).
+                if crate::gateway::quote_stage::is_final()
+                    && self.p.ctx.flag("exec.via_kyber").unwrap_or(false)
+                {
+                    // Решение 123: «лучший из двух» — KyberSwap и своя параллельно, берётся лучшая (best_of/quote.rs).
+                    if super::best_of::enabled(&self.p.ctx) {
+                        return super::best_of::quote::quote(&self.p, &self.kyber, asset, side, qty)
+                            .await;
+                    }
+                    match crate::venues::kyberswap::quote::quote(&self.kyber, asset, side, qty).await {
+                        Err(e) if e.code == ErrorCode::NoRoute => {}
+                        Err(e) => return Err(e),
+                        Ok(mut q) => {
+                            // Котировка от имени площадки bsc_dex: ядро сверяет площадку стороны.
+                            q.venue = self.p.ctx.venue();
+                            return Ok(q);
+                        }
                     }
                 }
+                // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
+                // ниже проб налогов, выше фона).
+                let class = urgency::is_set().unwrap_or(Class::Quote);
+                scope(class, self.p.quoting().quote(asset, side, qty)).await
             }
-            // Котировка: ядро на пути сделки ставит Trade (расчёт кандидата, предпроверка); иначе — Quote (живой экран,
-            // ниже проб налогов, выше фона).
-            let class = urgency::is_set().unwrap_or(Class::Quote);
-            scope(class, self.p.quoting().quote(asset, side, qty)).await
-        }
-        .await;
-        let baseline =
-            super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await;
-        let baseline=super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=Box::pin(super::tokenlon::routing::consider(&self.p,asset,side,qty,baseline)).await;
-        let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::dexalot::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::airswap::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=if self.p.zeroex.has(asset){
-            Box::pin(super::zeroex::routing::consider(&self.p,asset,side,qty,baseline)).await
-        }else{baseline};
-        let baseline=super::textile::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
-        super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await
+            .await;
+            let baseline =
+                super::hashflow::routing::consider(&self.p, asset, side, qty, baseline).await;
+            let baseline=super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::dexalot::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::airswap::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=if self.p.zeroex.has(asset){
+                Box::pin(super::zeroex::routing::consider(&self.p,asset,side,qty,baseline)).await
+            }else{baseline};
+            let baseline=super::textile::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline=super::ryze::routing::consider(&self.p,asset,side,qty,baseline).await;
+            let baseline = super::fermi::routing::consider(&self.p, asset, side, qty, baseline).await;
+            super::hanji::routing::consider(&self.p, asset, side, qty, baseline).await
+        };
+        Box::pin(super::tokenlon::routing::compete(&self.p, asset, side, qty, Box::pin(ordinary))).await
     }
 
     /// Решение 250: исполнимость объёма (проверка доли глубины h) — quote/fills.rs: прямой путь одного пула исполняет

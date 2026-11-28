@@ -27,6 +27,15 @@ fn read(who:Address,to:Address,signature:&str,args:&[Address])->Value{
     json!({"from":who,"to":to,"data":Bytes::from(data)})
 }
 
+/// Только единственное полное слово ABI успешного ответа. Пустая allowance не означает разрешения.
+fn word(c:&CallResult)->Option<U256> {
+    (c.ok() && c.return_data.len()==32).then(||U256::from_be_slice(&c.return_data))
+}
+
+fn matches_role(c:&CallResult,address:Address)->bool {
+    word(c)==Some(U256::from_be_slice(address.as_slice()))
+}
+
 pub(super) fn value(p:&Proof)->U256 {
     if p.terms.input==p.terms.roles.weth.address {p.terms.spent} else {U256::ZERO}
 }
@@ -51,7 +60,8 @@ pub(super) async fn run(ctx:&Ctx,proof:&Proof,data:&Bytes)->GatewayResult<(u64,u
     let input=balance(t.payer,t.input,mc,roles.weth.address);
     let output=balance(t.recipient,t.output,mc,roles.weth.address);
     let action=json!({"from":t.payer,"to":roles.user_proxy.address,"data":data,"value":value(proof)});
-    let mut calls=Vec::new();
+    let mut calls=vec![read(t.payer,roles.pmm.address,"userProxy()",&[]),
+        read(t.payer,roles.pmm.address,"zeroExchange()",&[])];
     if t.input!=roles.weth.address {
         tokio::try_join!(
             binding::plain(ctx,roles.spender.address,roles.spender.runtime,&tag),
@@ -65,16 +75,18 @@ pub(super) async fn run(ctx:&Ctx,proof:&Proof,data:&Bytes)->GatewayResult<(u64,u
     let blocks:Vec<Block>=super::private_node::simulate(ctx,json!([{"blockStateCalls":[{
         "calls":calls}]},&tag])).await?;
     let [b]=blocks.as_slice() else{return Err(reject())};
-    let word=|c:&CallResult| (c.ok() && c.return_data.len()==32).then(||U256::from_be_slice(&c.return_data));
+    let [proxy,exchange,remaining @ ..]=b.calls.as_slice() else{return Err(reject())};
+    if !matches_role(proxy,roles.user_proxy.address)
+        || !matches_role(exchange,roles.zero_exchange.address) {return Err(reject());}
     let payments=if t.input!=roles.weth.address {
-        let [spender,target,limit,rest @ ..]=b.calls.as_slice() else{return Err(reject())};
-        if word(spender)!=Some(U256::from_be_slice(roles.spender.address.as_slice())) ||
-            word(target)!=Some(U256::from_be_slice(roles.allowance_target.address.as_slice())) {return Err(reject());}
-        if word(limit).is_some_and(|n|n<t.spent){
+        let [spender,target,limit,rest @ ..]=remaining else{return Err(reject())};
+        if !matches_role(spender,roles.spender.address) ||
+            !matches_role(target,roles.allowance_target.address) {return Err(reject());}
+        if word(limit).ok_or_else(reject)?<t.spent {
             return Err(ctx.err(ErrorCode::InsufficientPermissions,"Tokenlon: разрешения пользователя для подтверждённого AllowanceTarget недостаточно"));
         }
         rest
-    } else {b.calls.as_slice()};
+    } else {remaining};
     let [i0,o0,swap,i1,o1]=payments else{return Err(reject())};
     if word(i0).is_some_and(|n|n<t.spent) {return Err(ctx.err(ErrorCode::InsufficientBalance,"Tokenlon: недостаточно входного актива кошелька"));}
     let flows=word(i0).zip(word(i1)).and_then(|(a,b)|a.checked_sub(b))
@@ -86,4 +98,28 @@ pub(super) async fn run(ctx:&Ctx,proof:&Proof,data:&Bytes)->GatewayResult<(u64,u
         return Err(reject());
     }
     Ok((head.number.to::<u64>(),swap.gas_used.to::<u64>()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn canonical_pmm_getters_reject_wrong_role_and_malformed_abi_words() {
+        let record:Value=serde_json::from_str(include_str!("../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json")).unwrap();
+        let rows:Vec<String>=serde_json::from_value(record["roles"].clone()).unwrap();
+        let roles=super::super::roles::FrozenRoles::from_rows(1,&rows).unwrap();
+        for (getter,role) in [("userProxy()",roles.user_proxy),("zeroExchange()",roles.zero_exchange),("spender()",roles.spender)] {
+            let raw=&record["reads"][format!("{}.{}",roles.pmm.address.to_string().to_lowercase(),getter)];
+            let mut result:CallResult=serde_json::from_value(json!({"status":"0x1","returnData":raw,"gasUsed":"0x0"})).unwrap();
+            assert!(matches_role(&result,role.address));
+            assert!(!matches_role(&result,roles.pmm.address));
+            result.status=U64::ZERO;
+            assert!(word(&result).is_none());
+            result.status=U64::from(1);
+            result.return_data=Bytes::copy_from_slice(&result.return_data[1..]);
+            assert!(word(&result).is_none());
+            result.return_data=Bytes::new();
+            assert!(word(&result).is_none());
+        }
+    }
 }

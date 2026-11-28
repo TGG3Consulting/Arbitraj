@@ -18,6 +18,7 @@ pub mod book_rest;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
+pub mod deposit_wallet;
 pub mod depth;
 pub mod errors;
 pub mod feed;
@@ -160,15 +161,16 @@ impl Venue for Bingx {
         true
     }
 
-    /// НЕТ (false — умолчание контракта не меняется): прямое зачисление депозита на СПОТОВЫЙ счёт не подтверждено.
-    /// Факт бота (решение 102, Тигран 02.11.2026): депозит BingX приходит на фондовый счёт (Funding Account), на спот —
-    /// только отдельным переводом POST /openApi/api/asset/v1/transfer (fund_move.rs) — это второй необратимый
-    /// внутренний перевод, который контракт расчётного круга исключает. В документации у истории депозитов
-    /// (GET /openApi/api/v3/capital/deposit/hisrec) поля счёта зачисления нет; у адреса депозита
-    /// (GET /openApi/wallets/v1/capital/deposit/address) есть walletType («Account type, 1 Fund Account; … 4 Spot
-    /// Account»), но параметра выбора счёта у основного аккаунта нет. Открытый вопрос — README.md этой папки.
+    /// Депозит прямо на торговый (спотовый) счёт без второго внутреннего перевода — deposit_wallet.rs::credit_ready.
+    /// true только если: (а) venue.deposit_to_spot [bingx] = нет или не задана (перевод фонд → спот fund_move.rs
+    /// выключен); (б) у адресов депозита сети venue.base_network, прочитанных из живого ответа GET
+    /// /openApi/wallets/v1/capital/deposit/address под текущим ключом API, walletType есть и не 1 (Fund Account), не 2
+    /// и не 3 (фьючерсы) — коды, одинаковые в английской и китайской версиях docs-v3 («Main Account Deposit Address»,
+    /// https://bingx-api.github.io/docs-v3/); код спота расходится (4 / 15) и не используется. Нет данных — false.
+    /// Основания: решение 102 (депозит приходил на фондовый счёт), решение Тиграна 28.11.2026 (зачисление в аккаунте
+    /// переключено на спот, перевод бота выключается venue.deposit_to_spot = нет).
     fn supports_settlement_credit(&self) -> bool {
-        false
+        deposit_wallet::credit_ready(&self.ctx, &self.addrs.types)
     }
 
     fn kind(&self) -> VenueKind {

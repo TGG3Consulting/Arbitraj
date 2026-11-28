@@ -52,5 +52,11 @@ pub(super) fn terms<'de, D: Deserializer<'de>>(input: D) -> Result<Terms, D::Err
             serde_json::to_value(roles).map_err(D::Error::custom)?,
         );
     }
-    serde_json::from_value(v).map_err(D::Error::custom)
+    let t: Terms = serde_json::from_value(v).map_err(D::Error::custom)?;
+    if !t.roles.verified() {
+        return Err(D::Error::custom(
+            "Tokenlon: исходные реализации ролей не подтверждены",
+        ));
+    }
+    Ok(t)
 }

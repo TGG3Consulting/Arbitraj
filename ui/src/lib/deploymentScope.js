@@ -1,4 +1,10 @@
 // Одна операция кошелька привязана к профилю, открытому до первого асинхронного запроса.
+/** В сети у общего модуля один адрес и один журнал CREATE для всех кошельков и версий карточки. */
+export function sourceDeploymentKey(source,venue,chain,version,wallet,shared) {
+  return (shared ? [source+'-create',venue,chain,'shared'] :
+    [source+'-create',venue,chain,version,wallet.toLowerCase()]).join(':');
+}
+
 /** Карточки идут от новой к старой. Поручение и ручной CREATE ограничивают выбор точным кодом. */
 export function matchingCard(settings, pending, input, cards) {
   const allowed = new Set((settings.hashes ?? []).map(h => h.toLowerCase()));
@@ -46,5 +52,11 @@ export function deploymentScope(storage, selected) {
     const target = ['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router';
     return setValue(target, {kind:'Dex', id}, address);
   }
-  return {key, settings:JSON.parse(settingsJson), active, check, read, save, beforeOrAfterSend, install};
+  const settings=JSON.parse(settingsJson);
+  /** Значение источника сохраняется в Venue с условием на исходное значение, включая отсутствие адреса. */
+  async function installSource(setting,next,setValue) {
+    check();
+    if (next!==settings.rows) await setValue(setting,{kind:'Venue',id:venue},next,settings.rows);
+  }
+  return {key, settings, active, check, read, save, beforeOrAfterSend, install, installSource};
 }

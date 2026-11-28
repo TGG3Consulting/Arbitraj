@@ -25,6 +25,62 @@ pub(super) fn limit_price(price: u128, slip: U256, buy_x: bool) -> Option<u128> 
 }
 
 impl Units {
+    /// Границы уровней и последний целый лот под потолком в монете ноги (X либо Y).
+    /// Значение уровня — целые единицы Y до комиссии; порядок потребления тот же, что в fill.
+    pub(super) fn quantity_points(
+        &self, levels: &[Level], side: Side, maximum: U256, coin_is_x: bool,
+    ) -> Option<Vec<U256>> {
+        let scale = U256::from(RATE_SCALE);
+        let rate = U256::from(self.fee_rate);
+        if self.x.is_zero() || self.y.is_zero() || rate >= scale {
+            return None;
+        }
+        let abi_max = U256::from(u128::MAX);
+        let lot_limit = if coin_is_x { (maximum / self.x).min(abi_max) } else { abi_max };
+        let y_limit = if coin_is_x { abi_max } else { (maximum / self.y).min(abi_max) };
+        let value_limit = match side {
+            Side::BuyX => y_limit * scale / (scale + rate),
+            // floor(value * (scale-rate)/scale) <= y_limit.
+            Side::SellX if !coin_is_x => (((y_limit + U256::ONE) * scale).div_ceil(scale - rate) - U256::ONE).min(abi_max),
+            Side::SellX => abi_max,
+        };
+        let mut points = Vec::new();
+        let (mut lots, mut value) = (U256::ZERO, U256::ZERO);
+        let mut previous = None;
+        for level in levels {
+            if level.price == 0 || level.price >= 1u128 << 72 || level.shares == 0
+                || previous.is_some_and(|last| match side {
+                    Side::BuyX => level.price < last,
+                    Side::SellX => level.price > last,
+                })
+            {
+                return None;
+            }
+            previous = Some(level.price);
+            let price = U256::from(level.price);
+            let shares = U256::from(level.shares);
+            let take = shares.min(lot_limit - lots).min((value_limit - value) / price);
+            if take.is_zero() {
+                break;
+            }
+            lots += take;
+            value += take * price;
+            let quantity = if coin_is_x {
+                lots.checked_mul(self.x)?
+            } else {
+                let fee = (value * rate).div_ceil(scale);
+                (match side { Side::BuyX => value + fee, Side::SellX => value - fee }).checked_mul(self.y)?
+            };
+            if !quantity.is_zero() {
+                points.push(quantity);
+            }
+            if take < shares {
+                break;
+            }
+        }
+        Some(points)
+    }
+
     /// Количество указано в единицах покупаемой или продаваемой монеты. Отклоняет неполный
     /// объём и округление до другого количества, в том числе когда монета является Y рынка.
     pub fn exact_quantity(

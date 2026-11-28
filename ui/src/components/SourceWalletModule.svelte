@@ -1,19 +1,18 @@
 <!-- Размещение модуля, для выбранной сети и владельца. -->
 <script>
   import {onDestroy} from 'svelte';
-  import {deploymentScope} from '../lib/deploymentScope.js';
+  import {deploymentScope,sourceDeploymentKey} from '../lib/deploymentScope.js';
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
 
-  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule}=$props();
-  const scope={kind:'Venue',get id(){return venue;}};
-  const rows=$derived(store.values[setting+'|Venue|'+venue] ?? []);
-  const storageKey=$derived([source+'-create',venue,chain,version,wallet.toLowerCase()].join(':'));
+  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,wrapped}=$props();
+  const rows=$derived(store.values[setting+'|Venue|'+venue] ?? (shared ? null : []));
+  const storageKey=$derived(sourceDeploymentKey(source,venue,chain,version,wallet,shared));
   let busy=$state(false),error=$state(''),message=$state(''),priced=$state(null),hash=$state('');
   let mounted=true;
   onDestroy(()=>{mounted=false;});
   const current=()=>mounted && {id:wallet.toLowerCase(),venue,kind,key:storageKey,
-    settings:{kind,wallet,chainId:chain,rows},router:null};
+    settings:{kind,wallet,chainId:chain,rows,wrapped},router:shared ? rows : null};
   const action=()=>deploymentScope(localStorage,current);
   const provider=()=>{
     if (!window.ethereum?.request) throw Error('Подключите кошелёк в браузере.');
@@ -37,7 +36,7 @@
   async function alreadyRegistered(a,p){
     const existing=await registeredOwnerModule(provider(),p,a.settings.rows);
     a.check();
-    if (existing){priced=null;message='Для этого кошелька уже зарегистрирован модуль '+existing+'.';}
+    if (existing){priced=null;message=(shared?'Общий модуль этой сети уже настроен: ':'Для этого кошелька уже зарегистрирован модуль ')+existing+'.';}
     return Boolean(existing);
   }
   async function price(){
@@ -71,18 +70,27 @@
         return;
       }
       const next=addModule(a.settings.rows,p,fact.address);
-      if (next!==a.settings.rows) await setValue(setting,scope,next,a.settings.rows);
-      a.save(null);priced=null;message='Модуль '+fact.address+' сохранён для '+p.wallet+'.';
+      await a.installSource(setting,next,setValue);
+      a.save(null);priced=null;message='Модуль '+fact.address+' сохранён для '+(shared?venue:p.wallet)+'.';
     };
     if(navigator.locks) await navigator.locks.request(a.key,install); else await install();
   }
 </script>
 <details ontoggle={(e)=>{if(e.currentTarget.open) reopen();}}>
   <summary>Модуль {label}</summary>
-  <p>Плательщик и получатель <code>{wallet}</code>. Сеть {chain}. Модуль проверяет фактическую выплату по подписанной цене.</p>
-  <button disabled={busy} onclick={()=>run(price)}>Оценить газ</button>
+  {#if shared}
+    <p>Общий исполнитель для кошельков площадки <code>{venue}</code>. Плательщик размещения <code>{wallet}</code>. Сеть {chain}, WETH <code>{wrapped ?? 'не задан'}</code>.</p>
+    {#if rows}<p>Заданный адрес <code>{rows}</code></p>{/if}
+  {:else}
+    <p>Плательщик и получатель <code>{wallet}</code>. Сеть {chain}. Модуль проверяет фактическую выплату по подписанной цене.</p>
+  {/if}
+  <button disabled={busy} onclick={()=>run(price)}>{shared && rows ? 'Проверить настроенный адрес' : 'Оценить газ'}</button>
   {#if priced}
-    <p>{priced.gas} gas · до {priced.fee} wei</p>
+    {#if shared}
+      <p>Исполнение на Base потребует примерно {priced.gas} gas ({priced.fee} wei). Перед подписью проверьте также плату за публикацию в L1.</p>
+    {:else}
+      <p>{priced.gas} gas · до {priced.fee} wei</p>
+    {/if}
     <button disabled={busy} onclick={()=>run(submit)}>Развернуть через кошелёк</button>
   {/if}
   <label>Хеш создания или его замены <input bind:value={hash} placeholder="0x…" /></label>

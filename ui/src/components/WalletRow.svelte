@@ -29,6 +29,7 @@
   import ClipperQuote from './ClipperQuote.svelte';
   import SourcePrice from './SourcePrice.svelte';
   import AirSwapSource from './AirSwapSource.svelte';
+  import HanjiSource from './HanjiSource.svelte';
   import DexalotSource from './DexalotSource.svelte';
   import ExecutorDeploy from './ExecutorDeploy.svelte';
   import CopyAddr from './CopyAddr.svelte';
@@ -111,6 +112,7 @@
   <CheckConnection url={`/api/check/wallet/${seg(w.id)}`} />
   {#if w.address && dex}<DexalotSource venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex}<AirSwapSource venue={dex} trader={w.address} wallet={w.id} />{/if}
+  {#if w.address && dex}<HanjiSource venue={dex} wallet={w.address} />{/if}
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.fynd}<SourcePrice venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}

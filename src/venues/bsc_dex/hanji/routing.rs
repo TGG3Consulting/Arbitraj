@@ -328,34 +328,9 @@ pub(in crate::venues::bsc_dex) fn breaks(
             let Some((dir, levels)) = m.direction(if buy { b.config.cash } else { coin }) else {
                 continue;
             };
-            let mut lots = U256::ZERO;
-            for (i, lvl) in levels.iter().enumerate() {
-                lots = lots.saturating_add(U256::from(lvl.shares));
-                let Some(x) = lots.checked_mul(m.units.x) else {
-                    break;
-                };
-                let qty = if coin == m.x {
-                    x
-                } else {
-                    let Some(f) =
-                        m.units
-                            .exact_quantity(&levels[..=i], dir, x, dir == super::Side::BuyX)
-                    else {
-                        break;
-                    };
-                    if buy { f.received } else { f.spent }
-                };
-                if let Some(q) = num::to_decimal(qty, m.decimals.0).filter(|q| *q <= max) {
-                    result.push(q);
-                }
-            }
-            if coin == m.x
-                && let Some(raw) = num::to_units(max, m.decimals.0)
-                && !m.units.x.is_zero()
-                && let Some(q) = num::to_decimal(raw / m.units.x * m.units.x, m.decimals.0)
-                    .filter(|q| *q > Decimal::ZERO)
-            {
-                result.push(q);
+            let Some(raw) = num::to_units(max, m.decimals.0) else { continue };
+            if let Some(points) = m.units.quantity_points(levels, dir, raw, coin == m.x) {
+                result.extend(points.into_iter().filter_map(|q| num::to_decimal(q, m.decimals.0)));
             }
         }
     }

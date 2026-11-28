@@ -1,6 +1,7 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
 import {loadDexalot,checkDexalot} from './dexalotDeploy.js';
+import {loadHanji,checkHanjiWrapped,checkHanjiModule} from './hanjiDeploy.js';
 import {checkWalletOwner} from './registeredWalletModule.js';
 import {isAirSwap,loadAirSwap,checkExchange} from './airswapDeploy.js';
 import {isLlamma, loadLlamma, checkLlamma} from './llammaDeploy.js';
@@ -23,7 +24,8 @@ import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq';
-const bindsWallet = kind => kind==='motoswap_v2' || kind==='lambda_propamm' || kind==='fluid_dex_lite' || kind==='eulerswap' || kind==='aqua_swapvm' || ownedModule(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
+const selectedPayer = kind => ownedModule(kind) || kind==='hanji';
+const bindsWallet = kind => kind==='motoswap_v2' || kind==='lambda_propamm' || kind==='fluid_dex_lite' || kind==='eulerswap' || kind==='aqua_swapvm' || selectedPayer(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
 
@@ -39,6 +41,7 @@ export async function hashCode(hex) {
 }
 
 export async function loadPlan(settings, plan) {
+  if (settings.kind==='hanji' || plan.kind==='hanji') return loadHanji(settings,plan,hashCode);
   if (eulerSwap(settings.kind) || plan.kind==='eulerswap') return loadEulerSwap(settings,plan,hashCode);
   if (settings.kind==='aqua_swapvm' || plan.kind==='aqua_swapvm') return loadAqua(settings,plan,hashCode);
   if (settings.kind==='dexalot_rfq' || plan.kind==='dexalot_rfq') return loadDexalot(settings,plan,hashCode);
@@ -79,6 +82,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (p.kind==='hanji') return checkHanjiWrapped(provider,p,at);
   if (p.kind==='aqua_swapvm') return checkAqua(provider,p,at);
   if (p.kind==='dexalot_rfq') return checkDexalot(provider,p,at);
   if (isAirSwap(p.kind)) return checkExchange(provider,p,at);
@@ -122,7 +126,7 @@ export async function estimate(provider, p) {
   const accounts = await call(provider, 'eth_requestAccounts');
   requireFact(address.test(accounts?.[0]), 'Кошелёк не предоставил адрес плательщика.');
   const from = accounts[0].toLowerCase();
-  if (ownedModule(p.kind)) requireFact(from===p.wallet,'Выберите в браузере кошелёк, для которого размещается модуль.');
+  if (selectedPayer(p.kind)) requireFact(from===p.wallet,'Выберите в браузере кошелёк, для которого размещается модуль.');
   const head = await call(provider, 'eth_getBlockByNumber', ['latest', false]);
   const at = {blockHash:head.hash, requireCanonical:true};
   await checkMarket(provider, p, at);
@@ -162,7 +166,7 @@ export async function deployed(provider, p, hash, pending) {
   ]);
   requireFact(tx && r && r.transactionHash?.toLowerCase()===hash.toLowerCase(), 'Каноническая квитанция пока не найдена.');
   const resolveReplacement = bindsWallet(p.kind);
-  if (ownedModule(p.kind)) requireFact(tx.from?.toLowerCase()===p.wallet,'Эту транзакцию подписал другой кошелёк.');
+  if (selectedPayer(p.kind)) requireFact(tx.from?.toLowerCase()===p.wallet,'Эту транзакцию подписал другой кошелёк.');
   const requested = tx.to == null && BigInt(tx.value) === 0n && tx.input?.toLowerCase() === p.data.toLowerCase();
   requireFact(tx.hash.toLowerCase() === hash.toLowerCase() && tx.blockHash === r.blockHash &&
     (requested || (resolveReplacement && pending)), 'Транзакция не создаёт этот модуль.');
@@ -198,6 +202,7 @@ export async function deployed(provider, p, hash, pending) {
   if (bindsWallet(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
   requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
+  if (p.kind==='hanji') await checkHanjiModule(provider,p,r.contractAddress,at);
   if (p.kind==='motoswap_v2') await checkMotoModule(provider,p,r.contractAddress,at);
   if (p.kind==='lambda_propamm') await checkPropModule(provider,p,r.contractAddress,at);
   if (ownedModule(p.kind)) await checkWalletOwner(provider,p,r.contractAddress,at);

@@ -4746,7 +4746,7 @@ prefill = { kind = "Venue", id = "base_dex" }
 name = "hanji.executor"
 area = "Venue base_dex"
 unit = "адрес"
-method = "Задаёт владелец: разверните HanjiExecutor для своего кошелька в Base, проверьте сеть, WETH и runtime по артефакту; внесите фактический адрес размещения."
+method = "Задаёт владелец. В карточке кошелька Base разместите общий HanjiExecutor один раз для площадки. После проверки сети, кода и адреса WETH сохраните подтверждённый адрес в hanji.executor. Его используют кошельки этой площадки."
 source = "tests/data/first_run_dex_2026-11-26/hanji_executor_receipts.json"
 rationale = "Адрес экземпляра в изолированном тесте не является развёртыванием владельца."
 

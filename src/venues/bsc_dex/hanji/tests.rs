@@ -219,3 +219,63 @@ fn mixed_baseline_with_an_extra_approval_cannot_hide_funded_hanji() {
     );
     assert!(limit_price(from_helper, U256::ZERO, true).unwrap() < actual_limit);
 }
+
+#[test]
+fn recorded_caps_emit_whole_fills_for_both_assets_and_none_on_the_empty_book() {
+    use super::{Level, Side as BookSide, Units};
+    let data: Value = serde_json::from_str(include_str!(
+        "../../../../tests/data/first_run_dex_2026-11-26/hanji_base.json"
+    )).unwrap();
+    let n = |v: &Value| U256::from(v.as_u64().unwrap());
+    let level = |v: &Value| Level {
+        price: u128::from(v[0].as_u64().unwrap()),
+        shares: u128::from(v[1].as_u64().unwrap()),
+    };
+    let mut checked = 0;
+    let mut empty = 0;
+    for m in data["markets"].as_array().unwrap() {
+        let units = Units {
+            x: n(&m["scale"][0]),
+            y: n(&m["scale"][1]),
+            fee_rate: u128::from(m["fee_rates"][1].as_u64().unwrap())
+                + u128::from(m["fee_rates"][3].as_u64().unwrap()),
+        };
+        let asks: Vec<_> = m["asks"].as_array().unwrap().iter().map(level).collect();
+        let bids: Vec<_> = m["bids"].as_array().unwrap().iter().map(level).collect();
+        if asks.is_empty() {
+            assert!(bids.is_empty());
+            assert_eq!(m["registry"]["baseToken"]["symbol"], "SNDKc");
+            for (dir, levels) in [(BookSide::BuyX, &asks), (BookSide::SellX, &bids)] {
+                for x in [true, false] {
+                    assert!(units.quantity_points(levels, dir, units.x, x).unwrap().is_empty());
+                }
+            }
+            empty += 1;
+        }
+        if !asks.is_empty() {
+            let visible: U256 = asks.iter().map(|l| U256::from(l.shares) * units.x).sum();
+            let over_depth = units.quantity_points(&asks, BookSide::BuyX, visible + units.x, true).unwrap();
+            assert_eq!(over_depth.last(), Some(&visible));
+        }
+        for f in m["fills"].as_array().unwrap() {
+            // Вторая нога использует bid после первой покупки, как в снимке балансов кошелька.
+            let bid_after = [level(&f["bid_after"])];
+            for (dir, levels, cap, x, net) in [
+                (BookSide::BuyX, asks.as_slice(), n(&f["budget_y"]), false, n(&f["debited_y"])),
+                (BookSide::BuyX, asks.as_slice(), n(&f["received_x"]), true, n(&f["received_x"])),
+                (BookSide::SellX, &bid_after[..], n(&f["received_y"]), false, n(&f["received_y"])),
+                (BookSide::SellX, &bid_after[..], n(&f["debited_x"]), true, n(&f["debited_x"])),
+            ] {
+                let points = units.quantity_points(levels, dir, cap, x).unwrap();
+                assert_eq!(points.last(), Some(&net));
+                let qty_is_output = x == (dir == BookSide::BuyX);
+                let fill = units.exact_quantity(levels, dir, net, qty_is_output).unwrap();
+                assert_eq!(if qty_is_output { fill.received } else { fill.spent }, net);
+                assert!(units.quantity_points(levels, dir, net - U256::ONE, x).unwrap()
+                    .iter().all(|smaller| *smaller < net));
+            }
+            checked += 1;
+        }
+    }
+    assert_eq!((checked, empty), (14, 1));
+}

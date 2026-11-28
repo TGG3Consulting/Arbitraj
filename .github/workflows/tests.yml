@@ -458,6 +458,26 @@ jobs:
         run: npm ci --no-audit --no-fund
       - id: compile_hanji
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
+      - name: Сверить карточку Hanji Base с собранным контрактом и архивной приёмкой
+        run: |
+          python - "$RUNNER_TEMP/hanji-executor/HanjiExecutor.json" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          compiled = json.loads(Path(sys.argv[1]).read_bytes())
+          card = json.loads(Path("ui/src/assets/hanji-base-create.json").read_bytes())
+          evidence = json.loads(Path("tests/data/first_run_dex_2026-11-26/hanji_executor_receipts.json").read_bytes())
+          constructor = next(item for item in compiled["abi"] if item["type"] == "constructor")
+          assert [item["type"] for item in constructor["inputs"]] == ["address"]
+          data = compiled["creation"] + card["wrapped"][2:].rjust(64, "0")
+          assert card["solc"] == compiled["solc"] and card["data"] == "0x" + data
+          assert hashlib.sha256(bytes.fromhex(data)).hexdigest() == card["creationSha256"]
+          assert hashlib.sha256(bytes.fromhex(compiled["runtime"])).hexdigest() == card["runtimeSha256"]
+          assert card["runtimeKeccak"] == evidence["runtime_keccak"]
+          assert card["sourceBlock"] == evidence["block_hash"]
+          PY
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor

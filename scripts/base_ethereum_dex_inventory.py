@@ -2543,6 +2543,11 @@ def tables(network, snapshots, profiles):
                      f"`clipper.pools = {settings['clipper.pools']}` и личный секрет `clipper.api_key`. В этой зашифрованной записи задайте поля JSON `origin` и `key`. ")
             task += (f"[Адреса, роли, остатки и квитанции](../{fixture.as_posix()}) · "
                      "[Официальный список Sushi](https://github.com/sushi-labs/clipper-rfq-subgraph/tree/453c83478f2553270f4fcf52797695fc52553240/scripts/deploy-codegen/networks).")
+        if not base and str(row["id"]) == "8823":
+            task = ("Ethereum USDT → WETH: неподписанная цена своего адреса через принятый реактор. "
+                    "Исторический ордер потратил 11 000 USDT за 6,481639816016846956 ETH. "
+                    "Обратный ответ с номинальным USDT проходит отдельные проверки реактора и токена. "
+                    "[Суммы и ABI](../tests/data/first_run_dex_2026-11-26/pancakex_ethereum_usdt_quotes.json.gz).")
         classic_ids = {"119": "sushiswap-v2-base" if base else "sushiswap",
                        "194": "pancakeswap-v2-base" if base else "pancakeswap_ethereum"}
         if classic_id := classic_ids.get(str(row["id"])):

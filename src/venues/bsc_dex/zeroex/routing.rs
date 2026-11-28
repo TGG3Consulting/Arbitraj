@@ -19,7 +19,7 @@ use std::{
     collections::HashMap,
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU64, Ordering},
     },
 };
 
@@ -43,24 +43,40 @@ impl Ticket {
 }
 type Tickets = HashMap<(Address, B256), Arc<Ticket>>;
 #[derive(Clone, Default)]
-pub(in crate::venues::bsc_dex) struct Book(Arc<Mutex<Tickets>>, Arc<AtomicBool>);
+pub(in crate::venues::bsc_dex) struct Book(Arc<BookState>);
+
+#[derive(Default)]
+struct BookState {
+    tickets: Mutex<Tickets>,
+    last_expiry: AtomicU64,
+}
 impl Book {
     pub(in crate::venues::bsc_dex) fn put(&self, t: Ticket) {
-        let mut book = self.0.lock().unwrap_or_else(|p| p.into_inner());
+        let mut book = self.0.tickets.lock().unwrap_or_else(|p| p.into_inner());
         book.retain(|_, v| current(v.proof.expiry));
         book.insert((t.proof.call.payer, t.proof.call.calldata), Arc::new(t));
-        self.1.store(true, Ordering::Release);
+        self.0.last_expiry.store(
+            book.values().map(|t| t.proof.expiry).max().unwrap_or(0),
+            Ordering::Release,
+        );
     }
     pub(in crate::venues::bsc_dex) fn take(&self, who: Address, id: B256) -> Option<Arc<Ticket>> {
-        let mut book = self.0.lock().ok()?;
+        let mut book = self.0.tickets.lock().ok()?;
         let t = book.remove(&(who, id));
-        self.1.store(!book.is_empty(), Ordering::Release);
+        self.0.last_expiry.store(
+            book.values().map(|t| t.proof.expiry).max().unwrap_or(0),
+            Ordering::Release,
+        );
         t
     }
+    fn any_live(&self) -> bool {
+        let expiry = self.0.last_expiry.load(Ordering::Acquire);
+        expiry != 0 && current(expiry)
+    }
     pub(in crate::venues::bsc_dex) fn has(&self, a: &Asset) -> bool {
-        self.1.load(Ordering::Acquire)
+        self.any_live()
             && a.contract.is_some_and(|coin| {
-                self.0.lock().is_ok_and(|b| {
+                self.0.tickets.lock().is_ok_and(|b| {
                     b.values().any(|t| {
                         current(t.proof.expiry) && [t.proof.input, t.proof.output].contains(&coin)
                     })
@@ -82,6 +98,7 @@ impl Book {
         let generation = p.ctx.settings.generation();
         Some(
             self.0
+                .tickets
                 .lock()
                 .ok()?
                 .values()
@@ -119,7 +136,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
     qty: Decimal,
     old: GatewayResult<Quote>,
 ) -> GatewayResult<Quote> {
-    if !p.zeroex.1.load(Ordering::Acquire)
+    if !p.zeroex.any_live()
         || qty <= Decimal::ZERO
         || quote_stage::settlement()
         || old.as_ref().is_err_and(|e| e.code != ErrorCode::NoRoute)

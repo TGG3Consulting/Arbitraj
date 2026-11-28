@@ -77,8 +77,7 @@ impl Venue for BscDex {
     ) -> GatewayResult<crate::gateway::source_quote::Preview> {
         if source == "dexalot" {return super::dexalot::preview(&self.p,req).await;}
         if source == "airswap" {return super::airswap::request(&self.p,req).await;}
-        if source=="zeroex" && req.firm.as_ref().is_some_and(|v| v.allow_trade) {
-            let terms=req.firm.as_ref().expect("selected firm request");
+        if source=="zeroex" && let Some(terms)=req.firm.as_ref().filter(|v|v.allow_trade) {
             if req.buy_amount_raw.is_some() || terms.maximum_raw.is_some() {return Err(self.p.ctx.err(ErrorCode::NotApplicable,"0x ожидает точный вход"));}
             let bound=self.p.bound(&terms.wallet);
             return super::keyed_price::preview_for(&bound.ctx,source,req,Some(&bound)).await;
@@ -259,7 +258,9 @@ impl Venue for BscDex {
         let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::dexalot::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::airswap::routing::consider(&self.p,asset,side,qty,baseline).await;
-        let baseline=super::zeroex::routing::consider(&self.p,asset,side,qty,baseline).await;
+        let baseline=if self.p.zeroex.has(asset){
+            Box::pin(super::zeroex::routing::consider(&self.p,asset,side,qty,baseline)).await
+        }else{baseline};
         let baseline=super::textile::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::gladius::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;

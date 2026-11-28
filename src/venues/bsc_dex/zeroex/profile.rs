@@ -10,14 +10,14 @@ const RUNTIME: alloy_primitives::B256 =
     b256!("c5547e965ffc209cdec17ed01f88def2bba6ef8a21f9ce287f9f25faf2cae9f9");
 
 pub(in crate::venues::bsc_dex) fn module(ctx: &Ctx) -> GatewayResult<Address> {
-    Some(ctx.addr("zeroex.wallet")?)
-        .filter(|a| !a.is_zero() && ctx.chain_id() == Some(1))
-        .ok_or_else(|| {
-            ctx.err(
-                ErrorCode::NotConfigured,
-                "Разместите модуль 0x в выбранной сети Ethereum",
-            )
-        })
+    let address = ctx.addr("zeroex.wallet")?;
+    if address.is_zero() || ctx.chain_id() != Some(1) {
+        return Err(ctx.err(
+            ErrorCode::NotConfigured,
+            "Разместите модуль 0x в выбранной сети Ethereum",
+        ));
+    }
+    Ok(address)
 }
 pub(in crate::venues::bsc_dex) async fn verify(
     ctx: &Ctx,

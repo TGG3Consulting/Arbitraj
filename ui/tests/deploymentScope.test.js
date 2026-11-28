@@ -53,7 +53,7 @@ test('a profile write already in flight retains its original target and clears o
   open().beforeOrAfterSend(other);
   await write;
   action.save(null);
-  assert.deepEqual(writes,[['dex.router',{kind:'Dex',id:eth.id},'verified-address']]);
+  assert.deepEqual(writes,[['dex.router',{kind:'Dex',id:eth.id},'verified-address',null]]);
   assert.deepEqual(open().read(),other);
   assert.equal(action.read(),null);
 });

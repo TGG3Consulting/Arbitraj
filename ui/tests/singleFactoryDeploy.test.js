@@ -28,6 +28,6 @@ for(const [id,file,chain] of [
     const scope=deploymentScope({},()=>({id,kind:settings.kind,settings,key:file,venue:chain}));
     const writes=[];
     scope.install('module',(...args)=>writes.push(args));
-    assert.deepEqual(writes,[[chain===1?'dex.router':'dex.v3_wallet_module',{kind:'Dex',id},'module']]);
+    assert.deepEqual(writes,[[chain===1?'dex.router':'dex.v3_wallet_module',{kind:'Dex',id},'module',null]]);
   });
 }

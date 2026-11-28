@@ -10,13 +10,13 @@ const equals=(value,expected)=>typeof value==='string' && value.toLowerCase()===
 export async function loadAmbient(s,p,sha) {
   if (s.kind!=='ambient_ethereum' || p.kind!==s.kind || p.chainId!==1 || String(s.chainId)!=='1' ||
       !hash.test(p.sourceBlock) || !hash.test(p.runtimeKeccak) || !/^[a-f0-9]{64}$/.test(p.runtimeSha256) ||
-      !s.hashes?.some(h=>equals(h,p.runtimeKeccak)) || !s.ambientRoles?.length)
+      (s.hashes?.length!==1 || !equals(s.hashes[0],p.runtimeKeccak)) || !s.ambientRoles?.length)
     throw Error('Проверьте сеть и хеш разрешённого модуля Ambient.');
   const configured=new Map();
   for(const line of s.ambientRoles){
-    const [role,address,code,...extra]=line.trim().toLowerCase().split(/\s+/);
-    if(configured.has(role) || extra.length) throw Error('Роль Ambient повторена или задана неверно.');
-    configured.set(role,[address,code]);
+    const [role,address,code,...extra]=line.trim().split(/\s+/);
+    if(!Object.hasOwn(roles,role) || configured.has(role) || !address || !code || extra.length) throw Error('Роль Ambient повторена или задана неверно.');
+    configured.set(role,[address.toLowerCase(),code.toLowerCase()]);
   }
   for(const [name,slot] of Object.entries(roles)){
     const r=p.roles?.[slot], item=configured.get(name);

@@ -1,35 +1,45 @@
 //! Кандидаты Umia для первого прохода без индексатора. Каждая версия vault имеет собственный PoolId.
 //! Перед включением в граф launch_market отдельно сверяет менеджер, хук и связи vault на узле.
 use super::{
-    families,
+    families::{self, Family},
     family_variant::Variant,
     key::PoolKey,
     launch_keys,
     stable_list::{self, Extra},
 };
-use crate::venues::bsc_dex::ctx::Ctx;
+use crate::{gateway::errors::GatewayResult, venues::bsc_dex::ctx::Ctx};
 use alloy_primitives::{Address, Bytes};
 use std::collections::HashMap;
 
 pub(super) fn extend(
     ctx: &Ctx,
+    profiles: &[&Family],
     coins: &HashMap<Address, String>,
     quotes: &[Address],
     out: &mut Extra,
 ) {
-    let chain = ctx.chain_id().and_then(crate::settings::evm_profiles::by_chain_id);
-    if chain.is_none_or(|network| network.chain != "base") {
-        return;
-    }
-    for f in families::all(ctx).into_iter().filter(|f| f.variant == Variant::LaunchUmia) {
-        if let Err(reason) = families::classify(ctx, f.id) {
-            out.notes.push(reason);
-            continue;
-        }
-        let (Ok(keys), Ok(roles)) = (
-            ctx.dex_list("dex.launch_pool_keys", f.id),
-            launch_keys::roles(ctx, f),
-        ) else {
+    extend_with(ctx, profiles, coins, quotes, out, |id| ctx.dex_list("dex.launch_pool_keys", id));
+}
+
+fn extend_with(
+    ctx: &Ctx,
+    profiles: &[&Family],
+    coins: &HashMap<Address, String>,
+    quotes: &[Address],
+    out: &mut Extra,
+    mut keys_for: impl FnMut(&str) -> GatewayResult<Vec<String>>,
+) {
+    for profile in profiles {
+        // Между составлением плана и чтением ключей профиль могли выключить или сменить его вид.
+        let f = match families::classify(ctx, profile.id) {
+            Ok(f) if f.variant == Variant::LaunchUmia => f,
+            Ok(_) => continue,
+            Err(reason) => {
+                out.notes.push(reason);
+                continue;
+            }
+        };
+        let (Ok(keys), Ok(roles)) = (keys_for(f.id), launch_keys::roles(ctx, f)) else {
             continue;
         };
         for text in keys {

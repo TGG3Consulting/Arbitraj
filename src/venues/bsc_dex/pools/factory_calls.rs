@@ -63,6 +63,8 @@ pub struct Plan {
     pub asks: Vec<Ask>,
     pub calls: Vec<(Address, Bytes)>,
     pub notes: Vec<String>,
+    /// Профили Umia этой площадки. Вместо вызова фабрики у них свой список ключей.
+    pub(super) umia: Vec<&'static Family>,
 }
 
 /// Собирает вопросы по всем подключённым DEX вида V2 / V3 / Solidly / Algebra / DODO. Принимает: монеты подписки, встречные токены (USDT и
@@ -76,6 +78,10 @@ pub fn plan(
 ) -> GatewayResult<Plan> {
     let mut out = Plan::default();
     for f in families::all(ctx) {
+        if f.variant == super::family_variant::Variant::LaunchUmia {
+            out.umia.push(f);
+            continue;
+        }
         if f.variant.defiplaza() || f.variant.prop_venue() || matches!(f.variant,super::family_variant::Variant::Brokerbot | super::family_variant::Variant::IntegralSize | super::family_variant::Variant::MaverickOne | super::family_variant::Variant::Carbon | super::family_variant::Variant::Pendle | super::family_variant::Variant::Surge | super::family_variant::Variant::Dagrow | super::family_variant::Variant::Temple){continue;} // pairs() у Controller перечисляется в carbon_directory
         // Решение 475 (T462-01): KyberSwap Elastic — getPool(a, b, swapFeeUnits) фабрики Elastic по уровням
         // dex.v3_fee_tiers: та же сигнатура getPool(address,address,uint24), что у V3, реестр — в обе стороны

@@ -1,0 +1,32 @@
+{
+  "chain": 8453,
+  "height": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "quote_signature": "quote(((address,(address,address,bytes),(address,uint8,uint256)[],(address,uint8,uint256)[],bytes32),uint256,uint256,(address,uint256[],bytes)[]))",
+  "quote_selector": "0xe0e530b7",
+  "books": [
+    {
+      "book": "0xa2f56f8f74b7d04d61f281be6576b6155581dcba",
+      "hash": "0x457d9d27a8653616f06cf389b80b4dbce756cd37cb06f50391e119d0fbe21557",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xa2f56f8f74b7d04d61f281be6576b6155581dcba?fields=abi,compilation,sources",
+      "verified_match": "match",
+      "take": "0x0997c4a0",
+      "exists": "0x2cb77e9f",
+      "external_quote": false,
+      "quote_push4": false
+    },
+    {
+      "book": "0xd2938e7c9fe3597f78832ce780feb61945c377d7",
+      "hash": "0x12bf1769f735e0ddc96e109c470be6f5f7844a83f2db65bb7a780c0ce7fee1f2",
+      "source": "https://sourcify.dev/server/v2/contract/8453/0xd2938e7c9fe3597f78832ce780feb61945c377d7?fields=abi,compilation,sources",
+      "verified_match": "match",
+      "take": "0x0997c4a0",
+      "exists": "0x2cb77e9f",
+      "external_quote": true,
+      "quote_push4": true
+    }
+  ]
+}

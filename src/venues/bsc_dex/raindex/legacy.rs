@@ -1,4 +1,4 @@
-//! В V3 отсутствует внешний quote. Измеряем настоящие разрешённые размеры своего кошелька.
+//! У V3 и ранней книги V4 Base отсутствует внешний quote. Измеряем настоящие разрешённые размеры своего кошелька.
 //! Оценка между точками проверяется полной симуляцией конкретной выплаты перед созданием билета.
 use super::*;
 use crate::{
@@ -7,6 +7,22 @@ use crate::{
 };
 use alloy::sol_types::SolCall;
 use serde_json::json;
+
+/// У раннего Base V4 есть takeOrders2 и orderExists, но в его конкретном runtime нет quote.
+/// Обычный отказ котировки других книг не переключает их на этот режим.
+pub(super) fn output_samples(p: Profile) -> bool {
+    p.version == 3 || early_base_v4(p)
+}
+
+fn early_base_v4(p: Profile) -> bool {
+    p.chain == 8453 && p.version == 4 &&
+        p.book == alloy_primitives::address!("a2f56f8f74b7d04d61f281be6576b6155581dcba") &&
+        p.book_hash == alloy_primitives::b256!("457d9d27a8653616f06cf389b80b4dbce756cd37cb06f50391e119d0fbe21557")
+}
+
+pub(super) fn budget_allowed(p: Profile, maximum: Option<U256>, wanted: U256) -> bool {
+    !early_base_v4(p) || maximum.is_some_and(|cap| wanted <= cap)
+}
 
 #[derive(Clone, Copy)]
 struct Sample {
@@ -61,16 +77,17 @@ fn price(debit: U256, credit: U256, di: u8, dout: u8) -> Option<Quantity> {
     };
     Quantity::v4(coefficient)
 }
+pub(super) fn registered(response: &[u8]) -> bool {
+    matches!(wire::orderExistsCall::abi_decode_returns_validate(response), Ok(true))
+}
+
 pub(super) async fn read(p: &Parts, leg: Leg, h: white_state::Head) -> Vec<Live> {
     let samples = Sample::configured(&p.ctx, &leg);
     if samples.is_empty() || leg.via.is_some() {
         return vec![];
     }
     let Some(bytes)=rpc::call::<Bytes>(&p.ctx,"eth_call",json!([{"to":leg.p.book,"input":Bytes::from(wire::orderExistsCall{hash:leg.hash}.abi_encode())},h.selector()])).await.ok() else{return vec![];};
-    if !matches!(
-        wire::orderExistsCall::abi_decode_returns_validate(&bytes),
-        Ok(true)
-    ) {
+    if !registered(&bytes) {
         return vec![];
     }
     let Ok(owner) = wallet::signer::address(&p.ctx) else {

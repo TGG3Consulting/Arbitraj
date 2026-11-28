@@ -70,6 +70,32 @@ impl Quantity {
         self.scaled(paid, i32::from(do_) - i32::from(di), true, false)
     }
 }
+/// Размер одиночного take. На пределе книги V6 целый дебет может включать округление
+/// вверх при переводе ERC20. В этом случае фиксируем выход, а модуль проверяет точный дебет.
+pub(super) fn fill_size(
+    ratio: Quantity,
+    capacity: Option<U256>,
+    wanted: U256,
+    decimals: (u8, u8),
+    buy: bool,
+    version: u8,
+) -> Option<(U256, U256, bool)> {
+    let (di, dout) = decimals;
+    let (mut output, debit) = if buy {
+        (wanted, ratio.paid(wanted, di, dout)?)
+    } else {
+        (ratio.received(wanted, di, dout)?, wanted)
+    };
+    let mut fixed_receive = buy || version <= 5;
+    if let Some(cap) = capacity && output > cap {
+        if buy || version != 6 || ratio.paid(cap, di, dout)? != debit {
+            return None;
+        }
+        output = cap;
+        fixed_receive = true;
+    }
+    (!output.is_zero() && !debit.is_zero()).then_some((output, debit, fixed_receive))
+}
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -24,7 +24,7 @@ def tx(target,name,types,values,value=0):
     return call(target,data(name,types,values),value,gas=10_000_000)
 
 
-def capture(network,url,artifact,legacy=False):
+def capture(network,url,artifact,legacy=False,capacity=False,reverse=False,*,selected_books=None,additional=None):
     src=json.loads(gzip.decompress((DATA/f"raindex_{network}_quotes.json.gz").read_bytes()))
     tag=src["anchor"];is_base=network=="base";chain=8453 if is_base else 1
     head=rpc(url,"eth_getBlockByHash",[tag["blockHash"],False])
@@ -37,6 +37,8 @@ def capture(network,url,artifact,legacy=False):
         if child["parentHash"]!=tag["blockHash"] or len(child["calls"])!=len(calls):raise ValueError("child")
         return child["calls"]
     books=([{"book":src["book"],"version":6,"runtime":src["runtime"],"live":src["entries"]}] if is_base else src["books"])
+    if selected_books is not None:
+        books=selected_books
     if legacy:books=[b for b in books if b["version"]==3]
     def module(b):
         book=b["book"]
@@ -67,6 +69,16 @@ def capture(network,url,artifact,legacy=False):
     def bal(token,owner=OWNER):return tx(token,"balanceOf",["address"],[owner])
     def approve(token,to,v):return tx(token,"approve",["address","uint256"],[to,v])
     def units(row):return int(row["returnData"],16)
+    if reverse:
+        from record_raindex_reverse import comparison
+        if not is_base or not artifact or legacy:
+            raise ValueError("Base V6 protected module required")
+        return comparison(src,module(books[0]),tag,stamp,seed,run,bal,approve,tx,end,identities)
+    if capacity:
+        from record_raindex_capacity import comparison
+        if not is_base or not artifact or legacy:
+            raise ValueError("Base V6 protected module required")
+        return comparison(src, module(books[0]), tag, stamp, seed, run, bal, approve, tx, end, identities)
     def money(prefix,b,o,l,cap,size,receive_fixed,di,do,partial=False):
         source,target=l["pay"],l["receive"];book=b["book"];version=b["version"];where=module(b) if artifact else book
         action=take(version,o["order"],l["i"],l["j"],1 if partial else size,size,do if receive_fixed else di,receive_fixed)
@@ -84,17 +96,29 @@ def capture(network,url,artifact,legacy=False):
         payment,op,be,af=play(1,cap,1,end)
         base={"book":book,"version":version,"order":o["hash"],"i":l["i"],"j":l["j"],"pay":source,"receive":target,
               "fixed_receive":receive_fixed,"partial":partial,"size":str(size),"cap":str(cap)}
-        if not GOOD(op):return None,dict(base,stage="revert",error=op.get("error"))
+        if not GOOD(op):
+            if additional is not None:
+                if be!=af:raise ValueError("failed sample changed balances")
+                base.update(before=list(map(str,be)),after=list(map(str,af)))
+            return None,dict(base,stage="revert",error=op.get("error"))
         paid=be[0]-af[0];net=af[1]-be[1]
         if net<=0 or paid<=0 or paid>cap or be[2:]!=af[2:]:return None,dict(base,stage="incomplete",before=be,after=af)
         if artifact:
             payment,op,b2,a2=play(paid,paid,net,end)
             if not GOOD(op) or (be,af)!=(b2,a2):raise ValueError("protected tight bound")
+            if additional is not None:
+                base["accepted_payment"]=payment
+                base["accepted_deadline"]=end
             for low,high,floor,dl in [(paid,paid,net+1,end),(1,paid-1,net,end),(paid,paid,net,stamp-1)]:
                 _,bad,x,y=play(low,high,floor,dl)
                 if GOOD(bad) or x!=y:raise ValueError("protected bound rollback")
+                if additional is not None:
+                    base.setdefault("failed_bounds",[]).append(dict(low=str(low),cap=str(high),floor=str(floor),
+                        deadline=dl,error=bad.get("error"),before=list(map(str,x)),after=list(map(str,y))))
         return setup+[payment],dict(base,stage="paid",paid=str(paid),net=str(net),before=[str(v) for v in be],after=[str(v) for v in af],
                                    action=action,target=where,gas=units({"returnData":op["gasUsed"]}),logs=op["logs"])
+    if additional is not None:
+        return additional(books,seed,run,bal,approve,tx,end,money,identities,tag)
     legs=[]
     for b in books:
         for o in b["live"]:
@@ -119,7 +143,7 @@ def capture(network,url,artifact,legacy=False):
             fixed_size=max(1,scale*10**dt//100)
             if legacy:
                 budget=3_000*10**df;fixed_size=scale*10**dt
-            if both:
+            if both or (selected_books is not None and b["version"]==5):
                 ratio=decimal(l["ratio"])
                 possible=int(Decimal(budget).scaleb(-df)/ratio*Decimal(10**dt)) if ratio>0 else 0
                 fixed_size=max(1,min(possible*9//10,int(decimal(l["cap"])*Decimal(10**dt))))
@@ -163,12 +187,12 @@ def capture(network,url,artifact,legacy=False):
 
 
 if __name__=="__main__":
-    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);p.add_argument("--legacy",action="store_true");args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument("network",choices=["base","ethereum"]);p.add_argument("out",type=Path);p.add_argument("--module",type=Path);p.add_argument("--legacy",action="store_true");p.add_argument("--capacity",action="store_true");p.add_argument("--reverse",action="store_true");args=p.parse_args()
     urls=(["https://base.drpc.org","https://base.gateway.tenderly.co","https://base-rpc.publicnode.com"] if args.network=="base" else ["https://eth.drpc.org","https://mainnet.gateway.tenderly.co","https://ethereum-rpc.publicnode.com"])
     errors=[]
     for url in urls:
         try:
-            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None,args.legacy)
+            archive=capture(args.network,url,json.loads(args.module.read_bytes()) if args.module else None,args.legacy,args.capacity,args.reverse)
             args.out.write_text(json.dumps(archive,separators=(",",":")),encoding="utf8");break
         except (requests.RequestException,ValueError,KeyError) as error:errors.append(str(error)[:200])
     else:raise ValueError(errors)

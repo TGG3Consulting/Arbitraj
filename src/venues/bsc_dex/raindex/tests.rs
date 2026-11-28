@@ -7,6 +7,19 @@ use alloy::{
 use flate2::read::GzDecoder;
 use serde_json::{Value, from_value};
 
+#[path = "deployment_tests.rs"]
+mod deployments;
+#[path = "capacity_tests.rs"]
+mod capacity;
+#[path = "reverse_tests.rs"]
+mod reverse;
+#[path = "recent_tests.rs"]
+mod recent;
+#[path = "candidate_tests.rs"]
+mod candidates;
+#[path = "history_tests.rs"]
+mod history;
+
 fn amount(row: &Value, field: &str) -> U256 {
     row[field].as_str().unwrap().parse().unwrap()
 }

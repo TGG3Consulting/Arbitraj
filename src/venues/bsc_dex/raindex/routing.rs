@@ -217,7 +217,7 @@ async fn candidate(
     };
     let (cap, ratio, word) = if let Some(h) = head {
         leg.p.verify(ctx, h).await.ok()?;
-        if leg.p.version == 3 {
+        if legacy::output_samples(leg.p) {
             (row.cap, row.ratio, B256::repeat_byte(255))
         } else {
             leg.current(ctx, h).await?
@@ -225,22 +225,13 @@ async fn candidate(
     } else {
         (row.cap, row.ratio, B256::ZERO)
     };
-    let output = if buy {
-        wanted
+    let capacity = if head.is_none() || row.max_budget.is_none() {
+        Some(cap.cap(dout)?)
     } else {
-        ratio.received(wanted, di, dout)?
+        None
     };
-    let debit = if buy {
-        ratio.paid(wanted, di, dout)?
-    } else {
-        wanted
-    };
-    if output.is_zero()
-        || debit.is_zero()
-        || (output > cap.cap(dout)? && (head.is_none() || row.max_budget.is_none()))
-    {
-        return None;
-    }
+    let (output, debit, receive_fixed) =
+        amount::fill_size(ratio, capacity, wanted, (di, dout), buy, leg.p.version)?;
     let middle = if buy { debit } else { output };
     let cash_units = match (leg.via, head) {
         (Some(b), Some(h)) => b.official(ctx, h, buy, middle).await?,
@@ -260,7 +251,9 @@ async fn candidate(
     } else {
         funds.spend
     };
-    if budget > limit {
+    if budget > limit
+        || !legacy::budget_allowed(leg.p, row.max_budget, budget)
+    {
         return None;
     }
     let cash = if let Some(h) = head {
@@ -269,7 +262,6 @@ async fn candidate(
             .timestamp
             .to::<u64>()
             .checked_add(ctx.int("dex.deadline_s").ok()?)?;
-        let receive_fixed = buy || leg.p.version <= 5;
         let action = leg.order.take(
             leg.i,
             leg.j,

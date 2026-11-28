@@ -1,10 +1,10 @@
 //! Источник только перечисляет orderBytes. Торговые поля подтверждает сама книга вызовом quote от модуля.
-use super::{profile::Source, wire::Order, *};
+use super::{profile::{Origin, Source}, wire::Order, *};
 use crate::gateway::market_http;
 use alloy::sol_types::SolEvent;
 use serde_json::{Value, json};
 use std::collections::{HashMap, HashSet};
-type Raw = HashMap<B256, Bytes>;
+pub(super) type Raw = HashMap<B256, Bytes>;
 const QUERY: &str = "query($h:Bytes!,$id:Bytes!){orders(first:250,orderBy:id,orderDirection:asc,where:{active:true,id_gt:$id},block:{hash:$h}){id orderHash orderBytes raindex{id}}}";
 async fn page(ctx: &Ctx, r: reqwest::RequestBuilder) -> Option<Value> {
     let (status, body) = market_http::exchange("raindex", r, ctx.limits().ok()?)
@@ -16,11 +16,11 @@ async fn page(ctx: &Ctx, r: reqwest::RequestBuilder) -> Option<Value> {
         .flatten()
 }
 impl Source {
-    async fn indexed(&self, ctx: &Ctx, h: white_state::Head) -> Option<Raw> {
+    async fn indexed(&self, ctx: &Ctx, h: white_state::Head, url: &reqwest::Url) -> Option<Raw> {
         let meta = page(
             ctx,
             ctx.http
-                .post(self.url.clone())
+                .post(url.clone())
                 .json(&json!({"query":"{_meta{block{number hash}}}"})),
         )
         .await?;
@@ -51,7 +51,7 @@ impl Source {
             let j = page(
                 ctx,
                 ctx.http
-                    .post(self.url.clone())
+                    .post(url.clone())
                     .json(&json!({"query":QUERY,"variables":{"h":anchor,"id":last}})),
             )
             .await?;
@@ -74,7 +74,7 @@ impl Source {
             }
         }
     }
-    async fn history(&self, ctx: &Ctx, h: white_state::Head) -> Option<Raw> {
+    async fn history(&self, ctx: &Ctx, h: white_state::Head, endpoint: &reqwest::Url) -> Option<Raw> {
         let event = match self.profile.version {
             3 => wire::AddOrder::SIGNATURE_HASH,
             4 => wire::AddOrderV2::SIGNATURE_HASH,
@@ -84,7 +84,7 @@ impl Source {
         let mut cursor = None::<(u64, u64)>;
         let mut used = HashSet::new();
         loop {
-            let mut url = self.url.clone();
+            let mut url = endpoint.clone();
             if let Some((block, index)) = cursor {
                 url.query_pairs_mut()
                     .append_pair("block_number", &block.to_string())
@@ -122,18 +122,19 @@ impl Source {
         p: &Parts,
         h: white_state::Head,
         quote: Address,
+        catalog: Option<history_candidates::View>,
     ) -> Option<Vec<Live>> {
         self.profile.verify(&p.ctx, h).await.ok()?;
-        let raw = if self.graphql {
-            self.indexed(&p.ctx, h).await?
-        } else {
-            self.history(&p.ctx, h).await?
+        let raw = match &self.origin {
+            Origin::Rpc(_) => catalog?,
+            Origin::Graph(url) => history_candidates::View::complete(Arc::new(self.indexed(&p.ctx, h, url).await?)),
+            Origin::Explorer(url) => history_candidates::View::complete(Arc::new(self.history(&p.ctx, h, url).await?)),
         };
         let known: HashSet<_> = p.tokens.all().into_iter().map(|v| v.address).collect();
         let bridges = cash::State::configured(&p.ctx, self.profile, h, quote).await;
         let mut legs = vec![];
-        for (hash, data) in raw {
-            let Some(order) = Order::decode(self.profile.version, &data, hash) else {
+        for (&hash, data) in raw.iter() {
+            let Some(order) = Order::decode(self.profile.version, data, hash) else {
                 continue;
             };
             let order = std::sync::Arc::new(order);
@@ -180,7 +181,7 @@ impl Source {
         use futures_util::{StreamExt, stream};
         let groups = stream::iter(legs)
             .map(|leg| async move {
-                if leg.p.version == 3 {
+                if legacy::output_samples(leg.p) {
                     return legacy::read(p, leg, h).await;
                 }
                 match leg.current(&p.ctx, h).await {

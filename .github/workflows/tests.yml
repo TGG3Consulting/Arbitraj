@@ -478,6 +478,15 @@ jobs:
           assert card["runtimeKeccak"] == evidence["runtime_keccak"]
           assert card["sourceBlock"] == evidence["block_hash"]
           PY
+      - name: Verify the Base Raindex V3–V7 wallet cards against the pinned compiler and recorded constructors
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          node contracts/verify-raindex-base-card.mjs --check "$RUNNER_TEMP/raindex/RaindexWallet.json" ui/src/assets/raindex-base-create.json tests/data/first_run_dex_2026-11-26/raindex_base_v6_codes.json.gz tests/data/first_run_dex_2026-11-26/raindex_base_v5_codes.json.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raindex-wallet-compiler
+          path: ${{ runner.temp }}/raindex/RaindexWallet.json
+          if-no-files-found: error
       - id: compile_fermi
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/fermi-executor" FermiSlotExecutor
       - run: node contracts/build-hanji.mjs "$RUNNER_TEMP/solidly-executor" SolidlyV3Executor
@@ -1191,12 +1200,46 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/epsilon" EpsilonWallet
           python scripts/record_epsilon_base.py "$RUNNER_TEMP/epsilon/EpsilonWallet.json" "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'raindex-')
+      - if: matrix.market == 'raindex-legacy-holder-base'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          python scripts/record_raindex_base_v5_holder.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'raindex-legacy-five-base'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          python scripts/record_raindex_base_v5.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'raindex-card-base'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+          python scripts/record_raindex_book_creates.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/raindex/raindex_base_manifest_creates.json.gz"
+          node contracts/verify-raindex-base-card.mjs --capture "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/raindex/raindex_base_v6_codes.json.gz" "$RUNNER_TEMP/raindex/raindex_base_v5_codes.json.gz" "$RUNNER_TEMP/raindex/raindex_base_manifest_creates.json.gz"
+      - if: matrix.market == 'raindex-card-base'
+        uses: actions/upload-artifact@v4
+        with:
+          name: raindex-base-create-compiler
+          path: |
+            ${{ runner.temp }}/raindex/RaindexWallet.json
+            ${{ runner.temp }}/raindex/raindex_base_v6_codes.json.gz
+            ${{ runner.temp }}/raindex/raindex_base_v5_codes.json.gz
+            ${{ runner.temp }}/raindex/raindex_base_manifest_creates.json.gz
+          if-no-files-found: error
+      - if: startsWith(matrix.market, 'raindex-') && matrix.market != 'raindex-card-base' && matrix.market != 'raindex-legacy-five-base' && matrix.market != 'raindex-legacy-holder-base'
         shell: bash
         env:
           MARKET: ${{ matrix.market }}
         run: |
           flags=()
+          if [[ "$MARKET" == raindex-base-order-samples ]]; then
+            npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+            node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
+            python scripts/record_raindex_base_order_samples.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+            exit 0
+          fi
+          if [[ "$MARKET" == raindex-base-addresses ]]; then
+            python scripts/record_raindex_base_balances.py "$RUNNER_TEMP/market.json"
+            exit 0
+          fi
           if [[ "$MARKET" == raindex-cash-* ]]; then
             node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
             node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexCashWallet
@@ -1210,6 +1253,8 @@ jobs:
             node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
             flags=(--module "$RUNNER_TEMP/raindex/RaindexWallet.json")
           fi
+          if [[ "$MARKET" == raindex-protected-reverse-base ]]; then flags+=(--reverse); fi
+          if [[ "$MARKET" == raindex-protected-capacity-base ]]; then flags+=(--capacity); fi
           python scripts/record_raindex_wallets.py "${MARKET##*-}" "$RUNNER_TEMP/market.json" "${flags[@]}"
       - if: matrix.market == 'zora-base-directory'
         run: python scripts/record_zora_base.py "$RUNNER_TEMP/market.json"

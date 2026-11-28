@@ -75,9 +75,9 @@ pub(in crate::venues::bsc_dex) async fn trade(p:&Parts,req:TradeRequest,t:&Ticke
     let mut parse=exec::swap_ctx::SwapCtx::swap(owner,pair,t.decs,&[],None,None);
     parse.tokenlon=Some(Box::new(saved.clone()));
     parse.who=Some(super::LABEL.into());
-    let raw=exec::txs::send(&env,&slot,terms.roles.user_proxy.address,t.data.clone(),sim::value(&t.proof),false,Some(hold));
     let measured=super::private_node::Measurement{owner,chain:terms.roles.chain,target:terms.roles.user_proxy.address,digest:saved.calldata,value:sim::value(&saved.order),gas};
-    let done=super::private_node::MEASUREMENT.scope(measured,hashflow::native_send(p,&req,t.proof.expiry,t.revision,&parse,raw)).await?;
+    let raw=exec::txs::send_tokenlon(&env,&slot,(terms.roles.user_proxy.address,t.data.clone(),measured.value),hold,&measured);
+    let done=hashflow::native_send(p,&req,t.proof.expiry,t.revision,&parse,raw).await?;
     exec::market_receipt::check_module_cancel(c,&parse,&done).await.map_err(|e|parse.attach(e.with_tx(done.chain.clone())))?;
     if matches!(done.chain.outcome,TxOutcome::Included|TxOutcome::Reverted){
         let r=done.receipt.as_ref().ok_or_else(||parse.attach(c.err(ErrorCode::OutcomeUnknown,"Нет собственной квитанции Tokenlon").with_tx(done.chain.clone())))?;

@@ -4064,6 +4064,15 @@ rationale = "Прокси и хеш кода реестра 0x, адрес и х
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
+name = "tokenlon.pairs"
+area = "Venue eth_dex"
+unit = "пары и размеры"
+value = "ETH 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 0.04,USDC 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 100/1000"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json"
+rationale = "Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта. Метка ETH и адрес WETH в API Tokenlon представляют расчёт в нативном ETH."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
 name = "tokenlon.publisher_url"
 area = "Venue eth_dex"
 unit = "URL"

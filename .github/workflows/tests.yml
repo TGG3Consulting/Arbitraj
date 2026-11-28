@@ -1265,6 +1265,7 @@ jobs:
       - if: matrix.market == 'tokenlon-ethereum-wallet'
         run: |
           node --test ui/tests/tokenlonQuote.test.js
+          cargo test --locked --lib tokenlon::
           cargo test --locked --test settings_cases_guard
           printf '%s\n' '{"chain":1,"source":"tokenlon"}' > "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'zeroex-wallet-ethereum'

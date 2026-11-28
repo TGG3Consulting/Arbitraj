@@ -76,6 +76,7 @@ impl Venue for BscDex {
         req: crate::gateway::source_quote::Request,
     ) -> GatewayResult<crate::gateway::source_quote::Preview> {
         if source == "dexalot" {return super::dexalot::preview(&self.p,req).await;}
+        if source == "tokenlon" {return super::tokenlon::preview(&self.p,req).await;}
         if source == "airswap" {return super::airswap::request(&self.p,req).await;}
         if source=="zeroex" && let Some(terms)=req.firm.as_ref().filter(|v|v.allow_trade) {
             if req.buy_amount_raw.is_some() || terms.maximum_raw.is_some() {return Err(self.p.ctx.err(ErrorCode::NotApplicable,"0x ожидает точный вход"));}

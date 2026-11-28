@@ -266,6 +266,7 @@ pub static DEX: &[SettingDef] = &[
     d("Textile FX","textile.trading",K::Bool,L::None,"да/нет",V,"Допустить выбор ранее проверенной заявки Textile, которую владелец явно передал торговому ядру.").optional().dex_venue(),
     d("Textile FX","textile.gas_budget_native",K::Decimal,L::Positive,"монета газа",V,"Предельный расход ETH на расчёт Textile с учётом комиссии публикации.").optional().dex_venue(),
     d("Kipseli", "kipseli.base_url", K::Url, L::None, "URL", V, "Корневой HTTPS адрес API Kipseli для ручной цены данной площадки. Секрет получает только официальный сервер.").optional().dex_venue(),
+    d("Tokenlon PMM", "tokenlon.pairs", K::TextList, L::None, "пары и размеры", V, "Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.publisher_url", K::Url, L::None, "URL", V, "Официальный сервис личных котировок PMMV5 для кошелька Ethereum.").optional().dex_venue(),
     d("Tokenlon PMM", "tokenlon.trading", K::Bool, L::None, "да/нет", V, "Допуск заявок Tokenlon к выбору по чистой прибыли на Ethereum.").optional().dex_venue(),
     d("0x", "zeroex.wallet", K::Address, L::None, "адрес", V, "Общий проверенный модуль оплаты 0x Ethereum. Адрес сохраняется после подтверждённого размещения.").optional().dex_venue(),

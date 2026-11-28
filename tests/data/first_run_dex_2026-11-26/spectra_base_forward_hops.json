@@ -1,0 +1,95 @@
+{
+  "source": "https://mainnet.base.org",
+  "chainId": 8453,
+  "block": 62262756,
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "calls": [
+    {
+      "pool": "0xb9f4539cffe696549ce00d999e56abeb495ee976",
+      "factory": "0x04ec86bf37dfd77397bcc2e386cb37f175b4e106",
+      "tokenIn": "0x969e05e08597a7c27775e97e8c0fdc6497e00f50",
+      "tokenOut": "0xc38380a706bfcd29874bf7bc436382017c90c255",
+      "input": "10604847159292",
+      "output": "9951578995258",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0xb9f4539cffe696549ce00d999e56abeb495ee976",
+            "data": "0x556d6e9f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009a52225d7fc"
+          },
+          {
+            "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+            "requireCanonical": true
+          }
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x0000000000000000000000000000000000000000000000000000090d0854ba3a"
+      }
+    },
+    {
+      "pool": "0xf5650b7dd5216fcc6cfa5c009ffd147ed8254f37",
+      "factory": "0x7ea3097e2af59ea705398544e0f58eddb7bd1852",
+      "tokenIn": "0xc38380a706bfcd29874bf7bc436382017c90c255",
+      "tokenOut": "0x458e662aa15a3e338a9b1f9668e2ccb302fd4340",
+      "input": "9951578995257",
+      "output": "10409971871015",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0xf5650b7dd5216fcc6cfa5c009ffd147ed8254f37",
+            "data": "0x556d6e9f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000090d0854ba39"
+          },
+          {
+            "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+            "requireCanonical": true
+          }
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x00000000000000000000000000000000000000000000000000000977c2aced27"
+      }
+    },
+    {
+      "pool": "0xf5650b7dd5216fcc6cfa5c009ffd147ed8254f37",
+      "factory": "0x7ea3097e2af59ea705398544e0f58eddb7bd1852",
+      "tokenIn": "0xc38380a706bfcd29874bf7bc436382017c90c255",
+      "tokenOut": "0x458e662aa15a3e338a9b1f9668e2ccb302fd4340",
+      "input": "9951578995258",
+      "output": "10409971871008",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0xf5650b7dd5216fcc6cfa5c009ffd147ed8254f37",
+            "data": "0x556d6e9f000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000090d0854ba3a"
+          },
+          {
+            "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+            "requireCanonical": true
+          }
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "result": "0x00000000000000000000000000000000000000000000000000000977c2aced20"
+      }
+    }
+  ]
+}

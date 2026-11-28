@@ -720,6 +720,9 @@ pub fn swap(
                 }
                 return Err(none());
             };
+            if e.family.variant.spectra() {
+                super::spectra_points::remember(e, zero_for_one, amount, out);
+            }
             Ok(Swapped {
                 amount_in: amount,
                 amount_out: out,

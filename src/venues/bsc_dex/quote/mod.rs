@@ -45,6 +45,7 @@ pub mod cpu;
 pub mod cpu_local;
 pub mod crypto_depth;
 mod spectra;
+mod spectra_points;
 pub mod cycle;
 pub mod cycle_audit;
 mod cycle_cash;

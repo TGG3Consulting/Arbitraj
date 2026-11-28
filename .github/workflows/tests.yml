@@ -1157,6 +1157,11 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/safeswap" SafeSwapAdapter
           python scripts/record_safeswap_protected.py "$RUNNER_TEMP/safeswap/SafeSwapAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'textile-create-base'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/textile" TextileWallet
+          python scripts/record_textile_base_create.py "$RUNNER_TEMP/textile/TextileWallet.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'textile-wallet-')
         env:
           MARKET: ${{ matrix.market }}

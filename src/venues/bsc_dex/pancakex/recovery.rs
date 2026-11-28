@@ -88,9 +88,14 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
             if !expired {
                 return Ok(None);
             }
-            boxed(|| m.ticket.cfg.p.check(ctx, cutoff, &m.ticket.offer.version))
-                .await
-                .map_err(|_| unknown())?;
+            boxed(|| {
+                m.ticket
+                    .cfg
+                    .p
+                    .check(ctx, cutoff, &m.ticket.offer.version, t.roles.reactor)
+            })
+            .await
+            .map_err(|_| unknown())?;
             let unused = m
                 .ticket
                 .cfg

@@ -83,25 +83,42 @@ impl Ticket {
         let terms = self.offer.terms(p, q)?;
         let at = h.selector();
         let (_, funds, unused, cancelled, code, _, _) = tokio::try_join!(
-            p.check(ctx, h, &self.offer.version),
+            p.check(ctx, h, &self.offer.version, terms.roles.reactor),
             p.funds(ctx, h, q.input, q.owner),
             p.unused(ctx, h, q.owner, terms.nonce),
-            canonical(
+            async {
+                if terms.roles.reactor != p.router.address {
+                    // Standalone V1 performs cancellation through the same Permit2 nonce bitmap.
+                    return Ok(false);
+                }
+                canonical(
+                    ctx,
+                    &at,
+                    p.router.address,
+                    super::profile::cancelledOrdersCall {
+                        owner: q.owner,
+                        orderHash: terms.order_hash,
+                    },
+                )
+                .await
+            },
+            rpc::call::<Bytes>(ctx, "eth_getCode", json!([q.owner, at])),
+            self.cfg.input.verify(
                 ctx,
                 &at,
-                p.router.address,
-                super::profile::cancelledOrdersCall {
-                    owner: q.owner,
-                    orderHash: terms.order_hash
-                }
+                q.owner,
+                self.offer.filler,
+                p.permit.address,
+                false
             ),
-            rpc::call::<Bytes>(ctx, "eth_getCode", json!([q.owner, at])),
-            self.cfg
-                .input
-                .verify(ctx, &at, q.owner, self.offer.filler, p.permit.address),
-            self.cfg
-                .output
-                .verify(ctx, &at, self.offer.filler, q.owner, p.router.address)
+            self.cfg.output.verify(
+                ctx,
+                &at,
+                self.offer.filler,
+                q.owner,
+                terms.roles.reactor,
+                true
+            )
         )
         .ok()?;
         (funds >= terms.maximum_input

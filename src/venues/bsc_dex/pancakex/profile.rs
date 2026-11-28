@@ -34,10 +34,12 @@ pub struct Profile {
     pub permit: Role,
     pub v1: Role,
     pub v3: Role,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standalone_v1: Option<Role>,
 }
 impl Profile {
     pub fn from_rows(chain: u64, rows: &[String]) -> Option<Self> {
-        let mut roles = [None; 5];
+        let mut roles = [None; 6];
         for row in rows {
             let f: Vec<_> = row.split_whitespace().collect();
             let [network, name, addr, hash] = f.as_slice() else {
@@ -46,9 +48,16 @@ impl Profile {
             if network.parse::<u64>().ok()? != chain {
                 continue;
             }
-            let i = ["router", "implementation", "permit", "v1", "v3"]
-                .iter()
-                .position(|s| s == name)?;
+            let i = [
+                "router",
+                "implementation",
+                "permit",
+                "v1",
+                "v3",
+                "standalone-v1",
+            ]
+            .iter()
+            .position(|s| s == name)?;
             let r = Role {
                 address: addr.parse().ok()?,
                 runtime: hash.parse().ok()?,
@@ -70,10 +79,22 @@ impl Profile {
             Some(permit),
             Some(v1),
             Some(v3),
+            standalone_v1,
         ] = roles
         else {
             return None;
         };
+        if standalone_v1.is_some_and(|v| {
+            chain != 1
+                || v.address
+                    != alloy_primitives::address!("35db01d1425685789dcc9228d47c7a5c049388d8")
+                || v.runtime
+                    != alloy_primitives::b256!(
+                        "7e4510ec4e8bcc09b3096ad85d8b23dcd2313e229366747439311e751e083ebb"
+                    )
+        }) {
+            return None;
+        }
         Some(Self {
             chain,
             router,
@@ -81,6 +102,7 @@ impl Profile {
             permit,
             v1,
             v3,
+            standalone_v1,
         })
     }
     pub fn roles(&self) -> Roles {
@@ -94,7 +116,13 @@ impl Profile {
         let rows = ctx.settings.list("pancakex.contracts", ctx.at()).ok()?;
         Self::from_rows(ctx.chain_id()?, &rows)
     }
-    pub(crate) async fn check(&self, ctx: &Ctx, h: Head, version: &str) -> GatewayResult<()> {
+    pub(crate) async fn check(
+        &self,
+        ctx: &Ctx,
+        h: Head,
+        version: &str,
+        reactor: Address,
+    ) -> GatewayResult<()> {
         let at = h.selector();
         let bad = || {
             ctx.err(
@@ -104,6 +132,24 @@ impl Profile {
         };
         if ctx.chain_id() != Some(self.chain) {
             return Err(bad());
+        }
+        let domain = eip712_domain! {name:"Permit2",chain_id:self.chain,verifying_contract:self.permit.address,};
+        if reactor != self.router.address {
+            let direct = self
+                .standalone_v1
+                .filter(|r| version == "v1" && r.address == reactor)
+                .ok_or_else(bad)?;
+            let (_, _, permit, separator) = tokio::try_join!(
+                plain(ctx, reactor, direct.runtime, &at),
+                plain(ctx, self.permit.address, self.permit.runtime, &at),
+                canonical(ctx, &at, reactor, permit2Call {}),
+                canonical(ctx, &at, self.permit.address, DOMAIN_SEPARATORCall {})
+            )?;
+            return if permit == self.permit.address && separator == domain.separator() {
+                Ok(())
+            } else {
+                Err(bad())
+            };
         }
         let (facet, advertised) = match version {
             "v1" => (
@@ -129,7 +175,6 @@ impl Profile {
             canonical(ctx, &at, self.router.address, permit2Call {}),
             canonical(ctx, &at, self.permit.address, DOMAIN_SEPARATORCall {})
         )?;
-        let domain = eip712_domain! {name:"Permit2",chain_id:self.chain,verifying_contract:self.permit.address,};
         if advertised != facet.address
             || related != self.permit.address
             || separator != domain.separator()

@@ -93,15 +93,21 @@ pub(super) async fn scan(
             )
         };
         let (fills, cancels, permits) = tokio::try_join!(
-            query(p.router.address, fill_filter(who)),
-            query(
-                p.router.address,
-                json!([
-                    OrderCancelled::SIGNATURE_HASH,
-                    who.into_word(),
-                    t.order_hash
-                ])
-            ),
+            query(t.roles.reactor, fill_filter(who)),
+            async {
+                if t.roles.reactor != p.router.address {
+                    return Ok(Vec::new());
+                }
+                query(
+                    p.router.address,
+                    json!([
+                        OrderCancelled::SIGNATURE_HASH,
+                        who.into_word(),
+                        t.order_hash
+                    ]),
+                )
+                .await
+            },
             query(
                 p.permit.address,
                 json!([UnorderedNonceInvalidation::SIGNATURE_HASH, who.into_word()])
@@ -114,7 +120,7 @@ pub(super) async fn scan(
             let id = log.transaction_hash.ok_or_else(bad)?;
             let own = if log.topics().first() == Some(&Fill::SIGNATURE_HASH) {
                 let a = Fill::decode_log_data(&log.inner.data).map_err(|_| bad())?;
-                if log.address() != p.router.address || a.swapper != who {
+                if log.address() != t.roles.reactor || a.swapper != who {
                     return Err(bad());
                 }
                 if a.nonce != t.nonce {
@@ -161,7 +167,8 @@ pub(super) async fn scan(
             if Some(h.hash) != receipt.block_hash {
                 return Err(bad());
             }
-            p.check(ctx, h, &m.ticket.offer.version).await?;
+            p.check(ctx, h, &m.ticket.offer.version, t.roles.reactor)
+                .await?;
             if own {
                 if out.original.replace(id).is_some() {
                     return Err(bad());

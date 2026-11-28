@@ -226,7 +226,12 @@ async fn ordinary_trade_future_excludes_rpc_and_receipt_state() {
     let recovery = bytes(|| super::recovery::reconcile(&p, r.clone(), &pending));
     let scan = bytes(|| super::history::scan(&p.ctx, &m, &terms, h));
     let paid = bytes(|| super::result::paid(&p, r.clone(), &m, &terms, m.anchor));
-    let profile = bytes(|| m.ticket.cfg.p.check(&p.ctx, h, &m.ticket.offer.version));
+    let profile = bytes(|| {
+        m.ticket
+            .cfg
+            .p
+            .check(&p.ctx, h, &m.ticket.offer.version, terms.roles.reactor)
+    });
     let sizes =
         json!({"prior":hot, "reconcile":recovery,"history":scan,"receipt":paid,"roles":profile});
     if let Some(path) = std::env::var_os("ARB_PANCAKEX_FUTURE_SIZES") {

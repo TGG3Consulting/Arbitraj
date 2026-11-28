@@ -246,7 +246,23 @@ fn ethereum_usdt_quotes_bind_original_assets_and_fill_through_the_pinned_reactor
         } else {
             assert_eq!(request.output, usdt);
             assert_ne!(profile.router.address, engine);
-            assert!(offer.terms(&profile, &request).is_none());
+            let accepted = offer.terms(&profile, &request).unwrap();
+            assert_eq!(accepted.roles.reactor, engine);
+            assert_eq!(accepted.digest, terms.digest);
+            let mut previous = profile.clone();
+            previous.standalone_v1 = None;
+            assert!(offer.terms(&previous, &request).is_none());
+            let tokens = archive["ethereum"]["tokens"].as_array().unwrap();
+            let tether = tokens
+                .iter()
+                .filter_map(|r| super::assets::AssetCode::parse(r.as_str()?, 1))
+                .find(|v| v.address() == usdt)
+                .unwrap();
+            assert_eq!(tether.guaranteed_net(minimum), U256::from(165995632u64));
+            assert_eq!(
+                tether.guaranteed_net(U256::from(1_000_000_000_000u64)),
+                U256::from(999951000000u64)
+            );
         }
     }
 }

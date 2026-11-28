@@ -95,7 +95,7 @@
   в USDT — `dealFunds` (`settlement_intent::note_gross`).
 - `supports_settlement_withdrawal` — Withdraw (V3) без клиентского ID; своя метка попытки — `remark`, сохраняется до POST,
   ищется в истории выводов (`settle_withdraw.rs`). Перед выводом USDC с trade на main — `venue.withdraw_from_trade`.
-- `supports_settlement_credit` — true, только пока `venue.deposit_to_spot` не «да»: тогда адрес депозита — только `to =
-  TRADE` («TRADE (spot trading account)», создаётся Add Deposit Address V3 с `to: trade`), второго перевода нет. При
-  `venue.deposit_to_spot = да` допускается адрес MAIN с переводом main → trade — флаг false.
+- `supports_settlement_credit` — true безусловно (решение Тиграна 28.11.2026). Адрес депозита выбирается как в BSC
+  (`deposit_addr.rs`: TRADE; MAIN — только при `venue.deposit_to_spot = да`); после зачисления ядро зовёт
+  `deposit_to_trading`, и при адресе MAIN KuCoin переводит main → trade (решение 102, `fund_move::to_trade`).
 - Сеть Base — `venue.base_network` (у KuCoin chainId `base`).

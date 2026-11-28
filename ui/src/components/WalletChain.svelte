@@ -24,6 +24,7 @@
   import SourcePrice from './SourcePrice.svelte';
   import AirSwapSource from './AirSwapSource.svelte';
   import NativeRfqSource from './NativeRfqSource.svelte';
+  import BopAmmSource from './BopAmmSource.svelte';
   import FermiSource from './FermiSource.svelte';
   import HanjiSource from './HanjiSource.svelte';
   import RaindexSource from './RaindexSource.svelte';
@@ -79,6 +80,7 @@
   {#if w.address && c.venue}<AirSwapSource venue={c.venue} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && c.venue}<HanjiSource venue={c.venue} wallet={w.address} />{/if}
   {#if w.address && c.venue}<FermiSource venue={c.venue} wallet={w.address} />{/if}
+  {#if w.address && c.venue}<BopAmmSource venue={c.venue} wallet={w.address} />{/if}
   {#if w.address && c.venue}<RaindexSource venue={c.venue} wallet={w.address} />{/if}
   {#if w.address && c.venue}<NativeRfqSource venue={c.venue} wallet={w.address} />{/if}
   {#if w.address && c.venue}<HashflowQuote venue={c.venue} trader={w.address} />{/if}

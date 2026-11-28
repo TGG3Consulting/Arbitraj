@@ -15,7 +15,7 @@ use serde_json::json;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct Tx {
+pub(super) struct Tx {
     hash: B256,
     block_hash: B256,
     transaction_index: U64,
@@ -25,6 +25,33 @@ struct Tx {
     nonce: U64,
     input: Bytes,
     value: U256,
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Sender {
+    Owner(u64),
+    Relay,
+}
+
+impl Tx {
+    pub(super) fn matches(&self, proof: &Proof, sender: Sender, digest: B256, at: u64) -> bool {
+        let authorized = match sender {
+            Sender::Owner(nonce) => {
+                self.from == proof.terms.payer && self.nonce == U64::from(nonce)
+            }
+            Sender::Relay => {
+                !self.from.is_zero() && self.from != proof.terms.payer && proof.terms.input != WETH
+            }
+        };
+        authorized
+            && proof.terms.recipient == proof.terms.payer
+            && self.chain_id == U64::from(crate::settings::evm_profiles::ETHEREUM_MAINNET)
+            && self.to == USER_PROXY
+            && self.value == proof.value()
+            && keccak256(&self.input) == digest
+            && Prepared::from_calldata(&self.input, &proof.terms, at)
+                .is_some_and(|p| p.proof == *proof)
+    }
 }
 
 impl Proof {
@@ -37,6 +64,18 @@ impl Proof {
         calldata_digest: B256,
         r: &Receipt,
     ) -> GatewayResult<()> {
+        self.check_delivery(ctx, hash, Sender::Owner(nonce), calldata_digest, r)
+            .await
+            .map(|_| ())
+    }
+    pub(super) async fn check_delivery(
+        &self,
+        ctx: &Ctx,
+        hash: B256,
+        sender: Sender,
+        calldata_digest: B256,
+        r: &Receipt,
+    ) -> GatewayResult<B256> {
         let fail = || {
             ctx.err(
                 ErrorCode::OutcomeUnknown,
@@ -56,7 +95,10 @@ impl Proof {
             .map_err(|_| fail())?;
         let block = r.block_hash.ok_or_else(fail)?;
         #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
         struct Header {
+            hash: B256,
+            parent_hash: B256,
             timestamp: U64,
         }
         let (tx, header): (Option<Tx>, Option<Header>) = tokio::try_join!(
@@ -66,22 +108,18 @@ impl Proof {
         .map_err(|_| fail())?;
         let tx = tx.ok_or_else(fail)?;
         // Истечение до включения может быть причиной status=0. Подлинность подписи и хеша сохраняется.
-        let timestamp = header.ok_or_else(fail)?.timestamp.to();
+        let header = header.ok_or_else(fail)?;
+        let timestamp = header.timestamp.to();
         let at = if r.status.is_zero() { 0 } else { timestamp };
         if tx.hash != hash
             || tx.block_hash != block
             || Some(tx.transaction_index) != r.transaction_index
-            || tx.chain_id != U64::from(crate::settings::evm_profiles::ETHEREUM_MAINNET)
-            || tx.from != self.terms.payer
-            || tx.to != USER_PROXY
-            || tx.nonce != U64::from(nonce)
-            || tx.value != self.value()
-            || keccak256(&tx.input) != calldata_digest
-            || Prepared::from_calldata(&tx.input, &self.terms, at).is_none_or(|p| p.proof != *self)
+            || header.hash != block
+            || !tx.matches(self, sender, calldata_digest, at)
         {
             return Err(fail());
         }
-        Ok(())
+        Ok(header.parent_hash)
     }
 
     /// Проверка исполнения status=1. При восстановлении этого же хеша используются тот же фильтр и роли.
@@ -104,19 +142,34 @@ impl Proof {
         }
         self.transaction_matches(ctx, hash, nonce, calldata_digest, r)
             .await?;
+        self.bound_amounts(
+            ctx,
+            hash,
+            r,
+            (self.terms.output == WETH).then_some(self.terms.recipient),
+        )
+        .await
+    }
+    pub(super) async fn bound_amounts(
+        &self,
+        ctx: &Ctx,
+        hash: B256,
+        r: &Receipt,
+        own_native: Option<Address>,
+    ) -> GatewayResult<(U256, U256)> {
+        let fail = || {
+            ctx.err(
+                ErrorCode::OutcomeUnknown,
+                "Tokenlon: исходная квитанция не подтверждает направления и суммы",
+            )
+        };
         let code = Code {
             shell: b256!("abf73cab47631c9363fa11b421585b9edc25458176a4e00292846ed8a45b3c1a"),
             implementation: address!("0b9f13ffab8448089f50073cf24bbe5c7bd8675a"),
             runtime: b256!("db3bf7e4d3bea9449bdaaf049140386c9c0d57c1d9fcb962a88310b002fc70a5"),
         };
-        code.at_transaction(
-            ctx,
-            USER_PROXY,
-            hash,
-            r,
-            (self.terms.output == WETH).then_some(self.terms.recipient),
-        )
-        .await?;
+        code.at_transaction(ctx, USER_PROXY, hash, r, own_native)
+            .await?;
         self.amounts(&r.logs).ok_or_else(fail)
     }
 }

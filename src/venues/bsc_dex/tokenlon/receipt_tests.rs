@@ -10,7 +10,7 @@ use flate2::read::GzDecoder;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io::Read};
 
-fn archive(bytes: &[u8]) -> Value {
+pub(super) fn archive(bytes: &[u8]) -> Value {
     let mut raw = Vec::new();
     GzDecoder::new(bytes).read_to_end(&mut raw).unwrap();
     serde_json::from_slice(&raw).unwrap()
@@ -18,7 +18,7 @@ fn archive(bytes: &[u8]) -> Value {
 fn num(s: &Value) -> U256 {
     s.as_str().unwrap().parse().unwrap()
 }
-fn logs(data: &Value) -> Vec<Log> {
+pub(super) fn logs(data: &Value) -> Vec<Log> {
     data.as_array()
         .unwrap()
         .iter()
@@ -130,6 +130,22 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
             .unwrap();
         assert_eq!(tx["blockHash"], ev["blockHash"]);
         assert_eq!(ev["topics"][2], json!(proof.order_hash));
+        let delivered: super::inclusion::Tx = serde_json::from_value(tx.clone()).unwrap();
+        let other = tx["from"].as_str().unwrap().parse::<Address>().unwrap() != terms.payer;
+        let relay = super::inclusion::Sender::Relay;
+        assert_eq!(json!(proof.fill_topics()), ev["topics"]);
+        assert_eq!(delivered.matches(proof, relay, keccak256(&data), at), other);
+        assert!(!delivered.matches(proof, relay, B256::ZERO, at));
+        if other {
+            assert_ne!(terms.input, WETH);
+            assert!(logs.iter().any(|l| l.topics() == proof.fill_topics()));
+            assert!(!delivered.matches(
+                proof,
+                super::inclusion::Sender::Owner(0),
+                keccak256(&data),
+                at
+            ));
+        }
         *makers.entry(proof.maker).or_insert(0) += 1;
         external_sender +=
             usize::from(tx["from"].as_str().unwrap().parse::<Address>().unwrap() != terms.payer);

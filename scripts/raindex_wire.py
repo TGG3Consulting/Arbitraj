@@ -23,7 +23,7 @@ def decimal(word):
     return Decimal(int.from_bytes(b[4:],"big",signed=True)).scaleb(int.from_bytes(b[:4],"big",signed=True))
 
 
-def take(version,order,i,j,minimum,maximum,decimals,receive_fixed):
+def take(version,order,i,j,minimum,maximum,decimals,receive_fixed,ratio_limit=None):
     if version not in (6,7) and not receive_fixed:
         raise ValueError("generation limits output purchased from maker")
     t=ORDERS[version]
@@ -37,7 +37,7 @@ def take(version,order,i,j,minimum,maximum,decimals,receive_fixed):
     else:
         flag=",bool" if version>=6 else ""
         spec=f"(bytes32,bytes32,bytes32{flag},{entry}[],bytes)"
-        values=(float_raw(minimum,decimals),float_raw(maximum,decimals),float_raw(10**50,0),*((receive_fixed,) if version>=6 else ()),[c],b"")
+        values=(float_raw(minimum,decimals),float_raw(maximum,decimals),ratio_limit if ratio_limit is not None else float_raw(10**50,0),*((receive_fixed,) if version>=6 else ()),[c],b"")
     action=data(METHODS[version],[spec],[values])
     if action[2:10]!=SELECTORS[version]:raise ValueError("ABI mismatch")
     return action

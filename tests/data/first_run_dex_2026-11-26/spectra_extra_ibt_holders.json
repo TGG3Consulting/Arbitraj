@@ -1,0 +1,117 @@
+{
+  "selector": {
+    "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+    "requireCanonical": true
+  },
+  "source": "eth_call Multicall3 balanceOf(address) at the canonical parent, followed by eth_getCode and eth_getBalance for nonzero accounts. Candidate EOAs are from spectra_base_wallets.json.gz, spectra_base_funding.json and record_base_launch_wallets.PAYER.",
+  "markets": [
+    {
+      "pool": "0xc6fbb3497d9a3920f2033ee57ec4f7e99ba280a9",
+      "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+          "balance": "49242796436832602298"
+        }
+      ]
+    },
+    {
+      "pool": "0x07e552a01b3dbb7dbcbb5235083b7c516a135aae",
+      "token": "0xea50f402653c41cadbafd1f788341db7b7f37816",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+          "balance": "6951340641390469"
+        }
+      ]
+    },
+    {
+      "pool": "0x25b8288b7b093998a234abbcf04035102d5dd50b",
+      "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+          "balance": "49242796436832602298"
+        }
+      ]
+    },
+    {
+      "pool": "0x5e3a444cbbabf92d619fa9fcaeef99c24ead3ba0",
+      "token": "0x83db73ef5192de4b6a4c92bd0141ba1a0dc87c65",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x2a315c59a6a95aeeec085c73badac801c2f4209f",
+          "balance": "168843061493021120"
+        },
+        {
+          "owner": "0xad01c20d5886137e056775af56915de824c8fce5",
+          "balance": "11940929871610648"
+        },
+        {
+          "owner": "0xc06ebbefd94032b85424d51906e2a335efae264b",
+          "balance": "95179601676997501"
+        },
+        {
+          "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+          "balance": "5129751453854202960"
+        }
+      ]
+    },
+    {
+      "pool": "0xa86bee5400d9f58aa2ff168fed6ab4bcb36bcc91",
+      "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+          "balance": "49242796436832602298"
+        }
+      ]
+    },
+    {
+      "pool": "0x8406cf4f9b59e78f107dbfebc1f5003e20e4d031",
+      "token": "0x616a4e1db48e22028f6bbf20444cd3b8e3273738",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0xad01c20d5886137e056775af56915de824c8fce5",
+          "balance": "4034187294478096"
+        },
+        {
+          "owner": "0xc06ebbefd94032b85424d51906e2a335efae264b",
+          "balance": "612687630039648086"
+        },
+        {
+          "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+          "balance": "71254844873330358"
+        }
+      ]
+    },
+    {
+      "pool": "0xad37bda04fb6a86547fe26d06c85cb825fb19945",
+      "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+          "balance": "49242796436832602298"
+        }
+      ]
+    },
+    {
+      "pool": "0xa07f72baa1eda80f6f0e25c2fb55180be46fdf69",
+      "token": "0x89cc2a57223fa803852b6b4e65c6e376d49909f9",
+      "sufficient_for_both": "1000000000000000",
+      "holders": [
+        {
+          "owner": "0x676660a0199d2998897a5625a11803b8f0aac6c3",
+          "balance": "49242796436832602298"
+        }
+      ]
+    }
+  ]
+}

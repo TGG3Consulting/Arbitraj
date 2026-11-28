@@ -650,6 +650,8 @@ jobs:
         run: python scripts/record_umia_base.py wallets "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-ipor-base'
         run: python scripts/record_spectra_ipor.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'spectra-extra-ibt-base'
+        run: python scripts/record_spectra_extra_ibt.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-base'
         run: python scripts/record_spectra_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'omni-flux-bin-base'

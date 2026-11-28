@@ -6514,7 +6514,7 @@
 |---|---|
 | T-SETTLE-GATE | Архив закрытого ордера по text с filled_total, комиссия в полученной или третьей валюте, точные USDT обоих направлений и частичный остаток. |
 | T-SETTLE-KUCOIN | Для MAIN↔TRADE отдельный устойчивый ID и история по каждому внутреннему переводу. Для внешнего вывода — подтверждение принадлежности исходному запросу и отсутствия повтора. |
-| T-SETTLE-BITGET | Независимые ID и история FUNDING↔SPOT, clientOid внешнего вывода, комиссии всех fills и точная quoteVolume. |
+| T-SETTLE-BITGET | Независимые ID и история FUNDING↔SPOT, clientOid внешнего вывода, комиссии всех fills и точная quoteVolume. Ветка claude/settle-bitget (28.11): вывод — clientOid сохраняется до перевода spot → p2p и до POST, сверка по clientOid; `supports_settlement_credit` = false — счёт зачисления депозита документацией не подтверждается (вопрос Тиграну: подтверждение спота). Нужны записи: withdrawal-records по clientOid и orderId (pending и success, сеть BASE, USDC), deposit-records USDC BASE, orderInfo IOC USDCUSDT (filled, partially/cancelled). |
 | T-SETTLE-HTX | Сохранённые currency, chain, wire и fee при поиске вывода одним clientOrderId; сверка списания и поступления именно в спотовый аккаунт. |
 | T-SETTLE-POLONIEX | После открытия стороны сети сверить withdrawOrderId с withdrawalRequestsId, точный filledAmount и все комиссии частичных исполнений. |
 | T-SETTLE-XT | Сверить tradeQuote с исполнениями и всеми комиссиями, связь clientOrderId→recordId→txHash и итоговое зачисление исходного аккаунта. |

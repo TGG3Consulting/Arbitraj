@@ -128,7 +128,7 @@ async fn candidate(
     let ctx = &p.ctx;
     let generation = ctx.settings.generation();
     let profile = Profile::read(ctx).ok()?;
-    if quote_stage::settlement() && !profile.supports_settlement() {
+    if !profile.accepts_trade(quote_stage::settlement()) {
         return None;
     }
     let module = profile.module?.address;

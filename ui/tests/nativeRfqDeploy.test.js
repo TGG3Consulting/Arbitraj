@@ -1,4 +1,4 @@
-// Данные получены из изолированного CREATE и 16 симуляций Native RFQ в GitHub Actions 46096868177.
+// Р”Р°РЅРЅС‹Рµ РїРѕР»СѓС‡РµРЅС‹ РёР· РёР·РѕР»РёСЂРѕРІР°РЅРЅРѕРіРѕ CREATE Рё 16 СЃРёРјСѓР»СЏС†РёР№ Native RFQ РІ GitHub Actions 46096868177.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {readFileSync} from 'node:fs';
@@ -6,7 +6,7 @@ import {gunzipSync} from 'node:zlib';
 import {loadPlan,sameRuntime,unsigned} from '../src/lib/walletDeployment.js';
 import {baseNetwork} from '../src/lib/baseNetwork.js';
 import {deploymentScope,sourceDeploymentKey} from '../src/lib/deploymentScope.js';
-import {addNative,checkNativeModule} from '../src/lib/nativeRfqDeploy.js';
+import {addNative,checkNativeModule,nativeRfqNetwork,checkNativeRoles} from '../src/lib/nativeRfqDeploy.js';
 
 const read=path=>readFileSync(new URL(path,import.meta.url));
 const card=JSON.parse(read('../src/assets/native-rfq-base-create.json'));
@@ -48,4 +48,27 @@ test('Native keeps the original role list on reload and installs one module for 
   assert.deepEqual(saved,['native_rfq.roles',{kind:'Venue',id:'base_dex'},next,rows]);
   selected={...selected,settings:{...args,rows:next}};
   await assert.rejects(reopened.installSource('native_rfq.roles',next,()=>assert.fail()));
+});
+
+test('Ethereum uses its archived registry, immutable runtime and own signing account',async()=>{
+  const eth=JSON.parse(read('../src/assets/native-rfq-ethereum-create.json'));
+  const proof=JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_create.json.gz')));
+  const receipts=JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_protected.json.gz')));
+  const roles=JSON.parse(read('../../tests/data/first_run_dex_2026-11-26/native_rfq_ethereum_public.json')).roles.roles;
+  const ethRows=['network 1 ethereum',...roles.map((r,i)=>[i?'pool':'router',r.address,r.runtime].join(' '))];
+  const settings={kind:eth.kind,chainId:1,wallet:receipts.payer,rows:ethRows};
+  const p=await loadPlan(settings,eth);
+  assert.equal(await sameRuntime(proof.runtime,p),true);
+  assert.equal(unsigned(p).chainId,'0x1');
+  assert.ok(receipts.observed.length===12 && receipts.observed.every(r=>r.runtime===p.runtimeKeccak));
+  assert.equal(addNative(ethRows,p,receipts.observed[0].module).length,4);
+  await assert.rejects(loadPlan({...settings,rows},eth));
+  const profile=[{venue:'eth_dex',evm_chain_id:1,chain:'ethereum'}];
+  const selected={'dex.chain|Venue|other':'ethereum','dex.evm_chain_id|Venue|other':1};
+  assert.equal(nativeRfqNetwork('other',profile,selected),1);
+  assert.equal(nativeRfqNetwork('other',profile,{...selected,'dex.evm_chain_id|Venue|other':56}),null);
+  const [call,at]=proof.registry.request;
+  assert.equal(call.to,p.router);
+  assert.equal(at.blockHash,p.sourceBlock);
+  await assert.rejects(checkNativeRoles({request:async()=>proof.runtime},p,at));
 });

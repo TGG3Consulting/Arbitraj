@@ -33,6 +33,8 @@ BASE_USDT_EVIDENCE = {
              "[Брокерские заявки](https://docs.dinari.com/docs/placing-orders) · [Снимок Base](../tests/data/first_run_dex_2026-11-26/dinari_base_usdt_checks.json.gz)."),
     "7626": ("Chain Wallet API строит маршрут для подписи владельца и возвращает spender. Указание USDT в общей спецификации не подтверждает котировку для физического Base USDT. "
              "[Котировка](https://docs-bot-api.ave.ai/en/chain-wallet-transaction-rest-api/quote-api) · [Исполнение EVM](https://docs-bot-api.ave.ai/en/chain-wallet-transaction-rest-api/evm-bsc-eth-base-polygon-robinhood-transaction-api) · [Доступ](https://docs-bot-api.ave.ai/en/how-to-activate)."),
+    "7902": ("Книга принимает позиции на спортивные события с расчётом в USDC на Base. "
+             "[Правила рынка и обеспечение](https://game.pred.app/how-sports-prediction-markets-work/)."),
 }
 
 

@@ -45,6 +45,7 @@ pub mod transfers;
 pub mod user_stream;
 pub mod wallet;
 mod withdraw_alias;
+pub mod withdraw_recover;
 pub mod ws;
 pub mod ws_book;
 pub mod ws_book_sync;
@@ -110,18 +111,25 @@ impl Poloniex {
 
 #[async_trait]
 impl Venue for Poloniex {
+    /// Счёт у Poloniex один — спот: «account type. Currently only SPOT is supported» (GET /accounts,
+    /// https://api-docs.poloniex.com/spot/api/private/account) — депозит зачисляется на торговый счёт.
     fn supports_settlement_credit(&self) -> bool {
         true
     }
+    /// withdrawOrderId — уникальный ключ вывода, повтор идемпотентен; история выводов возвращает его
+    /// (https://api-docs.poloniex.com/spot/api/private/wallet). Закрытый вывод (withdrawalEnable = false) ядро видит в
+    /// справочнике сетей (networks_parse.rs) и в круг не пускает.
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }
+    /// Решение 231: вывод с неизвестным итогом — по своему withdrawOrderId в истории (withdraw_recover.rs). Принимает:
+    /// исходный запрос, «чем найти». Возвращает: Some(перевод) или None — не подтверждён. Ошибки: разбор записи.
     async fn resolve_withdraw(
         &self,
         req: WithdrawRequest,
         p: &crate::gateway::pending::PendingRef,
     ) -> GatewayResult<Option<Transfer>> {
-        transfers::recover_settlement(&self.ctx, req, p).await
+        withdraw_recover::settlement(&self.ctx, &self.nets, req, p).await
     }
 
     /// GET сверяет окончательный ордер по ID из заявки. Открытый ордер остаётся на сверке.

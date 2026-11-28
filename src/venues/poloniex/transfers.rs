@@ -1,6 +1,6 @@
 //! Файл: venues/poloniex/transfers.rs
 //! Что делает: вывод с Poloniex по сети (withdrawalType 0) со своим withdrawOrderId (новым на каждую попытку) и его
-//! статус; при неизвестном итоге — поиск вывода по withdrawOrderId в истории.
+//! статус; при неизвестном итоге — поиск вывода по withdrawOrderId в истории (сверка расчётного круга — withdraw_recover.rs).
 //! Кто вызывает: mod.rs (функции контракта).
 //! От чего зависит: rest.rs, activity.rs, num.rs, ctx.rs, errors.rs, order_rules.rs (свой id), core/types.
 //! Настройки: venue.history_window_s [poloniex] (поиск и статус вывода — проверяется ДО отправки, урок 7).
@@ -112,7 +112,8 @@ fn withdraw_fields(coin: &str, network: &str, amount: &str) -> String {
 }
 
 /// Запись вывода по полю (withdrawalRequestsId / withdrawOrderId) в окне. None — не найдена или сбой.
-async fn find(ctx: &Ctx, field: &str, value: &str) -> Option<Value> {
+/// Вызывают: withdraw (здесь) и withdraw_recover.rs (сверка вывода расчётного круга).
+pub(super) async fn find(ctx: &Ctx, field: &str, value: &str) -> Option<Value> {
     activity::fetch(ctx, WITHDRAWALS)
         .await
         .ok()?
@@ -156,39 +157,6 @@ pub async fn withdrawal_status(ctx: &Ctx, id: &str) -> GatewayResult<Transfer> {
     };
     let ticker = num::text(rec, "currency")?.to_ascii_uppercase();
     activity::transfer(ctx, rec, &ticker, "", id, status)
-}
-
-/// Только поиск исходного вывода по клиентскому ID до передачи результата наблюдателю зачисления.
-pub(super) async fn recover_settlement(
-    ctx: &Ctx,
-    req: WithdrawRequest,
-    p: &crate::gateway::pending::PendingRef,
-) -> GatewayResult<Option<Transfer>> {
-    let Some(client) = p.client_id.as_deref() else {
-        return Ok(None);
-    };
-    let Some(row) = find(ctx, "withdrawOrderId", client).await else {
-        return Ok(None);
-    };
-    let Some(reference) = num::text_opt(&row, "withdrawalRequestsId") else {
-        return Ok(None);
-    };
-    // История документирует amount включая комиссию. Для автоматического восстановления
-    // нужны все реквизиты исходной заявки; неполная строка остаётся для ручной сверки.
-    if p.venue_ref.as_ref().is_some_and(|id| id != &reference)
-        || !num::text_opt(&row, "currency")
-            .is_some_and(|v| v.eq_ignore_ascii_case(&req.asset.ticker))
-        || !num::text_opt(&row, "network").is_some_and(|v| v == req.network)
-        || !num::text_opt(&row, "address").is_some_and(|v| v.eq_ignore_ascii_case(&req.address))
-        || num::dec_opt(&row, "amount")? != Some(req.amount)
-    {
-        return Ok(None);
-    }
-    Ok(Some(crate::gateway::pending::created(
-        ctx.venue(),
-        req,
-        reference,
-    )))
 }
 
 #[cfg(test)]

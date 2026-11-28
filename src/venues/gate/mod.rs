@@ -128,6 +128,9 @@ impl Gate {
 
 #[async_trait]
 impl Venue for Gate {
+    /// Зачисление депозита сразу на спот: DepositRecord.status DONE — «Funds Credited to Spot Account», TRACK — «Pending
+    /// Spot Account Credit» (GET /wallet/deposits, https://www.gate.com/docs/developers/apiv4/en/#retrieve-deposit-records;
+    /// SDK docs/DepositRecord.md). Второго перевода нет (deposit_to_trading). Возвращает true, ошибок нет.
     fn supports_settlement_credit(&self) -> bool {
         true
     }
@@ -144,6 +147,10 @@ impl Venue for Gate {
     fn settlement_account(&self) -> GatewayResult<String> {
         crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
     }
+    /// Ордер конверсии: POST /spot/orders с time_in_force ioc/fok и своим text (trade.rs, before_send до POST); сверка —
+    /// только GET /spot/orders/{order_id} и GET /spot/orders?status=finished (order_state::inspect); сумма котируемой —
+    /// filled_total «Total filled in quote currency» (https://www.gate.com/docs/developers/apiv4/en/#create-an-order,
+    /// SDK docs/Order.md). Возвращает true, ошибок нет.
     fn supports_settlement_order(&self) -> bool {
         true
     }
@@ -162,6 +169,9 @@ impl Venue for Gate {
         })
     }
 
+    /// Вывод со своим withdraw_order_id («User-defined order number for withdrawal», POST /withdrawals), сохранённым до
+    /// POST (transfers.rs), и поиском по нему в GET /wallet/withdrawals?withdraw_order_id= (resolve.rs)
+    /// (https://www.gate.com/docs/developers/apiv4/en/#withdraw, #retrieve-withdrawal-records). Возвращает true.
     fn supports_settlement_withdrawal(&self) -> bool {
         true
     }

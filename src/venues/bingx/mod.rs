@@ -34,6 +34,7 @@ pub mod pairs_watch;
 pub mod rate_pause;
 pub mod resolve;
 pub mod rest;
+pub mod settle;
 pub mod subs;
 pub mod symbols;
 pub mod symbols_qty;
@@ -116,6 +117,56 @@ impl Bingx {
 impl Venue for Bingx {
     fn id(&self) -> VenueId {
         self.ctx.venue()
+    }
+
+    /// Расчётный круг: отпечаток публичного ключа API (bingx.api_key) — идентичность торгового счёта после рестарта
+    /// (gateway/settlement_intent.rs::account). Ошибки: ключ не задан (NotConfigured), хранилище секретов закрыто.
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Расчётный ордер USDC-USDT: свой newClientOrderId сохраняется до POST (trade.rs), сверка — только GET «Query
+    /// Order details» по orderId / clientOrderID (settle.rs), точная сумма котируемой — cummulativeQuoteQty
+    /// (order_state::result). Документация — шапка settle.rs.
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Символ сохранённой заявки = «asset-quote» (settle.rs::matches).
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settle::matches(p, asset, quote)
+    }
+
+    /// Только GET: окончательный ордер по своему ID; открытый — None (остаётся на сверке). settle.rs::inspect.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settle::inspect(&self.ctx, req, p).await
+    }
+
+    /// Вывод USDC по Base: свой withdrawOrderId («Customer-defined withdrawal ID», POST
+    /// /openApi/wallets/v1/capital/withdraw/apply) сохраняется до POST (transfers.rs); после потери ответа — поиск в
+    /// GET /openApi/api/v3/capital/withdraw/history по withdrawOrderId (resolve.rs), статус — по id (transfers.rs).
+    /// https://github.com/BingX-API/api-ai-skills/blob/main/skills/spot-wallet/api-reference.md (разделы 2 и 4),
+    /// docs-v3 Account and Wallet → «Withdraw», «Withdraw records».
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
+    /// Зачисление расчётного круга Base доводится до спота: в круге Base после каждого зачисления на биржу ядро само
+    /// вызывает Venue::deposit_to_trading (решение 102, решение Тиграна 28.11.2026), а перевод фонд → спот у BingX
+    /// выполняет fund_move.rs по venue.deposit_to_spot [bingx] (POST /openApi/api/asset/v1/transfer, fromAccount=fund,
+    /// toAccount=spot — docs-v3 «Asset Transfer New», https://bingx-api.github.io/docs-v3/; api-ai-skills
+    /// https://github.com/BingX-API/api-ai-skills/blob/main/skills/fund-account/api-reference.md).
+    fn supports_settlement_credit(&self) -> bool {
+        true
     }
 
     fn kind(&self) -> VenueKind {

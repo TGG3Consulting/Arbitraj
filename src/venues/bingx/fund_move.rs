@@ -10,7 +10,8 @@
 //! Официальная документация (BingX api-ai-skills, skills/fund-account/api-reference.md и
 //! skills/spot-account/api-reference.md, «Transfer Assets Between Account Types»):
 //! - POST /openApi/api/asset/v1/transfer — fromAccount (fund — Funding Account, spot — Spot Account, …),
-//!   toAccount (то же), asset (например USDT), amount; ответ data.tranId. Лимит 2 запроса/с на UID.
+//!   toAccount (то же), asset (например USDT), amount; ответ data.tranId (docs-v3 «Asset Transfer New» — transferId,
+//!   читаются оба). Лимит 2 запроса/с на UID.
 //! - Право ключа — «универсальный перевод» (код 4 в GET /openApi/v1/account/apiPermissions, account.rs).
 //!   https://github.com/BingX-API/api-ai-skills/blob/main/skills/fund-account/api-reference.md
 
@@ -68,7 +69,11 @@ pub async fn transfer(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResul
         Op::Move,
     )
     .await?;
-    let id = num::text_opt(&data, "tranId").unwrap_or_else(|| "—".into());
+    // Источники расходятся в имени поля: api-ai-skills — data.tranId, docs-v3 («Asset Transfer New») — transferId.
+    // Читаются оба (только для текста журнала); живой записи ответа нет.
+    let id = num::text_opt(&data, "tranId")
+        .or_else(|| num::text_opt(&data, "transferId"))
+        .unwrap_or_else(|| "—".into());
     Ok(format!(
         "BingX: {} {} переведено с фондового счёта на спот (tranId {id})",
         amount.normalize(),

@@ -4,7 +4,7 @@
 //! venue.order_final_wait_ms — отменяет остаток (правило Тиграна: не исполнился — отменяем, больше не пробуем) и
 //! опрашивает ещё раз до того же срока.
 //! Затем переводит ответ BingX в результат ядра (исполнено, средняя цена, комиссия).
-//! Кто вызывает: trade.rs.
+//! Кто вызывает: trade.rs, resolve.rs, settle.rs (только result и is_final — чтение без отмены).
 //! От чего зависит: rest.rs, num.rs, ctx.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms — решение 398: читает вызывающий ДО постановки ордера
 //! (times) и передаёт значением; после постановки настройки не читаются (сторож tests/settings_before_send_guard.rs).
@@ -114,6 +114,9 @@ pub fn result(
     let orig = num::dec(s, "origQty")?;
     let filled = num::dec(s, "executedQty")?;
     let quote = num::dec(s, "cummulativeQuoteQty")?;
+    // Расчётный круг (gateway/settlement_intent.rs): точная сумма котируемой валюты — cummulativeQuoteQty того же
+    // ответа («Cumulative quote asset transacted quantity», docs-v3 «Query Order details»). Вне круга — ничего.
+    crate::gateway::settlement_intent::note_gross(Some(quote));
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
     } else if filled < orig {
@@ -164,8 +167,8 @@ async fn query(ctx: &Ctx, symbol: &str, order_id: &str) -> GatewayResult<Value> 
     .await
 }
 
-/// Состояние окончательное.
-fn is_final(s: &Value) -> bool {
+/// Состояние окончательное (FILLED / CANCELED / FAILED). Вызывают: poll_final, settle.rs (сверка расчётного ордера).
+pub fn is_final(s: &Value) -> bool {
     num::text_opt(s, "status").is_some_and(|st| FINAL.contains(&st.as_str()))
 }
 

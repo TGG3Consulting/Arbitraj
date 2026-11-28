@@ -36,6 +36,20 @@ fn endpoint(base: &str, official: &str, path: &str) -> Option<(reqwest::Url, boo
     Some((url, send_key))
 }
 
+/// Распознаёт сохранённую ошибку API-ключа официального Kipseli. Тело и заголовки в журнал не попадают.
+fn kipseli_key_error(
+    used_kipseli_key: bool, status: reqwest::StatusCode, body: &str,
+) -> Option<(ErrorCode, &'static str)> {
+    if !used_kipseli_key || status != reqwest::StatusCode::UNAUTHORIZED {
+        return None;
+    }
+    let response: Value = serde_json::from_str(body).ok()?;
+    let cause = &response["error"];
+    (cause["code"].as_str() == Some("UNAUTHORIZED")
+        && cause["message"].as_str() == Some("missing or invalid API key"))
+        .then_some((ErrorCode::InvalidCredentials, "Kipseli HTTP 401 (UNAUTHORIZED): сервис не принял API-ключ. Проверьте kipseli.api_key."))
+}
+
 pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayResult<Preview> {
     let invalid = |m: &str| ctx.err(ErrorCode::BadResponse, m);
     let chain = ctx
@@ -151,6 +165,9 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
         .await
         .map_err(|_| invalid("Не получен полный ответ источника цены"))?;
     if !status.is_success() {
+        if let Some((code, message)) = kipseli_key_error(source == "kipseli" && official, status, &body) {
+            return Err(ctx.err(code, message));
+        }
         return Err(invalid(&format!("{source} HTTP {}", status.as_u16())));
     }
     let book: Value =
@@ -274,6 +291,23 @@ mod tests {
             assert!(endpoint(invalid, origin, "price").is_none());
         }
     }
+    #[test]
+    fn recorded_kipseli_access_denial_identifies_only_the_official_key() {
+        let archive: Value = serde_json::from_str(include_str!(
+            "../../../tests/data/first_run_dex_2026-11-26/kipseli_base.json"
+        )).unwrap();
+        let reply = &archive["public_get"];
+        let status = reqwest::StatusCode::from_u16(reply["status"].as_u64().unwrap().try_into().unwrap()).unwrap();
+        let body = reply["body"].to_string();
+        let (code, message) = kipseli_key_error(true, status, &body).unwrap();
+        assert_eq!(code, ErrorCode::InvalidCredentials);
+        assert!(message.contains("kipseli.api_key"));
+        assert!(!message.contains(reply["body"]["error"]["requestId"].as_str().unwrap()));
+        assert!(kipseli_key_error(false, status, &body).is_none());
+        assert!(kipseli_key_error(true, reqwest::StatusCode::OK, &body).is_none());
+        assert!(kipseli_key_error(true, status, "{}").is_none());
+    }
+
     #[test]
     fn mixed_aggregator_shows_maker_per_leg() {
         let a = Address::with_last_byte(1);

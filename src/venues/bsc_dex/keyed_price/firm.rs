@@ -117,6 +117,7 @@ impl Ticket {
             ]);
             client.get(url).header("0x-version", "v2")
         };
+        let used_kipseli_key = self.fee.is_some() && auth.is_some();
         if let Some(auth) = auth {
             wire = wire.header(header, auth);
         }
@@ -124,6 +125,9 @@ impl Ticket {
             .await
             .map_err(|_| bad(ctx, "Нет полного ответа сервиса индивидуальных котировок"))?;
         if !status.is_success() {
+            if let Some((code, message)) = super::kipseli_key_error(used_kipseli_key, status, &body) {
+                return Err(ctx.err(code, message));
+            }
             return Err(bad(
                 ctx,
                 &format!(

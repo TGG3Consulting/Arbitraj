@@ -16,6 +16,15 @@ pub(super) struct Stored {
 }
 
 pub(super) async fn load(ctx: &Ctx, namespace: &str, version: u8) -> Result<Stored, DbError> {
+    load_records(ctx, namespace, version, false).await
+}
+
+/// В отдельном журнале свежих изменений пустой массив обозначает подтверждённое снятие.
+pub(super) async fn load_recent(ctx: &Ctx, namespace: &str, version: u8) -> Result<Stored, DbError> {
+    load_records(ctx, namespace, version, true).await
+}
+
+async fn load_records(ctx: &Ctx, namespace: &str, version: u8, recent: bool) -> Result<Stored, DbError> {
     let rows = venue_state::list(ctx.journal.db(), ctx.place.id, namespace, "").await?;
     let mut expected = None;
     let mut orders = Raw::new();
@@ -27,7 +36,7 @@ pub(super) async fn load(ctx: &Ctx, namespace: &str, version: u8) -> Result<Stor
         }
         let pair = key.parse::<B256>().ok().zip(body.parse::<Bytes>().ok());
         if let Some((hash, bytes)) = pair
-            && wire::Order::decode(version, &bytes, hash).is_some()
+            && ((recent && bytes.is_empty()) || wire::Order::decode(version, &bytes, hash).is_some())
         {
             orders.insert(hash, bytes);
         } else {

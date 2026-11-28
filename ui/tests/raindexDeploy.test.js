@@ -158,7 +158,7 @@ test('Each Base manifest book selects its measured constructor independently of 
     assert.equal(p.creationSha256,captured.initSha256);
     assert(await sameRuntime(captured.runtime,p));
     if(p.sourceKind==='rpc') assert.equal(p.url,String(captured.startBlock));
-    if(p.book!==quotes.book && p.book!==measuredV5){
+    if(p.book!==quotes.book && p.book!==measuredV5 && !inventory.sample_replay.protected.modules[p.book]){
       assert.equal(p.settlementVerified,null);
       assert.equal(p.projectFundingVerified,null);
     }

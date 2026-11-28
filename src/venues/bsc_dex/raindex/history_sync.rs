@@ -2,8 +2,49 @@
 use super::*;
 use crate::venues::bsc_dex::pools::scan;
 
-async fn hash_at(ctx: &Ctx, height: u64) -> GatewayResult<B256> {
+pub(super) async fn hash_at(ctx: &Ctx, height: u64) -> GatewayResult<B256> {
     Ok(white_state::head(ctx, &format!("{height:#x}")).await?.hash)
+}
+
+pub(super) async fn range(
+    ctx: &Ctx, profile: Profile, prior: Cursor, end: u64, generation: u64,
+) -> GatewayResult<(Cursor, history_orders::Delta)> {
+    let (last, hash) = prior;
+    let head = hash_at(ctx, end).await?;
+    let events = history_orders::topics(profile.version)
+        .ok_or_else(|| no(ctx, "Raindex: версия событий книги неизвестна"))?;
+    let topics = serde_json::json!([events]);
+    let book = profile.book;
+    let mut logs = scan::one(ctx, book, &topics, last + 1, end, "Raindex").await?;
+    let delta = history_orders::changes(profile, last + 1, end, &mut logs)
+        .ok_or_else(|| no(ctx, "Raindex: неполные или несовместимые события книги"))?;
+    let mut checked = None;
+    for log in &logs {
+        let height = log.block_number.unwrap_or_default();
+        if checked.is_none_or(|(n, _)| n != height) {
+            checked = Some((
+                height,
+                if height == end {
+                    head
+                } else {
+                    hash_at(ctx, height).await?
+                },
+            ));
+        }
+        if log.block_hash != checked.map(|(_, h)| h) {
+            return Err(no(ctx, "Raindex: событие с другой ветви"));
+        }
+    }
+    if hash_at(ctx, last).await? != hash
+        || hash_at(ctx, end).await? != head
+        || ctx.settings.generation() != generation
+    {
+        return Err(no(
+            ctx,
+            "Raindex: изменился канон или настройка при чтении диапазона",
+        ));
+    }
+    Ok(((end, head), delta))
 }
 
 impl Worker {
@@ -71,8 +112,19 @@ impl Worker {
     }
 
     pub(super) async fn step(&mut self, ctx: &Ctx) -> GatewayResult<Option<(u64, u64)>> {
+        let head = white_state::head(ctx, "latest").await?;
+        let tip = (head.number.to::<u64>(), head.hash);
+        let batch = scan::batch_size(ctx)?;
+        // Ошибка при чтении старого блока не должна остановить наблюдение за новыми ордерами.
+        let live = self.update_recent(ctx, tip, batch).await;
+        let full = self.advance(ctx, tip, batch).await;
+        live?;
+        full
+    }
+
+    async fn advance(&mut self, ctx: &Ctx, head: Cursor, batch: u64) -> GatewayResult<Option<(u64,u64)>> {
+        let tip = head.0;
         let generation = ctx.settings.generation();
-        let tip = white_state::head(ctx, "latest").await?.number.to::<u64>();
         if self.cursor.is_none() {
             self.restore(ctx, tip).await?;
         }
@@ -82,7 +134,8 @@ impl Worker {
         if tip < last {
             return Err(no(ctx, "Raindex: узел отстаёт от позиции"));
         }
-        if hash_at(ctx, last).await? != hash {
+        let canonical = if tip == last { head.1 } else { hash_at(ctx, last).await? };
+        if canonical != hash {
             self.cursor = None;
             self.tx.send_modify(|s| s.cursor = None);
             return Err(no(
@@ -96,42 +149,8 @@ impl Worker {
             }
             return Ok(None);
         }
-        let end = tip.min(last.saturating_add(scan::batch_size(ctx)?));
-        let head = hash_at(ctx, end).await?;
-        let events = history_orders::topics(self.profile.version)
-            .ok_or_else(|| no(ctx, "Raindex: версия событий книги неизвестна"))?;
-        let topics = serde_json::json!([events]);
-        let book = self.profile.book;
-        let mut logs = scan::one(ctx, book, &topics, last + 1, end, "Raindex").await?;
-        let delta = history_orders::changes(self.profile, last + 1, end, &mut logs)
-            .ok_or_else(|| no(ctx, "Raindex: неполные или несовместимые события книги"))?;
-        let mut checked = None;
-        for log in &logs {
-            let height = log.block_number.unwrap_or_default();
-            if checked.is_none_or(|(n, _)| n != height) {
-                checked = Some((
-                    height,
-                    if height == end {
-                        head
-                    } else {
-                        hash_at(ctx, height).await?
-                    },
-                ));
-            }
-            if log.block_hash != checked.map(|(_, h)| h) {
-                return Err(no(ctx, "Raindex: событие с другой ветви"));
-            }
-        }
-        if hash_at(ctx, last).await? != hash
-            || hash_at(ctx, end).await? != head
-            || ctx.settings.generation() != generation
-        {
-            return Err(no(
-                ctx,
-                "Raindex: изменился канон или настройка при чтении диапазона",
-            ));
-        }
-        let cursor = (end, head);
+        let end = tip.min(last.saturating_add(batch));
+        let (cursor, delta) = range(ctx, self.profile, (last, hash), end, generation).await?;
         let expected = Some(serde_json::json!((last, hash)).to_string());
         if !history_store::commit(
             ctx.journal.db(),

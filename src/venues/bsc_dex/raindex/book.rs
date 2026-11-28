@@ -44,111 +44,14 @@ impl Cache {
         self.state.lock().ok()?.tickets.remove(&(who, id))
     }
 }
+#[path = "book_refresh.rs"]
+mod refresh;
+
 pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEvent>) {
-    use futures_util::{StreamExt, stream};
-    let mut changes = p.ctx.settings.subscribe();
-    let mut readers = history::Readers::default();
-    loop {
-        let ctx = &p.ctx;
-        let g = ctx.settings.generation();
-        let started = Instant::now();
-        let config = || {
-            Some((
-                Profile::list(ctx)?,
-                ctx.int("raindex.max_age_ms").ok()?,
-                p.tokens.usdt(ctx).ok()?,
-            ))
-        };
-        let active = enabled(ctx).then(config).flatten();
-        readers.configure(ctx, active.as_ref().map_or(&[], |(sources, _, _)| sources.as_slice()));
-        let mut published = None;
-        if let Some((sources, ms, cash)) = active.as_ref()
-            && let Ok(head) = white_state::head(ctx, "latest").await
-        {
-            let ttl = Duration::from_millis(*ms);
-            // Каждая книга может временно потерять индексатор независимо от соседних.
-            let groups: Vec<_> = stream::iter(sources.clone())
-                .map(|src| {
-                    let p = &p;
-                    let cash = *cash;
-                    let catalog = readers.orders(&src, head.number.to::<u64>());
-                    async move {
-                        tokio::time::timeout(ttl / 2, src.read(p, head, cash, catalog))
-                            .await
-                            .ok()
-                            .flatten()
-                    }
-                })
-                .buffer_unordered(4)
-                .collect()
-                .await;
-            if started.elapsed() < ttl && ctx.settings.generation() == g {
-                let rows = groups
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(Arc::new)
-                    .collect::<Vec<_>>();
-                let mut markets = BTreeMap::new();
-                for r in &rows {
-                    let (input, output) = r.leg.pair();
-                    let b = input == *cash;
-                    let coin = if b { output } else { input };
-                    let sides = markets.entry(coin).or_insert((false, false));
-                    if b {
-                        sides.0 = true;
-                    } else {
-                        sides.1 = true;
-                    }
-                }
-                p.raindex
-                    .state
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner())
-                    .rows = Some((g, started, Arc::new(rows)));
-                let remaining = ttl.saturating_sub(started.elapsed());
-                published = Some((
-                    *cash,
-                    markets,
-                    chrono::Utc::now()
-                        .timestamp_millis()
-                        .saturating_add(i64::try_from(remaining.as_millis()).unwrap_or(i64::MAX)),
-                ));
-            }
-        }
-        if published.is_none()
-            && p.raindex
-                .state
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .rows
-                .take()
-                .is_some()
-        {
-            published = Some((Address::ZERO, BTreeMap::new(), 0));
-        }
-        if let Some((quote, markets, expires_ms)) = published
-            && out
-                .send(MarketEvent::RfqMarkets {
-                    source: SourceId::new(LABEL),
-                    venue: ctx.venue(),
-                    quote,
-                    markets,
-                    expires_ms,
-                })
-                .await
-                .is_err()
-        {
-            return;
-        }
-        let wait = async {
-            if let Some((_, ms, _)) = active {
-                tokio::time::sleep(Duration::from_millis((ms / 2).max(1))).await;
-            } else {
-                std::future::pending::<()>().await;
-            }
-        };
-        tokio::select! {_=wait=>{},v=changes.recv()=>if matches!(v,Err(tokio::sync::broadcast::error::RecvError::Closed)){return;}}
+    let (tx, rx) = mpsc::channel(1);
+    tokio::select! {
+        _ = refresh::read(&p, tx) => {},
+        _ = refresh::publish(&p, rx, out) => {},
     }
 }
 

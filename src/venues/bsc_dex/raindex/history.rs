@@ -11,6 +11,8 @@ use super::{
 use crate::storage::journal::Level;
 #[path = "history_sync.rs"]
 mod sync;
+#[path = "history_recent.rs"]
+mod newest;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -21,6 +23,7 @@ type Key = (Profile, u64);
 type Orders = Arc<Raw>;
 struct Reader {
     rows: watch::Receiver<Indexed>,
+    recent: watch::Receiver<Indexed>,
     _task: JoinSet<()>,
 }
 #[derive(Default)]
@@ -32,6 +35,10 @@ fn key(source: &Source) -> Option<Key> {
     } else {
         None
     }
+}
+
+pub(super) fn active(ctx: &Ctx, id: Key) -> bool {
+    enabled(ctx) && Profile::list(ctx).is_some_and(|sources| sources.iter().any(|s| key(s) == Some(id)))
 }
 
 impl Readers {
@@ -47,16 +54,22 @@ impl Readers {
                 let (tx, rows) = watch::channel(Indexed {
                     cursor: seed.as_ref().map(|(cursor, _)| *cursor), rows: start,
                 });
+                let (head_tx, recent) = watch::channel(Indexed::default());
                 let mut task = JoinSet::new();
-                task.spawn(run(ctx.clone(), id, seed, tx));
-                Reader { rows, _task: task }
+                task.spawn(crate::gateway::urgency::scope(
+                    crate::gateway::urgency::Urgency::Background,
+                    run(ctx.clone(), id, seed, tx, head_tx),
+                ));
+                Reader { rows, recent, _task: task }
             });
         }
     }
     pub(super) fn orders(&self, source: &Source, height: u64) -> Option<View> {
         let id = key(source)?;
         let reader = self.0.get(&id)?;
-        Some(View::for_book(id.0, id.1, height, &reader.rows.borrow()))
+        let indexed = reader.rows.borrow();
+        Some(View::for_book(id.0, id.1, height, &indexed)
+            .with_recent(height, indexed.cursor, &reader.recent.borrow()))
     }
 }
 
@@ -67,6 +80,7 @@ struct Worker {
     seed: Option<(Cursor, Orders)>,
     tx: watch::Sender<Indexed>,
     cursor: Option<Cursor>,
+    recent: newest::Recent,
 }
 
 async fn run(
@@ -74,21 +88,24 @@ async fn run(
     (profile, from): Key,
     seed: Option<(Cursor, Orders)>,
     tx: watch::Sender<Indexed>,
+    head_tx: watch::Sender<Indexed>,
 ) {
     let mut changes = ctx.settings.subscribe();
     let namespace = format!(
         "raindex:v{}:{}:{:#x}:{:#x}:{from}",
         profile.version, profile.chain, profile.book, profile.book_hash
     );
+    let recent = newest::Recent::new(head_tx, &namespace);
     let mut worker = Worker {
         profile,
+        recent,
         from,
         namespace,
         seed,
         tx,
         cursor: None,
     };
-    // При выключенной догрузке известные по прежним сессиям программы тоже доступны для актуального quote2.
+    // Известные по прежним сессиям программы доступны для актуальной проверки книги.
     if let Ok(saved) = history_store::load(&ctx, &worker.namespace, profile.version).await
         && let Some((cursor, rows)) = saved.valid
     {
@@ -97,18 +114,19 @@ async fn run(
     }
     let mut last_note = None::<Instant>;
     loop {
-        let cadence = ctx.int("bsc.blocks_poll_ms").ok().filter(|v| *v > 0);
+        let cadence = ctx.int("bsc.blocks_poll_ms").ok().filter(|v| *v > 0)
+            .or_else(|| ctx.int("raindex.max_age_ms").ok().filter(|v| *v > 0));
         let reporting = ctx
             .int("dex.scan_progress_s")
             .ok()
             .filter(|v| *v > 0)
             .map(Duration::from_secs);
-        let delay = if let (Some(ms), Some(interval)) = (cadence, reporting)
-            && ctx.flag("dex.history_scan").unwrap_or(false)
-            && enabled(&ctx)
+        let delay = if let Some(ms) = cadence
+            && active(&ctx, (profile, from))
         {
             let result = worker.step(&ctx).await;
-            if last_note.is_none_or(|t| t.elapsed() >= interval) {
+            let elapsed = reporting.is_some_and(|interval| last_note.is_none_or(|t| t.elapsed() >= interval));
+            if elapsed || (result.is_err() && last_note.is_none()) {
                 let count = worker.tx.borrow().rows.len();
                 match &result {
                     Ok(Some((n, tip))) => {
@@ -128,11 +146,8 @@ async fn run(
                 }
                 last_note = Some(Instant::now());
             }
-            Some(if result.is_err() {
-                interval
-            } else {
-                Duration::from_millis(ms)
-            })
+            let period = Duration::from_millis(ms);
+            Some(if result.is_err() { period.max(reporting.unwrap_or(period)) } else { period })
         } else {
             None
         };

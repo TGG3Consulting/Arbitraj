@@ -13,6 +13,8 @@ mod deployments;
 mod capacity;
 #[path = "reverse_tests.rs"]
 mod reverse;
+#[path = "recent_tests.rs"]
+mod recent;
 #[path = "candidate_tests.rs"]
 mod candidates;
 #[path = "history_tests.rs"]

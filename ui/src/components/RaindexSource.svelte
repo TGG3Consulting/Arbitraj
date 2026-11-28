@@ -29,7 +29,11 @@
     </label>
     {#key [venue,wallet,b.book].join(':')}
       <p>Блок размещения книги {b.startBlock}.</p>
-      {#if b.settlementVerified===true}
+      {#if b.sale?.paid}
+        <p>Продажа {b.sale.asset} за USDC подтверждена на двух размерах напрямую и через модуль.</p>
+      {:else if b.sale}
+        <p>Продажа {b.sale.asset} за USDC по проверенным заявкам откатилась на обоих размерах напрямую и через модуль. Ответ книги: <code>{b.sale.reason}</code>.</p>
+      {:else if b.settlementVerified===true}
         <p>В архивной симуляции подтверждены списание и выплата через модуль этой книги.</p>
       {:else}
         <p>Архивного измерения выплаты через модуль этой книги пока нет.</p>

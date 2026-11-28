@@ -61,11 +61,12 @@ fn candidates() -> Option<&'static Candidates> {
 pub(super) struct View {
     indexed: Arc<Raw>,
     partial: Option<&'static Raw>,
+    recent: Option<Arc<Raw>>,
 }
 
 impl View {
     pub(super) fn complete(indexed: Arc<Raw>) -> Self {
-        Self { indexed, partial: None }
+        Self { indexed, partial: None, recent: None }
     }
 
     pub(super) fn for_book(p: Profile, from: u64, height: u64, indexed: &Indexed) -> Self {
@@ -73,13 +74,23 @@ impl View {
             .filter(|s| s.chain == p.chain && height >= s.block
                 && indexed.cursor.is_none_or(|(block, _)| block < s.block || block > height))
             .and_then(|s| s.books.get(&(p.version, p.book, p.book_hash, from)));
-        Self { indexed: indexed.rows.clone(), partial }
+        Self { indexed: indexed.rows.clone(), partial, recent: None }
+    }
+
+    pub(super) fn with_recent(mut self, height: u64, full: Option<Cursor>, recent: &Indexed) -> Self {
+        if recent.cursor.is_some_and(|(n,_)| n <= height && full.is_none_or(|(f,_)| n > f)) {
+            self.recent = Some(recent.rows.clone());
+        }
+        self
     }
 
     pub(super) fn iter(&self) -> impl Iterator<Item = (&B256, &Bytes)> {
-        self.indexed.iter().chain(
-            self.partial.into_iter().flatten().filter(|(h, _)| !self.indexed.contains_key(*h))
-        )
+        let recent = self.recent.as_deref();
+        recent.into_iter().flatten().filter(|(_, v)| !v.is_empty()).chain(
+            self.indexed.iter().filter(move |(h, _)| recent.is_none_or(|r| !r.contains_key(*h)))
+        ).chain(self.partial.into_iter().flatten().filter(move |(h, _)| {
+            !self.indexed.contains_key(*h) && recent.is_none_or(|r| !r.contains_key(*h))
+        }))
     }
 }
 

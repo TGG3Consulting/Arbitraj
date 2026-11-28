@@ -117,3 +117,96 @@ fn canonical_rain_deployments_and_unprofiled_cash_books() {
     assert!(funded.is_empty());
     assert_eq!((orders, live), (18, 16));
 }
+
+#[test]
+fn funded_base_books_bind_receipt_amounts_and_rollback() {
+    let doc = registry();
+    let replay = &doc["sample_replay"];
+    let bare = &replay["direct"];
+    let protected = &replay["protected"];
+    assert_eq!(bare["selector"], doc["selector"]);
+    assert_eq!(protected["selector"], bare["selector"]);
+    assert_eq!(protected["wlth_funding"], bare["wlth_funding"]);
+    let funding = &bare["wlth_funding"];
+    let at = |row: &Value, key: &str, index: usize| -> U256 {
+        row[key][index].as_str().unwrap().parse().unwrap()
+    };
+    assert_eq!(
+        at(funding, "before", 0) - at(funding, "after", 0),
+        U256::from(1_000_000)
+    );
+    assert!(at(funding, "after", 1) > at(funding, "before", 1));
+    let owner: Address = from_value(protected["payer"].clone()).unwrap();
+    let mut paid = BTreeMap::new();
+    let mut rejected = 0;
+    let bare_cases = bare["cases"].as_array().unwrap();
+    let cases = protected["cases"].as_array().unwrap();
+    assert_eq!(bare_cases.len(), cases.len());
+    for (direct, case) in bare_cases.iter().zip(cases) {
+        for key in [
+            "book", "version", "order", "i", "j", "pay", "receive", "size", "stage",
+        ] {
+            assert_eq!(direct[key], case[key]);
+        }
+        if case["stage"] == "revert" {
+            for row in [direct, case] {
+                assert_eq!(row["error"]["code"], 3);
+                assert!(row["before"].as_array().unwrap().len() >= 2);
+                assert_eq!(row["before"], row["after"]);
+            }
+            rejected += 1;
+            continue;
+        }
+        check(case, owner, 8453);
+        let accepted = &case["accepted_payment"];
+        assert_eq!(accepted["from"], protected["payer"]);
+        assert_eq!(accepted["to"], case["target"]);
+        let data: Bytes = from_value(accepted["data"].clone()).unwrap();
+        let call = wire::fillCall::abi_decode_validate(&data).unwrap();
+        assert_eq!(
+            call.action,
+            from_value::<Bytes>(case["action"].clone()).unwrap()
+        );
+        assert_eq!(
+            call.l.input,
+            from_value::<Address>(case["pay"].clone()).unwrap()
+        );
+        assert_eq!(
+            call.l.output,
+            from_value::<Address>(case["receive"].clone()).unwrap()
+        );
+        assert_eq!(call.l.minimumDebit, amount(case, "paid"));
+        assert_eq!(call.l.maximumDebit, amount(case, "paid"));
+        assert_eq!(call.l.minimumCredit, amount(case, "net"));
+        assert_eq!(
+            call.l.deadline,
+            U256::from(case["accepted_deadline"].as_u64().unwrap())
+        );
+        assert_eq!(case["paid"], direct["paid"]);
+        assert_eq!(case["net"], direct["net"]);
+        let bounds = case["failed_bounds"].as_array().unwrap();
+        assert_eq!(bounds.len(), 3);
+        assert_eq!(amount(&bounds[0], "floor"), amount(case, "net") + U256::ONE);
+        assert_eq!(amount(&bounds[1], "cap") + U256::ONE, amount(case, "paid"));
+        assert!(bounds[2]["deadline"].as_u64().unwrap() < bounds[0]["deadline"].as_u64().unwrap());
+        for failed in bounds {
+            assert_eq!(failed["error"]["code"], 3);
+            assert_eq!(failed["before"], case["before"]);
+            assert_eq!(failed["before"], failed["after"]);
+        }
+        let version = case["version"].as_u64().unwrap();
+        let net = amount(case, "net").to::<u64>();
+        let spent = amount(case, "paid").to::<u64>();
+        assert!(paid.insert((version, net), spent).is_none());
+    }
+    assert_eq!(rejected, 14);
+    assert_eq!(
+        paid,
+        BTreeMap::from([
+            ((3, 1000), 516_440_961_769_448_410),
+            ((3, 10000), 5_164_409_617_694_484_095),
+            ((6, 1000), 299_000_000_000),
+            ((6, 10000), 2_990_000_000_000),
+        ])
+    );
+}

@@ -129,6 +129,10 @@ pub async fn decide_capped(
             Err(e) => reject(e, None),
         };
     }
+    // Найдено арбитром 28.11.2026: равные имена USDT без денежного круга — адрес USDT сети подтверждён (cash_same.rs).
+    if let Err(e) = super::cash_same::check(core, d) {
+        return reject(e, None);
+    }
     let cx = match pre {
         Some(c) => *c,
         None => match stage_sync(|| "контекст направления".into(), || DirCtx::build(core, d))

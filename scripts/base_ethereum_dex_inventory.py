@@ -17,6 +17,11 @@ from base_ethereum_source_roles import card_reference, classify_source, describe
 # Сетевые ID, явно отложенные владельцем при суточном обороте менее 5 000 USD.
 DEFERRED_BY_NETWORK = {"base": {"2589", "622", "1447", "7508", "5458", "1700"}, "ethereum": {"4703", "1700"}}
 
+# Канонические сделки Ethereum и фактическое происхождение выплаты.
+ETHEREUM_SOURCE_EVIDENCE = {
+    "6049": ('На блоке 26\u202f494\u202f831 контракт Axiom продал 216\u202f852\u202f090\u202f224\u202f152 атома токена 0x231b…e237 через пару Uniswap V2 0xa940…1933e. Пара отправила 0,022120911149855867 WETH маршрутизатору; тот развернул WETH и перечислил владельцу 0,021899702038357309 ETH. [Квитанции Ethereum](../tests/data/first_run_dex_2026-11-26/axiom_ethereum_source.json.gz).'),
+}
+
 # Уточнения условия владельца о паре с физическим Base USDT для строк решения 7.
 BASE_USDT_EVIDENCE = {
     "6675": ("На Base учитывается USDC. Покупателю выдаётся NFT на физическую карту; цена выкупа определяется для конкретной карты. "
@@ -2599,7 +2604,8 @@ def tables(network, snapshots, profiles):
                 if measured:
                     task = measured
             task = f"{status.rstrip('.')}. {task}" if task else status
-        if base and (detail := BASE_USDT_EVIDENCE.get(str(row["id"]))):
+        details = BASE_USDT_EVIDENCE if base else ETHEREUM_SOURCE_EVIDENCE
+        if detail := details.get(str(row["id"])):
             task += " " + detail
         out.append(f"| {row['id']} | {cell(row['name'])} | {volumes.get(row['id'], 'нет данных')} | [{cell(row['module'])}]({ref}) "
                    f"| {addresses(candidates)} | {task} |")

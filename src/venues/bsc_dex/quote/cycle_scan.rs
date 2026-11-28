@@ -168,8 +168,15 @@ pub async fn scan(q: &Quoting, gas: U256) -> GatewayResult<Vec<CycleSignal>> {
             cycle_rank::top(ctx, &g, &mut rates, base, max_len, max_cycles, cap)
         };
         let rank_ms = started.elapsed().as_millis() as u64;
-        let base_ticker = if physical {
-            "USDT".to_owned()
+        // Аудит 28.11.2026: расчётная монета — venue.quote_asset площадки (USDT у BSC), не зашитое «USDT»; не задана —
+        // тикер токена из реестра, как у остальных базовых.
+        let quote = if physical {
+            ctx.text("venue.quote_asset").ok()
+        } else {
+            None
+        };
+        let base_ticker = if let Some(qa) = quote {
+            qa
         } else {
             tickers
                 .get(&base)

@@ -14,7 +14,7 @@
 //!
 //! Кто вызывает: exec/trade.rs, exec/trade_smart.rs, exec/result.rs, check/native_probe.rs, quote/*, wallet/*.
 //! От чего зависит: exec/chain.rs (Step), pools/families.rs (Family), ctx.rs, wallet/balances.rs, num.rs.
-//! Настройки: dex.native_ticker, dex.native_wrapped [bsc_dex]; risk.min_bnb_balance (система).
+//! Настройки: dex.native_ticker, dex.native_wrapped [bsc_dex]; risk.min_bnb_balance (по площадке, иначе система).
 //!
 //! WETH9: deposit() → Deposit(dst, wad), withdraw(wad) → Withdrawal(src, wad) —
 //! https://github.com/gnosis/canonical-weth/blob/0dd1ea3e295eef916d0c6223ec63141137d22d67/contracts/WETH9.sol#L25-L42 ;
@@ -26,7 +26,6 @@ use rust_decimal::Decimal;
 
 use crate::core::types::{Asset, PoolKind, Side};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 use super::super::num;
@@ -155,10 +154,8 @@ pub async fn reserve_ok(
     value: U256,
 ) -> GatewayResult<()> {
     let ctx = &env.ctx;
-    let reserve = ctx
-        .settings
-        .decimal("risk.min_bnb_balance", At::default())
-        .map_err(|e| ctx.tag(e))?;
+    // Аудит 28.11.2026: резерв — по площадке (значение площадки, иначе вся система), в монете газа площадки.
+    let reserve = ctx.dec("risk.min_bnb_balance")?;
     let unit = super::super::gas_ticker::read(ctx)?;
     let price = if super::super::send::gas_mode::read(ctx)?.strict_type2() {
         let ready = send::select(ctx, &env.stats)?;

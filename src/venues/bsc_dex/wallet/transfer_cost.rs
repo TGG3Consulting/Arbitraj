@@ -69,7 +69,10 @@ pub async fn cost(
     let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("Газ перевода {wei} wei не переводится в BNB"),
+            format!(
+                "Газ перевода {wei} wei не переводится в {}",
+                super::super::gas_ticker::label(ctx)
+            ),
         )
     })?;
     // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).

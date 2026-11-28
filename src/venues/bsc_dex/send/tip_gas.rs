@@ -74,7 +74,10 @@ pub async fn planned_bnb(ctx: &Ctx, wei: U256) -> GatewayResult<Option<Decimal>>
         .ok_or_else(|| {
             ctx.err(
                 ErrorCode::BadResponse,
-                format!("Газ перевода чаевых {w} wei не переводится в BNB"),
+                format!(
+                    "Газ перевода чаевых {w} wei не переводится в {}",
+                    super::super::gas_ticker::label(ctx)
+                ),
             )
         })
 }

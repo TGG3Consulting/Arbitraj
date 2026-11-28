@@ -7,7 +7,8 @@
 //! бирже — стаканы газа всех сетей (all). Одна площадка DEX — её значение, как раньше. Не задана — газ-зависимые
 //! функции не работают с точной причиной «Не задана настройка dex.gas_ticker …».
 //! Кто вызывает: core/{convert_at,deal_gas,cycle_fact,precheck,buy_replan,native,balances_cache,sell,reconcile,subscribe,
-//! gas_stats}.rs, report/snap_dex.rs, api/wallets_dex.rs.
+//! gas_stats}.rs, report/snap_dex.rs, api/wallets_dex.rs, api/control.rs (поле gas статистики газа); low_gas_text —
+//! core/{precheck,precheck_par,buy_replan,reconcile}.rs (уведомление risk.low_bnb, аудит 28.11.2026).
 //! От чего зависит: settings (store, read), core/chain.rs (площадка DEX сети), engine.rs.
 //! Настройки: dex.gas_ticker (по площадке DEX).
 
@@ -98,5 +99,16 @@ pub fn for_venue_in(core: &Core, v: &VenueId, chain: Option<&ChainId>) -> Result
         at(&core.inner.deps.settings, v)
     } else {
         of_chain(core, chain)
+    }
+}
+
+/// Что делает: аудит 28.11.2026 — текст уведомления risk.low_bnb (ключ прежний) с заголовком по тикеру газа площадки
+/// DEX: «Мало BNB на газ» у BSC, «Мало ETH на газ» у Base/Ethereum (notify/heads.rs low_gas_text). Тикер не прочитан —
+/// текст как есть (заголовок без тикера из notify/heads.rs). Принимает: хранилище, площадку DEX, текст причины.
+/// Возвращает: текст для notify. Ошибок нет.
+pub fn low_gas_text(s: &Store, v: &VenueId, text: &str) -> String {
+    match at(s, v) {
+        Ok(g) => crate::notify::heads::low_gas_text(&g, text),
+        Err(_) => text.to_string(),
     }
 }

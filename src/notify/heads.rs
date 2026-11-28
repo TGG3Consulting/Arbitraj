@@ -3,8 +3,8 @@
 //! случилось, по-русски, без внутренних слов и номеров решений. Описание события для экрана «Уведомления» остаётся
 //! в notify/catalog.rs (title); здесь — только то, что видит человек в телефоне. Если текст события уже начинается
 //! со значка (собран notify/human.rs Msg), заголовок отсюда не добавляется.
-//! Кто вызывает: notify/dispatch.rs.
-//! От чего зависит: notify/human.rs (значки).
+//! Кто вызывает: notify/dispatch.rs; low_gas_text — core/gas_ticker.rs (уведомление risk.low_bnb).
+//! От чего зависит: notify/human.rs (значки, Msg), notify/reason.rs (tidy — для low_gas_text).
 //! Настройки: нет.
 
 use super::human::{INFO, OK, STOP, WARN};
@@ -15,6 +15,22 @@ pub fn head(code: &str, title: &str) -> String {
         Some((icon, h)) => format!("{icon} {h}"),
         None => format!("{INFO} {title}"),
     }
+}
+
+/// Что делает: текст события risk.low_bnb (ключ прежний) с заголовком по тикеру газа площадки — «⚠️ Мало <тикер> на
+/// газ» (аудит 28.11.2026: у BSC — прежний «Мало BNB на газ», у Base/Ethereum — «Мало ETH на газ»). Строки — как у
+/// dispatch::body (тот же шаблон Msg); текст уже со своим заголовком — как есть. Принимает: тикер газа (dex.gas_ticker
+/// площадки), текст причины. Возвращает: текст со своим заголовком (dispatch::body отдаёт его как есть). Ошибок нет.
+pub fn low_gas_text(gas: &str, text: &str) -> String {
+    if super::human::has_head(text) {
+        return text.to_string();
+    }
+    let (id, rest) = super::human::split_deal(text);
+    let mut m = super::human::Msg::new(WARN, format!("Мало {gas} на газ"));
+    for l in super::reason::tidy(rest).lines() {
+        m = m.line(l);
+    }
+    m.id(id.unwrap_or_default()).render()
 }
 
 /// Значок и заголовок события. Возвращает: None — события нет в списке.
@@ -60,7 +76,9 @@ fn find(code: &str) -> Option<(&'static str, &'static str)> {
         "risk.reconcile_paused" => (WARN, "Пауза от сверки балансов"),
         "risk.reconcile_resumed" => (OK, "Балансы сошлись — пауза от сверки снята"),
         "risk.auto_resumed" => (OK, "Пауза снята сама — причина ушла"),
-        "risk.low_bnb" => (WARN, "Мало BNB на газ"),
+        // Аудит 28.11.2026: заголовок с тикером газа площадки собирает low_gas_text (BNB у BSC, ETH у Base/Ethereum);
+        // этот — только когда тикер не прочитан (dex.gas_ticker не задана).
+        "risk.low_bnb" => (WARN, "Мало монеты газа"),
         "risk.low_usdt" => (WARN, "Мало USDT для покупок"),
         "venue.disconnected" => (WARN, "Связь с площадкой потеряна"),
         "venue.reconnected" => (OK, "Связь с площадкой восстановлена"),

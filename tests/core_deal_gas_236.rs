@@ -144,10 +144,12 @@ async fn no_bnb_price_keeps_spent_and_says_so_once() {
     dg::charge(&core, &mut x, &VenueId("mexc".into()), &mut list).await;
     assert!(list.is_empty(), "статьи забраны — второй раз не войдут");
     assert_eq!(x.spent, spent, "нет живой цены BNB — итог без газа");
+    // Аудит 28.11.2026: подпись газа — dex.gas_ticker площадки DEX сети; площадки DEX в тесте нет — «монеты газа».
     assert!(
-        x.timeline.iter().any(
-            |(_, t)| t.contains("откат обмена 0.0000265327 BNB") && t.contains("не пересчитан")
-        ),
+        x.timeline
+            .iter()
+            .any(|(_, t)| t.contains("откат обмена 0.0000265327 монеты газа")
+                && t.contains("не пересчитан")),
         "{:?}",
         x.timeline
     );
@@ -155,7 +157,7 @@ async fn no_bnb_price_keeps_spent_and_says_so_once() {
         entries(
             &j,
             "core.ledger",
-            "g1DOGE: газ 0.0000265327 BNB не переведён"
+            "g1DOGE: газ 0.0000265327 монеты газа не переведён"
         )
         .await
         .len(),
@@ -199,7 +201,7 @@ async fn closed_without_deal_or_price() {
         after
             .timeline
             .iter()
-            .any(|(_, t)| t.contains("откат перевода 0.0000265327 BNB")),
+            .any(|(_, t)| t.contains("откат перевода 0.0000265327 монеты газа")),
         "{:?}",
         after.timeline
     );

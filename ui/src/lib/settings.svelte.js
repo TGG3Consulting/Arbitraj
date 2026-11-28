@@ -4,7 +4,8 @@
 //   Значения обновляются на лету из живого потока ({"type":"settings"}), при «lagged» — перечитываются.
 //   Значений по умолчанию нет: не задано — значит в values нет записи.
 // Кто вызывает: App.svelte (start), экраны «Настройки», «Уведомления», «Площадки», components/SettingEditor.svelte,
-//   components/SettingCard.svelte и pages/Venues.svelte (shownAtVenue, решение 283).
+//   components/SettingCard.svelte и pages/Venues.svelte (shownAtVenue, решение 283); components/ChannelCard.svelte,
+//   DexCycles.svelte, ExecutorDeploy.svelte (gasTicker, quoteAsset — подписи монет площадки, аудит 28.11.2026).
 // От чего зависит: lib/api.js, lib/live.svelte.js, lib/flight.js (один запрос в полёте).
 // Настройки: читает и показывает любые.
 
@@ -90,6 +91,19 @@ export function shownAtVenue(def, v) {
   if (ryzeBookSetting(def.name) && !baseNetwork(v,store.schema?.dex_profiles,store.values,true)) return false;
   return store.venueKinds.find((x) => x.id === v)?.kind !== 'Cex';
 }
+
+/**
+ * Аудит 28.11.2026: тикер монеты газа площадки DEX — значение dex.gas_ticker этой площадки (GET /api/settings, уже в
+ * store.values): BNB у BSC, ETH у Base и Ethereum. Принимает: id площадки. Возвращает: тикер или подпись «монета газа»,
+ * если настройка не задана (тогда площадка и не торгует).
+ */
+export const gasTicker = (v) => store.values[valueKey('dex.gas_ticker', { kind: 'Venue', id: v })] || 'монета газа';
+
+/**
+ * Аудит 28.11.2026: расчётная монета площадки — значение venue.quote_asset этой площадки (USDT у BSC). Принимает: id
+ * площадки. Возвращает: тикер или подпись «расчётная монета», если не задана.
+ */
+export const quoteAsset = (v) => store.values[valueKey('venue.quote_asset', { kind: 'Venue', id: v })] || 'расчётная монета';
 
 /**
  * Подпись области «площадка» у настройки. Решение 118 (Я-4, Я-23): время в пути = отправка у источника + зачисление у

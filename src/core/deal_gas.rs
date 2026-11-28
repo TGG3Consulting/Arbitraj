@@ -18,12 +18,13 @@
 //! чаевых цикла).
 //! От чего зависит: deal.rs, fills.rs (usdt), convert.rs (GAS_TICKER), ledger.rs, daily.rs, daily_commit.rs,
 //! gas_stats.rs, core/types (ChainTx, TradeResult, Cost), deal_book.rs (статьи затрат и начисления дня, решение 257).
-//! Настройки: нет (venue.quote_asset — через fills::usdt).
+//! Настройки: venue.quote_asset (подпись расчётной монеты; пересчёт — через fills::usdt), dex.gas_ticker (подпись газа).
 
 use rust_decimal::Decimal;
 
 use crate::core::types::{ChainId, ChainTx, Cost, CostKind, TradeResult, TxOutcome, VenueId};
 use crate::gateway::errors::GatewayError;
+use crate::settings::read::At;
 use crate::storage::journal::Level;
 
 use super::deal::Deal;
@@ -97,37 +98,63 @@ pub fn of_err_approve(e: &GatewayError) -> Vec<Wasted> {
 
 /// Что делает: сумма статей в USDT живой ценой BNB (fills::usdt; монета сделки не участвует — у сделки с BNB газ тоже по
 /// живой цене BNB). Принимает: ядро, площадку (котируемая монета venue.quote_asset), статьи. Возвращает: (BNB, USDT).
-/// Ошибки: текст — нет живой цены BNB или не задана venue.quote_asset.
+/// Ошибки: текст — нет живой цены BNB или не задана venue.quote_asset. Аудит 28.11.2026: третьим — подписи
+/// (Units: тикер газа и расчётная монета площадки) для текстов хронологии и журнала.
 async fn usd(
     core: &Core,
     venue: &VenueId,
     chain: Option<&ChainId>,
     list: &[Wasted],
-) -> (Decimal, Result<Decimal, String>) {
+) -> (Decimal, Result<Decimal, String>, Units) {
     let bnb: Decimal = list.iter().map(|w| w.bnb).sum();
+    let quote = core
+        .inner
+        .deps
+        .settings
+        .text(
+            "venue.quote_asset",
+            At {
+                venue: Some(&venue.0),
+                coin: None,
+            },
+        )
+        .unwrap_or_else(|_| "расчётную монету (venue.quote_asset не задана)".to_string());
     // Решение 416: тикер газа — dex.gas_ticker площадки (core/gas_ticker.rs); не задана — пересчёта нет, причина.
     // Решение 430: у биржи — газ сети сделки (chain; None — сеть по умолчанию).
     let gas = match super::gas_ticker::for_venue_in(core, venue, chain) {
         Ok(g) => g,
-        Err(e) => return (bnb, Err(e)),
+        Err(e) => {
+            let u = Units {
+                gas: "монеты газа".to_string(),
+                quote,
+            };
+            return (bnb, Err(e), u);
+        }
     };
     let c = Cost::new(CostKind::Gas, bnb, &gas, false);
-    (
-        bnb,
-        super::fills::usdt(core, venue, "", Decimal::ONE, &c).await,
-    )
+    let r = super::fills::usdt(core, venue, "", Decimal::ONE, &c).await;
+    (bnb, r, Units { gas, quote })
 }
 
-/// Что делает: строка хронологии «Газ вне обмена в затратах сделки: approve 0.0001 BNB, … = 0.06 USDT». Ошибок нет.
-fn line(list: &[Wasted], bnb: Decimal, usd: &Result<Decimal, String>) -> String {
+/// Подписи монет в текстах (аудит 28.11.2026): тикер газа площадки (dex.gas_ticker: BNB у BSC, ETH у Base/Ethereum)
+/// и расчётная монета (venue.quote_asset площадки). У BSC тексты прежние — BNB и USDT.
+struct Units {
+    gas: String,
+    quote: String,
+}
+
+/// Что делает: строка хронологии «Газ вне обмена в затратах сделки: approve 0.0001 BNB, … = 0.06 USDT» (монеты —
+/// Units площадки). Ошибок нет.
+fn line(list: &[Wasted], bnb: Decimal, usd: &Result<Decimal, String>, n: &Units) -> String {
+    let (g, q) = (&n.gas, &n.quote);
     let parts: Vec<String> = list
         .iter()
-        .map(|w| format!("{} {} BNB", w.what, w.bnb))
+        .map(|w| format!("{} {} {g}", w.what, w.bnb))
         .collect();
     let tail = match usd {
-        Ok(u) => format!("= {} USDT — в затратах сделки", u.round_dp(6)),
+        Ok(u) => format!("= {} {q} — в затратах сделки", u.round_dp(6)),
         Err(_) => {
-            format!("= {bnb} BNB — не пересчитан в USDT (нет живой цены BNB), итог сделки без него")
+            format!("= {bnb} {g} — не пересчитан в {q} (нет живой цены {g}), итог сделки без него")
         }
     };
     format!("Газ вне итога обмена: {} {tail}", parts.join(", "))
@@ -141,11 +168,11 @@ pub async fn charge(core: &Core, deal: &mut Deal, venue: &VenueId, list: &mut Ve
         return;
     }
     let chain = deal.direction.asset.chain.clone();
-    let (bnb, u) = usd(core, venue, chain.as_ref(), &list).await;
-    deal.note(line(&list, bnb, &u));
+    let (bnb, u, n) = usd(core, venue, chain.as_ref(), &list).await;
+    deal.note(line(&list, bnb, &u, &n));
     match u {
         Ok(u) => super::deal_book::spend_wasted(deal, &list, u),
-        Err(e) => warn(core, venue, &deal.id, bnb, &e).await,
+        Err(e) => warn(core, venue, &deal.id, bnb, &e, &n).await,
     }
 }
 
@@ -166,8 +193,8 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
             .and_then(|k| deals.get(&k))
             .and_then(|d| d.direction.asset.chain.clone())
     };
-    let (bnb, u) = usd(core, venue, chain.as_ref(), &list).await;
-    let text = line(&list, bnb, &u);
+    let (bnb, u, n) = usd(core, venue, chain.as_ref(), &list).await;
+    let text = line(&list, bnb, &u, &n);
     let found = {
         let mut deals = lk(&core.inner.deals);
         // Решение 394 (ревью 4 t179): ID перегона — ID сделки с суффиксом перегона (relay_owner.rs).
@@ -194,8 +221,9 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
             let mut x = d.clone();
             let trip = super::deal_book::settle_closed(core, &mut x, -u).await;
             super::gas_stats::record_result(core, &d.direction.asset, -u).await;
+            let (g, q) = (&n.gas, &n.quote);
             let t = format!(
-                "Сделка {id}: газ {} BNB = {} USDT вычтен из итога, итог {} USDT",
+                "Сделка {id}: газ {} {g} = {} {q} вычтен из итога, итог {} {q}",
                 bnb,
                 u.round_dp(6),
                 d.result_usd.unwrap_or_default().round_dp(4)
@@ -204,13 +232,14 @@ pub async fn charge_closed(core: &Core, id: &str, venue: &VenueId, list: &mut Ve
             super::daily_commit::announce(core, &trip).await;
         }
         Ok(_) => {}
-        Err(e) => warn(core, venue, id, bnb, &e).await,
+        Err(e) => warn(core, venue, id, bnb, &e, &n).await,
     }
 }
 
-/// Журнал «газ не пересчитан в USDT». Ошибок нет.
-async fn warn(core: &Core, venue: &VenueId, id: &str, bnb: Decimal, e: &str) {
-    let t = format!("{id}: газ {bnb} BNB не переведён в USDT ({e}) — итог сделки без него");
+/// Журнал «газ не пересчитан в USDT» (монеты — Units площадки). Ошибок нет.
+async fn warn(core: &Core, venue: &VenueId, id: &str, bnb: Decimal, e: &str, n: &Units) {
+    let (g, q) = (&n.gas, &n.quote);
+    let t = format!("{id}: газ {bnb} {g} не переведён в {q} ({e}) — итог сделки без него");
     log(core, Level::Warn, venue, t).await;
 }
 

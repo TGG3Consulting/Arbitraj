@@ -119,7 +119,6 @@ raw.rotate_s
 raw.zstd_level
 risk.max_daily_loss_usd
 risk.max_errors_in_row
-risk.min_bnb_balance
 security.kdf_iterations
 security.kdf_memory_kib
 security.kdf_parallelism

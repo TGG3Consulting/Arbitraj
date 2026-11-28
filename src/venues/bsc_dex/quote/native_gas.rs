@@ -87,7 +87,10 @@ pub fn cost(q: &Quoting, quote: &Quote, gas_wei: U256) -> GatewayResult<Option<(
     let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("Газ обёртки {wei} wei не переводится в BNB"),
+            format!(
+                "Газ обёртки {wei} wei не переводится в {}",
+                super::super::gas_ticker::label(ctx)
+            ),
         )
     })?;
     // Решение 416: тикер газа — dex.gas_ticker площадки (gas_ticker.rs).

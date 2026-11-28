@@ -101,7 +101,17 @@ pub async fn run(core: Core) {
                     .deps
                     .log(Level::Warn, "core.reconcile", venue.as_deref(), text, None)
                     .await;
-                core.inner.deps.notify(code, venue.as_deref(), text).await;
+                // Аудит 28.11.2026: «мало газа» — заголовок по тикеру газа площадки (core/gas_ticker.rs low_gas_text);
+                // в журнал — текст как был.
+                let note = match (*code, venue) {
+                    ("risk.low_bnb", Some(id)) => super::gas_ticker::low_gas_text(
+                        &core.inner.deps.settings,
+                        &VenueId(id.clone()),
+                        text,
+                    ),
+                    _ => text.clone(),
+                };
+                core.inner.deps.notify(code, venue.as_deref(), &note).await;
             }
         }
         active.retain(|k| found.iter().any(|(c, _, t, _, _)| &format!("{c}{t}") == k));
@@ -178,10 +188,13 @@ async fn once(core: &Core) -> (Vec<Found>, HashSet<String>, HashSet<String>) {
             // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — та же тревога с точной причиной.
             let r = super::gas_ticker::at(&deps.settings, &v).and_then(|gas| {
                 let have: Decimal = b.iter().filter(|x| x.asset == gas).map(|x| x.free).sum();
+                // Аудит 28.11.2026: резерв — по площадке DEX (значение площадки, иначе вся система).
                 deps.settings
-                    .decimal("risk.min_bnb_balance", At::default())
+                    .decimal("risk.min_bnb_balance", at)
                     .map_err(|e| e.message)
-                    .and_then(|min| super::precheck::bnb_enough(&label, have, min, Decimal::ZERO))
+                    .and_then(|min| {
+                        super::precheck::bnb_enough(&label, &gas, have, min, Decimal::ZERO)
+                    })
             });
             if let Err(e) = r {
                 out.push(("risk.low_bnb", Some(v.0.clone()), e, None, w.clone()));

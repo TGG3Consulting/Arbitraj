@@ -135,15 +135,23 @@ pub(super) fn pair_side(core: &Core, v: &VenueId, d: &Direction, buy: bool) -> R
     super::pairs_fresh::side(&market, v, &t, buy, &limit, chrono::Utc::now())
 }
 
-/// BNB на газ у DEX-площадки: свободный нативный BNB ≥ резерв risk.min_bnb_balance + газ транзакций сделки на ней
-/// (need; сверка балансов — 0). Решение 132: кошелёк — строки маппинга направления. Принимает: ядро, направление,
-/// площадку, газ сделки. Ошибка — текст (мало BNB, резерв не задан, нет кошелька в маппинге, баланс не получен).
+/// Газ у DEX-площадки: свободная монета газа (dex.gas_ticker: BNB у BSC, ETH у Base/Ethereum) ≥ резерв
+/// risk.min_bnb_balance + газ транзакций сделки на ней (need; сверка балансов — 0). Аудит 28.11.2026: резерв — по
+/// площадке DEX (значение площадки, иначе вся система), в монете газа этой площадки. Решение 132: кошелёк — строки
+/// маппинга направления. Принимает: ядро, направление, площадку, газ сделки. Ошибка — текст (мало газа, резерв не
+/// задан, нет кошелька в маппинге, баланс не получен).
 pub async fn bnb_ok(core: &Core, d: &Direction, v: &VenueId, need: Decimal) -> Result<(), String> {
     let min = core
         .inner
         .deps
         .settings
-        .decimal("risk.min_bnb_balance", At::default())
+        .decimal(
+            "risk.min_bnb_balance",
+            At {
+                venue: Some(&v.0),
+                coin: None,
+            },
+        )
         .map_err(|e| e.message)?;
     // Решение 416: тикер газа — dex.gas_ticker этой площадки DEX (core/gas_ticker.rs); не задана — точная причина.
     let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
@@ -154,18 +162,24 @@ pub async fn bnb_ok(core: &Core, d: &Direction, v: &VenueId, need: Decimal) -> R
         .await
         .map_err(|e| format!("{}: балансы: {}", v.0, e.message))?
         .map_or(Decimal::ZERO, |x| x.free);
-    bnb_enough(&v.0, have, min, need)
+    bnb_enough(&v.0, &gas, have, min, need)
 }
 
-/// Хватает ли BNB на газ: свободный BNB не меньше минимума risk.min_bnb_balance плюс газ сделки. Принимает: площадку,
-/// свободный BNB, минимум, газ сделки. Ошибка — текст причины. Вызывают bnb_ok и сверка (reconcile.rs — по уже
-/// полученным балансам, без второго запроса).
-pub fn bnb_enough(who: &str, have: Decimal, min: Decimal, need: Decimal) -> Result<(), String> {
+/// Хватает ли монеты газа: свободный остаток не меньше минимума risk.min_bnb_balance плюс газ сделки. Принимает:
+/// площадку, тикер газа площадки (dex.gas_ticker — подпись в тексте), свободный остаток, минимум, газ сделки. Ошибка —
+/// текст причины. Вызывают bnb_ok и сверка (reconcile.rs — по уже полученным балансам, без второго запроса).
+pub fn bnb_enough(
+    who: &str,
+    gas: &str,
+    have: Decimal,
+    min: Decimal,
+    need: Decimal,
+) -> Result<(), String> {
     if have < min + need {
-        // Решение 164: числа для глаз (количество BNB — 4 значащие цифры).
+        // Решение 164: числа для глаз (количество монеты газа — 4 значащие цифры).
         use crate::notify::human::qty;
         return Err(format!(
-            "{who}: BNB на газ {} — меньше нужного {} (запас {} + газ сделки {})",
+            "{who}: {gas} на газ {} — меньше нужного {} (запас {} + газ сделки {})",
             qty(have),
             qty(min + need),
             qty(min),
@@ -464,9 +478,18 @@ async fn steps(
                     VenueKind::Dex => {
                         let at = Instant::now();
                         let r = bnb_ok(core, d, v, Decimal::ZERO).await;
-                        t.mark(format!("баланс BNB {}", v.0), at);
+                        // Подпись шага — тикер газа площадки (dex.gas_ticker; не задана — «газа»).
+                        let unit = super::gas_ticker::at(&core.inner.deps.settings, v)
+                            .unwrap_or_else(|_| "газа".to_string());
+                        t.mark(format!("баланс {unit} {}", v.0), at);
                         if let Err(e) = r {
-                            core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
+                            // Аудит 28.11.2026: заголовок — по тикеру газа площадки (core/gas_ticker.rs low_gas_text).
+                            let note =
+                                super::gas_ticker::low_gas_text(&core.inner.deps.settings, v, &e);
+                            core.inner
+                                .deps
+                                .notify("risk.low_bnb", Some(&v.0), &note)
+                                .await;
                             return Err(e);
                         }
                     }
@@ -657,9 +680,14 @@ async fn steps(
         let at = Instant::now();
         let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
         let r = bnb_ok(core, d, v, gas_need(&c.costs, &stages, &gas)).await;
-        t.mark(format!("газ BNB {}", v.0), at);
+        t.mark(format!("газ {gas} {}", v.0), at);
         if let Err(e) = r {
-            core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
+            // Аудит 28.11.2026: заголовок — по тикеру газа площадки (core/gas_ticker.rs low_gas_text).
+            let note = super::gas_ticker::low_gas_text(&core.inner.deps.settings, v, &e);
+            core.inner
+                .deps
+                .notify("risk.low_bnb", Some(&v.0), &note)
+                .await;
             return Err(e);
         }
     }

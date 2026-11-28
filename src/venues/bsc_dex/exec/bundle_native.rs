@@ -17,7 +17,7 @@
 //! Кто вызывает: exec/bundle_trade.rs (adapt, routers), exec/bundle.rs (group_wrap), exec/bundle_send.rs
 //! (reserve_ok), exec/result.rs (moved_all).
 //! От чего зависит: exec/native.rs, exec/chain.rs (Step), exec/bundle.rs (Bundle), wallet/balances.rs, num.rs.
-//! Настройки: risk.min_bnb_balance (система); через exec/native.rs — dex.native_ticker, dex.native_wrapped [bsc_dex].
+//! Настройки: risk.min_bnb_balance (по площадке, иначе система), dex.gas_ticker (подпись); через exec/native.rs — dex.native_ticker, dex.native_wrapped [bsc_dex].
 //!
 //! WRAP_ETH / UNWRAP_WETH: pancake-v4-universal-router 1b6d479e src/modules/Payments.sol#L76-L104, universal-router
 //! edf19bfd contracts/modules/Payments.sol#L91-L119 (wrapETH — точная сумма ≤ баланса BNB роутера; unwrapWETH9 —
@@ -28,7 +28,6 @@ use rust_decimal::Decimal;
 
 use crate::core::types::Side;
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::settings::read::At;
 
 use super::super::ctx::Ctx;
 use super::super::num;
@@ -99,7 +98,7 @@ pub fn moved_all(r: &Receipt, wbnb: Address, routers: &[Address], side: Side) ->
     })
 }
 
-/// Резерв на газ не тратится: BNB кошелька − value всех свопов − газ всех транзакций бандла (лимиты симуляции × цена)
+/// Резерв на газ не тратится: монета газа кошелька (dex.gas_ticker) − value всех свопов − газ всех транзакций бандла (лимиты симуляции × цена)
 /// ≥ risk.min_bnb_balance. Без value (не продажа BNB) — проверки нет. Принимает: окружение, кошелёк, бандл, лимиты
 /// газа по транзакциям, цену газа (wei). Ошибки: InsufficientBalance, NotConfigured (резерв), BadResponse, узел.
 pub async fn reserve_ok(
@@ -116,16 +115,16 @@ pub async fn reserve_ok(
     if value.is_zero() {
         return Ok(());
     }
-    let reserve = ctx
-        .settings
-        .decimal("risk.min_bnb_balance", At::default())
-        .map_err(|e| ctx.tag(e))?;
+    // Аудит 28.11.2026: резерв — по площадке (значение площадки, иначе вся система), в монете газа площадки.
+    let reserve = ctx.dec("risk.min_bnb_balance")?;
+    // Подпись — тикер газа площадки (dex.gas_ticker), как в exec/native.rs reserve_ok.
+    let unit = super::super::gas_ticker::read(ctx)?;
     let gas: u64 = limits.iter().sum();
     let wei = value.saturating_add(price.saturating_mul(U256::from(gas)));
     let spend = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("{wei} wei не переводится в BNB"),
+            format!("{wei} wei не переводится в {unit}"),
         )
     })?;
     let have = balances::bnb(ctx, wallet).await?;
@@ -133,7 +132,7 @@ pub async fn reserve_ok(
         return Err(ctx.err(
             ErrorCode::InsufficientBalance,
             format!(
-                "BNB (бандл): нужно {spend} (сумма + газ), а сверх резерва на газ {reserve} (risk.min_bnb_balance) на кошельке только {}",
+                "{unit} (бандл): нужно {spend} (сумма + газ), а сверх резерва на газ {reserve} (risk.min_bnb_balance) на кошельке только {}",
                 (have - reserve).max(Decimal::ZERO)
             ),
         ));

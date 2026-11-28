@@ -112,7 +112,12 @@ async fn gas_ok(core: &Core, d: &Direction, c: &Calc) -> Result<(), String> {
         let gas = super::gas_ticker::at(&core.inner.deps.settings, v)?;
         let need = super::precheck::gas_need(&c.costs, &stages, &gas);
         if let Err(e) = super::precheck::bnb_ok(core, d, v, need).await {
-            core.inner.deps.notify("risk.low_bnb", Some(&v.0), &e).await;
+            // Аудит 28.11.2026: заголовок — по тикеру газа площадки (core/gas_ticker.rs low_gas_text).
+            let note = super::gas_ticker::low_gas_text(&core.inner.deps.settings, v, &e);
+            core.inner
+                .deps
+                .notify("risk.low_bnb", Some(&v.0), &note)
+                .await;
             return Err(e);
         }
     }

@@ -6,7 +6,7 @@
     нет. Площадки-DEX берутся из GET /api/venues/kinds (ответ 400 по площадке — не DEX, пропускается). Обновляется на
     старте, по кнопке «Обновить» и при переподключении (lagged); исполнение — ядром при dex_dex.execute (решение 124).
   Кто вызывает: pages/Live.svelte.
-  От чего зависит: lib/api.js, lib/live.svelte.js, lib/fmt.js, lib/coinLabels.js (poolRefText), lib/labels.js (вид пула),
+  От чего зависит: lib/api.js, lib/live.svelte.js, lib/fmt.js, lib/settings.svelte.js (тикер газа площадки — gasTicker), lib/coinLabels.js (poolRefText), lib/labels.js (вид пула),
     components/CopyAddr.svelte, components/NoData.svelte, components/ErrorText.svelte.
   Настройки: нет (dex_dex.* — экран «Настройки»).
 -->
@@ -17,6 +17,7 @@
   import { fmtPrice } from '../lib/fmt.js';
   import { poolRefText } from '../lib/coinLabels.js';
   import { poolKindLabel } from '../lib/labels.js';
+  import { store, valueKey, gasTicker } from '../lib/settings.svelte.js';
   import CopyAddr from './CopyAddr.svelte';
   import NoData from './NoData.svelte';
   import ErrorText from './ErrorText.svelte';
@@ -62,6 +63,10 @@
     };
   });
 
+  /** Аудит 28.11.2026: обёртка монеты газа площадки — «W» + dex.gas_ticker (WBNB у BSC, WETH у Base/Ethereum);
+   *  тикер не задан — «обёртка монеты газа». Принимает: id площадки. Возвращает: подпись. */
+  const wrapped = (v) => (store.values[valueKey('dex.gas_ticker', { kind: 'Venue', id: v })] ? `W${gasTicker(v)}` : 'обёртка монеты газа');
+
   /** Маршрут строкой: «Pancake V3 0x… → Uniswap V3 0x…». */
   const routeText = (c) => c.hops.map((h) => `${poolKindLabel(h.kind)} ${poolRefText(h.pool)}`).join(' → ');
 </script>
@@ -90,10 +95,10 @@
     <p>
       {#if c.net_profit != null}
         Чистая прибыль на нём: <strong class={Number(c.net_profit) > 0 ? 'ok' : 'err'}>{fmtPrice(c.net_profit)} {c.base_ticker}</strong>
-        <span class="muted">(затраты {fmtPrice(c.bnb_cost)} BNB ≈ {fmtPrice(c.bnb_cost_in_base)} {c.base_ticker})</span>
+        <span class="muted">(затраты {fmtPrice(c.bnb_cost)} {gasTicker(c.venue)} ≈ {fmtPrice(c.bnb_cost_in_base)} {c.base_ticker})</span>
       {:else}
-        <span class="warn-text">чистая прибыль не посчитана: газ/чаевые нечем перевести в {c.base_ticker} (нет пула база ↔ WBNB)</span>
-        <span class="muted">— затраты {fmtPrice(c.bnb_cost)} BNB</span>
+        <span class="warn-text">чистая прибыль не посчитана: газ/чаевые нечем перевести в {c.base_ticker} (нет пула база ↔ {wrapped(c.venue)})</span>
+        <span class="muted">— затраты {fmtPrice(c.bnb_cost)} {gasTicker(c.venue)}</span>
       {/if}
     </p>
     {#if !c.executable && c.exec_note}

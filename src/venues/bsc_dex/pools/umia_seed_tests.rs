@@ -30,8 +30,8 @@ async fn initial_candidates_include_both_funded_vaults_of_the_migrated_venture()
     let ctx = &p.ctx;
     let store = &ctx.settings;
     store.set("dex.default_chain", Scope::Global, Some(json!("bsc")), "test").await.unwrap();
-    store.set("dex.chain", Scope::Venue(ctx.place.id.into()), Some(json!("l2")), "test").await.unwrap();
-    let alias = "venture-markets@l2";
+    store.set("dex.chain", Scope::Venue(ctx.place.id.into()), Some(json!("base")), "test").await.unwrap();
+    let alias = "venture-markets@base";
     let scope = Scope::Dex(alias.into());
 
     let ventures = catalog["rows"].as_array().unwrap();

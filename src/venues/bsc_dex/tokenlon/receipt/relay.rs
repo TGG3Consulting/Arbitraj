@@ -1,6 +1,6 @@
 //! Сверка уже выплаченной личной заявки, доставленной внешним плательщиком газа.
 //! Исходные Proof и digest берутся из durable intent владельца, записанного до разглашения подписи.
-use super::{FillOrder, Proof, WETH, inclusion::Sender};
+use super::{FillOrder, Proof, inclusion::Sender};
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::venues::bsc_dex::{ctx::Ctx, node::rpc, send::track::Receipt};
 use alloy::sol_types::SolEvent;
@@ -38,7 +38,7 @@ impl Proof {
         let parent = self
             .check_delivery(ctx, hash, Sender::Relay, calldata_digest, r)
             .await?;
-        if self.terms.output == WETH {
+        if self.terms.output == self.terms.roles.weth.address {
             plain_receiver(ctx, self.terms.payer, parent, r.block_hash.ok_or_else(bad)?).await?;
         }
         self.bound_amounts(ctx, hash, r, None).await

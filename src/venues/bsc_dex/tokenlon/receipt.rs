@@ -2,12 +2,13 @@
 //! Для native ETH дополнительно требуется каноническая собственная транзакция и EOA-получатель без кода.
 mod inclusion;
 mod relay;
+mod stored;
 #[cfg(test)]
 #[path = "receipt_tests.rs"]
 mod tests;
 use super::super::{exec::fill::moved_logs, node::abi::IERC20};
 use super::wire::{
-    PMM, Terms, WETH, ZERO_EXCHANGE,
+    Terms,
     abi::{Deposit, Fill, FillOrder, Withdrawal},
     asset,
 };
@@ -17,6 +18,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(in crate::venues::bsc_dex) struct Proof {
+    #[serde(deserialize_with = "stored::terms")]
     pub terms: Terms,
     pub maker: Address,
     pub order_hash: B256,
@@ -37,7 +39,7 @@ fn unique<E: SolEvent>(logs: &[Log], emitter: Address) -> Option<E> {
 
 impl Proof {
     pub(in crate::venues::bsc_dex) fn value(&self) -> U256 {
-        if self.terms.input == WETH {
+        if self.terms.input == self.terms.roles.weth.address {
             self.terms.spent
         } else {
             U256::ZERO
@@ -46,8 +48,10 @@ impl Proof {
     /// Во время предпроверки и после включения сверяются одни и те же полные денежные события.
     pub(in crate::venues::bsc_dex) fn amounts(&self, logs: &[Log]) -> Option<(U256, U256)> {
         let t = &self.terms;
-        let p = unique::<FillOrder>(logs, PMM)?;
-        let x = unique::<Fill>(logs, ZERO_EXCHANGE)?;
+        let pmm = t.roles.pmm.address;
+        let weth = t.roles.weth.address;
+        let p = unique::<FillOrder>(logs, pmm)?;
+        let x = unique::<Fill>(logs, t.roles.zero_exchange.address)?;
         if p.source != "0x v2"
             || p.transactionHash != self.tx_hash
             || p.orderHash != self.order_hash
@@ -63,8 +67,8 @@ impl Proof {
             || x.makerAddress != self.maker
             || x.feeRecipientAddress != t.payer
             || x.orderHash != self.order_hash
-            || x.takerAddress != PMM
-            || x.senderAddress != PMM
+            || x.takerAddress != pmm
+            || x.senderAddress != pmm
             || x.makerAssetFilledAmount != self.gross
             || x.takerAssetFilledAmount != t.spent
             || !x.makerFeePaid.is_zero()
@@ -83,31 +87,31 @@ impl Proof {
             return None;
         }
         let moved = |token, from, to| moved_logs(logs, token, from, to);
-        if moved(t.input, Some(PMM), Some(self.maker)) != t.spent
-            || moved(t.output, Some(self.maker), Some(PMM)) != self.gross
+        if moved(t.input, Some(pmm), Some(self.maker)) != t.spent
+            || moved(t.output, Some(self.maker), Some(pmm)) != self.gross
         {
             return None;
         }
-        if t.input == WETH {
-            let d = unique::<Deposit>(logs, WETH)?;
-            if d.dst != PMM || d.wad != t.spent {
+        if t.input == weth {
+            let d = unique::<Deposit>(logs, weth)?;
+            if d.dst != pmm || d.wad != t.spent {
                 return None;
             }
-        } else if moved(t.input, Some(t.payer), Some(PMM)) != t.spent
+        } else if moved(t.input, Some(t.payer), Some(pmm)) != t.spent
             || moved(t.input, Some(t.payer), None) != t.spent
             || !moved(t.input, None, Some(t.payer)).is_zero()
         {
             return None;
         }
-        let received = if t.output == WETH {
-            let w = unique::<Withdrawal>(logs, WETH)?;
-            if w.src != PMM || w.wad != self.net {
+        let received = if t.output == weth {
+            let w = unique::<Withdrawal>(logs, weth)?;
+            if w.src != pmm || w.wad != self.net {
                 return None;
             }
             // В pinned _settle сразу после withdraw средства переводятся тому же receiver.
             w.wad
         } else {
-            let credit = moved(t.output, Some(PMM), Some(t.recipient));
+            let credit = moved(t.output, Some(pmm), Some(t.recipient));
             if moved(t.output, None, Some(t.recipient)) != credit
                 || !moved(t.output, Some(t.recipient), None).is_zero()
             {

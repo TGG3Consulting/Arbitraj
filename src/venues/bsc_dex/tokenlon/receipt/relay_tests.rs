@@ -1,7 +1,7 @@
 //! Доставка через внешнего отправителя. 19 подлинных поручений, 18 групп балансов на границах блоков.
 use super::super::{
-    FillOrder, PMM,
-    tests::{archive, logs},
+    FillOrder,
+    tests::{archive, archived_roles, logs},
     unique,
 };
 use alloy_primitives::{B256, U256};
@@ -9,6 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 #[test]
 fn tokenlon_relayed_owner_balances_and_overlapping_payments() {
+    let roles = archived_roles();
     let historic = archive(include_bytes!(
         "../../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz"
     ));
@@ -29,13 +30,13 @@ fn tokenlon_relayed_owner_balances_and_overlapping_payments() {
         assert_eq!(r["tx"]["hash"], r["canonical"]);
         assert_eq!(row["block"], r["tx"]["blockHash"]);
         assert_eq!(row["delivery"], r["tx"]["from"]);
-        let pay = unique::<FillOrder>(&logs(&r["logs"]), PMM).unwrap();
+        let pay = unique::<FillOrder>(&logs(&r["logs"]), roles.pmm.address).unwrap();
         assert_ne!(row["delivery"], row["owner"]);
         assert_eq!(row["owner"], serde_json::json!(pay.userAddr));
         assert_eq!(pay.receiverAddr, pay.userAddr);
         assert_eq!(row["input"], serde_json::json!(pay.takerAssetAddr));
         assert_eq!(row["output"], serde_json::json!(pay.makerAssetAddr));
-        native += usize::from(pay.makerAssetAddr == super::WETH);
+        native += usize::from(pay.makerAssetAddr == roles.weth.address);
         let word =
             |key: &str, col: usize| serde_json::from_value::<U256>(row[key][col].clone()).unwrap();
         assert_eq!(row["before"][2], "0x");

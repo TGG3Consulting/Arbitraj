@@ -39,6 +39,8 @@ BASE_USDT_EVIDENCE = {
              "[Терминал и исполнение заявок](https://axiom.trade/)."),
     "8053": ("Погашение права на физический предмет оформляется с адресом доставки. "
              "[Покупка, перепродажа и доставка](https://docs.dyli.io/core-features/marketplace/drop-pages/redeeming)."),
+    "5181": ("Книга и AMM обменивают условные ERC1155-позиции, обеспеченные залогом. В обороте Base измеряется USDC. "
+             "[Устройство рынков и условных требований](https://limitless.exchange/whitepaper.pdf)."),
 }
 
 

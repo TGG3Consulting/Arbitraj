@@ -52,11 +52,11 @@ pub(super) fn crypto_input(
     let mut nearest_short = None;
     let mut previous = U256::ZERO;
     for k in 1..=40u64 {
-        // Входы на единицах ERC-20 и равномерно по окрестности первой нормировки.
+        // Входы на единицах ERC-20 и по окрестности первой нормировки с более частыми пробами около уже подтверждённой границы.
         let delta = if k <= 8 {
             U256::from(k)
         } else {
-            full_math::mul_div_up(window, U256::from(k - 8), U256::from(32))?
+            full_math::mul_div_up(window, U256::from((k - 8).pow(2)), U256::from(32u64.pow(2)))?
         };
         if delta <= previous || delta >= start {
             continue;

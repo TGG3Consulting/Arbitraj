@@ -1,5 +1,8 @@
 //! Сопоставление Curve IBT/PT со всеми публичными get_dy Spectra при реальных rates, fee и остатках.
 mod curve_crypto_common;
+mod multi_common;
+#[path = "base_spectra_math/routing.rs"]
+mod routing;
 
 use alloy_primitives::{Address, U256};
 use arb::venues::bsc_dex::{

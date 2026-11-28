@@ -44,6 +44,7 @@ pub mod costs;
 pub mod cpu;
 pub mod cpu_local;
 pub mod crypto_depth;
+mod spectra;
 pub mod cycle;
 pub mod cycle_audit;
 mod cycle_cash;

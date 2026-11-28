@@ -64,6 +64,15 @@ pub fn swap(
             ),
         )
     };
+    if e.family.variant.spectra() {
+        if !zero_for_one && token_in != e.pool.token1 {
+            return Err(why("Spectra: на входе нужен IBT или PT этой пары"));
+        }
+        if !exact_in {
+            let payout = |paid| swap(ctx, e, token_in, true, paid).ok().map(|s| s.amount_out);
+            return super::spectra::target(e, zero_for_one, amount, payout).ok_or_else(none);
+        }
+    }
     match (&e.pool.state, e.pool.kind) {
         (PoolState::UmbraeDamm(s), PoolKind::V2) => super::super::math::umbrae_damm::fill(s, token_in, exact_in, amount)
             .map(|f| f.swapped).ok_or_else(none),

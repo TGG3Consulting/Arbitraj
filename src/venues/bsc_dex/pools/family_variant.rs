@@ -241,6 +241,8 @@ pub enum Variant {
 }
 
 impl Variant {
+    pub(crate) fn spectra(self) -> bool { self == Self::Spectra }
+
     pub(crate) fn prop_venue(self) -> bool { self == Self::PropVenue }
     /// Рынок BaseStonk с зафиксированным V4-хуком.
     pub(crate) fn basestonk(self) -> bool { self == Self::BaseStonk }

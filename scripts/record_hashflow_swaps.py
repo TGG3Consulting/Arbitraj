@@ -39,6 +39,16 @@ def capture(row):
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) == 3 and sys.argv[1] == "--ethereum":
+        original = next(row for row in json.loads(FILE.read_bytes()) if row["chain_id"]==1)
+        reverse = json.loads(FILE.with_name("ethereum_reverse.json").read_bytes())
+        observed = []
+        for row in (original, reverse):
+            capture(row)
+            observed.append({key:row[key] for key in ("transaction_hash","block_hash","nonce","receipt")})
+        Path(sys.argv[2]).write_text(json.dumps(observed,separators=(",",":")),encoding="utf8")
+        sys.exit(0)
     rows = json.loads(FILE.read_text("utf8"))
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(max_workers=len(rows)) as pool:

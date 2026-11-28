@@ -36,7 +36,10 @@ fn mined_swaps_match_the_same_router_abi_and_amounts() {
         rows.iter().map(|r| r.chain_id).collect::<Vec<_>>(),
         [1, 56, 8453, 42161]
     );
-    for r in rows {
+    let reverse: Row = serde_json::from_str(include_str!(
+        "../../../../tests/data/hashflow_direct_2026-11-26/ethereum_reverse.json"
+    )).unwrap();
+    for r in rows.into_iter().chain([reverse]) {
         assert_eq!(r.to, router(r.chain_id).unwrap());
         assert_eq!(r.status, U256::from(1u8));
         let call = wire::tradeRFQTCall::abi_decode_validate(&r.input).unwrap();

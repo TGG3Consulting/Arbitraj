@@ -28,7 +28,7 @@
     <fieldset disabled={busy}>
       <label>Токен в паре с USDT Ethereum <input bind:value={token} placeholder="0x…" /></label>
       <label>Направление <select bind:value={buy}><option value={false}>Продать токен за USDT</option><option value={true}>Купить токен за USDT</option></select></label>
-      <label>Количество токена в минимальных единицах <input bind:value={size} inputmode="numeric" /></label>
+      <label>{buy ? 'Количество токена до комиссии Tokenlon, в минимальных единицах' : 'Расход токена в минимальных единицах'} <input bind:value={size} inputmode="numeric" /></label>
       <label><input type="checkbox" bind:checked={firm} /> Запросить условия маркетмейкера для кошелька {wallet}</label>
       {#if firm}
         <label>Минимум к получению в единицах {buy ? 'токена' : 'USDT'} <input bind:value={minimum} inputmode="numeric" /></label>
@@ -40,6 +40,9 @@
   {#if error}<p role="alert">{error}</p>{/if}
   {#if answer}
     <p role="status">Расход {answer.spent_raw} ({answer.input}). К получению {answer.received_raw} ({answer.output}). Суммы в минимальных единицах активов.</p>
+    {#if answer.details?.stage === 'indicative'}<p>Предварительная цена. Для суммы после комиссии запросите условия маркетмейкера.</p>{/if}
+    {#if answer.details?.stage === 'maker_order'}<p>Маркетмейкер подписал условия. Комиссия Tokenlon — {answer.fee?.amount_raw} минимальных единиц получаемого актива. Фактическое исполнение ещё предстоит.</p>{/if}
+    {#if answer.details?.native_input}<p>Оплата с баланса ETH этого кошелька.</p>{:else if answer.details?.native_output}<p>Выплата поступает на баланс ETH этого кошелька.</p>{/if}
     {#if answer.expires}<p>Срок условий до {new Date(answer.expires * 1000).toLocaleString()}.</p>{/if}
   {/if}
 </details>

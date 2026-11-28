@@ -6518,6 +6518,7 @@
 | T-SETTLE-HTX | Сохранённые currency, chain, wire и fee при поиске вывода одним clientOrderId; сверка списания и поступления именно в спотовый аккаунт. |
 | T-SETTLE-POLONIEX | После открытия стороны сети сверить withdrawOrderId с withdrawalRequestsId, точный filledAmount и все комиссии частичных исполнений. |
 | T-SETTLE-XT | Сверить tradeQuote с исполнениями и всеми комиссиями, связь clientOrderId→recordId→txHash и итоговое зачисление исходного аккаунта. |
+| T-SETTLE-BINANCE | Ветка claude/settle-binance: ордер и вывод — true, зачисление — false. Записать с сервера бота: POST /api/v3/order USDCUSDT (newOrderRespType FULL) полный и частичный IOC; GET /api/v3/order по origClientOrderId (FILLED и EXPIRED); GET /api/v3/myTrades по orderId; GET /sapi/v1/capital/withdraw/history?withdrawOrderId=… (вывод USDC сеть BASE, статусы 4 и 6); GET /sapi/v1/capital/deposit/hisrec?coin=USDC&txId=… (депозит USDC BASE: поле walletType). Вопрос Тиграну: на какой кошелёк (Spot/Funding) зачисляется депозит у счёта бота — «selected wallet» в кабинете; документация API не даёт прочитать выбор и не расшифровывает walletType депозита. Пока не подтверждено — supports_settlement_credit = false. |
 
 ### О-65. Критерий приёмки проверки баланса
 

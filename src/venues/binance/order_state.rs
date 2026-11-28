@@ -4,7 +4,7 @@
 //! сбой запроса — повтор до срока; не дождался за venue.order_final_wait_ms — отмена остатка (правило Тиграна «не
 //! исполнился — отменяем») и ещё опрос. Ордер с неизвестным итогом постановки ищется по своему ID
 //! (origClientOrderId); не найден — отмена по нему же и снова поиск. Комиссия — fills.rs.
-//! Кто вызывает: trade.rs.
+//! Кто вызывает: trade.rs, settle.rs (inspect — сверка ордера расчётного круга Base).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, fills.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms; venue.my_trades_limit (fills.rs).
 //!
@@ -138,6 +138,19 @@ pub async fn result(
     let orig = num::dec_opt(s, "origQty")?.unwrap_or(sent_qty);
     let filled = num::dec(s, "executedQty")?;
     let quote = num::dec(s, "cummulativeQuoteQty")?;
+    // Query order (rest-api «Account endpoints», GET /api/v3/order): «For some historical orders cummulativeQuoteQty will
+    // be < 0, meaning the data is not available at this time». Отрицательное — оборота нет: средняя цена из него была бы
+    // отрицательной, поэтому при исполнении итог не подтверждён (OutcomeUnknown), а не выдуман.
+    if quote < Decimal::ZERO && !filled.is_zero() {
+        let m = format!(
+            "Binance {symbol}: ордер {order_id} исполнен на {filled}, но cummulativeQuoteQty < 0 — оборот сейчас недоступен"
+        );
+        let e = GatewayError::new(ErrorCode::OutcomeUnknown, None, m);
+        return Err(ctx.tag(e).with_raw(s.to_string()));
+    }
+    // Расчётный круг Base: точный оборот ордера в котируемой монете — то же поле cummulativeQuoteQty того же ответа,
+    // которым подтверждены executedQty и комиссия (gateway/settlement_intent.rs note_gross; вне круга — ничего не делает).
+    crate::gateway::settlement_intent::note_gross((quote >= Decimal::ZERO).then_some(quote));
     // Решение 268 (Тигран 14.11): ордер истёк без исполнения, потому что цена исполнения вне разрешённого диапазона —
     // status EXPIRED и expiryReason EXECUTION_RULE_PRICE_RANGE_EXCEEDED (enums.md «Expiry Reasons»; правило —
     // https://github.com/binance/binance-spot-api-docs/blob/master/faqs/price_range_execution_rules.md). Ничего не
@@ -199,7 +212,11 @@ async fn cancel(ctx: &Ctx, symbol: &str, id: (&'static str, &str)) -> GatewayRes
 }
 
 /// Запрос состояния по orderId или origClientOrderId. Ошибки: как rest::signed.
-async fn query(ctx: &Ctx, symbol: &str, id: (&'static str, &str)) -> GatewayResult<Value> {
+pub(super) async fn query(
+    ctx: &Ctx,
+    symbol: &str,
+    id: (&'static str, &str),
+) -> GatewayResult<Value> {
     let q = vec![("symbol", symbol.to_string()), (id.0, id.1.to_string())];
     rest::signed(ctx, Method::GET, "/api/v3/order", q, Op::Other).await
 }

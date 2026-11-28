@@ -28,6 +28,7 @@ pub struct Saved {
     minimum: U256,
 }
 impl Saved {
+    pub(in crate::venues::bsc_dex) fn digest(&self) -> B256 { self.order.digest }
     pub(in crate::venues::bsc_dex) fn matches(&self, r: &Receipt) -> Option<U256> {
         self.order
             .received(&r.logs, Some(self.module))
@@ -70,6 +71,8 @@ pub(in crate::venues::bsc_dex) async fn trade(
     };
     let who = wallet::signer::address(ctx)?;
     let profile = Profile::read(ctx)?;
+    if matches!(req.route.as_ref().map(|r|r.mode),Some(crate::core::types::RouteMode::NativeRfqSettlement(_)))
+        && !profile.supports_settlement() { return Err(reject()); }
     let module = profile.module.ok_or_else(reject)?.address;
     let q = &t.checked.firm;
     let o = &q.proof;
@@ -152,7 +155,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
             .map_err(|e| parse.attach(e.with_tx(d.chain.clone())))?;
     }
     exec::result::by(
-        exec::result::result(ctx, req, d, who, pair, t.decs, &[]).map_err(|e| parse.attach(e)),
+        exec::result::with_native_fact(ctx, req, d, who, pair, t.decs, &[], Some(&parse)).map_err(|e| parse.attach(e)),
         super::LABEL,
     )
 }

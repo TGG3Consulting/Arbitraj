@@ -25,7 +25,9 @@
 -->
 <script>
   import { uniq, uniqBy } from '../lib/uniq.js';
-  import { store, valueKey, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
+  import { store, venueScopeLabel, shownAtVenue } from '../lib/settings.svelte.js';
+  import {baseNetwork} from '../lib/baseNetwork.js';
+  import {ryzeBookBudget,ryzeBookSetting} from '../lib/ryzeBookBudget.js';
   import { dex, dexIdsFor, allChannels, whyNoDex } from '../lib/dex.svelte.js';
   import { kindLabel, limitLabel, scopeLabel } from '../lib/labels.js';
   import { href } from '../lib/router.svelte.js';
@@ -110,6 +112,26 @@
   const eventTitle = (code) => store.schema.events.find((e) => e.code === code)?.title ?? code;
 </script>
 
+{#snippet ryzeBudget(venue)}
+  {@const b = ryzeBookBudget(store.values,venue)}
+  {#if b.cap===null}
+    <p class="err">Задайте положительный общий бюджет <code>ryze.router_requests_per_minute</code>. До этого бот не отправит POST /quote.</p>
+  {:else if b.perMinute!==null}
+    <p class="muted">Ryze Router /quote · <code>{venue}</code>. Строк размеров в настройках: {b.sizes}.
+      На проход одного кошелька — до {b.buy} запросов покупки и {b.sell} продажи, всего {b.total}.
+      При заданной паузе расчётный темп одного опроса — около {b.perMinute.toLocaleString('ru-RU',{maximumFractionDigits:1})} запросов/мин.
+      Оценка учитывает все строки размеров. Бот пропускает некорректные строки и недоступные рынки. Ранний ответ снижает расход.</p>
+  {:else}
+    <p class="muted">Для оценки фонового опроса <code>{venue}</code> задайте размеры и положительную паузу между проходами.</p>
+  {/if}
+  {#if b.cap!==null}
+    <p class="muted">Предел — {b.cap} запросов за скользящую минуту на сервер Router. Этот бюджет делят фоновые опросы всех кошельков, финальные цены и сверка перед подписью.</p>
+    {#if b.mayExhaust}
+      <p class="warn-text">При полной нагрузке фоновые котировки могут исчерпать бюджет до финальной проверки.</p>
+    {/if}
+  {/if}
+{/snippet}
+
 <article class="card">
   <header>
     <code>{def.name}</code>
@@ -130,6 +152,11 @@
 
   {#if def.scopes.includes('Global')}
     <SettingEditor {def} scope={{ kind: 'Global' }} label="вся система" />
+    {#if def.name==='ryze.router_requests_per_minute'}
+      {#each venueSettings.filter(v=>store.venueKinds.find(x=>x.id===v)?.kind!=='Cex' && baseNetwork(v,store.schema?.dex_profiles,store.values)) as v (v)}
+        {@render ryzeBudget(v)}
+      {/each}
+    {/if}
   {/if}
   {#if def.name === 'venue.cex_cex_deny'}
     <!-- Решение 249: список задаётся окном «Настроить список» у venue.cex_cex (выбор бирж, не текст). -->
@@ -138,18 +165,8 @@
     <!-- Решение 283: у настройки venue_for «Dex» строки бирж не показываются (shownAtVenue); значения не трогаются. -->
     {#each venueSettings.filter((v) => shownAtVenue(def, v)) as v (v)}
       <SettingEditor {def} scope={{ kind: 'Venue', id: v }} label={venueScopeLabel(def, v)} />
-      {#if def.name === 'ryze.books_interval_ms' || def.name === 'ryze.quote_sizes'}
-        {@const scope = {kind: 'Venue', id: v}}
-        {@const rows = store.values[valueKey('ryze.quote_sizes', scope)]}
-        {@const interval = store.values[valueKey('ryze.books_interval_ms', scope)]}
-        {#if Array.isArray(rows) && rows.length && interval > 0}
-          <p class="muted">Router /quote: до {5 * rows.length} запросов за проход по {rows.length} строкам размеров,
-            до {(5 * rows.length * 60000 / interval).toLocaleString('ru-RU', {maximumFractionDigits: 1})} запросов/мин
-            в среднем при заданной паузе. При раннем отказе запросов меньше. На размер до четырёх запросов покупки и одного продажи.
-            Финальная цена и сверка перед подписью используют то же окно Router.</p>
-        {:else}
-          <p class="muted">Для опроса Router /quote задайте размеры и паузу между проходами.</p>
-        {/if}
+      {#if ryzeBookSetting(def.name)}
+        {@render ryzeBudget(v)}
       {/if}
       {#if def.name === 'venue.cex_cex' && store.venueKinds.find((x) => x.id === v)?.kind === 'Cex'}
         <CexCexDeny venue={v} />

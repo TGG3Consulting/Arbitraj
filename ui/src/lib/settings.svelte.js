@@ -9,6 +9,8 @@
 // Настройки: читает и показывает любые.
 
 import { get, put } from './api.js';
+import {baseNetwork} from './baseNetwork.js';
+import {ryzeBookSetting} from './ryzeBookBudget.js';
 import { onLive, lagFor } from './live.svelte.js';
 import { flight } from './flight.js';
 
@@ -85,6 +87,7 @@ export const defOf = (name) => store.schema?.settings.find((d) => d.name === nam
  */
 export function shownAtVenue(def, v) {
   if (def.venue_for !== 'Dex') return true;
+  if (ryzeBookSetting(def.name) && !baseNetwork(v,store.schema?.dex_profiles,store.values,true)) return false;
   return store.venueKinds.find((x) => x.id === v)?.kind !== 'Cex';
 }
 

@@ -8,13 +8,7 @@ const digest = /^0x[0-9a-f]{64}$/;
 const word = value => value.slice(2).toLowerCase().padStart(64,'0');
 const wrappedGetter = '0x'+sha3.keccak_256('wrapped()').slice(0,8);
 
-/** Выбирает физическую сеть по точным настройкам площадки и профилям из /api/settings/schema. */
-export function hanjiNetwork(venue,profiles,values) {
-  const local = name => values[name+'|Venue|'+venue];
-  const chain = local('dex.evm_chain_id');
-  const profile = profiles?.find(p=>p.venue===venue) ?? profiles?.find(p=>p.evm_chain_id===chain);
-  return profile?.chain==='base' && profile.chain===local('dex.chain') && profile.evm_chain_id===chain ? chain : null;
-}
+export {baseNetwork as hanjiNetwork} from './baseNetwork.js';
 
 /** Возвращает проверенный CREATE одного shared-модуля с аргументом WETH и выбранным плательщиком. */
 export async function loadHanji(settings,plan,sha) {

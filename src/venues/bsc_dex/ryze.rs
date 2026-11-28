@@ -31,6 +31,8 @@ mod service_tests;
 #[cfg(test)]
 mod quote_replay_tests;
 #[cfg(test)]
+mod result_tests;
+#[cfg(test)]
 mod router_budget_tests;
 pub(crate) mod tokens;
 pub mod wire;

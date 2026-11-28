@@ -192,3 +192,38 @@ fn legacy_market_parameters_follow_their_catalog_scope() {
     assert!(check_row("kyber.assume_zero_transfer_tax", "Global", why, source, &presets).is_err());
     assert!(check_row("kyber.http_timeout_ms", "Global", why, source, &presets).is_err());
 }
+
+#[test]
+fn ryze_base_presets_match_the_router_and_every_pool_in_factory_order() {
+    let archive: Value = serde_json::from_str(include_str!(
+        "../data/first_run_dex_2026-11-26/base_recovered_markets.json"
+    )).unwrap();
+    let ryze = &archive["ryze"];
+    let required = ["ryze.router", "ryze.factory", "ryze.router_runtime_hash",
+        "ryze.factory_runtime_hash", "ryze.pool_runtime_hash", "ryze.pools"]
+        .into_iter().map(str::to_owned).collect();
+    let values = presets(&required, &[]);
+    let configured = |key: &str| &values[&(key.to_owned(), "Venue base_dex".to_owned())];
+    for (role, address_key, code_key) in [
+        ("router", "ryze.router", "ryze.router_runtime_hash"),
+        ("factory", "ryze.factory", "ryze.factory_runtime_hash"),
+    ] {
+        assert_eq!(configured(address_key), &ryze[role]["address"]);
+        assert_eq!(configured(code_key), &ryze[role]["hash"]);
+    }
+    let pools = configured("ryze.pools").as_array().unwrap();
+    let markets = ryze["markets"].as_array().unwrap();
+    assert_eq!(pools.len(), markets.len());
+    assert_eq!(ryze["count"].as_u64().unwrap(), pools.len() as u64);
+    let onchain: Vec<_> = archive["calls"].as_array().unwrap().iter()
+        .filter(|r| r["to"] == ryze["factory"]["address"] && r["name"] == "pools(uint256)")
+        .collect();
+    assert_eq!(onchain.len(), pools.len());
+    for (index, ((address, market), getter)) in pools.iter().zip(markets).zip(onchain).enumerate() {
+        assert_eq!(address, &market["pool"]["address"]);
+        assert_eq!(configured("ryze.pool_runtime_hash"), &market["pool"]["hash"]);
+        assert_eq!(market["official"]["address"].as_str().unwrap().to_ascii_lowercase(), address.as_str().unwrap());
+        assert!(getter["data"].as_str().unwrap().ends_with(&format!("{index:064x}")));
+        assert_eq!(getter["result"].as_str().unwrap(), format!("0x{:0>64}", &address.as_str().unwrap()[2..]));
+    }
+}

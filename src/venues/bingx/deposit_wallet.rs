@@ -31,10 +31,13 @@ use super::num;
 /// Депозит на такой счёт — не на торговый (спотовый).
 const NOT_TRADING: [i64; 3] = [1, 2, 3];
 
-/// walletType прочитанных адресов депозита: (отпечаток ключа API, монета, сеть) → код. Дешёво клонируется.
+/// Ключ памяти: (отпечаток ключа API, монета, сеть).
+type Key = (u64, String, String);
+
+/// walletType прочитанных адресов депозита: ключ → код (None — поля нет). Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct WalletTypes {
-    seen: Arc<Mutex<HashMap<(u64, String, String), Option<i64>>>>,
+    seen: Arc<Mutex<HashMap<Key, Option<i64>>>>,
 }
 
 impl WalletTypes {

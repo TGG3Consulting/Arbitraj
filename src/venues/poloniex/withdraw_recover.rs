@@ -13,6 +13,7 @@
 //! - Wallets Activity Records, withdrawals: withdrawalRequestsId, currency, address, amount («the total amount withdrawn
 //!   including the fee»), fee, timestamp, status, txid, withdrawOrderId, withdrawalType, toAccount. Поля network в
 //!   записи вывода НЕТ — сеть запроса сверяется только через уникальный withdrawOrderId.
+//!
 //! Факты записанных выводов (tests/data/poloniex_withdraw_alias_2026-11-23):
 //! - ledger.json: вывод BNB по сети BSC в истории назван currency = BSC — именем монеты в сети (networkList.coin
 //!   справочника), а не спотовым тикером; такое имя принимается, только если справочник подтверждает его для этой

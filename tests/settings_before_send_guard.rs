@@ -85,8 +85,8 @@ const AFTER: [(&str, &str, &str); 39] = [
     ("src/venues/kyberswap/trade_fact.rs", "*", ""),
     (
         "src/venues/bsc_dex/exec/txs.rs",
-        // Решение 437 (3): тело отправки — send_tipped (send_capped зовёт её).
-        "send_tipped",
+        // Обычные отправки и измеренная Tokenlon проходят через одно тело перед dispatch.
+        "send_with_gas",
         "send::dispatch(",
     ),
     (

@@ -7,7 +7,7 @@ use super::{
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
 use crate::settings::{recommendations, scope::Scope};
-use alloy::primitives::{Address, B256, aliases::U24};
+use alloy::primitives::{B256, aliases::U24};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{

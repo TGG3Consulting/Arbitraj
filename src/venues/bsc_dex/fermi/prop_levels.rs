@@ -59,14 +59,14 @@ pub(super) fn quote_result(router: Address, venue: Address, raw: &[u8]) -> Optio
     (!net.is_zero()).then_some(net)
 }
 #[derive(Clone, Copy)]
-pub(super) enum Quoted {
+pub(super) enum Quoted<'a> {
     Prop(prop_wallet::Terms),
-    Bop(super::bop_cash::Path),
+    Bop(&'a super::bop_cash::Path),
 }
-impl Quoted {
-    pub(super) fn book(book: &Books) -> Option<Self> {
+impl<'a> Quoted<'a> {
+    pub(super) fn book(book: &'a Books) -> Option<Self> {
         match &book.config.source {
-            Source::Bop(path) => Some(Self::Bop(*path)),
+            Source::Bop(path) => Some(Self::Bop(path)),
             _ => book.prop.map(Self::Prop),
         }
     }
@@ -75,7 +75,7 @@ pub(super) async fn quotes(
     ctx: &Ctx,
     h: &Head,
     f: &Frame,
-    source: Quoted,
+    source: Quoted<'_>,
     i: Address,
     o: Address,
     sizes: &[U256],
@@ -117,7 +117,7 @@ async fn read_pair(
     let ctx = &p.ctx;
     let (source, terms, dec) = match &cfg.source {
         Source::Bop(path) => (
-            Quoted::Bop(*path),
+            Quoted::Bop(path),
             None,
             canonical(ctx, h.hash, coin, decimalsCall {}).await?,
         ),

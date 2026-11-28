@@ -150,7 +150,7 @@ pub(super) async fn simulate(
 pub(super) async fn candidate(
     ctx: &Ctx,
     c: &super::indicative::Candidate,
-    t: super::prop_levels::Quoted,
+    t: super::prop_levels::Quoted<'_>,
     leg: B256,
 ) -> Option<slot::Proof> {
     let b = &c.book;

@@ -12,7 +12,9 @@ const zeroWord='0x'+'0'.repeat(64);
 const addrWord=a=>a.slice(2).toLowerCase().padStart(64,'0');
 
 /** Допустимый источник ордеров, как в raindex/profile.rs. */
-function source(kind,url) {
+function source(version,kind,url) {
+  // При чтении событий выбранного узла последняя колонка содержит блок размещения книги.
+  if(kind==='rpc') return Number(version)===5 && typeof url==='string' && /^0*[1-9][0-9]{0,19}$/.test(url) && BigInt(url)<=0xffffffffffffffffn;
   if(!['graphql','blockscout'].includes(kind) || !URL.canParse(url)) return false;
   const u=new URL(url);
   return u.protocol==='https:' && !u.username && !u.password && !/[?#]/.test(url);
@@ -27,7 +29,7 @@ function readRows(rows,plan) {
     if(tail.length || !/^\+?\d+$/.test(chain) || Number(chain)!==plan.chainId ||
         !/^\+?\d+$/.test(version) || !Object.hasOwn(selectors,Number(version)) ||
         !address.test(book) || !hash.test(bookHash) || !address.test(module) || !hash.test(moduleHash) ||
-        book.toLowerCase()===module.toLowerCase() || books.has(book.toLowerCase()) || !source(kind,url)) {
+        book.toLowerCase()===module.toLowerCase() || books.has(book.toLowerCase()) || !source(version,kind,url)) {
       throw Error('Проверьте сеть, версии, адреса и источники в raindex.books.');
     }
     books.set(book.toLowerCase(),{version:Number(version),bookHash:bookHash.toLowerCase(),module:module.toLowerCase(),moduleHash:moduleHash.toLowerCase()});
@@ -45,7 +47,7 @@ export async function loadRaindex(settings,card,digest) {
   if(settings.kind!=='raindex' || card.kind!==settings.kind || card.chainId!==8453 || settings.chainId!==card.chainId ||
       !address.test(settings.wallet) || !hash.test(card.sourceBlock) || !book || !address.test(book.book) ||
       !hash.test(book.bookHash) || !hash.test(book.runtimeKeccak) || !sha.test(book.runtimeSha256) ||
-      selectors[book.version]!==book.takeSelector || !book.takeSelector || !source(book.sourceKind,book.url)) {
+      selectors[book.version]!==book.takeSelector || !book.takeSelector || !source(book.version,book.sourceKind,book.url)) {
     throw Error('Проверьте кошелёк, сеть Base и архивное размещение книги Raindex.');
   }
   const data=card.creation+addrWord(book.book)+book.bookHash.slice(2)+book.takeSelector.slice(2).padEnd(64,'0');

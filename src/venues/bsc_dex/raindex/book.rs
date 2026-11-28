@@ -47,6 +47,7 @@ impl Cache {
 pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEvent>) {
     use futures_util::{StreamExt, stream};
     let mut changes = p.ctx.settings.subscribe();
+    let mut readers = history::Readers::default();
     loop {
         let ctx = &p.ctx;
         let g = ctx.settings.generation();
@@ -59,6 +60,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
             ))
         };
         let active = enabled(ctx).then(config).flatten();
+        readers.configure(ctx, active.as_ref().map_or(&[], |(sources, _, _)| sources.as_slice()));
         let mut published = None;
         if let Some((sources, ms, cash)) = active.as_ref()
             && let Ok(head) = white_state::head(ctx, "latest").await
@@ -69,8 +71,9 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
                 .map(|src| {
                     let p = &p;
                     let cash = *cash;
+                    let catalog = readers.orders(&src);
                     async move {
-                        tokio::time::timeout(ttl / 2, src.read(p, head, cash))
+                        tokio::time::timeout(ttl / 2, src.read(p, head, cash, catalog))
                             .await
                             .ok()
                             .flatten()

@@ -5,7 +5,7 @@ use crate::venues::bsc_dex::pools::solidly_classic_factory as binding;
 use alloy_primitives::keccak256;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 pub(super) struct Profile {
     pub chain: u64,
     pub version: u8,
@@ -17,8 +17,40 @@ pub(super) struct Profile {
 #[derive(Clone)]
 pub(super) struct Source {
     pub profile: Profile,
-    pub graphql: bool,
-    pub url: reqwest::Url,
+    pub origin: Origin,
+}
+#[derive(Clone)]
+pub(super) enum Origin {
+    Graph(reqwest::Url),
+    Explorer(reqwest::Url),
+    Rpc(u64),
+}
+impl Origin {
+    pub(super) fn parse(version: u8, kind: &str, endpoint: &str) -> Option<Self> {
+        match kind {
+            "rpc" if version == 5 && endpoint.bytes().all(|b| b.is_ascii_digit()) => {
+                let block = endpoint.parse::<u64>().ok()?;
+                (block > 0).then_some(Self::Rpc(block))
+            }
+            "graphql" | "blockscout" => {
+                let url = reqwest::Url::parse(endpoint).ok()?;
+                if url.scheme() != "https"
+                    || !url.username().is_empty()
+                    || url.password().is_some()
+                    || url.fragment().is_some()
+                    || url.query().is_some()
+                {
+                    return None;
+                }
+                Some(if kind == "graphql" {
+                    Self::Graph(url)
+                } else {
+                    Self::Explorer(url)
+                })
+            }
+            _ => None,
+        }
+    }
 }
 impl Profile {
     pub(super) fn list(ctx: &Ctx) -> Option<Vec<Source>> {
@@ -51,7 +83,6 @@ impl Profile {
                 module: module.parse().ok()?,
                 module_hash: module_hash.parse().ok()?,
             };
-            let url = reqwest::Url::parse(url).ok()?;
             if p.chain != chain
                 || !matches!(p.version, 3..=7)
                 || p.book.is_zero()
@@ -60,24 +91,11 @@ impl Profile {
                 || p.book_hash.is_zero()
                 || p.module_hash.is_zero()
                 || !ids.insert(p.book)
-                || url.scheme() != "https"
-                || !url.username().is_empty()
-                || url.password().is_some()
-                || url.fragment().is_some()
-                || url.query().is_some()
             {
                 return None;
             }
-            let graphql = match *kind {
-                "graphql" => true,
-                "blockscout" => false,
-                _ => return None,
-            };
-            sources.push(Source {
-                profile: p,
-                graphql,
-                url,
-            });
+            let origin = Origin::parse(p.version, kind, url)?;
+            sources.push(Source { profile: p, origin });
         }
         Some(sources)
     }

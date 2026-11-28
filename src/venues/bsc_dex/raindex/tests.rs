@@ -11,6 +11,8 @@ use serde_json::{Value, from_value};
 mod capacity;
 #[path = "reverse_tests.rs"]
 mod reverse;
+#[path = "history_tests.rs"]
+mod history;
 
 fn amount(row: &Value, field: &str) -> U256 {
     row[field].as_str().unwrap().parse().unwrap()

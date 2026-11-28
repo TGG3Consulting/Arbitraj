@@ -37,6 +37,7 @@ alloy::sol! {
     function takeOrders4(Take6 config) external returns(bytes32,bytes32);
     event AddOrderV2(address sender,bytes32 orderHash,Order4 order);
     event AddOrderV3(address sender,bytes32 orderHash,Order6 order);
+    event RemoveOrderV3(address sender,bytes32 orderHash,Order6 order);
     event TakeOrderV2(address sender,Leg4 config,uint256 input,uint256 output);
     event TakeOrderV3(address sender,Leg6 config,bytes32 input,bytes32 output);
     struct Limits{address input;address output;uint256 minimumDebit;uint256 maximumDebit;uint256 minimumCredit;uint256 deadline;}

@@ -19,6 +19,9 @@
 {#if artifact}
   {#await artifact then card}
     {#each card.default.books as b ([venue,wallet,b.book].join(':'))}
+      {#if b.settlementVerified===false}
+        <p>Raindex V{b.version}. Архивная проверка выплаты через модуль по этой книге ещё не прошла. Перед торговлей бот проверяет списание и зачисление для каждого ордера.</p>
+      {/if}
       <SourceWalletModule {venue} {wallet} {chain} {load} shared={true} book={b.book} bookModule={displayed(b.book)}
         source={'raindex-'+b.book} version={b.version} kind="raindex" label={'Raindex V'+b.version} setting="raindex.books"
         addModule={addRaindex} registeredOwnerModule={registeredRaindex}/>

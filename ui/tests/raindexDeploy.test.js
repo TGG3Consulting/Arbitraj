@@ -21,6 +21,27 @@ const setting={kind:'raindex',chainId:funded.chain,book:quotes.book,wallet,rows:
 const word=a=>'0x'+a.slice(2).padStart(64,'0');
 const selector=name=>'0x'+sha3.keccak_256(name).slice(0,8);
 
+test('Base V5 book keeps the source deployment height through another book registration',async()=>{
+  const seed=record('raindex_base_v5_seed');
+  const legacy=card.books.find(b=>b.book===seed.book);
+  assert.equal(legacy.version,5);
+  assert.equal(legacy.sourceKind,'rpc');
+  assert.match(legacy.url,/^[1-9][0-9]*$/);
+  assert.ok(BigInt(legacy.url)<BigInt(seed.block));
+  const oldPlan=await loadPlan({...setting,book:legacy.book},card);
+  // В этой проверке адреса строк фиктивные: проверяется сохранение настроек при добавлении книги.
+  const first=addRaindex(null,oldPlan,'0x'+'ab'.repeat(20));
+  const plan=await loadPlan({...setting,rows:first},card);
+  const both=addRaindex(first,plan,target);
+  assert.equal(both[0],first[0]);
+  assert.ok(both[0].endsWith(' rpc '+legacy.url));
+  assert.equal(both.length,2);
+  for(const invalid of ['0','-1','1.5','18446744073709551616',quotes.subgraph]) {
+    const rows=[first[0].replace('rpc '+legacy.url,'rpc '+invalid)];
+    await assert.rejects(loadPlan({...setting,rows},card));
+  }
+});
+
 test('Base archive binds the book, selector and paid order to the exact CREATE',async()=>{
   const plan=await loadPlan(setting,card);
   const args=word(quotes.book)+quotes.runtime.slice(2)+current.selector.padEnd(64,'0');

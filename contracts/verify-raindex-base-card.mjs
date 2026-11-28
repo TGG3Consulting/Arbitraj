@@ -2,11 +2,11 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import sha3 from 'js-sha3';
 
-const [mode, compiledPath, cardPath] = process.argv.slice(2);
-assert(['--capture', '--check'].includes(mode) && compiledPath && cardPath);
+const [mode, compiledPath, cardPath, codesPath] = process.argv.slice(2);
+assert(['--capture', '--check'].includes(mode) && compiledPath && cardPath && codesPath);
 const compiled = JSON.parse(readFileSync(compiledPath));
 const archive = name => JSON.parse(gunzipSync(readFileSync(
   `tests/data/first_run_dex_2026-11-26/raindex_base_${name}.json.gz`)));
@@ -68,6 +68,11 @@ const card = {
 
 if (mode === '--check') {
   assert.deepEqual(JSON.parse(readFileSync(cardPath)), card, 'Raindex deployment card differs from the compiled constructor');
+  const codes = JSON.parse(gunzipSync(readFileSync(codesPath)));
+  assert.equal(codes.sourceBlock, card.sourceBlock);
+  assert.equal(codes.book, book.book);
+  assert.equal(keccak(Buffer.from(codes.bookCode.slice(2), 'hex')), directory.runtime);
+  assert.equal(codes.runtime, '0x' + runtime.toString('hex'));
 } else {
   // Only public canonical reads. The CREATE eth_call checks all constructor arguments against the actual book at H.
   async function confirm(endpoint) {
@@ -86,13 +91,15 @@ if (mode === '--check') {
     assert.equal(keccak(Buffer.from(code.slice(2), 'hex')), directory.runtime);
     const created = await rpc('eth_call', [{from:evidence.payer, data:'0x'+init.toString('hex')}, directory.anchor]);
     assert.equal(created.toLowerCase(), '0x' + runtime.toString('hex'));
+    return {sourceBlock:card.sourceBlock, book:book.book, bookCode:code.toLowerCase(), runtime:created.toLowerCase()};
   }
-  let confirmed = false;
+  let codes;
   for (const endpoint of ['https://base.gateway.tenderly.co','https://mainnet.base.org','https://base-rpc.publicnode.com']) {
-    try { await confirm(endpoint); confirmed = true; break; }
+    try { codes = await confirm(endpoint); break; }
     catch (error) { console.error(endpoint, String(error.message).slice(0,180)); }
   }
-  assert(confirmed, 'no canonical constructor confirmation');
+  assert(codes, 'no canonical constructor confirmation');
+  writeFileSync(codesPath, gzipSync(JSON.stringify(codes)));
   writeFileSync(cardPath, JSON.stringify(card) + '\n');
 }
 

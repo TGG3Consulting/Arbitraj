@@ -481,7 +481,7 @@ jobs:
       - name: Verify Base Raindex V6 wallet card from the pinned compiler and the captured constructor
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
-          node contracts/verify-raindex-base-card.mjs --check "$RUNNER_TEMP/raindex/RaindexWallet.json" ui/src/assets/raindex-base-create.json
+          node contracts/verify-raindex-base-card.mjs --check "$RUNNER_TEMP/raindex/RaindexWallet.json" ui/src/assets/raindex-base-create.json tests/data/first_run_dex_2026-11-26/raindex_base_v6_codes.json.gz
       - uses: actions/upload-artifact@v4
         with:
           name: raindex-wallet-compiler
@@ -1204,12 +1204,14 @@ jobs:
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
-          node contracts/verify-raindex-base-card.mjs --capture "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
+          node contracts/verify-raindex-base-card.mjs --capture "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/raindex/raindex_base_v6_codes.json.gz"
       - if: matrix.market == 'raindex-card-base'
         uses: actions/upload-artifact@v4
         with:
           name: raindex-base-create-compiler
-          path: ${{ runner.temp }}/raindex/RaindexWallet.json
+          path: |
+            ${{ runner.temp }}/raindex/RaindexWallet.json
+            ${{ runner.temp }}/raindex/raindex_base_v6_codes.json.gz
           if-no-files-found: error
       - if: startsWith(matrix.market, 'raindex-') && matrix.market != 'raindex-card-base'
         shell: bash

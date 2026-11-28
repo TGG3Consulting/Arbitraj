@@ -6,6 +6,8 @@ const address=/^0x(?!0{40}$)[0-9a-f]{40}$/i;
 const hash=/^0x(?!0{64}$)[0-9a-f]{64}$/i;
 const word=a=>a.slice(2).padStart(64,'0').toLowerCase();
 const jsonCall=(provider,method,params)=>provider.request({method,params});
+const moduleKeys=['module','cash_module'];
+const moduleKey=plan=>plan.moduleRole??'module';
 const roleNames=['market','pricing','registry'];
 
 function components(rows,plan) {
@@ -13,10 +15,10 @@ function components(rows,plan) {
   const roles={},addresses=new Set();
   for(const row of rows) {
     const [name,target,code,...tail]=String(row).trim().split(/\s+/);
-    if(![...roleNames,'module'].includes(name) || Object.hasOwn(roles,name) || tail.length ||
+    if(![...roleNames,...moduleKeys].includes(name) || Object.hasOwn(roles,name) || tail.length ||
         !address.test(target) || !hash.test(code) || addresses.has(target.toLowerCase())) throw Error('Проверьте поля и уникальность bopamm.roles.');
     const id=target.toLowerCase(), digest=code.toLowerCase();
-    if(name==='module' ? digest!==plan.runtimeKeccak :
+    if(moduleKeys.includes(name) ? (name===moduleKey(plan) && digest!==plan.runtimeKeccak) :
       (id!==plan.roles[name]?.address || digest!==plan.roles[name]?.hash)) throw Error('Привязка роли bopAMM расходится с архивом.');
     roles[name]=id;addresses.add(id);
   }
@@ -57,7 +59,7 @@ export async function checkBopModule(provider,p,module,at) {
 }
 
 export async function registeredBop(provider,p,rows) {
-  const {module}=components(rows,p);
+  const module=components(rows,p)[moduleKey(p)];
   if(!module) return null;
   if(BigInt(await jsonCall(provider,'eth_chainId',[]))!==1n) throw Error('Выберите Ethereum в кошельке.');
   const block=await jsonCall(provider,'eth_getBlockByNumber',['finalized',false]);
@@ -69,10 +71,10 @@ export async function registeredBop(provider,p,rows) {
 }
 
 export function addBop(rows,p,target) {
-  const {module}=components(rows,p);
+  const module=components(rows,p)[moduleKey(p)];
   if(!address.test(target) || (module && module!==target.toLowerCase())) throw Error('Уже задан другой модуль bopAMM.');
   if(module) return rows;
-  const result=[...rows,'module '+target.toLowerCase()+' '+p.runtimeKeccak];
+  const result=[...rows,moduleKey(p)+' '+target.toLowerCase()+' '+p.runtimeKeccak];
   components(result,p);
   return result;
 }

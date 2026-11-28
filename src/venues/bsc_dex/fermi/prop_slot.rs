@@ -74,6 +74,7 @@ impl Order {
                 self.minimum
             },
             leg: self.leg,
+            bop: None,
             prop: Some(Box::new(prop_wallet::Proof {
                 terms: self.terms,
                 payer: self.payer,
@@ -149,7 +150,7 @@ pub(super) async fn simulate(
 pub(super) async fn candidate(
     ctx: &Ctx,
     c: &super::indicative::Candidate,
-    t: prop_wallet::Terms,
+    t: super::prop_levels::Quoted,
     leg: B256,
 ) -> Option<slot::Proof> {
     let b = &c.book;
@@ -203,6 +204,11 @@ pub(super) async fn candidate(
     .await
     .ok()?;
     let (spent, output) = rows.into_iter().find(|(_, out)| !buy || *out >= wanted)?;
+    let minimum = if buy { wanted } else { output };
+    let t = match t {
+        super::prop_levels::Quoted::Bop(path) => return Some(path.proof(c, leg, spent, minimum)),
+        super::prop_levels::Quoted::Prop(t) => t,
+    };
     Some(
         Order {
             terms: t,

@@ -2,6 +2,9 @@
 //! https://docs.titanbuilder.xyz/propamms · https://buildernet.org/docs/api
 //! Сверяет chain/router/engine, родителя, номер и время слота до и после запроса.
 //! Операторская котировка приходит из общего шлюза. Штатный выбор и порядок отправки реализованы в дочерних модулях.
+mod bop_cash;
+mod bop_receipt;
+mod bop_versions;
 pub(super) mod bopamm;
 pub(super) mod bopamm_profile;
 pub(super) mod prop_market;
@@ -209,6 +212,7 @@ pub(super) async fn source_preview(ctx: &Ctx, req: Request) -> GatewayResult<Pre
     let (received, gas_used) = if let Some(executor) = executor {
         let leg = keccak256((head.hash, who, req.input, req.output, amount).abi_encode());
         let proof = slot::Proof {
+            bop: None,
             prop: None,
             builder: builder.name().into(),
             parent: head.hash,

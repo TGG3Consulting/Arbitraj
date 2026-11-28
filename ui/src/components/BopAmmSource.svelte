@@ -5,6 +5,7 @@
   import {addBop,registeredBop} from '../lib/bopammDeploy.js';
   let {venue,wallet}=$props();
   const chain=$derived(ethereumNetwork(venue,store.schema?.dex_profiles,store.values));
+  const cash=()=>import('../assets/bopamm-cash-ethereum-create.json');
   const load=()=>import('../assets/bopamm-ethereum-create.json');
 </script>
 
@@ -12,6 +13,9 @@
   {#key [venue,wallet,chain].join(':')}
     <SourceWalletModule {venue} {wallet} {chain} {load} shared={true} roleRows={true}
       source="bopamm" version="1" kind="bopamm" label="bopAMM" setting="bopamm.roles"
+      addModule={addBop} registeredOwnerModule={registeredBop}/>
+    <SourceWalletModule {venue} {wallet} {chain} load={cash} roleName="cash_module" shared={true} roleRows={true}
+      source="bopamm" version="2" kind="bopamm" label="bopAMM и Uniswap V3 через USDC" setting="bopamm.roles"
       addModule={addBop} registeredOwnerModule={registeredBop}/>
   {/key}
 {/if}

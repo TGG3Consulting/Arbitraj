@@ -116,7 +116,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
                 }) {
                     return None;
                 }
-                if c.book.prop.is_none()
+                if super::prop_levels::Quoted::book(&c.book).is_none()
                     && !improves(
                         side,
                         hashflow::routing::total(p, &c.quote).await?,

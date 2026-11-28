@@ -7,6 +7,7 @@ pub(super) fn fill(
     receipt: &send::receipt::Receipt,
     router: alloy::primitives::Address,
 ) -> Option<(U256, U256)> {
+    if proof.bop.is_some() { return super::bop_receipt::fill(proof,receipt,router); }
     let one = |who, topic| {
         let mut logs = receipt
             .logs
@@ -82,6 +83,7 @@ mod tests {
         for c in cases {
             let strval = |k: &str| c[k].as_str().unwrap();
             let proof = Proof {
+                bop: None,
                 prop: None,
                 builder: strval("builder").into(),
                 parent: strval("parent").parse().unwrap(),

@@ -69,3 +69,17 @@ test('Finalized deployment and reuse verify the module and every configured role
     await assert.rejects(deployed(node,p,node.hash,null));
   }
 });
+
+test('The two-leg wallet registers its own role and preserves an existing direct module',async()=>{
+  const cash=JSON.parse(read('../src/assets/bopamm-cash-ethereum-create.json'));
+  const cashFact=JSON.parse(gunzipSync(read(dir+'bopamm_ethereum_cash_wallet.json.gz')));
+  const direct=addBop(rows,card,module);
+  const other=cashFact.frames.flatMap(f=>f.cases).map(c=>c.compound.executor).find(x=>x && x!==module);
+  const p=await loadPlan({...settings,rows:direct},cash);
+  assert(await sameRuntime(cashFact.runtime,p));
+  const both=addBop(direct,p,other);
+  assert.deepEqual(both.slice(0,-1),direct);
+  assert.equal(both.at(-1),'cash_module '+other+' '+cash.runtimeKeccak);
+  assert.deepEqual(addBop(both,p,other),both);
+  await assert.rejects(loadPlan({...settings,chainId:8453},cash));
+});

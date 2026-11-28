@@ -992,6 +992,20 @@ jobs:
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashWallet
           python -m pip install --quiet eth-account==0.13.7
           python scripts/record_bopamm_cash.py "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/market.json" --production
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        uses: dtolnay/rust-toolchain@1.97.0
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        run: |
+          npm ci --prefix ui --no-audit --no-fund
+          node --test ui/tests/bopammDeploy.test.js
+          npm run build --prefix ui
+          cargo test --locked --lib venues::bsc_dex::fermi::
+          cp ui/src/assets/bopamm-cash-ethereum-create.json "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bopamm-cash-wallet-card-ethereum'
         run: |
           npm ci --prefix contracts

@@ -13,11 +13,13 @@ pub(super) struct Role {
     pub(super) address: Address,
     pub(super) hash: B256,
 }
+#[derive(Clone, Copy)]
 pub(super) struct Profile {
     pub(super) market: Role,
     pub(super) pricing: Role,
     pub(super) registry: Role,
     pub(super) module: Option<Role>,
+    pub(super) cash_module: Option<Role>,
 }
 impl Profile {
     pub(super) fn parse(rows: &Value) -> Option<Self> {
@@ -28,8 +30,10 @@ impl Profile {
             let role = fields.next()?;
             let address: Address = fields.next()?.parse().ok()?;
             let hash: B256 = fields.next()?.parse().ok()?;
-            if !matches!(role, "market" | "pricing" | "registry" | "module")
-                || fields.next().is_some()
+            if !matches!(
+                role,
+                "market" | "pricing" | "registry" | "module" | "cash_module"
+            ) || fields.next().is_some()
                 || address.is_zero()
                 || hash.is_zero()
                 || !accounts.insert(address)
@@ -43,6 +47,7 @@ impl Profile {
             pricing: roles.remove("pricing")?,
             registry: roles.remove("registry")?,
             module: roles.remove("module"),
+            cash_module: roles.remove("cash_module"),
         })
     }
 

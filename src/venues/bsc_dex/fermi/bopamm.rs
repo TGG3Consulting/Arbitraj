@@ -24,7 +24,7 @@ alloy::sol! {
 }
 
 impl Profile {
-    async fn verify(&self, ctx: &Ctx, h: B256, firm: Option<Role>) -> GatewayResult<()> {
+    pub(super) async fn verify(&self, ctx: &Ctx, h: B256, firm: Option<Role>) -> GatewayResult<()> {
         let verify = async |r: Role| {
             let code: Bytes = rpc::call(
                 ctx,
@@ -71,7 +71,7 @@ impl Profile {
     }
 }
 
-fn frame(builder: Builder, result: &Value, p: &Profile) -> Option<Frame> {
+pub(super) fn frame(builder: Builder, result: &Value, p: &Profile) -> Option<Frame> {
     let accepts = |s: &str| {
         s.parse::<Address>()
             .ok()

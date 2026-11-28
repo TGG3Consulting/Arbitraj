@@ -46,7 +46,7 @@ pub(super) async fn submit(
         {
             return Err(pending(&entry.lookup));
         }
-        if original.as_ref().is_some_and(|m| m.order.prop.is_some()) {
+        if original.as_ref().is_some_and(|m| m.order.observed()) {
             return reconcile(p, req, &entry.lookup)
                 .await?
                 .ok_or_else(|| pending(&entry.lookup));
@@ -95,7 +95,7 @@ pub(super) async fn submit(
     proof.leg = keccak256(key.as_bytes());
     let (amount, proceeds, gas) =
         slot_config::simulate(ctx, &q.book, &proof, (q.fees.max_fee, q.fees.tip)).await?;
-    let required = proof.prop.as_ref().map_or(q.received, |r| r.minimum);
+    let required = proof.minimum().unwrap_or(q.received);
     if amount > q.spent || proceeds < required || gas > q.gas_limit {
         return Err(ctx.err(
             ErrorCode::QuoteMismatch,

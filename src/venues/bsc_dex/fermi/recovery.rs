@@ -64,7 +64,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
-    if o.prop.is_none()
+    if !o.observed()
         && let Some(intent::Outcome::Order(out)) = &entry.result
     {
         resolve::release_if_ours(p, hash, Some(nonce), false).await;
@@ -105,8 +105,12 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
+    if let Some(order)=o.bop {
+        let code:alloy::primitives::Bytes=super::rpc::call(ctx,"eth_getCode",json!([o.executor,{"blockHash":block,"requireCanonical":true}])).await?;
+        if code.is_empty() || alloy::primitives::keccak256(code)!=order.runtime {return Err(unknown());}
+    }
     let ok = r.receipt.status == U64::from(1);
-    if o.prop.is_some() {
+    if o.observed() {
         if ok && parse.outer_account.is_some() && crate::gateway::settlement_proofs::active() {
             send::canonical_receipt::observe(ctx, hash, &r.receipt)
                 .await
@@ -117,7 +121,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
                 .map_err(|_| unknown())?;
         }
     }
-    if o.prop.is_some() {
+    if o.observed() {
         let filled = super::canonical(
             ctx,
             block,

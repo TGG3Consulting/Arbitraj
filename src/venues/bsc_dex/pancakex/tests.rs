@@ -266,3 +266,76 @@ fn ethereum_usdt_quotes_bind_original_assets_and_fill_through_the_pinned_reactor
         }
     }
 }
+
+#[test]
+fn standalone_fill_recovers_the_original_eoa_and_the_two_canonical_wallet_changes() {
+    let book = read(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/pancakex_v1_ethereum_net.json.gz"
+    ));
+    let archived = serde_json::from_slice::<Value>(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/pancakex_profiles.json"
+    ))
+    .unwrap();
+    let profile = profile::Profile::from_rows(
+        1,
+        &serde_json::from_value::<Vec<String>>(archived["ethereum"]["contracts"].clone()).unwrap(),
+    )
+    .unwrap();
+    let token = archived["ethereum"]["tokens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|r| assets::AssetCode::parse(r.as_str()?, 1))
+        .find(|r| matches!(r, assets::AssetCode::TetherNet(_)))
+        .unwrap();
+    let rows = book["payments"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    for row in rows {
+        let o = &row["order"];
+        let req = Request {
+            owner: field(&o["offerer"]),
+            input: field(&o["input"]["token"]),
+            output: token.address(),
+            amount: field(&row["walletDebit"]),
+            minimum: U256::ONE,
+            exact_output: false,
+            now: field::<U256>(&row["header"]["timestamp"]).to(),
+        };
+        let offer = client::Offer {
+            filler: field(&o["filler"]),
+            id: "recorded".into(),
+            version: "v1".into(),
+            encoded: field(&o["encodeOrder"]),
+            hash: field(&o["hash"]),
+        };
+        let terms = offer.terms(&profile, &req).unwrap();
+        assert_eq!(terms.roles.reactor, profile.standalone_v1.unwrap().address);
+        assert_eq!(
+            field::<Signature>(&o["signature"])
+                .recover_address_from_prehash(&terms.digest)
+                .unwrap(),
+            req.owner
+        );
+        let logs =
+            serde_json::from_value::<Vec<alloy::rpc::types::Log>>(row["receipt"]["logs"].clone())
+                .unwrap();
+        let cash = terms.cash_net(&logs, &[], false, &token).unwrap();
+        let val = |state: &str, key: &str| field::<U256>(&row[state][key]["result"]);
+        assert_eq!(
+            cash.received,
+            val("after", "outputBalance") - val("before", "outputBalance")
+        );
+        assert_eq!(
+            cash.paid,
+            val("before", "inputBalance") - val("after", "inputBalance")
+        );
+        assert_eq!(cash.received, field::<U256>(&row["walletCredit"]));
+        assert_eq!(row["receipt"]["blockHash"], row["header"]["hash"]);
+        assert_eq!(row["receipt"]["transactionHash"], o["transactionHash"]);
+        let bit = (terms.nonce & U256::from(255)).to::<usize>();
+        assert!(!val("before", "nonceBitmap").bit(bit));
+        assert!(val("after", "nonceBitmap").bit(bit));
+        assert!(terms.cash_net(&[], &[], false, &token).is_none());
+        assert!(terms.cash_net(&logs, &[], true, &token).is_none());
+    }
+}

@@ -16,6 +16,7 @@ async fn fresh_events_reach_the_reader_while_deployment_backfill_is_still_runnin
     let height = |r:&Value| u64::from_str_radix(r["blockNumber"].as_str().unwrap().trim_start_matches("0x"),16).unwrap();
     let events = [add["log"].clone(),remove["log"].clone()];
     let (first, last)=(height(&events[0]),height(&events[1]));
+    let chain=remove["chain"].as_u64().unwrap();
     let id: B256 = serde_json::from_value(remove["hash"].clone()).unwrap();
     let book: Address = serde_json::from_value(remove["book"].clone()).unwrap();
     let tip = Arc::new(AtomicU64::new(first));
@@ -45,6 +46,7 @@ async fn fresh_events_reach_the_reader_while_deployment_backfill_is_still_runnin
         async move {
             let num=|s:&str|u64::from_str_radix(s.trim_start_matches("0x"),16).unwrap();
             let result=match q["method"].as_str().unwrap() {
+                "eth_chainId" => json!(format!("{chain:#x}")),
                 "eth_getBlockByNumber" => {
                     let tag=q["params"][0].as_str().unwrap();
                     let n=if tag=="latest" {tip.load(Ordering::Relaxed)} else {num(tag)};

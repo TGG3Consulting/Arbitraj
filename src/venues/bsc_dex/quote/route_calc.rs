@@ -30,6 +30,9 @@ use super::path::{Hop, Path, hop};
 use super::pool_quote;
 use super::select::Usable;
 
+#[path = "route_buy_forward.rs"]
+mod buy_forward;
+
 /// Один пул маршрута в порядке исполнения: пул, его допуск (крючок, газ) и токены/decimals входа и выхода.
 #[derive(Clone)]
 pub struct Leg {
@@ -160,13 +163,17 @@ pub(super) fn buy(
         pcts[i] = pct;
         swaps[i] = Some(s);
     }
-    let swaps = complete(ctx, swaps)?;
+    let mut swaps = complete(ctx, swaps)?;
+    let budget = swaps[0].amount_in;
+    if legs.iter().skip(1).any(buy_forward::legacy_spectra) {
+        buy_forward::reconcile(ctx, legs, &mut swaps, &mut pcts)?;
+    }
     let last = &swaps[n - 1];
     let k_last = tax_keep * keep(pcts[n - 1]);
     let coins = (num::to_decimal(last.amount_out, legs[n - 1].dec_out).ok_or_else(|| bad(ctx))?
         * k_last)
         .min(qty);
-    let usdt = num::to_decimal(swaps[0].amount_in, legs[0].dec_in).ok_or_else(|| bad(ctx))?;
+    let usdt = num::to_decimal(budget, legs[0].dec_in).ok_or_else(|| bad(ctx))?;
     build(ctx, legs, swaps, &pcts, (coins, usdt))
 }
 

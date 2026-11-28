@@ -6,7 +6,7 @@ use arb::core::types::{Pool, PoolRef, PoolState, Side, VenueId};
 use arb::venues::bsc_dex::{
     ctx::{Ctx, Place}, exec::executor::{abi::ArbExecutor, entry}, num,
     pools::{families, load_crypto_v1, load_curve_ng, registry::Entry},
-    quote::{pool_quote, route_calc, select::Usable},
+    quote::{pool_quote, route_calc, route_first, select::Usable},
 };
 use rust_decimal::Decimal;
 use serde_json::Value;
@@ -38,6 +38,24 @@ fn state(ctx: &Ctx, r: &Value, pool: Address, coins: [Address; 2], stamp: u64) -
     load_curve_ng::state(ctx, &load_curve_ng::Raw { pool, n: 2, got }, pair).unwrap()
 }
 
+/// Восстанавливает обе физические валюты и состояние зарегистрированного пула на высоте записи.
+fn recorded_entry(ctx: &Ctx, d: &Value, row: &Value, math: &Value, profiles: &[Value]) -> (Entry, [Address; 2], [u8; 2]) {
+    let profile = profiles.iter().find(|p| p["settings"]["dex.factory"] == row["factory"]).unwrap();
+    let f = families::make(profile["id"].as_str().unwrap(), profile["settings"]["dex.kind"].as_str().unwrap()).unwrap();
+    let coins: [Address; 2] = ["coin0","coin1"].map(|k| row[k].as_str().unwrap().parse().unwrap());
+    let dec = ["decimals0","decimals1"].map(|k| row[k].as_u64().unwrap() as u8);
+    let addr = row["pool"].as_str().unwrap().parse().unwrap();
+    let block = d["block"].as_u64().unwrap();
+    let stamp = d["timestamp"].as_u64().unwrap();
+    let pool = Pool { venue: VenueId("base_dex".into()), family: f.id.into(), kind: f.kind,
+        reference: PoolRef::Contract(addr), token0: coins[0].min(coins[1]), token1: coins[0].max(coins[1]),
+        fee_pips: None, tick_spacing: None, bin_step: None, hooks: None, state: state(ctx, math, addr, coins, stamp),
+        block, received_at: chrono::DateTime::from_timestamp(stamp as i64, 0).unwrap() };
+    let e = Entry { family: f, pool, ticker: "PT".into(), coin: coins[1], usdt: coins[0],
+        key: None, ticks: None, bins: None, synced_block: block, synced_log: None, valid: true, asleep: false, state_gen: 0 };
+    (e, coins, dec)
+}
+
 #[tokio::test]
 async fn target_buy_and_forward_sale_use_registered_currencies_and_the_paid_v5_step() {
     let d = archive(include_bytes!("../data/first_run_dex_2026-11-26/spectra_base_directory.json.gz"));
@@ -62,19 +80,7 @@ async fn target_buy_and_forward_sale_use_registered_currencies_and_the_paid_v5_s
         let math = &m["markets"][find(&m)];
         let ws = &w["markets"][find(&w)]["wallets"];
         let wallet = ws.as_array().unwrap().iter().find(|r| r["mode"] == "v5" && r["legs"][1]["stage"] == "accepted").unwrap();
-        let profile = profiles.iter().find(|p| p["settings"]["dex.factory"] == row["factory"]).unwrap();
-        let f = families::make(profile["id"].as_str().unwrap(), profile["settings"]["dex.kind"].as_str().unwrap()).unwrap();
-        let coins: [Address; 2] = ["coin0","coin1"].map(|k| row[k].as_str().unwrap().parse().unwrap());
-        let dec = ["decimals0","decimals1"].map(|k| row[k].as_u64().unwrap() as u8);
-        let addr = pool.parse().unwrap();
-        let block = d["block"].as_u64().unwrap();
-        let stamp = d["timestamp"].as_u64().unwrap();
-        let pool_data = Pool { venue: VenueId("base_dex".into()), family: f.id.into(), kind: f.kind,
-            reference: PoolRef::Contract(addr), token0: coins[0].min(coins[1]), token1: coins[0].max(coins[1]),
-            fee_pips: None, tick_spacing: None, bin_step: None, hooks: None, state: state(&ctx, math, addr, coins, stamp),
-            block, received_at: chrono::DateTime::from_timestamp(stamp as i64, 0).unwrap() };
-        let e = Entry { family: f, pool: pool_data, ticker: "PT".into(), coin: coins[1], usdt: coins[0],
-            key: None, ticks: None, bins: None, synced_block: block, synced_log: None, valid: true, asleep: false, state_gen: 0 };
+        let (e, coins, dec) = recorded_entry(&ctx, &d, row, math, profiles);
         let underlying = row["underlying"].as_str().unwrap().parse().unwrap();
         for exact_in in [false, true] {
             assert!(pool_quote::swap(&ctx,&e,underlying,exact_in,U256::ONE).is_err());
@@ -125,4 +131,59 @@ async fn target_buy_and_forward_sale_use_registered_currencies_and_the_paid_v5_s
     assert!(left.amount_out >= right.amount_in);
     let terminal = pool_quote::swap(&ctx, &second.entry, second.token_in, true, left.amount_out).unwrap();
     assert!(terminal.amount_out >= target);
+}
+
+/// Два зарегистрированных PT с общим IBT. На одном блоке соседние выплаты последнего пула
+/// разошлись на семь атомов. Проверяет прямую покупку и приём рассчитанного первого шага.
+#[tokio::test]
+async fn buy_carries_credited_ibt_into_legacy_spectra_with_or_without_first_cache() {
+    let d = archive(include_bytes!("../data/first_run_dex_2026-11-26/spectra_base_directory.json.gz"));
+    let m = archive(include_bytes!("../data/first_run_dex_2026-11-26/spectra_base_math.json.gz"));
+    let samples: Value = serde_json::from_str(include_str!("../data/first_run_dex_2026-11-26/spectra_base_forward_hops.json")).unwrap();
+    let profiles: Value = serde_json::from_str(include_str!("../../config/first_run_dex.json")).unwrap();
+    assert_eq!(samples["selector"], d["selector"]);
+    assert_eq!(samples["block"], d["block"]);
+    let mut ctx = multi_common::ctx("spectra_forward").await;
+    ctx.place = Place { id: "base_dex", all: &["base_dex"] };
+    let rows = samples["calls"].as_array().unwrap();
+    let mut legs = Vec::new();
+    let mut swaps = Vec::new();
+    for (n, r) in rows.iter().enumerate() {
+        assert_eq!(r["request"]["params"][1], d["selector"]);
+        let row = d["markets"].as_array().unwrap().iter().find(|v| v["pool"] == r["pool"]).unwrap();
+        let math = m["markets"].as_array().unwrap().iter().find(|v| v["pool"] == r["pool"]).unwrap();
+        assert_eq!(r["factory"], row["factory"]);
+        let (e, coins, dec) = recorded_entry(&ctx, &d, row, math, profiles.as_array().unwrap());
+        let i = usize::from(n == 0);
+        let j = 1 - i;
+        assert_eq!(r["tokenIn"].as_str().unwrap().parse::<Address>().unwrap(), coins[i]);
+        assert_eq!(r["tokenOut"].as_str().unwrap().parse::<Address>().unwrap(), coins[j]);
+        let dx = number(&r["input"]);
+        let s = pool_quote::swap(&ctx, &e, coins[i], true, dx).unwrap();
+        assert_eq!(s.amount_out, number(&r["output"]));
+        assert_eq!(s.amount_out, U256::from_str_radix(&r["response"]["result"].as_str().unwrap()[2..], 16).unwrap());
+        swaps.push(s);
+        if n < 2 {
+            legs.push(route_calc::Leg { entry:e, usable:Usable { one_share_only:false, gas:0,
+                hook_pct:Decimal::ZERO,tax_pct:Decimal::ZERO,hook:Default::default() },
+                token_in:coins[i],token_out:coins[j],dec_in:dec[i],dec_out:dec[j] });
+        }
+    }
+    assert_eq!(legs[0].token_out, legs[1].token_in);
+    assert_eq!(swaps[0].amount_out, swaps[2].amount_in);
+    assert_eq!(swaps[2].amount_in, swaps[1].amount_in + U256::ONE);
+    assert_eq!(swaps[1].amount_out, swaps[2].amount_out + U256::from(7));
+    let qty = num::to_decimal(swaps[1].amount_out, legs[1].dec_out).unwrap();
+    let first = route_first::first(&ctx, &legs, Side::Buy, qty, Decimal::ONE).unwrap();
+    let measured = (Decimal::ZERO, swaps[1].clone());
+    for cache in [None, Some(&first), Some(&measured)] {
+        let path = route_calc::eval_from(&ctx, &legs, Side::Buy, qty, Decimal::ONE, cache).unwrap();
+        let paid = path.hops[0].swapped.amount_in;
+        let left = pool_quote::swap(&ctx, &legs[0].entry, legs[0].token_in, true, paid).unwrap();
+        let right = pool_quote::swap(&ctx, &legs[1].entry, legs[1].token_in, true, left.amount_out).unwrap();
+        assert_eq!(path.hops[1].swapped.amount_in, left.amount_out);
+        assert_eq!(path.hops[1].swapped.amount_out, right.amount_out);
+        assert_eq!(path.coins, qty.min(num::to_decimal(right.amount_out, legs[1].dec_out).unwrap()));
+        assert_eq!(path.usdt, num::to_decimal(paid, legs[0].dec_in).unwrap());
+    }
 }

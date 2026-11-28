@@ -16,8 +16,12 @@ jobs:
       - name: Compare 216 physical exact-input measurements
         env:
           SPECTRA_REPORT: ${{ runner.temp }}/report.json
-        run: cargo test --locked --lib recorded_targets_bound_the_forward_calls_for_both_pool_families
+        run: cargo test --locked --lib control_all_paid_inputs
       - uses: actions/upload-artifact@v4
         with:
           name: spectra-inputs
           path: ${{ runner.temp }}/report.json
+      - name: Require correct wallet amounts and actual intermediate debits
+        run: cargo test --locked --test base_spectra_math
+      - name: Check the known input bound and cold search costs on both families
+        run: cargo test --locked --lib quote::spectra::tests

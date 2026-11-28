@@ -125,12 +125,12 @@ impl FrozenRoles {
     }
 }
 
-fn asset_rows(chain: u64, rows: &[String]) -> Option<Vec<Asset>> {
+pub(super) fn asset_rows(chain: u64, rows: &[String]) -> Option<Vec<Asset>> {
     let mut assets = Vec::new();
     let mut seen = HashSet::new();
     for row in rows {
         let fields: Vec<_> = row.split_whitespace().collect();
-        let [net, name, addr, hash, remaining @ ..] = fields[..] else {
+        let [net, name, addr, hash, ref remaining @ ..] = fields[..] else {
             return None;
         };
         if net.parse::<u64>().ok()? != chain {

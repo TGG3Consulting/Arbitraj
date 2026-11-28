@@ -56,13 +56,10 @@ mod tests{
         let median=|list:&mut Vec<u64>|{list.sort_unstable();list[(list.len()-1)/2]};
         assert_eq!(sampled("unknown","unknown"),median(&mut samples));
         assert_eq!(groups.len(),7);
-        let id=|a:Address|match a {
-            alloy_primitives::address!("dac17f958d2ee523a2206206994597c13d831ec7")=>"tether-net",
-            alloy_primitives::address!("a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")=>"fiat-usdc",
-            alloy_primitives::address!("1f9840a85d5af5bf1d1762f925bdaddc4201f984")=>"exact-uni",
-            alloy_primitives::address!("c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2")=>"wrapped-native",
-            _=>panic!("unexpected asset"),
-        };
+        let evidence:Value=serde_json::from_str(include_str!("../../../../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json")).unwrap();
+        let rows:Vec<String>=serde_json::from_value(evidence["assets"].clone()).unwrap();
+        let tokens=super::super::roles::asset_rows(evidence["chain"].as_u64().unwrap(), &rows).unwrap();
+        let id=|address:Address|tokens.iter().find(|row|row.token.address==address).unwrap().id.as_str();
         for ((i,o),mut obs) in groups {assert_eq!(sampled(id(i),id(o)),median(&mut obs));}
     }
 }

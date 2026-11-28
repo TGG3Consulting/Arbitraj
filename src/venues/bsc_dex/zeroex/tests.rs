@@ -75,6 +75,20 @@ fn ethereum_holder_module_binds_the_recorded_payment_and_both_wallet_deltas() {
         extra.push(logs.last().unwrap().clone());
         assert_eq!(proof.amounts(&extra), None);
         assert_eq!(proof.amounts(&logs[..logs.len() - 1]), None);
+        // При лучшей фактической выплате в план попадает гарантированный объём.
+        let mut conservative = proof.clone();
+        conservative.minimum -= U256::ONE;
+        let t = super::routing::Ticket {
+            proof: conservative,
+            data: data.clone().into(),
+            gas: case["gas"].as_u64().unwrap(),
+            generation: 0,
+            di: 18,
+            dout: 6,
+        };
+        assert_eq!(t.units(true).0, credit - U256::ONE);
+        assert_eq!(t.units(false).1, credit - U256::ONE);
+        assert_eq!(t.proof.amounts(&logs), Some((debit, credit)));
         proof.minimum += U256::ONE;
         assert_eq!(proof.amounts(&logs), None);
         proof.minimum -= U256::ONE;

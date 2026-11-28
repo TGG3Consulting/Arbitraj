@@ -1659,6 +1659,9 @@ id Basin у GeckoTerminal НЕ сверен (api.geckoterminal.com из сред
 | `venue.bsc_network` | Venue eth_dex | `ethereum` | src/core/transfers.rs, own_net; src/venues/bsc_dex/coins.rs; src/venues/bsc_dex/wallet/transfer.rs; Снимок настроек 25.11.2026, tests/data/first_run_dex_2026-11-26/first_run_operating_evidence.json, области bsc_dex и arb_dex |
 | `venue.quote_asset` | Venue base_dex | `USDC` | docs/BASE_ETHEREUM_SETTINGS.md, расчётная монета и сверка конверсии; src/venues/bsc_dex/tokens.rs, usdt; https://developers.circle.com/stablecoins/usdc-contract-addresses |
 | `venue.quote_asset` | Venue eth_dex | `USDT` | docs/BASE_ETHEREUM_SETTINGS.md, расчётная монета и сверка конверсии; src/venues/bsc_dex/tokens.rs, usdt; https://tether.to/en/supported-protocols/ |
+| `zeroex.trading` | Venue eth_dex | `false` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |
+| `zeroex.gas_budget_native` | Venue eth_dex | `0.00012` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |
+| `zeroex.wallet` | Venue eth_dex | Задаёт владелец: разместите общий модуль Ethereum кнопкой в карточке 0x. Адрес запишется после подтверждения кошельком. | ui/src/assets/zeroex-ethereum-create.json |
 | `zeroex.api_key` | Секреты | Задаёт владелец. Создайте свой ключ приложения в кабинете 0x. | https://dashboard.0x.org/ |
 | `zeroex.base_url` | Venue base_dex | `https://api.0x.org` | https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api |
 | `zeroex.base_url` | Venue eth_dex | `https://api.0x.org` | https://docs.0x.org/docs/introduction/quickstart/swap-tokens-with-0x-swap-api |

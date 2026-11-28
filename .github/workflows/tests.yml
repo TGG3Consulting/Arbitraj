@@ -1210,12 +1210,19 @@ jobs:
       - if: matrix.market == 'zeroex-wallet-ethereum'
         uses: Swatinem/rust-cache@v2
       - if: matrix.market == 'zeroex-wallet-ethereum'
-        run: cargo test --locked --lib zeroex
+        run: |
+          cargo test --locked --lib zeroex
+          cargo test --locked --lib ethereum_holder_separates_paid_spot_actions
+          cargo test --locked --test settings_cases_guard
       - if: matrix.market == 'zeroex-wallet-ethereum'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/zeroex" ZeroExWallet
           python -m pip install --quiet eth-account==0.13.7
+          python scripts/check_zeroex_wallet_card.py "$RUNNER_TEMP/zeroex/ZeroExWallet.json"
+          npm ci --prefix ui --no-audit --no-fund
+          npm --prefix ui run build
+          node --test ui/tests/zeroexDeploy.test.js
           python scripts/record_zeroex_ethereum_wallet.py "$RUNNER_TEMP/zeroex/ZeroExWallet.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'textile-wallet-')
         env:

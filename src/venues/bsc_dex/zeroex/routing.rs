@@ -26,18 +26,18 @@ use std::{
 pub(in crate::venues::bsc_dex) struct Ticket {
     pub proof: Saved,
     pub data: Bytes,
-    pub received: U256,
     pub gas: u64,
     pub generation: u64,
     pub di: u8,
     pub dout: u8,
 }
 impl Ticket {
+    // Ядро планирует гарантированный выход. Возможный избыток фиксируется по квитанции.
     pub(super) fn units(&self, buy: bool) -> (U256, U256, u8, u8) {
         if buy {
-            (self.received, self.proof.debit, self.dout, self.di)
+            (self.proof.minimum, self.proof.debit, self.dout, self.di)
         } else {
-            (self.proof.debit, self.received, self.di, self.dout)
+            (self.proof.debit, self.proof.minimum, self.di, self.dout)
         }
     }
 }
@@ -156,7 +156,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
         };
         let gas = if quote_stage::is_final() {
             match t.proof.measure(&p.ctx, head, &t.data).await {
-                Ok((out, g)) if out == t.received => g,
+                Ok((out, g)) if out >= t.proof.minimum => g,
                 _ => continue,
             }
         } else {

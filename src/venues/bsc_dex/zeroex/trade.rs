@@ -79,7 +79,7 @@ pub(in crate::venues::bsc_dex) async fn trade(
     let h = white_state::head(ctx, "latest").await?;
     profile::verify(ctx, &h.selector(), t.proof.call.module, t.proof.settler).await?;
     let (received, _) = t.proof.measure(ctx, h, &t.data).await?;
-    if received != t.received || !valid() {
+    if received < t.proof.minimum || !valid() {
         return Err(reject());
     }
     let decs = (cd, sd);

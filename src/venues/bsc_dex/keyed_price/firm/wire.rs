@@ -95,6 +95,39 @@ mod tests {
     use alloy_primitives::B256;
     use flate2::read::GzDecoder;
     #[test]
+    fn ethereum_holder_separates_paid_spot_actions_from_bridge_and_foreign_recipients() {
+        let archive:Value=serde_json::from_reader(GzDecoder::new(&include_bytes!(
+            "../../../../../tests/data/first_run_dex_2026-11-26/zeroex_ethereum_payments.json.gz")[..])).unwrap();
+        let holder="0x0000000000001ff3684f28c67538d4d072c22734".parse::<Address>().unwrap();
+        let usdt="0xdac17f958d2ee523a2206206994597c13d831ec7";
+        let mut counts=[0_u32;5];
+        let rows=archive["transactions"].as_array().unwrap();
+        assert_eq!(rows.len(),197);
+        for r in rows {
+            for leg in r["legs"].as_array().unwrap() {
+                counts[3]+=1;
+                if leg["makerInput"]["address"]==usdt || leg["makerOutput"]["address"]==usdt {counts[4]+=1;}
+            }
+            if r["target"].as_str().and_then(|x|x.parse::<Address>().ok())!=Some(holder) || r["input"].is_null(){continue;}
+            let raw=r["input"].as_str().unwrap().parse::<Bytes>().unwrap();
+            let outer=IAllowanceHolder::execCall::abi_decode_validate(&raw).unwrap();
+            let Ok(inner)=ISettler::executeCall::abi_decode_validate(&outer.data) else {
+                assert_eq!(outer.data[..4],[0x3c,0xdf,0xaf,0x67]);
+                counts[0]+=1;
+                continue;
+            };
+            let payer=r["payer"].as_str().unwrap().parse::<Address>().unwrap();
+            let t=Ticket {owner:payer,input:outer.token,output:inner.slippage.buyToken,amount:outer.amount,
+                minimum:inner.slippage.minAmountOut,fee:None,target:holder,runtime:B256::ZERO,generation:0};
+            if inner.slippage.recipient==payer {
+                assert_eq!(settler(&t,&raw),Some(outer.target));counts[1]+=1;
+            }else{
+                assert_eq!(settler(&t,&raw),None);counts[2]+=1;
+            }
+        }
+        assert_eq!(counts,[6,12,1,165,65]);
+    }
+    #[test]
     fn canonical_holder_call_binds_real_spender_payee_output_and_floor() {
         let f:Value=serde_json::from_reader(GzDecoder::new(&include_bytes!(
             "../../../../../tests/data/first_run_dex_2026-11-26/kipseli_zeroex_settled_traces.json.gz")[..])).unwrap();

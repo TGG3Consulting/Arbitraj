@@ -28,12 +28,66 @@ pub(super) fn target(
     if reserve_in.is_zero() { return None; }
     let seed = full_math::mul_div_up(wanted, reserve_in, reserve_out)?;
     let cap = U256::MAX - reserve_in;
-    let (paid, received) = first_input(seed, cap, wanted, payout)?;
+    let (paid, received) = match &e.pool.state {
+        PoolState::Crypto(data) => crypto_input(seed, cap, wanted, data, usize::from(i), payout)?,
+        _ => first_input(seed, cap, wanted, payout)?,
+    };
     (received <= reserve_out).then_some(Swapped {
         amount_in: paid,
         amount_out: received,
         complete: true,
     })
+}
+
+/// В legacy Curve целочисленный `newton_y` может уменьшить выплату при большем входе.
+/// Масштаб проб берём из первой нормировки K0_i = 2·10^18·xp[i]/D самого контракта.
+/// Каждая принятая цена проверяется прямой функцией; шаг нормировки задаёт сетку проб.
+fn crypto_input(
+    seed: U256, cap: U256, wanted: U256, data: &crate::core::types::CryptoData, i: usize,
+    payout: impl Fn(U256) -> Option<U256>,
+) -> Option<(U256, U256)> {
+    let (mut best, mut out) = first_input(seed, cap, wanted, &payout)?;
+    if best == U256::ONE { return Some((best, out)); }
+    let scale = if i == 0 { U256::from(10u64.pow(18)) } else { *data.price_scale.get(i - 1)? };
+    let precision = *data.precisions.get(i)?;
+    if precision.is_zero() || scale.is_zero() { return None; }
+    let quantum = precision.checked_mul(scale).and_then(|v| v.checked_mul(U256::from(2)))
+        .map_or(U256::ONE, |den| data.d.div_ceil(den).max(U256::ONE));
+    let start = best;
+    let window = quantum.saturating_mul(U256::from(4)).min(start - U256::ONE);
+    let mut previous = U256::ZERO;
+    for k in 1..=40u64 {
+        // Входы на единицах ERC-20 и равномерно по окрестности первой нормировки.
+        let delta = if k <= 8 { U256::from(k) } else {
+            full_math::mul_div_up(window, U256::from(k - 8), U256::from(32))?
+        };
+        if delta <= previous || delta >= start { continue; }
+        previous = delta;
+        let x = start - delta;
+        if let Some(y) = payout(x).filter(|y| *y >= wanted) { (best, out) = (x, y); }
+    }
+    // Если у найденной точки работает и предшествующий атом, сужаем цену за счёт известных выплат.
+    if best < start && best > U256::ONE && payout(best - U256::ONE).is_some_and(|y| y >= wanted) {
+        let mut step = U256::ONE;
+        let hi = best;
+        loop {
+            let x = hi.saturating_sub(step).max(U256::ONE);
+            if let Some(y) = payout(x).filter(|y| *y >= wanted) {
+                (best, out) = (x, y);
+                if x == U256::ONE { break; }
+                step = step.saturating_mul(U256::from(2));
+            } else {
+                let mut low = x;
+                while best - low > U256::ONE {
+                    let mid = low + (best - low) / U256::from(2);
+                    if let Some(y) = payout(mid).filter(|y| *y >= wanted) { (best, out) = (mid, y); }
+                    else { low = mid; }
+                }
+                break;
+            }
+        }
+    }
+    Some((best, out))
 }
 
 /// Ищет границу только по прямым котировкам. Слишком маленький и чрезмерный вход могут оба дать откат.
@@ -115,11 +169,16 @@ mod tests {
         let raw = include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/spectra_base_math.json.gz");
         let archive: Value = serde_json::from_reader(flate2::read::GzDecoder::new(raw.as_slice())).unwrap();
         let num = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
+        let extra: Value = serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_intermediate.json.gz").as_slice())).unwrap();
         let mut differences = Vec::new();
         let mut peak = [0; 2];
         let mut checked = [0; 2];
         for m in archive["markets"].as_array().unwrap() {
-            let quotes: Vec<_> = m["quotes"].as_array().unwrap().iter()
+            let mut all = m["quotes"].as_array().unwrap().clone();
+            for extra in extra["points"].as_array().unwrap().iter().filter(|x|x[0]==m["pool"]) {
+                all.push(serde_json::json!({"i":extra[1],"dx":extra[2],"dy":extra[3]}));
+            }
+            let quotes: Vec<_> = all.iter()
                 .filter(|q| q["dy"].is_string() && !num(&q["dy"]).is_zero()).collect();
             if quotes.is_empty() { continue; }
             let c = &m["calls"];
@@ -151,25 +210,17 @@ mod tests {
                     }
                 };
                 let seed = full_math::mul_div_up(target, balances[i], balances[j]).unwrap();
-                let (paid, net) = first_input(seed, U256::MAX - balances[i], target, payout).unwrap();
-                let reference = num(&q["dx"]);
-                if paid > reference || net < target {
-                    let probes: Vec<_> = [reference,paid].into_iter().map(|center| {
-                        let nearby: Vec<_> = [-1024i32,-256,-64,-16,-8,-4,-2,-1,0,1,2,4,8,16,64,256,1024].into_iter().map(|offset| {
-                            let d = U256::from(offset.unsigned_abs());
-                            let point = if offset<0 { center.saturating_sub(d) } else {center.saturating_add(d)};
-                            (offset, payout(point).map(|o|o.to_string()))
-                        }).collect();
-                        (center.to_string(), nearby)
-                    }).collect();
-                    differences.push(serde_json::json!({"pool":m["pool"],"family":family,"target":target.to_string(),"reference":reference.to_string(),"paid":paid.to_string(),"net":net.to_string(),"probes":probes}));
-                }
+                let (paid, net) = if let Some(data) = &crypto {
+                    crypto_input(seed, U256::MAX - balances[i], target, data, i, payout)
+                } else { first_input(seed, U256::MAX - balances[i], target, payout) }.unwrap();
+                let reference=num(&q["dx"]);
+                if paid>reference || net<target {differences.push(serde_json::json!({"pool":m["pool"],"reference":q["dx"],"target":q["dy"],"paid":paid.to_string()}));}
                 peak[family] = peak[family].max(n.get());
                 checked[family] += 1;
             }
         }
         eprintln!("Spectra: максимум прямых расчётов на архивную цель у legacy {}, у NG {}",peak[0],peak[1]);
-        assert_eq!(checked, [92, 124]);
-        std::fs::write(std::env::var("SPECTRA_REPORT").unwrap(), serde_json::to_vec(&serde_json::json!({"counts":checked,"peak":peak,"mismatches":differences})).unwrap()).unwrap();
+        assert_eq!(checked, [184,124]);
+        std::fs::write(std::env::var("SPECTRA_REPORT").unwrap(),serde_json::to_vec(&serde_json::json!({"counts":checked,"peak":peak,"mismatches":differences})).unwrap()).unwrap();
     }
 }

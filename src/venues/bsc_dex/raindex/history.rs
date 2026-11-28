@@ -13,6 +13,9 @@ use crate::storage::journal::Level;
 mod sync;
 #[path = "history_recent.rs"]
 mod newest;
+#[cfg(test)]
+#[path = "history_network_tests.rs"]
+mod network_tests;
 use std::{
     collections::HashMap,
     time::{Duration, Instant},
@@ -113,7 +116,13 @@ async fn run(
         worker.tx.send_replace(Indexed { cursor: None, rows });
     }
     let mut last_note = None::<Instant>;
+    let mut configured = None;
+    let mut failed = false;
     loop {
+        let generation = ctx.settings.generation();
+        if configured.is_none_or(|(g, _)| g != generation) {
+            configured = Some((generation, active(&ctx, (profile, from))));
+        }
         let cadence = ctx.int("bsc.blocks_poll_ms").ok().filter(|v| *v > 0)
             .or_else(|| ctx.int("raindex.max_age_ms").ok().filter(|v| *v > 0));
         let reporting = ctx
@@ -122,11 +131,11 @@ async fn run(
             .filter(|v| *v > 0)
             .map(Duration::from_secs);
         let delay = if let Some(ms) = cadence
-            && active(&ctx, (profile, from))
+            && matches!(configured, Some((_,true)))
         {
             let result = worker.step(&ctx).await;
             let elapsed = reporting.is_some_and(|interval| last_note.is_none_or(|t| t.elapsed() >= interval));
-            if elapsed || (result.is_err() && last_note.is_none()) {
+            if elapsed || (result.is_err() && !failed) {
                 let count = worker.tx.borrow().rows.len();
                 match &result {
                     Ok(Some((n, tip))) => {
@@ -146,8 +155,9 @@ async fn run(
                 }
                 last_note = Some(Instant::now());
             }
+            failed = result.is_err();
             let period = Duration::from_millis(ms);
-            Some(if result.is_err() { period.max(reporting.unwrap_or(period)) } else { period })
+            Some(if failed { period.max(reporting.unwrap_or(period)) } else { period })
         } else {
             None
         };

@@ -96,7 +96,11 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False,*,sel
         payment,op,be,af=play(1,cap,1,end)
         base={"book":book,"version":version,"order":o["hash"],"i":l["i"],"j":l["j"],"pay":source,"receive":target,
               "fixed_receive":receive_fixed,"partial":partial,"size":str(size),"cap":str(cap)}
-        if not GOOD(op):return None,dict(base,stage="revert",error=op.get("error"))
+        if not GOOD(op):
+            if additional is not None:
+                if be!=af:raise ValueError("failed sample changed balances")
+                base.update(before=list(map(str,be)),after=list(map(str,af)))
+            return None,dict(base,stage="revert",error=op.get("error"))
         paid=be[0]-af[0];net=af[1]-be[1]
         if net<=0 or paid<=0 or paid>cap or be[2:]!=af[2:]:return None,dict(base,stage="incomplete",before=be,after=af)
         if artifact:
@@ -105,6 +109,9 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False,*,sel
             for low,high,floor,dl in [(paid,paid,net+1,end),(1,paid-1,net,end),(paid,paid,net,stamp-1)]:
                 _,bad,x,y=play(low,high,floor,dl)
                 if GOOD(bad) or x!=y:raise ValueError("protected bound rollback")
+                if additional is not None:
+                    base.setdefault("failed_bounds",[]).append(dict(low=str(low),cap=str(high),floor=str(floor),
+                        deadline=dl,error=bad.get("error"),before=list(map(str,x)),after=list(map(str,y))))
         return setup+[payment],dict(base,stage="paid",paid=str(paid),net=str(net),before=[str(v) for v in be],after=[str(v) for v in af],
                                    action=action,target=where,gas=units({"returnData":op["gasUsed"]}),logs=op["logs"])
     if additional is not None:

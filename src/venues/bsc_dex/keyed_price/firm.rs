@@ -1,6 +1,8 @@
 //! Получает индивидуальные условия по явному запросу выбранного кошелька и проверяет обмен в дочернем блоке.
 mod cash;
+pub(super) mod ethereum;
 mod registry;
+pub(in crate::venues::bsc_dex) use registry::verify as verify_settler;
 mod wire;
 use super::{white_state, zeroex};
 use crate::gateway::{

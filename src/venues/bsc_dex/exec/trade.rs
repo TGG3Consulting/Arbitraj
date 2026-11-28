@@ -108,6 +108,7 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
                 _ => "Hashflow RFQT",
             }
         }
+        RouteMode::ZeroEx(_) => super::super::zeroex::LABEL,
         RouteMode::PropSettlementSlot(_) => "PropAMM",
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
         RouteMode::PancakeX(_) => super::super::pancakex::market::LABEL,

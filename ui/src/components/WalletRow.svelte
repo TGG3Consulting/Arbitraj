@@ -30,6 +30,7 @@
   import TextileSource from './TextileSource.svelte';
   import SourcePrice from './SourcePrice.svelte';
   import AirSwapSource from './AirSwapSource.svelte';
+  import ZeroExSource from './ZeroExSource.svelte';
   import NativeRfqSource from './NativeRfqSource.svelte';
   import FermiSource from './FermiSource.svelte';
   import HanjiSource from './HanjiSource.svelte';
@@ -119,10 +120,10 @@
   {#if w.address && dex}<HanjiSource venue={dex} wallet={w.address} />{/if}
   {#if w.address && dex}<FermiSource venue={dex} wallet={w.address} />{/if}
   {#if w.address && dex}<RaindexSource venue={dex} wallet={w.address} />{/if}
-  {#if w.address && dex}<NativeRfqSource venue={dex} wallet={w.address} />{/if}
+  {#if w.address && dex}<NativeRfqSource venue={dex} wallet={w.address} /><ZeroExSource venue={dex} wallet={w.address} />{/if}
   {#if w.address && dex}<HashflowQuote venue={dex} trader={w.address} />{/if}
   {#if w.address && dex && w.fynd}<SourcePrice venue={dex} trader={w.address} />{/if}
-  {#if w.address && dex && w.zeroex}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/if}
+  {#if w.address && dex && w.zeroex}{#key [dex,w.id,w.address].join(':')}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="zeroex" label="0x" />{/key}{/if}
   {#if w.address && dex && w.textile}<TextileSource venue={dex} trader={w.address} wallet={w.id} />{/if}
   {#if w.address && dex && w.kipseli}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="kipseli" label="Kipseli" />{/if}
   {#if w.address && dex && w.clipper}<ClipperQuote venue={dex} trader={w.address} wallet={w.id} />{/if}

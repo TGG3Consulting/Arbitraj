@@ -21,7 +21,7 @@ async fn registered<E>(
     Ok(active == expected || previous.await? == expected)
 }
 
-pub(super) async fn verify(ctx: &Ctx, settler: Address, at: &Value) -> GatewayResult<()> {
+pub(in crate::venues::bsc_dex) async fn verify(ctx: &Ctx, settler: Address, at: &Value) -> GatewayResult<()> {
     let fail = || super::bad(ctx, "Реестр 0x не подтвердил действующий Settler");
     let data = ctx.text("zeroex.settler_registry")?;
     let fields = data.split_whitespace().collect::<Vec<_>>();

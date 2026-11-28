@@ -137,6 +137,8 @@ def tables(network, snapshots, profiles):
         out.extend(base_launch_inventory.vecta())
     out.extend(base_launch_inventory.fynd(network))
     out.extend(["", "#### Ручные цены источников", "", "На этой площадке `zeroex.base_url = https://api.0x.org` включает ручную оценку маршрута. Ключ `zeroex.api_key` выдаётся в [кабинете 0x](https://dashboard.0x.org/). Доли RFQ и остальных поставщиков отображаются по шагам цены. Для согласованного обмена требуется отдельная действующая фирменная котировка для своего плательщика."])
+    if not base:
+        out[-1:-1]=["На Ethereum за 600 блоков найдены 197 квитанций с маркером RFQ. У 165 ног удалось сопоставить списание и выдачу одного маркетмейкера, у 65 из них встречается USDT (39 выплат и 26 поступлений USDT у maker). Восемь изолированных оплат WETH ↔ USDT воспроизведены в обе стороны с обычным AllowanceHolder и модулем. Для работы после старта нужны ключ API 0x, размещение `zeroex.wallet` из карточки и разрешение выбранного входного ERC20 этому модулю. Стартовые `zeroex.trading=false` и `zeroex.gas_budget_native=0.00012 ETH`. После включения поставьте галочку допуска в персональной заявке. Для выбора бот использует гарантированный минимум и измеренный газ. При исполнении записывает весь реальный выход, включая полученный сверх минимума. [Архив денежных проверок](../tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz).",""]
     well_id = "pinto-exchange-base" if base else "basin-wells-ethereum"
     if well_id in configured:
         out.extend(["", "#### "+("Pinto Exchange" if base else "Basin Wells"), "",

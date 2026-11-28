@@ -4063,6 +4063,24 @@ source = "tests/data/first_run_dex_2026-11-26/keyed_quote_endpoints.json"
 rationale = "Прокси и хеш кода реестра 0x, адрес и хеш реализации EIP-1967. Проверяются текущий и предыдущий Settler функции 2."
 prefill = { kind = "Venue", id = "eth_dex" }
 
+[[section.rec]]
+name = "zeroex.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "false"
+source = "tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "После размещения модуля, открытия ключа API и проверки ETH на газ включите для допуска подтверждённых заявок. Доступные заявки сравниваются по чистому результату."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "zeroex.gas_budget_native"
+area = "Venue eth_dex"
+unit = "ETH"
+value = "0.00012"
+source = "tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz"
+rationale = "2 × 240981 единица газа в наиболее дорогой из четырёх контрольных выплат × 241442222 wei/gas (максимум двух сохранённых квитанций), с округлением вверх до двух значащих цифр. Лимит владельца может отсечь более дорогой обмен."
+prefill = { kind = "Venue", id = "eth_dex" }
+
 [[section]]
 title = "Открытые заявки Rubicon Gladius"
 intro = "Публичная выдача ордеров и проверенные размещения. Для самостоятельной оплаты владелец добавляет размещение защитного модуля и разрешение своего кошелька."

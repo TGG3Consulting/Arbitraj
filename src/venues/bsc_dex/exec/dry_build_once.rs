@@ -46,7 +46,7 @@ pub(super) async fn once(
         RouteMode::Smart => "умный".to_string(),
         RouteMode::Graph => String::new(),
         RouteMode::Rfq(_)
-        | RouteMode::RfqIndicative
+        | RouteMode::ZeroEx(_) | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
         | RouteMode::Raindex(_) | RouteMode::NativeRfqSettlement(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
         | RouteMode::PropSettlementSlot(_)
@@ -192,7 +192,7 @@ pub(super) async fn once(
     let (at, now) = q.heads.at(ctx).await?;
     let built = match shape {
         RouteMode::Rfq(_)
-        | RouteMode::RfqIndicative
+        | RouteMode::ZeroEx(_) | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
         | RouteMode::Raindex(_) | RouteMode::NativeRfqSettlement(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
         | RouteMode::PropSettlementSlot(_)

@@ -21,6 +21,7 @@ pub(super) enum Gate {
     Hashflow(String),
     Native { generation: u64, mixed: bool },
     Textile(u64),
+    ZeroEx(u64),
     Dexalot(u64),
     AirSwap(u64),
     Gladius(u64),
@@ -33,6 +34,7 @@ impl Dispatch {
             Gate::Hashflow(_) => "hashflow.gas_budget_native",
             Gate::Dexalot(_) => "dexalot.gas_budget_native",
             Gate::AirSwap(_) => "airswap.gas_budget_native",
+            Gate::ZeroEx(_) => "zeroex.gas_budget_native",
             Gate::Textile(_) => "textile.gas_budget_native",
             Gate::Native { .. } => "native_rfq.gas_budget_native",
             Gate::Epsilon { .. } => "epsilon.gas_budget_native",
@@ -56,6 +58,7 @@ impl Dispatch {
             Gate::Gladius(g) => super::super::gladius::enabled(ctx) && ctx.settings.generation()==*g && super::super::gladius::timely(ctx,self.expiry),
             Gate::Dexalot(g) => super::super::dexalot::enabled(ctx) && ctx.settings.generation()==*g && super::super::dexalot::timely(ctx,self.expiry),
             Gate::AirSwap(g) => super::super::airswap::enabled(ctx) && ctx.settings.generation()==*g && super::super::airswap::timely(ctx,self.expiry),
+            Gate::ZeroEx(g) => super::super::zeroex::enabled(ctx) && ctx.settings.generation()==*g && super::super::zeroex::current(self.expiry),
             Gate::Textile(g) => super::super::textile::enabled(ctx) && ctx.settings.generation()==*g && super::super::textile::current(self.expiry),
             Gate::Native { generation:g, .. } => {
                 super::super::native_rfq::enabled(ctx)
@@ -124,7 +127,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
     marker: &PendingRef,
 ) -> GatewayResult<()> {
     let Some(parse) =
-        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.dexalot.is_some() || c.airswap.is_some() || c.textile.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some() || c.epsilon.is_some())
+        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.dexalot.is_some() || c.airswap.is_some() || c.zeroex.is_some() || c.textile.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some() || c.epsilon.is_some())
     else {
         return Ok(());
     };
@@ -242,7 +245,7 @@ where
             super::execute::key(p, req)?
         },
         expiry,
-        gate: if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native { generation, mixed }},
+        gate: if parse.zeroex.is_some(){Gate::ZeroEx(generation)}else if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native { generation, mixed }},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

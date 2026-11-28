@@ -1,6 +1,7 @@
 //! Ручная оценка официальных API Kipseli и 0x для указанного размера.
 //! Служебный ключ передаётся только исходному HTTPS-адресу соответствующего API.
 mod firm;
+pub(super) use firm::verify_settler;
 mod kipseli;
 use super::{
     ctx::Ctx,
@@ -51,6 +52,10 @@ fn kipseli_key_error(
 }
 
 pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayResult<Preview> {
+    preview_for(ctx,source,req,None).await
+}
+
+pub(super) async fn preview_for(ctx:&Ctx,source:&str,req:Request,book:Option<&super::parts::Parts>)->GatewayResult<Preview>{
     let invalid = |m: &str| ctx.err(ErrorCode::BadResponse, m);
     let chain = ctx
         .chain_id()
@@ -137,6 +142,9 @@ pub(super) async fn preview(ctx: &Ctx, source: &str, req: Request) -> GatewayRes
             url,
             chain,
         };
+        if let Some(p)=book {
+            return firm::ethereum::admit(p,ticket,config,(dec_in,dec_out)).await;
+        }
         return ticket.preview(ctx, config).await;
     } else {
         url.query_pairs_mut()

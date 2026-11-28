@@ -4067,8 +4067,8 @@ prefill = { kind = "Venue", id = "eth_dex" }
 name = "tokenlon.pairs"
 area = "Venue eth_dex"
 unit = "пары и размеры"
-value = "ETH 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 0.04,USDC 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 100/1000"
-source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json"
+value = "ETH 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 0.04,USDC 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 100/1000,WBTC 0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 0.5005/1,UNI 0x1f9840a85d5af5bf1d1762f925bdaddc4201f984 USDT 0xdac17f958d2ee523a2206206994597c13d831ec7 10030.0902"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_additional_rates.json"
 rationale = "Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта. Метка ETH и адрес WETH в API Tokenlon представляют расчёт в нативном ETH."
 prefill = { kind = "Venue", id = "eth_dex" }
 

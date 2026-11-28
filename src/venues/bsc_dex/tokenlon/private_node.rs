@@ -112,4 +112,29 @@ mod tests{
         server.await.unwrap();
         assert!(tokio::time::timeout(Duration::from_millis(50),other.accept()).await.is_err());
     }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn geth_ipc_uses_newline_framing_and_checks_request_id(){
+        use tokio::{io::{AsyncBufReadExt,AsyncWriteExt,BufReader},net::UnixListener};
+        let mut name=[0u8;12];getrandom::fill(&mut name).unwrap();
+        let path=std::env::temp_dir().join(format!("tokenlon-{}.ipc",alloy_primitives::hex::encode(name)));
+        let server=UnixListener::bind(&path).unwrap();
+        let task=tokio::spawn(async move{
+            for id in [2,1]{
+                let (mut s,_)=server.accept().await.unwrap();
+                let mut line=String::new();
+                BufReader::new(&mut s).read_line(&mut line).await.unwrap();
+                let req:Value=serde_json::from_str(&line).unwrap();
+                assert_eq!(req["method"],"eth_simulateV1"); assert_eq!(req["id"],1);
+                let response=format!("{}\n",json!({"jsonrpc":"2.0","id":id,"result":[{"number":"0x1"}]}));
+                s.write_all(response.as_bytes()).await.unwrap();
+            }
+        });
+        let req=json!({"jsonrpc":"2.0","id":1,"method":"eth_simulateV1","params":[]});
+        let lim=Limits{head:Duration::from_secs(1),idle:Duration::from_secs(1),total:Duration::from_secs(2),max_bytes:4096};
+        assert!(exchange(Endpoint::Ipc(path.clone()),req.clone(),lim).await.is_none());
+        assert_eq!(exchange(Endpoint::Ipc(path.clone()),req,lim).await.unwrap(),json!([{"number":"0x1"}]));
+        task.await.unwrap();
+        std::fs::remove_file(path).unwrap();
+    }
 }

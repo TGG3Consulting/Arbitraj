@@ -50,3 +50,7 @@ pub(super) fn markets(ctx: &Ctx) -> Option<Vec<Market>> {
         seen.insert((market.base_token, market.quote_token)).then_some(market)
     }).collect()
 }
+
+#[cfg(test)]
+#[path="profile_tests.rs"]
+mod tests;

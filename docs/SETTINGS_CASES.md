@@ -7672,7 +7672,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `tokenlon.pairs`
 
 - **Кейс:** Пары Ethereum и размеры запроса в обычных единицах базового актива. Разделитель размеров внутри одной пары — косая черта.
-- **Что ставить:** По одной строке на пару в формате `BASE адрес QUOTE адрес размер[/размер]`. Значения первого запуска приведены в таблице Ethereum. [Оригинальные котировки](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json)
+- **Что ставить:** По одной строке на пару в формате `BASE адрес QUOTE адрес размер[/размер]`. В первом запуске ETH, USDC, WBTC и UNI котируются в USDT. Для WBTC указаны размеры 0.5005/1, для UNI — 10030.0902. [Каталог и четыре персональные ставки](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_additional_rates.json). [Оригинальные котировки](../tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json)
 - **Если не задана:** Источник не рассчитывает неподтверждённые пары.
 
 ### `tokenlon.gas_budget_native`

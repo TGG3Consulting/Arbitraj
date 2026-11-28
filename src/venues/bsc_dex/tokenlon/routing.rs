@@ -95,7 +95,7 @@ async fn candidate(p:&Parts,asset:&Asset,side:Side,qty:Decimal,cutoff:Option<Dec
     }
     if (buy && proof.net<target) || (!buy && proof.terms.spent!=target) || !super::timely(c,proof.expiry){return None;}
     let (block,gas)=sim::run(c,&proof,&data).await.ok()?;
-    let gas_limit=send::tx::with_margin(c,gas.into(),c.dec("send.gas_limit_margin_pct").ok()?).ok()?;
+    let gas_limit=send::tx::with_margin(c,alloy_primitives::U64::from(gas),c.dec("send.gas_limit_margin_pct").ok()?).ok()?;
     let price=exec::tx_fee::price(&p.env(),&ready,None).await.ok()?;
     let max_fee=exec::gas_fund::need_wei(U256::ZERO,price.cap(),gas_limit,None);
     if max_fee>num::to_units(cap,18)? {return None;}

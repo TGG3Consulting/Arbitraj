@@ -986,6 +986,11 @@ jobs:
           npm run build --prefix ui
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashPathProbe
           python scripts/record_bopamm_cash.py "$RUNNER_TEMP/bopamm/BopAmmWallet.json" "$RUNNER_TEMP/bopamm/BopCashPathProbe.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-cash-wallet-card-ethereum'
+        run: |
+          npm ci --prefix contracts
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashWallet
+          cp "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bopamm-wallet-card-ethereum'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund

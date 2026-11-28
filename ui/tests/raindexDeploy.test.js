@@ -87,7 +87,7 @@ function browser(plan,changed={}) {
       case 'eth_getCode':
         assert.deepEqual(params[1],quotes.anchor);
         if(params[0]===plan.book) return changed.bookCode??codes.bookCode;
-        assert.equal(params[0],target);return codes.runtime;
+        assert.equal(params[0],target);return changed.moduleCode??codes.runtime;
       case 'eth_getStorageAt': assert.deepEqual(params[2],quotes.anchor);return changed.slot??zero;
       case 'eth_call':
         assert.equal(params[0].to,target);assert.deepEqual(params[1],quotes.anchor);
@@ -137,4 +137,53 @@ test('Reopened Base card binds the paid CREATE to the original payer and adds on
   const writes=[];
   await original.installSource('raindex.books',next,(...args)=>writes.push(args));
   assert.deepEqual(writes,[['raindex.books',{kind:'Venue',id:venue},next,null]]);
+});
+
+test('Each Base manifest book selects its measured constructor independently of USDC inventory',async()=>{
+  const inventory=record('raindex_base_deployment_balances');
+  const captures=record('raindex_base_manifest_creates');
+  assert.deepEqual(new Set(card.books.map(b=>b.book)),new Set(inventory.books.map(b=>b.book)));
+  assert.equal(card.books.length,captures.entries.length);
+  assert.equal(card.sourceBlock,captures.selector.blockHash);
+  let fundedBooks=0;
+  const measuredV5=record('raindex_base_v5_holder_wallets').book;
+  for(const captured of captures.entries){
+    const p=await loadPlan({...setting,book:captured.book},card);
+    const m=inventory.books.find(row=>row.book===p.book);
+    if(BigInt(m.balances.USDC)>0n) fundedBooks++;
+    assert.equal(p.startBlock,m.start_block);
+    assert.equal(p.version,m.version);
+    assert.equal(p.takeSelector,'0x'+m.take_selector);
+    assert.equal(p.bookHash,runtimeKeccak(captures.codes[p.bookHash]));
+    assert.equal(p.creationSha256,captured.initSha256);
+    assert(await sameRuntime(captured.runtime,p));
+    if(p.sourceKind==='rpc') assert.equal(p.url,String(captured.startBlock));
+    if(p.book!==quotes.book && p.book!==measuredV5){
+      assert.equal(p.settlementVerified,null);
+      assert.equal(p.projectFundingVerified,null);
+    }
+  }
+  assert.equal(fundedBooks,13);
+  assert.equal(captures.entries.length-fundedBooks,25);
+});
+
+test('An additional verified book registers at its own deployment block and retains other sources',async()=>{
+  const captures=record('raindex_base_manifest_creates');
+  const inventory=record('raindex_base_deployment_balances');
+  const sample=inventory.books.find(b=>b.version===4 && BigInt(b.balances.USDC)>0n);
+  const c=captures.entries.find(v=>v.book===sample.book);
+  const old=await loadPlan(setting,card);
+  // Модель настроек другого владельца, с его адресом прежнего модуля и HTTPS-источником.
+  const original=addRaindex(null,old,wallet).map(row=>row.replace('graphql '+old.url,'blockscout https://base.blockscout.com'));
+  const plan=await loadPlan({...setting,book:c.book,rows:original},card);
+  await assert.rejects(loadPlan({...setting,book:c.book},{...card,books:[{...plan,startBlock:plan.startBlock+1}]}));
+  assert.throws(()=>addRaindex(original,plan,wallet));
+  const joined=addRaindex(original,plan,target);
+  assert.deepEqual(joined.slice(0,-1),original);
+  assert.equal(joined.at(-1),[8453,c.version,c.book,c.bookHash,target,plan.runtimeKeccak,'rpc',c.startBlock].join(' '));
+  const rpc=browser(plan,{bookCode:captures.codes[c.bookHash],moduleCode:c.runtime});
+  assert.equal(await registeredRaindex(rpc,plan,joined),target);
+  assert.strictEqual(addRaindex(joined,plan,target),joined);
+  await assert.rejects(registeredRaindex(browser(plan,{bookCode:codes.bookCode,moduleCode:c.runtime}),plan,joined));
+  await assert.rejects(registeredRaindex(browser(plan,{bookCode:captures.codes[c.bookHash],moduleCode:codes.runtime}),plan,joined));
 });

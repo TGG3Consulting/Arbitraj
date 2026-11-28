@@ -15,7 +15,7 @@ pub(super) struct Stored {
     pub valid: Option<(Cursor, Arc<Raw>)>,
 }
 
-pub(super) async fn load(ctx: &Ctx, namespace: &str) -> Result<Stored, DbError> {
+pub(super) async fn load(ctx: &Ctx, namespace: &str, version: u8) -> Result<Stored, DbError> {
     let rows = venue_state::list(ctx.journal.db(), ctx.place.id, namespace, "").await?;
     let mut expected = None;
     let mut orders = Raw::new();
@@ -27,7 +27,7 @@ pub(super) async fn load(ctx: &Ctx, namespace: &str) -> Result<Stored, DbError> 
         }
         let pair = key.parse::<B256>().ok().zip(body.parse::<Bytes>().ok());
         if let Some((hash, bytes)) = pair
-            && wire::Order::decode(5, &bytes, hash).is_some()
+            && wire::Order::decode(version, &bytes, hash).is_some()
         {
             orders.insert(hash, bytes);
         } else {

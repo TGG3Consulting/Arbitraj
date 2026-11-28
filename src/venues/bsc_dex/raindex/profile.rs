@@ -28,7 +28,7 @@ pub(super) enum Origin {
 impl Origin {
     pub(super) fn parse(version: u8, kind: &str, endpoint: &str) -> Option<Self> {
         match kind {
-            "rpc" if version == 5 && endpoint.bytes().all(|b| b.is_ascii_digit()) => {
+            "rpc" if matches!(version, 3..=7) && endpoint.bytes().all(|b| b.is_ascii_digit()) => {
                 let block = endpoint.parse::<u64>().ok()?;
                 (block > 0).then_some(Self::Rpc(block))
             }

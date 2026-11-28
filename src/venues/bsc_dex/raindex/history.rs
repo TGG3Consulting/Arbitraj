@@ -1,4 +1,4 @@
-//! Фоновая история Add/Remove одной книги V5. Подбор читает опубликованные ордера и
+//! Фоновая история Add/Remove одной книги Raindex. Подбор читает опубликованные ордера и
 //! независимо проверяет текущую ёмкость каждого подходящего ордера от своего модуля.
 use super::{
     history_orders::{self, Cursor},
@@ -72,8 +72,8 @@ async fn run(
 ) {
     let mut changes = ctx.settings.subscribe();
     let namespace = format!(
-        "raindex:v5:{}:{:#x}:{:#x}:{from}",
-        profile.chain, profile.book, profile.book_hash
+        "raindex:v{}:{}:{:#x}:{:#x}:{from}",
+        profile.version, profile.chain, profile.book, profile.book_hash
     );
     let mut worker = Worker {
         profile,
@@ -84,7 +84,7 @@ async fn run(
         cursor: None,
     };
     // При выключенной догрузке известные по прежним сессиям программы тоже доступны для актуального quote2.
-    if let Ok(saved) = history_store::load(&ctx, &worker.namespace).await
+    if let Ok(saved) = history_store::load(&ctx, &worker.namespace, profile.version).await
         && let Some((cursor, rows)) = saved.valid
     {
         worker.cursor = Some(cursor);
@@ -110,7 +110,7 @@ async fn run(
                         ctx.log(
                             Level::Info,
                             "dex.scan",
-                            format!("Raindex V5: блок {n} из {tip}, в каталоге {count} ордеров"),
+                            format!("Raindex V{}: блок {n} из {tip}, в каталоге {count} ордеров", profile.version),
                             None,
                         )
                         .await

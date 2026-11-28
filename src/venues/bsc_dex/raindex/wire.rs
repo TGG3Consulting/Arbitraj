@@ -29,6 +29,7 @@ alloy::sol! {
     function takeOrders3(Take5 config) external returns(bytes32,bytes32);
     function takeOrders5(Take7 config) external returns(bytes32,bytes32);
     event AddOrder(address sender,address expressionDeployer,Order3 order,bytes32 orderHash);
+    event RemoveOrder(address sender,Order3 order,bytes32 orderHash);
     event TakeOrder(address sender,Leg3 config,uint256 input,uint256 output);
     event TakeOrderV4(address sender,Leg7 config,bytes32 input,bytes32 output);
     function quote(Leg4 config) external view returns(bool live,uint256 outputMax,uint256 ioRatio);
@@ -36,6 +37,7 @@ alloy::sol! {
     function takeOrders2(Take4 config) external returns(uint256,uint256);
     function takeOrders4(Take6 config) external returns(bytes32,bytes32);
     event AddOrderV2(address sender,bytes32 orderHash,Order4 order);
+    event RemoveOrderV2(address sender,bytes32 orderHash,Order4 order);
     event AddOrderV3(address sender,bytes32 orderHash,Order6 order);
     event RemoveOrderV3(address sender,bytes32 orderHash,Order6 order);
     event TakeOrderV2(address sender,Leg4 config,uint256 input,uint256 output);

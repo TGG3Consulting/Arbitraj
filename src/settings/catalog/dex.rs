@@ -325,7 +325,7 @@ pub static DEX: &[SettingDef] = &[
     d("Raindex", "raindex.trading", K::Bool, L::None, "да/нет", V, "Разрешить оплату собственным кошельком положительных ордеров Raindex, прошедших полное исполнение в симуляции.").optional().dex_venue(),
     d("Raindex", "raindex.sample_amounts", K::TextList,L::None,"сырые количества ERC20",V,"Проба без внешнего quote для V3: chainId book input output maxDebit exactCredit. Используются только средства и разрешение своего кошелька.").optional().dex_venue(),
     d("Raindex", "raindex.cash_routes", K::TextList,L::None,"сети и мосты",V,"Строки chainId book cashWallet runtime feePct. Модуль связывает исходную книгу, штатный V2 router, пару и две валюты; процент комиссии для предварительного расчёта.").optional().dex_venue(),
-    d("Raindex", "raindex.books", K::TextList, L::None, "сети и книги", V, "Полные привязки доверенного модуля к книге.").optional().dex_venue(),
+    d("Raindex", "raindex.books", K::TextList, L::None, "сети и книги", V, "Строка книги: chainId, версия, адрес и хеш книги, адрес и хеш модуля, источник и адрес источника. Для источника rpc указывается номер блока размещения книги.").optional().dex_venue(),
     d("Raindex", "raindex.max_age_ms", K::Integer, L::Positive, "мс", V, "Возраст перечня ордеров и подтверждённого свободного остатка.").optional().dex_venue(),
     d("Raindex", "raindex.quote_timeout_ms", K::Integer, L::Positive, "мс", V, "Бюджет сравнения ордеров и симуляции своего кошелька.").optional().dex_venue(),
     d("Raindex", "raindex.gas_budget_native", K::Decimal, L::Positive, "монета газа", V, "Предел расхода на одну оплату с учётом комиссии публикации.").optional().dex_venue(),

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { gzipSync, gunzipSync } from 'node:zlib';
 import sha3 from 'js-sha3';
+import {bindManifest,constructorRuntime} from './raindex-manifest-card.mjs';
 
 const [mode, compiledPath, cardPath, codeV6, codeV5] = process.argv.slice(2);
 assert(['--capture', '--check'].includes(mode) && compiledPath && cardPath && codeV6 && codeV5);
@@ -66,7 +67,24 @@ function verifiedSettlement(spec) {
     assert.deepEqual(audit.anchor, directory.anchor);
     assert(direct.every(v => audit.tokens[v.receive].isCertificationExpired === true));
   }
-  return paid;
+  if (spec.version === 5) {
+    const independent = archive('v5_holder_wallets');
+    assert.equal(independent.height, directory.height);
+    assert.deepEqual(independent.selector, directory.anchor);
+    assert.equal(independent.book, spec.address);
+    assert.equal(independent.runtime, spec.payout.modules[spec.address].runtime);
+    const funded = independent.cases.filter(row => row.stage === 'paid');
+    assert.equal(new Set(funded.map(row => row.asset)).size, 2);
+    for (const row of funded) {
+      assert(BigInt(row.paid) > 0n && BigInt(row.net) > 0n);
+      assert(row.holder !== spec.payout.payer && row.tight_reproduced && row.excess_minimum_rolled_back);
+      assert.equal(BigInt(row.before[0])-BigInt(row.after[0]), BigInt(row.paid));
+      assert.equal(BigInt(row.after[1])-BigInt(row.before[1]), BigInt(row.net));
+      assert.deepEqual(row.before.slice(2), row.after.slice(2));
+    }
+    return {settlementVerified:true, projectFundingVerified:paid};
+  }
+  return {settlementVerified:paid, projectFundingVerified:paid};
 }
 for (const spec of specs) {
   const evidence = spec.payout;
@@ -81,20 +99,12 @@ for (const spec of specs) {
   const words = [book.book.slice(2).padStart(64,'0'), spec.hash.slice(2), book.selector.padEnd(64,'0')]
     .map(hex => Buffer.from(hex,'hex'));
   const init = Buffer.concat([Buffer.from(compiled.creation,'hex'), ...words]);
-  const matches = [];
-  for (const order of [[0,1,2],[0,2,1],[1,0,2],[1,2,0],[2,0,1],[2,1,0]]) {
-    const runtime = Buffer.from(template);
-    for (const [i, group] of groups.entries())
-      for (const {start} of group) words[order[i]].copy(runtime,start);
-    if (keccak(runtime) === book.runtime) matches.push(runtime);
-  }
-  assert.equal(matches.length, 1, 'compiled runtime must reproduce the recorded constructor');
-  const [runtime] = matches;
-  const settlementVerified = verifiedSettlement(spec);
+  const runtime = constructorRuntime(template,groups,words,book.runtime);
+  const verification = verifiedSettlement(spec);
   const entry = {
     version:book.version, book:book.book, bookHash:spec.hash, takeSelector:'0x'+book.selector,
     runtimeKeccak:keccak(runtime), runtimeSha256:sha256(runtime), creationSha256:sha256(init),
-    sourceKind:spec.sourceKind, url:spec.source, settlementVerified
+    sourceKind:spec.sourceKind, url:spec.source, ...verification
   };
   card.books.push(entry);
   if (mode === '--check') {
@@ -131,6 +141,8 @@ for (const spec of specs) {
   assert(codes,'no canonical constructor confirmation');
   writeFileSync(spec.codePath,gzipSync(JSON.stringify(codes)));
 }
+const creates = process.argv[7] ? JSON.parse(gunzipSync(readFileSync(process.argv[7]))) : archive('manifest_creates');
+bindManifest(card,compiled,template,groups,archive('deployment_balances'),creates);
 if (mode === '--check') {
   assert.deepEqual(JSON.parse(readFileSync(cardPath)),card,'compiled constructor or recorded settlement changed');
 } else {

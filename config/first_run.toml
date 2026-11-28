@@ -4995,9 +4995,17 @@ prefill = { kind = "Venue", id = "base_dex" }
 name = "raindex.books"
 area = "Venue base_dex"
 unit = "сети и книги"
-method = "Задаёт владелец: из квитанции развёртывания взять адрес своего модуля для каждой книги и подставить в скобках; формат строк через запятую: 8453 6 0xe522cb4a5fcb2eb31a52ff41a4653d85a4fd7c9d 0xfba04db418c8fbba851c2570230536316d9fb53bdc5f44ec82229b30c92263a2 (адрес своего размещённого модуля книги) 0x19077c4459bc38204f0c205b670cf1287fc99fcc912cd036f7647ea2718310bf graphql https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71/subgraphs/raindex-base/prod/gn"
-source = "tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz; tests/data/first_run_dex_2026-11-26/raindex_base_quotes.json.gz; https://github.com/rainlanguage/rain.strategies/blob/d58fd9d89a040c0ace494f12abf5452776b106d5/settings.yaml"
+method = "Задаёт владелец. В карточке кошелька Base выберите нужную книгу Raindex и разверните её модуль. После проверки интерфейс добавит строку в настройку. Для ручного ввода подставьте адрес подтверждённого модуля в свою строку: 8453 6 0xe522cb4a5fcb2eb31a52ff41a4653d85a4fd7c9d 0xfba04db418c8fbba851c2570230536316d9fb53bdc5f44ec82229b30c92263a2 (адрес своего размещённого модуля книги) 0x19077c4459bc38204f0c205b670cf1287fc99fcc912cd036f7647ea2718310bf graphql https://subgraph.api.ormilabs.com/api/public/9f4fc2fa-4a15-44f7-a7c1-66fdaa518a71/subgraphs/raindex-base/prod/gn, 8453 5 0x52ceb8ebef648744ffdde89f7bc9c3ac35944775 0x9292aa990c007d1cebaacdd77133e4832455fa690a768ac39bce0f2d1aee9fe1 (адрес своего размещённого модуля книги) 0x40ff20f8b272e4030fdbb41de5bbfe38688be0a89d79187061e4148bb65f7364 rpc 36667253"
+source = "ui/src/assets/raindex-base-create.json; tests/data/first_run_dex_2026-11-26/raindex_base_protected_wallets.json.gz; tests/data/first_run_dex_2026-11-26/raindex_base_v5_holder_wallets.json.gz; tests/data/first_run_dex_2026-11-26/raindex_base_v5_seed.json.gz"
 rationale = "Каждому адресу книги соответствует отдельный модуль своего кошелька. Код проверяет хеши обоих контрактов, book(), bookCodeHash() и селектор версии."
+
+[[section.rec]]
+name = "raindex.sample_amounts"
+area = "Venue base_dex"
+unit = "сырые количества ERC20"
+method = "Задаёт владелец для V3. Формат одной строки: 8453, адрес книги, адрес входного токена, адрес выходного токена, максимальное списание и точная выдача в минимальных единицах токенов. Шесть полей разделяются пробелами. Берите размеры из оплаченной симуляции выбранной книги и пары для своего кошелька."
+source = "src/venues/bsc_dex/raindex/legacy.rs; tests/data/first_run_dex_2026-11-26/raindex_base_manifest_creates.json.gz"
+rationale = "У V3 нет публичного quote. Для каждого ордера проверяются отдельные параметры кошелька и сумма фактической выплаты до создания билета."
 
 [[section]]
 title = "Параметры ryze · Venue base_dex"

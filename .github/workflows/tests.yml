@@ -27,7 +27,7 @@ jobs:
         run: node --test tests/raindexDeploy.test.js
       - working-directory: ui
         run: npm run build
-      - name: Rebuild RaindexWallet and bind the Base V5 and V6 runtime to the archived books
+      - name: Rebuild RaindexWallet and bind all 38 Base books to their archived deployments
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet

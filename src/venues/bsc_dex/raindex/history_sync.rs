@@ -8,7 +8,7 @@ async fn hash_at(ctx: &Ctx, height: u64) -> GatewayResult<B256> {
 
 impl Worker {
     async fn restore(&mut self, ctx: &Ctx, tip: u64) -> GatewayResult<()> {
-        let saved = history_store::load(ctx, &self.namespace)
+        let saved = history_store::load(ctx, &self.namespace, self.profile.version)
             .await
             .map_err(|e| no(ctx, &format!("Raindex: чтение позиции: {e}")))?;
         let mut replaced = None;
@@ -93,10 +93,12 @@ impl Worker {
         }
         let end = tip.min(last.saturating_add(scan::batch_size(ctx)?));
         let head = hash_at(ctx, end).await?;
-        let topics = serde_json::json!([history_orders::topics()]);
+        let events = history_orders::topics(self.profile.version)
+            .ok_or_else(|| no(ctx, "Raindex: версия событий книги неизвестна"))?;
+        let topics = serde_json::json!([events]);
         let book = self.profile.book;
-        let mut logs = scan::one(ctx, book, &topics, last + 1, end, "Raindex V5").await?;
-        let delta = history_orders::changes(book, last + 1, end, &mut logs)
+        let mut logs = scan::one(ctx, book, &topics, last + 1, end, "Raindex").await?;
+        let delta = history_orders::changes(self.profile, last + 1, end, &mut logs)
             .ok_or_else(|| no(ctx, "Raindex: неполные или несовместимые события книги"))?;
         let mut checked = None;
         for log in &logs {

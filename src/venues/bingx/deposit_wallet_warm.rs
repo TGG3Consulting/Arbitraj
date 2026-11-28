@@ -11,10 +11,13 @@
 //! биржу» (gateway/addr_book.rs fresh).
 //! Какой токен: монеты справочника BingX, у которых в сети venue.base_network адрес контракта равен одному из
 //! сохранённых оператором dex.settlement_contract (адрес расчётного токена DEX, решение «Base USDC» — у base_dex это USDC
-//! 0x833589fC…2913). Тикер не зашит: монета находится по адресу контракта.
+//! 0x833589fC…2913). Тикер не зашит: монета находится по адресу контракта. Список этих монет кладётся в память
+//! (WalletTypes::set_targets) — флаг зачисления смотрит только их адрес.
+//! USDT здесь не читается: флагам круга он не нужен, а перед возвратом USDT на биржу ядро само читает адрес получателя
+//! (core/transfers.rs → deposit_proof.rs → deposit_address), и walletType USDT попадает в память до зачисления.
 //! Кто вызывает: mod.rs (Venue::coin_networks).
 //! От чего зависит: deposit_wallet.rs, deposit_addr.rs, ctx.rs, settings (Store::all), gateway/addr_book.rs, журнал.
-//! Настройки: venue.deposit_to_spot, venue.base_network [bingx]; dex.settlement_contract (все DEX, только чтение).
+//! Настройки: venue.base_network [bingx]; dex.settlement_contract (все DEX, только чтение).
 //! Новых нет.
 //!
 //! Официальная документация: docs-v3 Account and Wallet → «Main Account Deposit Address»
@@ -31,7 +34,6 @@ use crate::storage::journal::Level;
 
 use super::ctx::{Ctx, ID, SECRET_API_KEY};
 use super::deposit_addr::{self, DepositAddrs};
-use super::deposit_wallet::credit_network;
 
 /// Код записи журнала.
 const CODE: &str = "venue.deposit_wallet";
@@ -40,17 +42,28 @@ const CODE: &str = "venue.deposit_wallet";
 /// окружение, память адресов, свежий справочник сетей, флаг «уже идёт» (второй проход не начинается, пока идёт первый).
 /// Возвращает: ничего. Ошибок нет: сбой запроса — запись в журнал (Warn), повтор — со следующим справочником.
 pub fn spawn(ctx: &Ctx, addrs: &DepositAddrs, list: &[CoinNetworkInfo], busy: &Arc<AtomicBool>) {
-    let Some(network) = credit_network(ctx) else {
+    let Ok(network) = ctx.text("venue.base_network") else {
+        addrs.types.set_targets(vec![]);
         return;
     };
     let contracts = settlement_contracts(ctx);
     let mark = ctx.vault.mark(SECRET_API_KEY);
-    let todo: Vec<CoinNetworkInfo> = list
+    let targets: Vec<CoinNetworkInfo> = list
         .iter()
         .filter(|n| n.network == network)
         .filter(|n| n.asset.contract.is_some_and(|c| contracts.contains(&c)))
-        .filter(|n| !addrs.types.known(mark, &n.asset.ticker, &network))
         .cloned()
+        .collect();
+    // Расчётные монеты — для supports_settlement_credit (смотрится только их адрес, не все адреса сети Base).
+    addrs.types.set_targets(
+        targets
+            .iter()
+            .map(|n| (n.asset.ticker.clone(), n.network.clone()))
+            .collect(),
+    );
+    let todo: Vec<CoinNetworkInfo> = targets
+        .into_iter()
+        .filter(|n| !addrs.types.known(mark, &n.asset.ticker, &n.network))
         .collect();
     if todo.is_empty() || busy.swap(true, Ordering::SeqCst) {
         return;

@@ -166,13 +166,14 @@ impl Venue for Bingx {
     }
 
     /// Депозит прямо на торговый (спотовый) счёт без второго внутреннего перевода — deposit_wallet.rs::credit_ready.
-    /// true только если: (а) venue.deposit_to_spot [bingx] = нет или не задана (перевод фонд → спот fund_move.rs
-    /// выключен); (б) у адресов депозита сети venue.base_network, прочитанных из живого ответа GET
-    /// /openApi/wallets/v1/capital/deposit/address под текущим ключом API, walletType есть и не 1 (Fund Account), не 2
-    /// и не 3 (фьючерсы) — коды, одинаковые в английской и китайской версиях docs-v3 («Main Account Deposit Address»,
-    /// https://bingx-api.github.io/docs-v3/); код спота расходится (4 / 15) и не используется. Нет данных — false.
-    /// Основания: решение 102 (депозит приходил на фондовый счёт), решение Тиграна 28.11.2026 (зачисление в аккаунте
-    /// переключено на спот, перевод бота выключается venue.deposit_to_spot = нет).
+    /// true только если адрес депозита расчётной монеты в сети venue.base_network (монета — по контракту
+    /// dex.settlement_contract, у base_dex это USDC; список — deposit_wallet_warm.rs) прочитан из живого ответа GET
+    /// /openApi/wallets/v1/capital/deposit/address под текущим ключом API и его walletType есть и не 1 (Fund Account),
+    /// не 2 и не 3 (фьючерсы) — коды, одинаковые в английской и китайской версиях docs-v3 («Main Account Deposit
+    /// Address», https://bingx-api.github.io/docs-v3/); код спота расходится (4 / 15) и не используется. Смотрится только
+    /// расчётная монета; нет данных — false. venue.deposit_to_spot на флаг не влияет: счёт зачисления у BingX — по
+    /// монете. Основания: решение 102 (депозит приходил на фондовый счёт), решение Тиграна 28.11.2026 (Spot — только у
+    /// USDT и USDC, остальные монеты — на фонд и переводятся ботом).
     fn supports_settlement_credit(&self) -> bool {
         deposit_wallet::credit_ready(&self.ctx, &self.addrs.types)
     }
@@ -333,7 +334,7 @@ impl Venue for Bingx {
         asset: &Asset,
         amount: rust_decimal::Decimal,
     ) -> GatewayResult<Option<String>> {
-        fund_move::to_spot(&self.ctx, asset, amount).await
+        fund_move::to_spot(&self.ctx, &self.addrs.types, asset, amount).await
     }
 
     async fn withdraw_cost(

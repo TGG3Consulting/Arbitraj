@@ -1,12 +1,16 @@
 //! Файл: venues/bingx/deposit_wallet.rs
-//! Что делает: расчётный круг USDC Base — на какой счёт BingX зачисляет депозит. Запоминает walletType адреса депозита
-//! в момент, когда адрес читается из API (deposit_addr.rs), и по этой памяти отвечает синхронному
-//! Venue::supports_settlement_credit (mod.rs): зачисление прямо на торговый счёт подтверждено, только если перевод
-//! фонд → спот выключен (venue.deposit_to_spot [bingx] = нет или не задана) и у адресов сети venue.base_network,
-//! прочитанных под текущим ключом API, walletType есть и он не фондовый и не фьючерсный.
-//! Кто вызывает: deposit_addr.rs (keep — после ответа API), mod.rs (credit_ready).
+//! Что делает: на какой счёт BingX зачисляет депозит монеты. Счёт зачисления выбирается в аккаунте BingX отдельно по
+//! каждой монете (Тигран, 28.11.2026: Spot — только у USDT и USDC, остальные монеты — на фонд). Запоминает walletType
+//! адреса депозита в момент, когда адрес читается из API (deposit_addr.rs), под отпечатком ключа API, и по этой памяти
+//! отвечает:
+//! - Venue::supports_settlement_credit (credit_ready) — у адреса расчётной монеты в сети venue.base_network (монета —
+//!   по контракту dex.settlement_contract, её находит deposit_wallet_warm.rs) walletType есть и не 1/2/3;
+//! - Venue::deposit_to_trading (direct_to_spot, fund_move.rs) — монета зачисляется сразу на спот: перевод фонд → спот
+//!   не нужен.
+//! Кто вызывает: deposit_addr.rs (keep — после ответа API), deposit_wallet_warm.rs (set_targets), mod.rs
+//! (credit_ready), fund_move.rs (direct_to_spot).
 //! От чего зависит: ctx.rs (настройки, хранилище секретов), num.rs.
-//! Настройки: venue.deposit_to_spot, venue.base_network (обе существующие, область bingx; новых нет).
+//! Настройки: venue.base_network [bingx] (существующая; новых нет).
 //!
 //! Официальная документация: docs-v3 (https://bingx-api.github.io/docs-v3/), Account and Wallet → «Main Account Deposit
 //! Address», GET /openApi/wallets/v1/capital/deposit/address — поле ответа walletType (int64). Английский текст:
@@ -14,15 +18,13 @@
 //! текст той же страницы: «1 資金賬戶；2 標合賬戶；3 永續賬戶；15 現貨賬戶». Версии совпадают в 1, 2, 3 и расходятся в
 //! коде спота (4 / 15) — на код спота здесь не опираемся: зачисление «не на торговый» = 1, 2 или 3.
 //! Журнал изменений docs-v3 2025-07-11: «Added wallType field to responses for 'Main Account Deposit Address' …».
-//! Решения: 102 (депозит приходил на фондовый счёт, перевод fund_move.rs), Тигран 28.11.2026 — зачисление депозита
-//! переключено в аккаунте BingX на спотовый счёт, перевод бота выключается venue.deposit_to_spot = нет.
+//! Решения: 102 (депозит приходил на фондовый счёт, перевод fund_move.rs), Тигран 28.11.2026 (счёт зачисления — по
+//! монете; USDT и USDC — Spot).
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
-
-use crate::gateway::errors::ErrorCode;
 
 use super::ctx::{Ctx, SECRET_API_KEY};
 use super::num;
@@ -34,10 +36,17 @@ const NOT_TRADING: [i64; 3] = [1, 2, 3];
 /// Ключ памяти: (отпечаток ключа API, монета, сеть).
 type Key = (u64, String, String);
 
-/// walletType прочитанных адресов депозита: ключ → код (None — поля нет). Дешёво клонируется.
+/// walletType прочитанных адресов депозита: ключ → код (None — поля нет) и расчётные монеты (монета, сеть) из
+/// последнего справочника. Дешёво клонируется.
 #[derive(Clone, Default)]
 pub struct WalletTypes {
     seen: Arc<Mutex<HashMap<Key, Option<i64>>>>,
+    targets: Arc<Mutex<Vec<(String, String)>>>,
+}
+
+/// Код зачисляет на торговый счёт: поле есть и не из NOT_TRADING.
+fn trading(code: Option<i64>) -> bool {
+    code.is_some_and(|c| !NOT_TRADING.contains(&c))
 }
 
 impl WalletTypes {
@@ -59,41 +68,50 @@ impl WalletTypes {
         seen.contains_key(&(m, coin.to_string(), network.to_string()))
     }
 
-    /// Что делает: все адреса сети, прочитанные под ключом `mark`, зачисляют на торговый счёт. Принимает: отпечаток
-    /// ключа, сеть. Возвращает: true — есть хотя бы один адрес, у каждого walletType есть и не из NOT_TRADING;
-    /// нет ключа, нет адресов, нет поля или хоть один фондовый / фьючерсный — false. Ошибок нет.
+    /// Что делает: заменяет список расчётных монет (монета BingX, сеть) — по последнему справочнику сетей.
+    /// Принимает: список. Ошибок нет.
+    pub fn set_targets(&self, list: Vec<(String, String)>) {
+        *self.targets.lock().unwrap_or_else(|p| p.into_inner()) = list;
+    }
+
+    /// Что делает: адрес каждой расчётной монеты сети прочитан под ключом `mark` и зачисляет на торговый счёт.
+    /// Принимает: отпечаток ключа, сеть. Возвращает: true — расчётная монета в этой сети есть и у каждой walletType
+    /// есть и не из NOT_TRADING; нет ключа, нет монеты, адрес не читался, нет поля или 1/2/3 — false. Ошибок нет.
     pub fn trading_credit(&self, mark: Option<u64>, network: &str) -> bool {
+        let Some(m) = mark else { return false };
+        let targets = self
+            .targets
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .clone();
+        let seen = self.seen.lock().unwrap_or_else(|p| p.into_inner());
+        let mut mine = targets.iter().filter(|(_, n)| n == network).peekable();
+        mine.peek().is_some()
+            && mine.all(|(c, n)| trading(seen.get(&(m, c.clone(), n.clone())).copied().flatten()))
+    }
+
+    /// Что делает: монета зачисляется сразу на торговый счёт — все прочитанные под ключом `mark` адреса этой монеты
+    /// (в любых сетях: deposit_to_trading сеть не получает) имеют walletType не из NOT_TRADING. Принимает: отпечаток
+    /// ключа, монету. Возвращает: true — есть хотя бы один адрес и все такие; нет ключа, адрес не читался, нет поля или
+    /// хоть один 1/2/3 — false (прежнее поведение перевода). Ошибок нет.
+    pub fn direct_to_spot(&self, mark: Option<u64>, coin: &str) -> bool {
         let Some(m) = mark else { return false };
         let seen = self.seen.lock().unwrap_or_else(|p| p.into_inner());
         let mut codes = seen
             .iter()
-            .filter(|((k, _, n), _)| *k == m && n == network)
+            .filter(|((k, c, _), _)| *k == m && c == coin)
             .map(|(_, code)| *code)
             .peekable();
-        codes.peek().is_some() && codes.all(|c| c.is_some_and(|c| !NOT_TRADING.contains(&c)))
+        codes.peek().is_some() && codes.all(trading)
     }
 }
 
 /// Что делает: условие Venue::supports_settlement_credit. Принимает: окружение, память walletType.
-/// Возвращает: true — venue.deposit_to_spot не «да» (нет или не задана) и trading_credit по сети venue.base_network
-/// под текущим ключом API; иначе (перевод фонд → спот включён, сеть Base не задана, нет данных) — false. Ошибок нет.
+/// Возвращает: true — задана venue.base_network и trading_credit по ней под текущим ключом API; иначе false.
+/// Ошибок нет.
 pub fn credit_ready(ctx: &Ctx, types: &WalletTypes) -> bool {
-    let Some(network) = credit_network(ctx) else {
+    let Ok(network) = ctx.text("venue.base_network") else {
         return false;
     };
     types.trading_credit(ctx.vault.mark(SECRET_API_KEY), &network)
-}
-
-/// Что делает: настройки допускают прямое зачисление — venue.deposit_to_spot не «да» (нет или не задана) и задана
-/// venue.base_network. Принимает: окружение. Возвращает: Some(имя сети Base у BingX); иначе None. Ошибок нет.
-/// Вызывают: credit_ready, deposit_wallet_warm.rs.
-pub fn credit_network(ctx: &Ctx) -> Option<String> {
-    // Перевод фонд → спот включён — депозит по решению 102 ждётся на фонде; круг с ним не совместим.
-    // Неразборчивое значение — тоже не «нет»: зачисление не подтверждено.
-    match ctx.flag("venue.deposit_to_spot") {
-        Ok(false) => {}
-        Err(e) if e.code == ErrorCode::NotConfigured => {}
-        _ => return None,
-    }
-    ctx.text("venue.base_network").ok()
 }

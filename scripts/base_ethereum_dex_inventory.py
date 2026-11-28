@@ -19,6 +19,7 @@ DEFERRED_BY_NETWORK = {"base": {"2589", "622", "1447", "7508", "5458", "1700"}, 
 
 # Канонические сделки Ethereum и фактическое происхождение выплаты.
 ETHEREUM_SOURCE_EVIDENCE = {
+    "7626": ('На блоке 26\u202f490\u202f767 кошелёк передал 9\u202f343\u202f546\u202f547\u202f571\u202f783 атома LINK непосредственно в Uniswap V4 PoolManager. Он перечислил в Ave.ai 49\u202f253\u202f505\u202f336\u202f961 wei; кошельку дошли 48\u202f859\u202f477\u202f294\u202f266 wei, до газа. [Спецификация маршрута и подписи](https://docs-bot-api.ave.ai/en/chain-wallet-transaction-rest-api/evm-bsc-eth-base-polygon-robinhood-transaction-api). [Квитанции Ethereum](../tests/data/first_run_dex_2026-11-26/aveai_ethereum_source.json.gz).'),
     "6049": ('На блоке 26\u202f494\u202f831 контракт Axiom продал 216\u202f852\u202f090\u202f224\u202f152 атома токена 0x231b…e237 через пару Uniswap V2 0xa940…1933e. Пара отправила 0,022120911149855867 WETH маршрутизатору; тот развернул WETH и перечислил владельцу 0,021899702038357309 ETH. [Квитанции Ethereum](../tests/data/first_run_dex_2026-11-26/axiom_ethereum_source.json.gz).'),
 }
 

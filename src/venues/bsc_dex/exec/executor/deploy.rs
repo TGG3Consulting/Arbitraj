@@ -98,14 +98,23 @@ pub async fn quote(q: &Quoting, env: &Env) -> GatewayResult<ExecutorDeployQuote>
     let cost_bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("газ {wei} wei не переводится в BNB"),
+            format!(
+                "газ {wei} wei не переводится в {}",
+                super::super::super::gas_ticker::label(ctx)
+            ),
         )
     })?;
     let (cost_usdt, note) = match usdt_of(q, wei).await {
         Ok(v) => (Some(v), None),
         Err(e) => (
             None,
-            Some(format!("цена в USDT не посчитана: {}", e.message)),
+            // Аудит 28.11.2026: подпись — расчётная монета площадки (venue.quote_asset), не зашитое «USDT».
+            Some(format!(
+                "цена в {} не посчитана: {}",
+                ctx.text("venue.quote_asset")
+                    .unwrap_or_else(|_| "расчётной монете".into()),
+                e.message
+            )),
         ),
     };
     Ok(ExecutorDeployQuote {

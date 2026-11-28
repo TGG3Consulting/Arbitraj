@@ -12,7 +12,7 @@
 -->
 <script>
   import { uniq } from '../lib/uniq.js';
-  import { store } from '../lib/settings.svelte.js';
+  import { store, gasTicker } from '../lib/settings.svelte.js';
   import { secrets } from '../lib/secrets.svelte.js';
   import { methodLabel, channelState, showTime } from '../lib/labels.js';
   import SettingEditor from './SettingEditor.svelte';
@@ -63,7 +63,7 @@
   {#if stats}
     <p>Состояние: <span class={state.ok ? 'ok' : 'err'}>{state.text}</span> <span class="muted">· {showTime(stats.updated_at)}</span></p>
     <table>
-      <thead><tr><th class="num">Отправлено</th><th class="num">Отклонено</th><th class="num">В блоке</th><th class="num">Откатов</th><th class="num">Газ впустую, BNB</th></tr></thead>
+      <thead><tr><th class="num">Отправлено</th><th class="num">Отклонено</th><th class="num">В блоке</th><th class="num">Откатов</th><th class="num">Газ впустую, {gasTicker(venue)}</th></tr></thead>
       <tbody><tr>
         <td class="num">{stats.sent}</td><td class="num">{stats.rejected}</td><td class="num">{stats.included}</td>
         <td class="num">{stats.reverted}</td><td class="num">{stats.gas_wasted_bnb}</td>

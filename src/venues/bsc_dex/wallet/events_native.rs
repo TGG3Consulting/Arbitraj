@@ -95,9 +95,11 @@ impl Native {
                 ctx.log(Level::Info, "dex.balance_event", msg, None).await;
                 return Ok(None);
             }
-            Step::In(v) => (amount(v)?, BalanceKind::Deposit),
-            Step::Out(v) => (-amount(v)?, BalanceKind::Other),
+            Step::In(v) => (amount(v, &ticker)?, BalanceKind::Deposit),
+            Step::Out(v) => (-amount(v, &ticker)?, BalanceKind::Other),
         };
+        // Аудит 28.11.2026: подпись источника — тикер газа площадки (dex.gas_ticker), не зашитое «BNB».
+        let unit = super::super::gas_ticker::label(ctx);
         Ok(Some(BalanceChange {
             venue: ctx.venue(),
             asset: Asset {
@@ -110,19 +112,20 @@ impl Native {
             own: false,
             tx_hash: None,
             at: Utc::now(),
-            source: format!("баланс BNB кошелька, блоки {}–{block}", from + 1),
+            source: format!("баланс {unit} кошелька, блоки {}–{block}", from + 1),
             account: ctx.account.clone().map(crate::core::types::DexAccountId),
         }))
     }
 }
 
-/// Wei → BNB. Ошибка: сумма не помещается в Decimal (текст в ошибке узла не нужен — BadResponse).
-fn amount(v: U256) -> GatewayResult<Decimal> {
+/// Wei → монеты нативной монеты. Принимает: wei, тикер (подпись в ошибке). Ошибка: сумма не помещается в Decimal
+/// (текст в ошибке узла не нужен — BadResponse).
+fn amount(v: U256, ticker: &str) -> GatewayResult<Decimal> {
     num::to_decimal(v, num::BNB_DECIMALS).ok_or_else(|| {
         crate::gateway::errors::GatewayError::new(
             crate::gateway::errors::ErrorCode::BadResponse,
             None,
-            format!("изменение баланса BNB {v} wei не помещается в Decimal"),
+            format!("изменение баланса {ticker} {v} wei не помещается в Decimal"),
         )
     })
 }

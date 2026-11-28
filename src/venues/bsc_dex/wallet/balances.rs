@@ -127,7 +127,10 @@ fn wei_to_bnb(ctx: &Ctx, wei: U256) -> GatewayResult<Decimal> {
     num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
         ctx.err(
             ErrorCode::BadResponse,
-            format!("Баланс BNB {wei} wei не помещается в Decimal"),
+            format!(
+                "Баланс {} {wei} wei не помещается в Decimal",
+                super::super::gas_ticker::label(ctx)
+            ),
         )
     })
 }

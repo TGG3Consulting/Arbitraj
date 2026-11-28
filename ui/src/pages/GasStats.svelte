@@ -1,7 +1,7 @@
 <!--
   Файл: ui/src/pages/GasStats.svelte
   Что делает: экран «Статистика газа» (решение 36) — по каждой монете: попытки, успехи, отмены, газ впустую
-    и всего (BNB), итог (USDT: прибыль минус убыток минус газ впустую), когда обновлено. Сортировка по столбцу.
+    и всего (в монете газа сети монеты — поле gas ответа, dex.gas_ticker: BNB у BSC, ETH у Base/Ethereum), итог (USDT: прибыль минус убыток минус газ впустую), когда обновлено. Сортировка по столбцу.
     Числа Decimal приходят строками и показываются как есть (без пересчёта в браузере — без потери точности).
     Данные — GET /api/gas-stats; пока ядро не подключено — «нет данных» (503) с причиной.
     Живое сообщение gas_stats — перечитать.
@@ -19,15 +19,24 @@
 
   const stats = remote('/api/gas-stats', ['gas_stats']);
 
+  /** Поля газа: значение — в монете газа сети монеты (поле gas строки — dex.gas_ticker, аудит 28.11.2026). */
+  const GAS = ['gas_wasted_bnb', 'gas_total_bnb'];
+  /** Один тикер газа у всех строк — он в заголовке (у BSC — «BNB», как раньше); разные или не задан — тикер у числа. */
+  const unit = $derived.by(() => {
+    const set = new Set((stats.data ?? []).map((s) => s.gas ?? null));
+    return set.size === 1 ? [...set][0] : null;
+  });
   /** Столбцы: поле, заголовок, числовой ли (для выравнивания и сортировки). */
-  const COLS = [
+  const COLS = $derived([
     ['attempts', 'Попытки', true],
     ['successes', 'Успехи', true],
     ['cancels', 'Отмены', true],
-    ['gas_wasted_bnb', 'Газ впустую, BNB', true],
-    ['gas_total_bnb', 'Газ всего, BNB', true],
+    ['gas_wasted_bnb', unit ? `Газ впустую, ${unit}` : 'Газ впустую', true],
+    ['gas_total_bnb', unit ? `Газ всего, ${unit}` : 'Газ всего', true],
     ['result_usdt', 'Итог, USDT', true],
-  ];
+  ]);
+  /** Число ячейки: у поля газа без общего тикера — с тикером строки (не задан — «монета газа»). */
+  const cell = (s, field) => (GAS.includes(field) && !unit ? `${s[field]} ${s.gas ?? 'монета газа'}` : s[field]);
   let sortBy = $state('');
   let desc = $state(true);
 
@@ -69,7 +78,7 @@
         <tr>
           <td>{assetLabel(s.asset)}</td>
           {#each COLS as [field] (field)}
-            <td class="num" class:err={field === 'result_usdt' && String(s[field]).startsWith('-')}>{s[field]}</td>
+            <td class="num" class:err={field === 'result_usdt' && String(s[field]).startsWith('-')}>{cell(s, field)}</td>
           {/each}
           <td>{showTime(s.updated_at)}</td>
         </tr>

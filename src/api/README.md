@@ -103,7 +103,7 @@
 
 | Маршрут | Запрос | Ответ |
 | --- | --- | --- |
-| `GET /api/gas-stats` | — | `[CoinGasStats]`, по монетам |
+| `GET /api/gas-stats` | — | `[CoinGasStats]`, по монетам; у строки поле `gas` — тикер газа сети монеты (dex.gas_ticker) или null |
 | WS `/api/ws` | — | `{"type":"gas_stats","data":CoinGasStats}` |
 
 ### «Живой экран», «Сделки», «Управление» (ядро)

@@ -322,7 +322,8 @@ async fn revert_text_has_min_expected_tax_per_leg() {
     let r = req(Side::Sell, d("100"), d("739.5"));
     let legs = build(&q, &r, &paths, None).1.expect("минимумы").0;
     let exp: Vec<(Decimal, Decimal)> = paths.iter().map(|(p, _)| (p.usdt, Decimal::ZERO)).collect();
-    let text = sim::legs_text(&legs, &exp, &r, DECS);
+    // Аудит 28.11.2026: подпись расчётной монеты — venue.quote_asset площадки (у записанной BSC — USDT).
+    let text = sim::legs_text(&legs, &exp, &r, DECS, "USDT");
     assert_eq!(
         text,
         "доля 1: minOut 29645.525116470566368146 USDT, ожидалось 29660.451318 USDT, модельный налог монеты 0%; \

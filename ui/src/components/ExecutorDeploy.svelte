@@ -2,8 +2,8 @@
   Файл: ui/src/components/ExecutorDeploy.svelte
   Что делает: исполнитель ArbExecutor кошелька DEX на экране «Маппинг кошельков» (решения 122 X, 132: у каждого кошелька
     свой исполнитель — запросы с ?wallet=<id>; адрес после развёртывания записывается у кошелька сам): кнопка
-    «Развернуть исполнитель» → GET /api/venues/{id}/executor/quote (газ, цена газа, стоимость в BNB и USDT, кошелёк,
-    nonce, будущий адрес, SHA-256 байткода, версия solc, адрес обёртки BNB — аргумент конструктора, ревью 272 А1) →
+    «Развернуть исполнитель» → GET /api/venues/{id}/executor/quote (газ, цена газа, стоимость в монете газа и в расчётной монете площадки — venue.quote_asset, кошелёк,
+    nonce, будущий адрес, SHA-256 байткода, версия solc, адрес обёртки нативной монеты — аргумент конструктора, ревью 272 А1) →
     окно подтверждения → «Подтвердить и отправить» →
     POST /api/venues/{id}/executor/deploy {sha256, wnative} (задача t114: и адрес обёртки из окна — бот сверяет его с
     текущей dex.native_wrapped; транзакция создания с кошелька бота через очередь кошелька) →
@@ -23,12 +23,13 @@
     непринятого класса пул исполнителем идёт, только если прошёл пробу обе стороны (прошли / отвергнуты / не проверено);
     у принятого — сколько пулов отвергнуто пробой или откатом сделки. Подробно по пулу — карточка пула на «Монетах».
   Кто вызывает: pages/Wallets.svelte (у каждого кошелька).
-  От чего зависит: lib/api.js, components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
+  От чего зависит: lib/api.js, lib/settings.svelte.js (quoteAsset — подпись расчётной монеты), components/Modal.svelte, components/ErrorText.svelte, components/CheckConnection.svelte.
   Настройки: нет (адрес исполнителя — у кошелька).
 -->
 <script>
   import { post, seg } from '../lib/api.js';
   import { requestExecutorQuote } from '../lib/walletExecutor.js';
+  import { quoteAsset } from '../lib/settings.svelte.js';
   import Modal from './Modal.svelte';
   import ErrorText from './ErrorText.svelte';
   import CheckConnection from './CheckConnection.svelte';
@@ -108,7 +109,7 @@
         <tr><th>Адрес контракта (при nonce {quote.nonce})</th><td><code>{quote.address}</code></td></tr>
         <tr><th>Газ (лимит)</th><td>{quote.gas}</td></tr>
         <tr><th>Цена газа</th><td>{quote.gas_price_wei} wei</td></tr>
-        <tr><th>Стоимость в нативной монете</th><td>{quote.cost_bnb}{quote.cost_usdt ? ` ≈ ${quote.cost_usdt} USDT` : ''}</td></tr>
+        <tr><th>Стоимость в нативной монете</th><td>{quote.cost_bnb}{quote.cost_usdt ? ` ≈ ${quote.cost_usdt} ${quoteAsset(venue)}` : ''}</td></tr>
         <tr><th>Байткод</th><td>{quote.bytecode_len} байт, SHA-256 <code>{quote.bytecode_sha256}</code>, solc {quote.solc}</td></tr>
         <tr><th>Обёртка нативной монеты</th><td><code>{quote.wnative}</code> — dex.native_wrapped, аргумент конструктора; сменить потом нельзя, только переразвернуть</td></tr>
       </tbody>

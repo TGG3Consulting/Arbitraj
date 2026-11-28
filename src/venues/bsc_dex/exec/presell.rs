@@ -103,8 +103,10 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
         let have = balances::bnb(ctx, wallet).await?;
         let need = num::to_decimal(p.value(), num::BNB_DECIMALS).ok_or_else(bad)?;
         if have < need {
+            // Аудит 28.11.2026: подпись — тикер газа площадки (dex.gas_ticker), не зашитое «BNB».
+            let unit = super::super::gas_ticker::label(ctx);
             let why = format!(
-                "продажа BNB: у кошелька {have} BNB, нужно {need} — нативная монета в симуляции не пополняется \
+                "продажа {unit}: у кошелька {have} {unit}, нужно {need} — нативная монета в симуляции не пополняется \
                  (налога токена у неё нет)"
             );
             return Err(ctx.err(ErrorCode::NotApplicable, why));
@@ -122,12 +124,16 @@ pub async fn run(q: &Quoting, req: TradeRequest) -> GatewayResult<PresellOutcome
     // Решение 407: баланс входа подменой слота (exec/presell_credit.rs); не вышло — путь как раньше, с пометкой.
     let sim = presell_credit::run(q, &ready, wallet, &io).await?;
     // Решение 252, вариант «б»: выход уже уменьшен на излишек пары от пополнения — строка в журнал и в причину отказа.
+    // Аудит 28.11.2026: подпись — расчётная монета площадки (venue.quote_asset), не зашитое «USDT».
+    let qa = ctx
+        .text("venue.quote_asset")
+        .unwrap_or_else(|_| "расчётная монета".into());
     let surplus = sim
         .surplus
-        .map(|s| dry_surplus_cut::line(&s, decs.0, decs.1, "USDT"));
+        .map(|s| dry_surplus_cut::line(&s, decs.0, decs.1, &qa));
     let tail = || {
         format!(
-            "кошелёк {wallet:#x}, форма {}, ожидалось {} USDT (живой пересчёт, модельный налог), минимум {} USDT \
+            "кошелёк {wallet:#x}, форма {}, ожидалось {} {qa} (живой пересчёт, модельный налог), минимум {} {qa} \
              (по долям: {}), блок {}{}{}",
             ready.form,
             ready.usdt.round_dp(6),

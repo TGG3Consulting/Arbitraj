@@ -2,13 +2,13 @@
 //! Что делает: экраны «Ручное управление» (застрявшие монеты, «Беру на себя», «Вернуть боту», решение 37)
 //! и «Статистика газа» (по монетам, решение 36) — данные и команды ядра.
 //! Кто вызывает: интерфейс (экраны «Ручное управление», «Статистика газа»).
-//! От чего зависит: api/state.rs, core (Core::manual, Core::command, Core::gas_stats), core/types.
+//! От чего зависит: api/state.rs, core (Core::manual, Core::command, Core::gas_stats), core/gas_ticker.rs, core/types.
 //! Настройки: нет (режим застрявших монет — stuck.*, экран «Настройки»).
 //!
 //! GET  /api/manual          — {alerts: [StuckAlert], holdings: [ManualHolding], halted: [Deal] (решение 100),
 //!                              usdt: [Deal] — «USDT не вернулись» (решение 163), records: [ManualRecord] (решение 156)}
 //! POST /api/manual/command  — {action: ManualAction} → {ok, details}
-//! GET  /api/gas-stats       — [CoinGasStats]
+//! GET  /api/gas-stats       — [CoinGasStats + gas: тикер газа сети монеты или null]
 
 use axum::Json;
 use axum::extract::State;
@@ -64,7 +64,21 @@ pub async fn command(
     })
 }
 
-/// Статистика газа по монетам. Ошибок нет.
-pub async fn gas_stats(State(st): State<AppState>) -> Json<Vec<CoinGasStats>> {
-    Json(st.core.gas_stats())
+/// Статистика газа по монетам. Аудит 28.11.2026: к каждой строке — поле gas, тикер газа сети монеты
+/// (core/gas_ticker.rs of_asset: dex.gas_ticker площадки DEX сети — BNB у BSC, ETH у Base/Ethereum; не задана — null)
+/// для подписи столбцов газа. Ошибок нет.
+pub async fn gas_stats(State(st): State<AppState>) -> Json<Vec<serde_json::Value>> {
+    let rows: Vec<CoinGasStats> = st.core.gas_stats();
+    Json(
+        rows.into_iter()
+            .map(|r| {
+                let gas = crate::core::gas_ticker::of_asset(&st.core, &r.asset).ok();
+                let mut v = serde_json::to_value(&r).unwrap_or_default();
+                if let Some(o) = v.as_object_mut() {
+                    o.insert("gas".into(), serde_json::json!(gas));
+                }
+                v
+            })
+            .collect(),
+    )
 }

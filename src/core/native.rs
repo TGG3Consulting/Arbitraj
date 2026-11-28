@@ -138,13 +138,13 @@ pub async fn minus_sell_gas(
                 .sum();
             (
                 qty - gas,
-                Some(format!("BNB: за вычетом газа продажи {gas}")),
+                Some(format!("{gas_t}: за вычетом газа продажи {gas}")),
             )
         }
         Err(e) => (
             qty,
             Some(format!(
-                "BNB: газ продажи не оценён ({}) — не вычтен",
+                "{gas_t}: газ продажи не оценён ({}) — не вычтен",
                 e.message
             )),
         ),
@@ -219,7 +219,14 @@ pub fn spendable(
         .inner
         .deps
         .settings
-        .decimal("risk.min_bnb_balance", At::default())
+        // Аудит 28.11.2026: резерв — по площадке DEX (значение площадки, иначе вся система), в монете газа площадки.
+        .decimal(
+            "risk.min_bnb_balance",
+            At {
+                venue: Some(&venue.0),
+                coin: None,
+            },
+        )
         .map_err(|e| {
             format!(
                 "{}: {ticker} без резерва на газ не посчитать — {}",

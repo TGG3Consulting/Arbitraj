@@ -162,15 +162,17 @@ fn price(
 
 /// Что делает: текст «доля k: minOut M, ожидалось E, модельный налог T%» по долям — для отката пробы (решение 234, п. 4).
 /// Принимает: шаги долей (минимум — у последнего шага, exec/leg_min.rs), по долям (ожидаемый выход, налог %), запрос
-/// (сторона: продажа — USDT, покупка — монеты), (decimals монеты, USDT). Ошибок нет (число не переводится — «?»).
+/// (сторона: продажа — расчётная монета, покупка — монеты), (decimals монеты, USDT), тикер расчётной монеты площадки
+/// (venue.quote_asset — подпись; аудит 28.11.2026, раньше зашитое «USDT»). Ошибок нет (число не переводится — «?»).
 pub fn legs_text(
     legs: &[Vec<Step>],
     exp: &[(Decimal, Decimal)],
     req: &TradeRequest,
     (coin_dec, usdt_dec): (u8, u8),
+    quote: &str,
 ) -> String {
     let (dec, unit) = match req.side {
-        Side::Sell => (usdt_dec, "USDT"),
+        Side::Sell => (usdt_dec, quote),
         Side::Buy => (coin_dec, req.asset.ticker.as_str()),
     };
     let parts: Vec<String> = legs

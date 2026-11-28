@@ -127,17 +127,19 @@ pub async fn withdraw(
     ))
 }
 
-/// Адрес токена монеты. Ошибки: NotConfigured — у монеты нет адреса в BSC.
+/// Адрес токена монеты. Ошибки: NotConfigured — у монеты нет адреса в сети площадки (аудит 28.11.2026: в тексте —
+/// сеть площадки dex.chain, не зашитое «BSC»; не задана — id площадки).
 pub fn token(ctx: &Ctx, a: &Asset) -> GatewayResult<Address> {
     a.contract.ok_or_else(|| {
+        let net = ctx.text("dex.chain").unwrap_or_else(|_| ctx.venue().0);
         ctx.err(
             ErrorCode::NotConfigured,
-            format!("{}: нет адреса контракта в BSC", a.ticker),
+            format!("{}: нет адреса контракта в сети {net}", a.ticker),
         )
     })
 }
 
-/// Сеть запроса — сеть BSC (venue.bsc_network). Ошибки: NotConfigured, InvalidAddress (другая сеть).
+/// Сеть запроса — сеть площадки (venue.bsc_network — историческое имя, у Base/Ethereum — их сеть). Ошибки: NotConfigured, InvalidAddress (другая сеть).
 pub fn same_network(ctx: &Ctx, network: &str) -> GatewayResult<()> {
     let ours = ctx.text("venue.bsc_network")?;
     if network != ours {

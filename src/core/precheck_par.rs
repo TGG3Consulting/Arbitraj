@@ -122,8 +122,11 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
             }
             VenueKind::Dex => {
                 let r = bnb_ok(core, d, a, Decimal::ZERO).await;
+                // Подпись шага — тикер газа площадки (dex.gas_ticker; не задана — «газа»).
+                let unit = super::gas_ticker::at(&core.inner.deps.settings, a)
+                    .unwrap_or_else(|_| "газа".to_string());
                 (
-                    format!("баланс BNB {}", a.0),
+                    format!("баланс {unit} {}", a.0),
                     at.elapsed().as_millis(),
                     r,
                     None,
@@ -153,7 +156,9 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
                 Ok(VenueKind::Dex) => {
                     let at = Instant::now();
                     let r = bnb_ok(core, d, b, Decimal::ZERO).await;
-                    m.push((format!("баланс BNB {}", b.0), at.elapsed().as_millis()));
+                    let unit = super::gas_ticker::at(&core.inner.deps.settings, b)
+                        .unwrap_or_else(|_| "газа".to_string());
+                    m.push((format!("баланс {unit} {}", b.0), at.elapsed().as_millis()));
                     r.map_err(Stop::LowBnb)
                 }
             }
@@ -185,7 +190,12 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
     marks.push((name_a, ms_a));
     if let Err(e) = ra {
         if ka == VenueKind::Dex {
-            core.inner.deps.notify("risk.low_bnb", Some(&a.0), &e).await;
+            // Аудит 28.11.2026: заголовок — по тикеру газа площадки (core/gas_ticker.rs low_gas_text).
+            let note = super::gas_ticker::low_gas_text(&core.inner.deps.settings, a, &e);
+            core.inner
+                .deps
+                .notify("risk.low_bnb", Some(&a.0), &note)
+                .await;
         }
         return (marks, srcs, Err(e));
     }
@@ -207,7 +217,12 @@ async fn run(core: &Core, d: &Direction, par: Par<'_>) -> Out {
         }
         Err(Stop::Plain(e)) => (marks, srcs, Err(e)),
         Err(Stop::LowBnb(e)) => {
-            core.inner.deps.notify("risk.low_bnb", Some(&b.0), &e).await;
+            // Аудит 28.11.2026: заголовок — по тикеру газа площадки (core/gas_ticker.rs low_gas_text).
+            let note = super::gas_ticker::low_gas_text(&core.inner.deps.settings, b, &e);
+            core.inner
+                .deps
+                .notify("risk.low_bnb", Some(&b.0), &note)
+                .await;
             (marks, srcs, Err(e))
         }
     }

@@ -179,7 +179,7 @@ async fn session(p: &Pools, inflows: &Inflows, wallet: Address) -> String {
                 match native.step(&p.ctx, inflows, wallet, done).await {
                     Ok(Some(b)) => { let _ = p.out.send(MarketEvent::Balance(b)).await; }
                     Ok(None) => {}
-                    Err(e) => p.ctx.log(Level::Warn, "dex.balance_event", format!("Баланс BNB: {}", e.message), None).await,
+                    Err(e) => p.ctx.log(Level::Warn, "dex.balance_event", format!("Баланс {}: {}", super::super::gas_ticker::label(&p.ctx), e.message), None).await,
                 }
             }
         }

@@ -110,7 +110,11 @@ pub async fn trade(
         ));
     }
     // Решение 234 (п. 4): minOut, ожидаемое и модельный налог каждой доли — в текст отката пробы (хронология сделки).
-    let mut diag = sim::legs_text(&legs, &exp, &req, decs);
+    // Аудит 28.11.2026: подпись расчётной монеты — venue.quote_asset площадки (не задана — «расчётная монета»).
+    let qa = ctx
+        .text("venue.quote_asset")
+        .unwrap_or_else(|_| "расчётная монета".into());
+    let mut diag = sim::legs_text(&legs, &exp, &req, decs, &qa);
     let mut model = exp;
     let slot = nonces.acquire(ctx).await?;
     let wallet = slot.from;
@@ -167,7 +171,7 @@ pub async fn trade(
         legs = fresh_legs;
         note = fresh;
         favour = fav;
-        diag = sim::legs_text(&legs, &exp, &req, decs);
+        diag = sim::legs_text(&legs, &exp, &req, decs, &qa);
         model = exp;
         (c, at) = build(q, &legs, executor, nat).await?;
         if !super::approvals(ctx, &c, wallet, executor).await?.is_empty()

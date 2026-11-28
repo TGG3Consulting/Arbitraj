@@ -12,7 +12,7 @@
 //! GasLimit × GasFeeCap + Value), а не фактическая плата.
 //! Кто вызывает: exec/txs.rs (send).
 //! От чего зависит: wallet/balances.rs (eth_getBalance), num.rs.
-//! Настройки: нет.
+//! Настройки: risk.min_bnb_balance (add_native_reserve; по площадке, иначе система), dex.gas_ticker (подпись).
 
 use alloy_primitives::{Address, U256};
 
@@ -39,12 +39,14 @@ pub fn add_native_reserve(ctx: &Ctx, value: U256, need: U256) -> GatewayResult<U
     {
         return Ok(need);
     }
-    let min = ctx
-        .settings
-        .decimal("risk.min_bnb_balance", crate::settings::read::At::default())
-        .map_err(|e| ctx.tag(e))?;
-    let reserve = num::to_units(min, num::BNB_DECIMALS)
-        .ok_or_else(|| ctx.err(ErrorCode::BadResponse, "резерв ETH не помещается в wei"))?;
+    // Аудит 28.11.2026: резерв — по площадке (значение площадки, иначе вся система), в монете газа площадки.
+    let min = ctx.dec("risk.min_bnb_balance")?;
+    let reserve = num::to_units(min, num::BNB_DECIMALS).ok_or_else(|| {
+        ctx.err(
+            ErrorCode::BadResponse,
+            "резерв на газ (risk.min_bnb_balance) не помещается в wei",
+        )
+    })?;
     Ok(need.saturating_add(reserve))
 }
 

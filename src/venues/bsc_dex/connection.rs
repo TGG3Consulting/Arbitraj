@@ -205,13 +205,15 @@ async fn history(ctx: &Ctx) -> Result<String, String> {
 }
 
 /// Кошелёк окружения (решение 132: у вида на счёт — кошелёк счёта; без привязки — кошелёк строки «пробы»): ключ из
-/// секретов → адрес, баланс BNB.
+/// секретов → адрес, баланс монеты газа (dex.gas_ticker).
 async fn wallet(ctx: &Ctx) -> Result<String, String> {
     let run = async {
         let name = ctx.wallet()?.name;
         let addr = signer::address(ctx)?;
         let bnb = balances::bnb(ctx, addr).await?;
-        GatewayResult::Ok(format!("«{name}»: адрес {addr}, BNB {bnb}"))
+        // Аудит 28.11.2026: подпись — тикер газа площадки (dex.gas_ticker), не зашитое «BNB».
+        let unit = super::gas_ticker::label(ctx);
+        GatewayResult::Ok(format!("«{name}»: адрес {addr}, {unit} {bnb}"))
     };
     run.await.map_err(|e| e.message)
 }

@@ -72,7 +72,7 @@ pub async fn dex_for_at(
         .map_err(ApiError::gateway)
 }
 
-/// Балансы BNB и USDT кошелька. Ошибки: 400/404 — как у dex_for; сбой запроса — в поле error.
+/// Балансы монеты газа (поле bnb, тикер — поле gas) и расчётной монеты (поле usdt, тикер — поле quote) кошелька. Ошибки: 400/404 — как у dex_for; сбой запроса — в поле error.
 pub async fn balances(
     State(st): State<AppState>,
     Path(id): Path<String>,
@@ -90,7 +90,8 @@ pub async fn balances(
         async move { v.balance(&a).await.map(|b| b.map(|x| x.free)) }
     };
     // Решение 416: тикер газа — dex.gas_ticker площадки DEX; не задана — причина в поле error.
-    let bnb = match crate::core::gas_ticker::at(&st.settings, &dex) {
+    let gas = crate::core::gas_ticker::at(&st.settings, &dex);
+    let bnb = match gas.clone() {
         Ok(g) => one(g).await,
         Err(e) => Err(crate::gateway::errors::GatewayError::not_set(
             None,
@@ -114,6 +115,8 @@ pub async fn balances(
         "bnb": bnb.ok().flatten(),
         "usdt": usdt.and_then(|u| u.ok().flatten()),
         "quote": quote,
+        // Аудит 28.11.2026: тикер газа площадки (dex.gas_ticker) — подпись строки газа в интерфейсе; не задана — null.
+        "gas": gas.ok(),
         "error": if err.is_empty() { None } else { Some(err.join("; ")) },
     })))
 }

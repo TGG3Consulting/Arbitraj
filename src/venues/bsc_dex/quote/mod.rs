@@ -433,7 +433,7 @@ impl Quoting {
             let bnb = num::to_decimal(wei, num::BNB_DECIMALS).ok_or_else(|| {
                 ctx.err(
                     ErrorCode::BadResponse,
-                    format!("Газ разрешений {wei} wei не переводится в BNB"),
+                    format!("Газ разрешений {wei} wei не переводится в {gas_t}"),
                 )
             })?;
             q.costs.push(with_step(Cost::new(

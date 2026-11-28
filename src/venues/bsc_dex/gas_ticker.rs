@@ -7,7 +7,9 @@
 //! Решение 398: после отправки транзакции настройки не читаются — затраты газа после отправки (exec/result.rs, перевод)
 //! берут тикер, прочитанный перед ней (node/chain_seen.rs ensure → ticker), — sent.
 //! Кто вызывает: wallet/{balances,transfer,transfer_cost,transfer_status}.rs, exec/result.rs, resolve_withdraw.rs,
-//! quote/{mod,pick,steps,native_gas}.rs, best_of/extra.rs, pools/mid_dex.rs, node/chain_seen.rs.
+//! quote/{mod,pick,steps,native_gas}.rs, best_of/extra.rs, pools/mid_dex.rs, node/chain_seen.rs; label (подписи, аудит
+//! 28.11.2026) — connection.rs, exec/presell.rs, exec/executor/deploy.rs, send/tip_gas.rs,
+//! wallet/{balances,events,events_native,transfer_cost}.rs, quote/native_gas.rs.
 //! От чего зависит: ctx.rs (настройки, Ctx.chains — память тикера).
 //! Настройки: dex.gas_ticker [bsc_dex].
 
@@ -44,4 +46,11 @@ pub fn sent(ctx: &Ctx) -> GatewayResult<String> {
         Some(t) => Ok(t),
         None => read(ctx),
     }
+}
+
+/// Что делает: аудит 28.11.2026 — подпись монеты газа для текстов (ошибки, проверка подключения, источники событий):
+/// тикер (sent: прочитанный перед отправкой, иначе из настроек); не задан — «монета газа». У BSC — прежнее «BNB».
+/// Принимает: окружение. Возвращает: подпись. Ошибок нет (подпись не меняет поведения).
+pub fn label(ctx: &Ctx) -> String {
+    sent(ctx).unwrap_or_else(|_| "монета газа".to_string())
 }

@@ -24,6 +24,8 @@ pub struct Market {
     pub quote: String,
 }
 
+/// Денежный круг конверсии у направления: у стороны с dex.settlement_contract расчётная валюта отличается от валюты
+/// биржи-напарника. Равные имена USDT — см. cash_same.rs. Принимает: ядро, направление. Ошибок нет.
 pub fn mixed(core: &Core, d: &Direction) -> bool {
     let s = &core.inner.deps.settings;
     [(&d.buy_on, &d.sell_on), (&d.sell_on, &d.buy_on)]
@@ -38,11 +40,14 @@ pub fn mixed(core: &Core, d: &Direction) -> bool {
             if a != b || b != evm_profiles::LEDGER_QUOTE {
                 return true;
             }
-            // Равные отображаемые имена допускают прямой расчёт только при совпавшем физическом ERC-20.
-            let Ok(Some(pinned)) = configured(core, dex) else {
-                return true;
-            };
-            super::registry_chains::usdt_of(core, pinned.chain.as_ref()).ok() != pinned.contract
+            // Равные имена USDT (найдено арбитром 28.11.2026, cash_same.rs): адрес USDT сети подтверждён — прямой
+            // расчёт. Не подтверждён — денежный круг только если биржа зовёт закреплённый ERC-20 иначе (Market::new
+            // проходит); иначе прямой путь, и сигнал со входом отвечают явной причиной (cash_same::check), а не вечным
+            // «Расчётные валюты сторон совпадают».
+            if super::cash_same::confirmed(core, dex).is_ok() {
+                return false;
+            }
+            Market::new(core, dex, cex).is_ok()
         })
 }
 

@@ -16,6 +16,8 @@
 //! Решение 391 (t177): σ плана входа — sigma_plan.rs (reserve.rs sigma_now; при profit.sigma_min_changes и заданной
 //! границе profit.sigma_floor_per_s [B] — σ = max(σ ряда, граница) вместо отказа).
 //! Решения 358, 364 (только журнал): план входа всегда несёт сравнение σ (reserve_check.rs), решение не меняется.
+//! Найдено в живом боте 28.11.2026 (сборка e9907a2f): for_settlement_signal — ранний сигнал денежного круга без σ
+//! (σ = 0, как грубый спред BSC); иначе круг «цены нет без σ — σ нет без замеров — замеров нет без цены».
 //! Решение 242: profit.price_move_k и profit.closure_share — сначала площадка + тип направления (core/venue_dir.rs);
 //! дополнение п. 2 (Тигран 09.11): у profit.price_move_k монета сильнее пары (монета → пара → вся система).
 //! Настройки: venue.quote_asset, profit.price_move_k (можно по монете), profit.liquidity_share_h (по B),
@@ -92,6 +94,10 @@ enum Moment<'a> {
     Entry,
     /// Сделка уже идёт (частичная покупка): как до решения 240 — σ ряда, без доли.
     Held,
+    /// Найдено в живом боте 28.11.2026: ранний сигнал направления с денежным кругом конверсии (prices.rs →
+    /// settlement_model::signal) — как грубый спред BSC, без σ и запаса: σ = 0, сравнения σ нет. Ряд σ копится из цен
+    /// этого сигнала (evaluate.rs); σ по-прежнему обязательна для входа (Entry: settlement_entry.rs decide).
+    Signal,
     /// Момент решения о входе: σ и T плана, настройки — копия на этот момент (решения 237, 239).
     Decided {
         sigma: Decimal,
@@ -143,6 +149,12 @@ impl DirCtx {
     /// Сборка контекста на момент `at_m` (см. Moment). Ошибки: как у build.
     pub(super) fn for_settlement(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
         Self::build_with(core, dir, Moment::Entry, true)
+    }
+
+    /// Контекст раннего сигнала денежного круга (найдено в живом боте 28.11.2026): как for_settlement, но без σ
+    /// (Moment::Signal) — цена сигнала не ждёт рядов σ, которые сами копятся из цен сигнала. Ошибки: как у build, кроме σ.
+    pub(super) fn for_settlement_signal(core: &Core, dir: &Direction) -> Result<DirCtx, String> {
+        Self::build_with(core, dir, Moment::Signal, true)
     }
 
     fn build_with(
@@ -213,28 +225,7 @@ impl DirCtx {
             .filter(|(v, k)| *k == VenueKind::Cex && super::registry_sync::enabled(core, v))
             .map(|(v, _)| v.clone())
             .collect();
-        // σ продажи на B — ряд этого направления (напарник A, решение 118); решение 237 — у плана сделки своя;
-        // решение 240 — у плана входа с проверкой и границей (reserve.rs).
-        let sigma = match &at_m {
-            Moment::Decided { sigma, .. } => *sigma,
-            // Решение 391 (t177): неподвижная цена при заданной границе — σ = граница, а не отказ (sigma_plan.rs).
-            Moment::Entry => {
-                super::sigma_plan::entry_shared(&core.inner.vol, s, dir, chrono::Utc::now())?
-            }
-            Moment::Held => {
-                let window = s
-                    .integer("profit.sigma_window_min", At::default())
-                    .map_err(|e| e.message)?;
-                lk(&core.inner.vol).sigma(
-                    &dir.sell_on,
-                    &dir.asset,
-                    Side::Sell,
-                    &dir.buy_on,
-                    window,
-                    chrono::Utc::now(),
-                )?
-            }
-        };
+        let sigma = sigma_at(core, s, dir, &at_m)?;
         let coin = super::coin_key::scope_id(&dir.asset);
         let coin_at = At {
             venue: None,
@@ -377,6 +368,34 @@ impl DirCtx {
     }
 }
 
+/// σ продажи на B за секунду на момент сборки: ряд этого направления (напарник A, решение 118); решение 237 — у плана
+/// сделки своя; решение 240 — у плана входа с проверкой и границей (reserve.rs); ранний сигнал денежного круга — 0
+/// (Moment::Signal, найдено в живом боте 28.11.2026). Принимает: ядро, настройки, направление, момент.
+/// Ошибки: текст «σ ещё не измерена» и прочие отказы sigma_plan.rs / vol.rs; не задано окно.
+fn sigma_at(core: &Core, s: &Store, dir: &Direction, at_m: &Moment) -> Result<Decimal, String> {
+    Ok(match at_m {
+        Moment::Decided { sigma, .. } => *sigma,
+        Moment::Signal => Decimal::ZERO,
+        // Решение 391 (t177): неподвижная цена при заданной границе — σ = граница, а не отказ (sigma_plan.rs).
+        Moment::Entry => {
+            super::sigma_plan::entry_shared(&core.inner.vol, s, dir, chrono::Utc::now())?
+        }
+        Moment::Held => {
+            let window = s
+                .integer("profit.sigma_window_min", At::default())
+                .map_err(|e| e.message)?;
+            lk(&core.inner.vol).sigma(
+                &dir.sell_on,
+                &dir.asset,
+                Side::Sell,
+                &dir.buy_on,
+                window,
+                chrono::Utc::now(),
+            )?
+        }
+    })
+}
+
 /// Возврат USDT в каждой сделке (варианты usdt_return.mode — per_trade / separate, settings/catalog/trade.rs).
 fn cx_return(mode: &str) -> bool {
     mode == "per_trade"
@@ -389,3 +408,7 @@ fn at(v: &VenueId) -> At<'_> {
         coin: None,
     }
 }
+
+#[cfg(test)]
+#[path = "dirctx_sigma_tests.rs"]
+mod sigma_tests;

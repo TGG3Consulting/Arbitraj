@@ -85,15 +85,7 @@ pub async fn evaluate(
             None => super::prices::for_books(core, &dir, &reference_books).await,
         };
         if let Ok(p) = &prices {
-            // Замеры цен для σ (vol.rs): покупка на A и продажа на B — отдельные ряды, у каждого направления свои
-            // (решение 118: ключ — со площадкой-напарником).
-            let now = Utc::now();
-            let w = window_min(core);
-            let (a, b) = (&dir.buy_on, &dir.sell_on);
-            let mut vol = lk(&core.inner.vol);
-            vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
-            let sell_price = p.venue_sale.as_ref().map_or(p.sell, |s| s.price);
-            vol.sample(b, &dir.asset, Side::Sell, a, sell_price, now, w);
+            sample(core, &dir, p, Utc::now());
         }
         let timer = lk(&core.inner.ripen).take_fired(&dir);
         let now = Utc::now();
@@ -153,6 +145,25 @@ pub async fn evaluate(
             core.inner.live.send(CoreEvent::Spread(view));
         }
     }
+}
+
+/// Замеры цен сигнала для σ (vol.rs) — единственная запись рядов σ направления: покупка на A и продажа на B — отдельные
+/// ряды, у каждого направления свои (решение 118: ключ — со площадкой-напарником). Продажа — в единицах B
+/// (Prices.venue_sale), иначе Prices.sell. У денежного круга (найдено в живом боте 28.11.2026) цены сигнала считаются
+/// без σ (settlement_model::signal), поэтому ряд копится с первого тика. Принимает: ядро, направление, цены, время.
+/// Ошибок нет.
+pub(super) fn sample(
+    core: &Core,
+    dir: &Direction,
+    p: &super::signal::Prices,
+    now: chrono::DateTime<Utc>,
+) {
+    let w = window_min(core);
+    let (a, b) = (&dir.buy_on, &dir.sell_on);
+    let mut vol = lk(&core.inner.vol);
+    vol.sample(a, &dir.asset, Side::Buy, b, p.buy, now, w);
+    let sell_price = p.venue_sale.as_ref().map_or(p.sell, |s| s.price);
+    vol.sample(b, &dir.asset, Side::Sell, a, sell_price, now, w);
 }
 
 /// Решение 322: направления с площадкой события пула — первыми; сортировка устойчивая (остальные в прежнем порядке);

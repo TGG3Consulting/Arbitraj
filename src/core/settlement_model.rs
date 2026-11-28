@@ -2,6 +2,7 @@
 //! Что делает: считает прибыль полного маршрута в валюте учёта.
 //! Кто вызывает: API и выбор исполнимого маршрута.
 //! От чего зависит: снимки обеих сторон, комиссии и оценка расходов.
+//! signal — ранний сигнал (prices.rs) без σ и запаса (найдено в живом боте 28.11.2026); evaluate/point — вход.
 //! Настройки: пара целевой сделки и расчётная пара исходной биржи.
 pub use super::settlement_values::{Model, signal_amounts};
 use super::settlement_values::{add, mul};
@@ -20,14 +21,30 @@ pub async fn evaluate(core: &Core, d: &Direction, qty: Decimal) -> Result<Model,
     point(core, d, qty).await.map_err(|e| e.to_string())
 }
 
+/// Ранний сигнал денежного круга (prices.rs; найдено в живом боте 28.11.2026): та же модель на текущих данных, но без
+/// σ и запаса на движение цены (reserve_quote = 0), как грубый спред BSC. Цены сигнала копят ряд σ (evaluate.rs), а
+/// σ и запас обязательны для входа и исполнения (evaluate, point). Принимает: ядро, направление, объём.
+/// Возвращает: модель с reserve_quote = 0. Ошибки: как у evaluate, кроме «σ ещё не измерена».
+pub async fn signal(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, String> {
+    crate::gateway::quote_stage::settlement_if(true, model(core, d, qty, true))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 pub(super) async fn point(
     core: &Core,
     d: &Direction,
     qty: Decimal,
 ) -> Result<Model, super::size::Fail> {
-    crate::gateway::quote_stage::settlement_if(true, model(core, d, qty)).await
+    crate::gateway::quote_stage::settlement_if(true, model(core, d, qty, false)).await
 }
-async fn model(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, super::size::Fail> {
+/// signal = true — ранний сигнал: контекст без σ (dirctx.rs for_settlement_signal), запас 0.
+async fn model(
+    core: &Core,
+    d: &Direction,
+    qty: Decimal,
+    signal: bool,
+) -> Result<Model, super::size::Fail> {
     use super::size::Fail;
     let market = super::settlement_market::Market::direction(core, d)?;
     market.accounting()?;
@@ -55,7 +72,11 @@ async fn model(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, super:
     {
         return Err("Для биржи отсутствует восстанавливаемая конверсия/вывод".into());
     }
-    let cx = super::dirctx::DirCtx::for_settlement(core, d)?;
+    let cx = if signal {
+        super::dirctx::DirCtx::for_settlement_signal(core, d)?
+    } else {
+        super::dirctx::DirCtx::for_settlement(core, d)?
+    };
     if !cx.units_b_per_a.is_identity() {
         return Err(
             "Единицы целевого токена на двух площадках требуют подтверждённой отдельной сверки"
@@ -204,15 +225,20 @@ async fn model(core: &Core, d: &Direction, qty: Decimal) -> Result<Model, super:
         };
         add(sum, value)
     })?;
-    let reserve = super::reserve::amount(
-        cx.keep.ok_or("Нет горизонта перехода")?,
-        final_quote,
-        cx.closure_share,
-        cx.units_b_per_a
-            .to_buy(buy_unit)
-            .map_err(|e| e.to_string())?,
-        sell_unit,
-    );
+    // Ранний сигнал — без запаса на движение цены (σ ещё может копиться); вход и исполнение — с запасом.
+    let reserve = if signal {
+        Decimal::ZERO
+    } else {
+        super::reserve::amount(
+            cx.keep.ok_or("Нет горизонта перехода")?,
+            final_quote,
+            cx.closure_share,
+            cx.units_b_per_a
+                .to_buy(buy_unit)
+                .map_err(|e| e.to_string())?,
+            sell_unit,
+        )
+    };
     let profit = final_quote - invested - costs - reserve;
     Ok(Model {
         cost_lines,

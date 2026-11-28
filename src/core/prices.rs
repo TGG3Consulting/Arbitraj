@@ -189,6 +189,12 @@ async fn compare(
     if ref_price <= Decimal::ZERO {
         return Err("опорная цена в единицах покупки округлена до нуля".into());
     }
+    // Найдено арбитром 28.11.2026: равные имена USDT без денежного круга — адрес USDT сети подтверждён (cash_same.rs),
+    // иначе явная причина до котировок.
+    let mixed = super::settlement_market::mixed(core, dir);
+    if !mixed {
+        super::cash_same::check(core, dir)?;
+    }
     let at = At {
         venue: Some(&dir.buy_on.0),
         coin: None,
@@ -228,10 +234,12 @@ async fn compare(
             qa.fillable_qty, qb.fillable_qty
         ));
     }
-    if super::settlement_market::mixed(core, dir) {
+    if mixed {
+        // Найдено в живом боте 28.11.2026: сигнал — без σ и запаса (settlement_model::signal), как грубый спред BSC;
+        // иначе цены нет без σ, а σ нет без замеров цен сигнала (evaluate.rs). σ обязательна для входа.
         let model = crate::gateway::quote_purpose::scope(
             Signal,
-            super::settlement_model::evaluate(core, dir, qty),
+            super::settlement_model::signal(core, dir, qty),
         )
         .await?;
         super::window_dex::note(core, dir, &model.buy, &model.sell, generation);

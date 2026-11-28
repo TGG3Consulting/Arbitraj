@@ -40,6 +40,7 @@ pub mod card_links;
 pub mod card_max;
 pub mod card_text;
 pub mod cash_holds;
+pub mod cash_same;
 pub mod cash_order;
 pub mod cex_link;
 pub mod chain;

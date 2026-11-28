@@ -49,6 +49,8 @@ pub struct SwapCtx {
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) dexalot: Option<Box<super::super::dexalot::receipt::Saved>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
+    pub(in crate::venues::bsc_dex) tokenlon: Option<Box<super::super::tokenlon::settlement::Saved>>,
+    #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) airswap: Option<Box<super::super::airswap::receipt::Saved>>,
     #[serde(default,skip_serializing_if="Option::is_none")]
     pub(in crate::venues::bsc_dex) epsilon: Option<Box<super::super::epsilon::wire::Saved>>,
@@ -182,6 +184,7 @@ impl SwapCtx {
     pub(in crate::venues::bsc_dex) fn module_order(&self)->Option<super::signed_call::Erc20Call> {
         self.native_rfq.as_deref().map(super::super::native_rfq::settlement::Saved::signed)
             .or_else(|| self.zeroex.as_deref().map(|p|p.call))
+            .or_else(||self.tokenlon.as_deref().map(super::super::tokenlon::settlement::Saved::signed))
             .or_else(|| self.shiba.as_deref().map(super::shiba_payment::Proof::signed))
             .or_else(|| self.aqua.as_deref().map(super::aqua_wallet::Proof::signed))
             .or_else(|| self.aktionariat.as_deref().map(super::aktionariat_wallet::Proof::signed))

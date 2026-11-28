@@ -65,12 +65,12 @@ impl Store<'_> {
         match self {
             Store::Deal(d) => {
                 d.plan[FIELD] = v;
-                super::settlement_cycle::save(core, &**d).await
+                super::settlement_cycle::save(core, d).await
             }
             Store::Path(db, p) => {
                 let previous = (**p).clone();
                 p.to_trading = Some(v);
-                super::settlement_recovery::save(*db, &**p, Some(&previous)).await
+                super::settlement_recovery::save(db, p, Some(&previous)).await
             }
         }
     }

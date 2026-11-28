@@ -48,6 +48,14 @@ impl WalletTypes {
         seen.insert((m, coin.to_string(), network.to_string()), code);
     }
 
+    /// Что делает: есть ли в памяти запись (даже «нет поля») для адреса монеты в сети под ключом `mark`.
+    /// Принимает: отпечаток ключа, монету, сеть. Возвращает: true — адрес уже читался под этим ключом. Ошибок нет.
+    pub fn known(&self, mark: Option<u64>, coin: &str, network: &str) -> bool {
+        let Some(m) = mark else { return false };
+        let seen = self.seen.lock().unwrap_or_else(|p| p.into_inner());
+        seen.contains_key(&(m, coin.to_string(), network.to_string()))
+    }
+
     /// Что делает: все адреса сети, прочитанные под ключом `mark`, зачисляют на торговый счёт. Принимает: отпечаток
     /// ключа, сеть. Возвращает: true — есть хотя бы один адрес, у каждого walletType есть и не из NOT_TRADING;
     /// нет ключа, нет адресов, нет поля или хоть один фондовый / фьючерсный — false. Ошибок нет.
@@ -67,15 +75,22 @@ impl WalletTypes {
 /// Возвращает: true — venue.deposit_to_spot не «да» (нет или не задана) и trading_credit по сети venue.base_network
 /// под текущим ключом API; иначе (перевод фонд → спот включён, сеть Base не задана, нет данных) — false. Ошибок нет.
 pub fn credit_ready(ctx: &Ctx, types: &WalletTypes) -> bool {
+    let Some(network) = credit_network(ctx) else {
+        return false;
+    };
+    types.trading_credit(ctx.vault.mark(SECRET_API_KEY), &network)
+}
+
+/// Что делает: настройки допускают прямое зачисление — venue.deposit_to_spot не «да» (нет или не задана) и задана
+/// venue.base_network. Принимает: окружение. Возвращает: Some(имя сети Base у BingX); иначе None. Ошибок нет.
+/// Вызывают: credit_ready, deposit_wallet_warm.rs.
+pub fn credit_network(ctx: &Ctx) -> Option<String> {
     // Перевод фонд → спот включён — депозит по решению 102 ждётся на фонде; круг с ним не совместим.
     // Неразборчивое значение — тоже не «нет»: зачисление не подтверждено.
     match ctx.flag("venue.deposit_to_spot") {
         Ok(false) => {}
         Err(e) if e.code == ErrorCode::NotConfigured => {}
-        _ => return false,
+        _ => return None,
     }
-    let Ok(network) = ctx.text("venue.base_network") else {
-        return false;
-    };
-    types.trading_credit(ctx.vault.mark(SECRET_API_KEY), &network)
+    ctx.text("venue.base_network").ok()
 }

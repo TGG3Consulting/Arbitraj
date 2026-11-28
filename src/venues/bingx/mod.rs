@@ -19,6 +19,7 @@ pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
 pub mod deposit_wallet;
+pub mod deposit_wallet_warm;
 pub mod depth;
 pub mod errors;
 pub mod feed;
@@ -82,6 +83,8 @@ pub struct Bingx {
     fees: Fees,
     /// Адреса депозита в памяти (deposit_addr.rs, решение 118 Я-5).
     addrs: DepositAddrs,
+    /// Идёт фоновое чтение адреса расчётного токена Base (deposit_wallet_warm.rs) — второе не начинается.
+    wallet_warm: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Bingx {
@@ -94,6 +97,7 @@ impl Bingx {
             books: Books::default(),
             fees: Fees::default(),
             addrs: DepositAddrs::default(),
+            wallet_warm: Default::default(),
         }
     }
 
@@ -181,8 +185,12 @@ impl Venue for Bingx {
         Ok(account::check(&self.ctx).await)
     }
 
+    /// Справочник сетей (wallet.rs). Расчётный круг: после удачного ответа — фоновое чтение адреса депозита
+    /// расчётного токена в сети Base, если его walletType ещё не известен (deposit_wallet_warm.rs); ответ ядру не ждёт.
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
-        wallet::coin_networks(&self.ctx).await
+        let list = wallet::coin_networks(&self.ctx).await?;
+        deposit_wallet_warm::spawn(&self.ctx, &self.addrs, &list, &self.wallet_warm);
+        Ok(list)
     }
 
     /// Решение 175: делистинги — пары в статусе 29 «pre-delisted» справочника пар (delist.rs).

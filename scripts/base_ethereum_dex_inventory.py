@@ -27,6 +27,8 @@ BASE_USDT_EVIDENCE = {
              "[Trading API](https://docs.o1.exchange/api/trading.md) · [Отдельная статистика Terminal, Swap и Launchpad](https://o1.exchange/analytics)."),
     "9153": ("На Base расчёт идёт в USDC, конкретная карта выбирается с помощью VRF. "
              "[Набор и способ расчёта](https://www.top.market/packs/1)."),
+    "534": ("Собственный AMM Overtime предлагает ликвидность для ставок на исход. Билет и право на выигрыш не образуют валютную пару. "
+             "[Устройство AMM](https://docs.overtime.io/learn-about-overtime/how-overtime-works) · [Расчёт исходов](https://docs.overtime.io/learn-about-overtime/market-creation-and-trading)."),
 }
 
 

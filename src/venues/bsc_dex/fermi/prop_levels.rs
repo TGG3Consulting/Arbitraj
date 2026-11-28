@@ -60,14 +60,14 @@ pub(super) fn quote_result(router: Address, venue: Address, raw: &[u8]) -> Optio
 }
 #[derive(Clone, Copy)]
 pub(super) enum Quoted<'a> {
-    Prop(prop_wallet::Terms),
+    Prop(&'a prop_wallet::Terms),
     Bop(&'a super::bop_cash::Path),
 }
 impl<'a> Quoted<'a> {
     pub(super) fn book(book: &'a Books) -> Option<Self> {
         match &book.config.source {
             Source::Bop(path) => Some(Self::Bop(path)),
-            _ => book.prop.map(Self::Prop),
+            _ => book.prop.as_ref().map(Self::Prop),
         }
     }
 }
@@ -115,10 +115,10 @@ async fn read_pair(
     dc: u8,
 ) -> GatewayResult<(Option<prop_wallet::Terms>, SideBook, SideBook)> {
     let ctx = &p.ctx;
-    let (source, terms, dec) = match &cfg.source {
+    let measured;
+    let (source, dec) = match &cfg.source {
         Source::Bop(path) => (
             Quoted::Bop(path),
-            None,
             canonical(ctx, h.hash, coin, decimalsCall {}).await?,
         ),
         Source::Prop { id, .. } => {
@@ -132,8 +132,8 @@ async fn read_pair(
             if !enabled || !roles.accepts_frame(cfg.deployment.engine, cfg.deployment.runtime) {
                 return Err(ctx.err(ErrorCode::NoRoute, "Именная площадка отключена"));
             }
-            let t = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;
-            (Quoted::Prop(t), Some(t), dec)
+            measured = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;
+            (Quoted::Prop(&measured), dec)
         }
         _ => unreachable!(),
     };
@@ -177,6 +177,7 @@ async fn read_pair(
         }
         SideBook(amounts.into_iter().collect())
     };
+    let terms = match source { Quoted::Prop(terms) => Some(*terms), Quoted::Bop(_) => None };
     Ok((terms, levels(buy, true), levels(sell, false)))
 }
 pub(super) async fn levels(

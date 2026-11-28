@@ -220,7 +220,7 @@ pub(super) async fn candidate(
     let (spent, output) = rows.into_iter().find(|(_, out)| !buy || *out >= wanted)?;
     Some(
         Order {
-            terms: t,
+            terms: *t,
             payer: c.who,
             tokens: (c.input, c.output),
             specified: c.amount,

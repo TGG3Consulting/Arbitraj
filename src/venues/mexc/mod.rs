@@ -9,10 +9,11 @@
 //! каждого файла и в README.md этой папки. Фондового счёта у MEXC в документации API нет. Счёт зачисления депозита —
 //! выбор пользователя в аккаунте: Spot или Futures (справка MEXC «What is a Crypto Deposit?»,
 //! https://www.mexc.com/support/articles/17827791509026: «You can choose to deposit tokens into either your Spot Account
-//! or Futures Account»); в Spot V3 API этот выбор не читается — поэтому supports_settlement_credit = false.
+//! or Futures Account»); в Spot V3 API этот выбор не читается. Тигран 28.11.2026 подтвердил: в аккаунте бота
+//! депозит зачисляется на Spot (стоит по умолчанию) — supports_settlement_credit = true.
 //!
 //! Расчётный круг USDC Base (gateway/contract.rs): ордер конверсии — trade.rs + settle_order.rs, вывод —
-//! transfers.rs + resolve.rs; зачисление на торговый счёт API не подтверждает (см. выше).
+//! transfers.rs + resolve.rs, зачисление — сразу на Spot по решению Тиграна 28.11 (см. выше).
 
 pub mod account;
 pub mod account_update;
@@ -172,10 +173,13 @@ impl Venue for Mexc {
         true
     }
 
-    /// Нет: счёт зачисления депозита (Spot или Futures) выбирается в аккаунте MEXC и через Spot V3 API не читается
-    /// (шапка файла). Без подтверждения ядро MEXC в расчётный круг не пускает.
+    /// Да — решение Тиграна 28.11.2026: в аккаунте MEXC депозит зачисляется на Spot (стоит по умолчанию); совпадает
+    /// с прежним поведением deposit_to_trading (None — переводить нечего, продажа со спота).
+    /// Справка MEXC https://www.mexc.com/support/articles/17827791509026: счёт зачисления — выбор в аккаунте (Spot или
+    /// Futures), через Spot V3 API не читается. Условие: если в аккаунте выбрать Futures — круг ломается (USDC уйдёт
+    /// на фьючерсный счёт), и этот флаг нужно вернуть в false.
     fn supports_settlement_credit(&self) -> bool {
-        false
+        true
     }
 
     fn id(&self) -> VenueId {

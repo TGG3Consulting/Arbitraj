@@ -1,6 +1,11 @@
 //! Tokenlon PMMV5: персональная котировка по адресу кошелька и двум контрактам Ethereum.
 mod client;
 mod profile;
+pub(super) mod routing;
+pub(super) mod book;
+pub(super) mod settlement;
+mod assets;
+mod sim;
 pub(super) mod receipt;
 pub(super) mod wire;
 
@@ -13,6 +18,13 @@ use alloy_primitives::U256;
 use rust_decimal::Decimal;
 use serde_json::json;
 
+pub(super) const LABEL: &str = "Tokenlon PMMV5";
+pub(super) fn enabled(c:&super::ctx::Ctx)->bool {
+    c.chain_id()==Some(1) && c.flag("tokenlon.trading").unwrap_or(false)
+}
+pub(super) fn timely(c:&super::ctx::Ctx,expiry:u64)->bool {
+    c.int("tokenlon.min_validity_ms").is_ok_and(|n|n>0 && super::hashflow::routing::expiry_ok(expiry,n))
+}
 fn quantity(field: &serde_json::Value) -> Option<U256> {
     if let Some(s) = field.as_str() {
         return (!s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))

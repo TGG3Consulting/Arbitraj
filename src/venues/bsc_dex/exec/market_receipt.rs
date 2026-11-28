@@ -79,6 +79,7 @@ pub(super) enum Saved<'a> {
     Raindex(&'a super::super::raindex::settlement::Saved),
     Textile(&'a super::super::textile::receipt::Saved),
     Dexalot(&'a super::super::dexalot::receipt::Saved),
+    Tokenlon(&'a super::super::tokenlon::settlement::Saved),
     AirSwap(&'a super::super::airswap::receipt::Saved),
     Epsilon(&'a super::super::epsilon::wire::Saved),
     SolidlyRouter(&'a super::solidly_router_wallet::Proof),
@@ -127,6 +128,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
         c.raindex.as_deref().map(Saved::Raindex),
         c.textile.as_deref().map(Saved::Textile),
         c.dexalot.as_deref().map(Saved::Dexalot),
+        c.tokenlon.as_deref().map(Saved::Tokenlon),
         c.airswap.as_deref().map(Saved::AirSwap),
         c.epsilon.as_deref().map(Saved::Epsilon),
         c.solidly_router.as_deref().map(Saved::SolidlyRouter),
@@ -240,6 +242,10 @@ pub(in crate::venues::bsc_dex) async fn included(
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Dexalot"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
     }
+    if let Some(g)=&c.tokenlon{
+        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет nonce Tokenlon"))?.nonce;
+        g.included(ctx,hash,nonce,receipt).await?;
+    }
     if let Some(g)=&c.airswap{
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce AirSwap"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
@@ -262,7 +268,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     for saved in entries(c) {
         match saved {
             Saved::Gladius(_) => {}, // в том числе проверено для revert выше
-            Saved::Dexalot(_) | Saved::AirSwap(_) | Saved::Textile(_) | Saved::Raindex(_) | Saved::Epsilon(_) => {}, // в том числе проверено для revert выше
+            Saved::Tokenlon(_) | Saved::Dexalot(_) | Saved::AirSwap(_) | Saved::Textile(_) | Saved::Raindex(_) | Saved::Epsilon(_) => {}, // в том числе проверено для revert выше
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::Ranges(p)=>p.included(ctx,hash,receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
@@ -318,6 +324,7 @@ impl Saved<'_> {
             Self::Gladius(p) => p.amounts(&r.logs).ok_or("Gladius: фактические движения и выплата не подтверждены"),
             Self::Textile(p) => p.amounts(&r.logs).ok_or("Textile: не подтверждены распоряжение и обе выплаты"),
             Self::Dexalot(p) => p.amounts(&r.logs).ok_or("Dexalot: не подтверждены распоряжение и обе выплаты"),
+            Self::Tokenlon(p) => p.amounts(&r.logs).ok_or("Tokenlon: движения позиции расходятся с ордером"),
             Self::AirSwap(p) => p.amounts(&r.logs).ok_or("AirSwap: не подтверждены распоряжение и обе выплаты"),
             Self::Epsilon(p) => p.amounts(&r.logs).ok_or("Epsilon: не подтверждены чистая выдача, провайдер или расход кошелька"),
             Self::Raindex(p) => p.amounts(&r.logs).ok_or("Raindex: фактические движения и выплата не подтверждены"),

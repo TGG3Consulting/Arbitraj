@@ -23,6 +23,7 @@ pub(super) enum Gate {
     Textile(u64),
     Dexalot(u64),
     AirSwap(u64),
+    Tokenlon(u64),
     Gladius(u64),
     Raindex { generation: u64, mixed: bool },
     Epsilon { generation: u64, mixed: bool },
@@ -32,6 +33,7 @@ impl Dispatch {
         let k = match self.gate {
             Gate::Hashflow(_) => "hashflow.gas_budget_native",
             Gate::Dexalot(_) => "dexalot.gas_budget_native",
+            Gate::Tokenlon(_) => "tokenlon.gas_budget_native",
             Gate::AirSwap(_) => "airswap.gas_budget_native",
             Gate::Textile(_) => "textile.gas_budget_native",
             Gate::Native { .. } => "native_rfq.gas_budget_native",
@@ -55,6 +57,7 @@ impl Dispatch {
             Gate::Raindex { generation, .. } => super::super::raindex::enabled(ctx) && ctx.settings.generation()==*generation && super::super::raindex::timely(self.expiry),
             Gate::Gladius(g) => super::super::gladius::enabled(ctx) && ctx.settings.generation()==*g && super::super::gladius::timely(ctx,self.expiry),
             Gate::Dexalot(g) => super::super::dexalot::enabled(ctx) && ctx.settings.generation()==*g && super::super::dexalot::timely(ctx,self.expiry),
+            Gate::Tokenlon(g) => super::super::tokenlon::enabled(ctx) && ctx.settings.generation()==*g && super::super::tokenlon::timely(ctx,self.expiry),
             Gate::AirSwap(g) => super::super::airswap::enabled(ctx) && ctx.settings.generation()==*g && super::super::airswap::timely(ctx,self.expiry),
             Gate::Textile(g) => super::super::textile::enabled(ctx) && ctx.settings.generation()==*g && super::super::textile::current(self.expiry),
             Gate::Native { generation:g, .. } => {
@@ -74,6 +77,7 @@ pub(in crate::venues::bsc_dex) fn marker(
     nonce: u64,
     ready: &[send::ready::Ready],
     need: U256,
+    fee_only: U256,
 ) -> GatewayResult<Option<PendingRef>> {
     DISPATCH
         .try_with(|d| {
@@ -83,7 +87,8 @@ pub(in crate::venues::bsc_dex) fn marker(
             ) {
                 return Err(ctx.err(ErrorCode::NoRoute,"Ключ денежного шага или состав каналов источника изменились"));
             }
-            if need > d.cap(ctx)? || !d.active(ctx) || send::tip(ready).is_some() {
+            let capped=if matches!(d.gate,Gate::Tokenlon(_)){fee_only}else{need};
+            if capped > d.cap(ctx)? || !d.active(ctx) || send::tip(ready).is_some() {
                 return Err(ctx.err(
                     ErrorCode::NoRoute,
                     "Допуск, срок RFQ или состав каналов изменился до отправки",
@@ -124,7 +129,7 @@ pub(in crate::venues::bsc_dex) async fn reserve(
     marker: &PendingRef,
 ) -> GatewayResult<()> {
     let Some(parse) =
-        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.dexalot.is_some() || c.airswap.is_some() || c.textile.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some() || c.epsilon.is_some())
+        exec::swap_ctx::SwapCtx::of(marker).filter(|c| c.rfq.is_some() || c.dexalot.is_some() || c.tokenlon.is_some() || c.airswap.is_some() || c.textile.is_some() || c.native_rfq.is_some() || c.gladius.is_some() || c.raindex.is_some() || c.epsilon.is_some())
     else {
         return Ok(());
     };
@@ -242,7 +247,7 @@ where
             super::execute::key(p, req)?
         },
         expiry,
-        gate: if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native { generation, mixed }},
+        gate: if parse.dexalot.is_some(){Gate::Dexalot(generation)}else if parse.tokenlon.is_some(){Gate::Tokenlon(generation)}else if parse.airswap.is_some(){Gate::AirSwap(generation)}else if parse.textile.is_some(){Gate::Textile(generation)}else if parse.epsilon.is_some(){Gate::Epsilon {generation,mixed}}else if parse.raindex.is_some(){Gate::Raindex { generation, mixed }}else if parse.gladius.is_some(){Gate::Gladius(generation)}else{Gate::Native { generation, mixed }},
         parse: parse.clone(),
     };
     submit(p, req, dispatch, send).await

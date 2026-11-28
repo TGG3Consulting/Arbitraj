@@ -186,7 +186,8 @@ pub async fn send_tipped(
     // channel.cond_time_window_s нет — None, узел не спрашивается.
     let head_time = send::sequencer_cond::head_time(ctx, &env.heads, &ready).await?;
     if crate::gateway::settlement_intent::active() {
-        let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need)?;
+        let fee_only=super::gas_fund::need_wei(U256::ZERO,price.cap(),gas,tip_cost).saturating_add(extra);
+        let rfq = super::super::hashflow::marker(ctx, signed.hash, nonce, &ready, need,fee_only)?;
         let other = rfq.is_none();
         let hanji = super::super::hanji::execute::marker(ctx, signed.hash, nonce, &ready, need)?;
         let marker = rfq

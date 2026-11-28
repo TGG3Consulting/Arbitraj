@@ -11,10 +11,10 @@ FRAMES = {
     26492655: ("0xb0bcb022954dd6546e06a3a4dca6d2b1a286efce998197e37866ba3a26c0efb3", "0xda7afeed021eafc1c1af9c362de477dad0396b81", "0xa9114b0f"),
 }
 
-def frame(c, rpc, height, expected):
+def frame(c, rpc, height, expected, source=None):
     block = rpc(c, "eth_getBlockByNumber", [hex(height), True])["result"]
     assert block["hash"] == expected
-    witness, oracle, selector = FRAMES[height]
+    witness, oracle, selector = source if source is not None else FRAMES[height]
     txs = block["transactions"]
     stop = [t["hash"] for t in txs].index(witness)
     parent = {"blockHash": block["parentHash"], "requireCanonical": True}

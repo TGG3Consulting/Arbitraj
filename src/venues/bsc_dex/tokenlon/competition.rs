@@ -83,13 +83,20 @@ async fn competition<A, B>(
         offer.filter(|_| Instant::now() <= end)
     });
     let mut firm = std::pin::pin!(timed);
+    // Если ordinary готов на первом опросе, слабая ставка не должна даже открывать STOMP-подписку.
+    let mut started = false;
     let old = tokio::select! {
         biased;
         old=&mut ordinary=>old,
-        ready=&mut firm=>return (ordinary.await,ready.ok().flatten()),
+        ready=std::future::poll_fn(|cx| {
+            started = true;
+            firm.as_mut().poll(cx)
+        })=>return (ordinary.await,ready.ok().flatten()),
     };
     let ready = match window(&old) {
         Window::Veto => None,
+        Window::Ready if !started => None,
+        Window::Until(t) if !started && t <= Instant::now() => None,
         Window::Ready => until_ready(None, &mut firm).await,
         Window::Until(t) => until_ready(Some(t), &mut firm).await,
     };

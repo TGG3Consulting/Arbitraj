@@ -3619,6 +3619,23 @@ source = "https://buildernet.org/docs/api#state-stream и eth_getCode на ка�
 rationale = "market.pricing() связывает рынок и его оракул. Из опубликованного кадра в расчёт попадает только изменение хранилища настроенного реестра."
 prefill = { kind = "Venue", id = "eth_dex" }
 
+[[section.rec]]
+name = "bopamm.cash_path"
+area = "площадка eth_dex"
+unit = "роли и ставка Ethereum"
+value = "weth 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xd0a06b12ac47863b5c7be4185c2deaad1c61557033f56c7d4ea74429cbb25e23,usdc 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 0xd80d4b7c890cb9d6a4893e6b52bc34b56b25335cb13716e0d1d31383e6b41505,usdt 0xdac17f958d2ee523a2206206994597c13d831ec7 0xb44fb4e949d0f78f87f79ee46428f23a2a5713ce6fc6e0beb3dda78c2ac1ea55,pool 0x3416cf6c708da44db2624d63ea0aaef7113527c6 0x2ff673bacc60a73fc85c678888296c6bce3de2a9d7475c032fe7aa6e0eacba86,router 0xe592427a0aece92de3edee1f18e0157c05861564 0xbb90113d2f9a5e9b7feb15a1d1fff06c1ee1575b3f9b1181778ffd0cf633e7ea,quoter 0xb27308f9f90d607463bb33ea1bebb41c27ce5ab6 0xd7efd86e5c3f85370d1100907ab446b24a996ad245172f44efec6a20f9ba70e6,factory 0x1f98431c8ad98523631ae4a59f267346ea31f984 0x4d7b8525cd5d14343fa67a732fba5b24cddba11620ca88392f4ec6c52f91fd69,fee 100"
+source = "tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_roles.json.gz, eth_getCode и getPool на двух канонических родителях"
+rationale = "Три актива, маршрутизатор, квотер, фабрика и фактический пул проверяются по коду и связям контрактов. В поручении сохраняются действовавшие роли."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "bopamm.slot_builders"
+area = "площадка eth_dex"
+unit = "titan / buildernet"
+method = "Задаёт владелец. В маппинге кошелька Ethereum откройте «Модуль bopAMM и Uniswap V3 через USDC», нажмите «Оценить газ», подтвердите размещение и сохраните адрес. Выдайте модулю разрешение на свою сумму входа. Здесь укажите допустимых строителей titan и/или buildernet."
+source = "src/venues/bsc_dex/fermi/bop_cash.rs и tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_wallet.json.gz"
+rationale = "До явного выбора строителя подписка и отправка bopAMM выключены. Каждое поручение действует один слот; цена, остатки, газ и минимум относятся к выбранному кошельку."
+
 [[section]]
 title = "FermiSwap на Ethereum — адреса и хеши"
 intro = "Данные размещения для сверки с узлом. Исполнитель кошелька и включение торговли задаются отдельно."

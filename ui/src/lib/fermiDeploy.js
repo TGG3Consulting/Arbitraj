@@ -10,11 +10,7 @@ const getter = (provider,to,signature,at) => request(provider,'eth_call',[
   {to,data:'0x'+sha3.keccak_256(signature).slice(0,8)},at,
 ]);
 
-export function fermiNetwork(venue,profiles,values) {
-  const chain=values['dex.chain|Venue|'+venue], id=values['dex.evm_chain_id|Venue|'+venue];
-  const profile=profiles?.find(p=>p.venue===venue) ?? profiles?.find(p=>p.evm_chain_id===id);
-  return chain==='ethereum' && id===1 && profile?.chain===chain && profile.evm_chain_id===id ? id : null;
-}
+export {ethereumNetwork as fermiNetwork} from './ethereumNetwork.js';
 
 /** Проверяет именно настройки выбранной Ethereum-площадки и CREATE без аргументов. */
 export async function loadFermi(settings,plan,digest) {

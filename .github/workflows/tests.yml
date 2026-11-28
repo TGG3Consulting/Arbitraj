@@ -1,8 +1,8 @@
-# Полный прогон тестов параллельными частями на машинах GitHub (Тигран 15.11.2026: «сборка в гите», ускорить прогон).
-# Запускается на пуш в ветки test/** (ветки только для прогона — никуда не сливаются, сервер не трогают) и вручную.
-# Все наборы tests/*.rs делятся на SHARDS частей по порядку имён (номер файла mod SHARDS); часть 0 дополнительно
-# гонит --lib, --bins и doc-тесты. Отдельная работа — clippy -D warnings. Версия Rust закреплена той же, что у
-# разработчиков, чтобы линтер не расходился.
+# РџРѕР»РЅС‹Р№ РїСЂРѕРіРѕРЅ С‚РµСЃС‚РѕРІ РїР°СЂР°Р»Р»РµР»СЊРЅС‹РјРё С‡Р°СЃС‚СЏРјРё РЅР° РјР°С€РёРЅР°С… GitHub (РўРёРіСЂР°РЅ 15.11.2026: В«СЃР±РѕСЂРєР° РІ РіРёС‚РµВ», СѓСЃРєРѕСЂРёС‚СЊ РїСЂРѕРіРѕРЅ).
+# Р—Р°РїСѓСЃРєР°РµС‚СЃСЏ РЅР° РїСѓС€ РІ РІРµС‚РєРё test/** (РІРµС‚РєРё С‚РѕР»СЊРєРѕ РґР»СЏ РїСЂРѕРіРѕРЅР° вЂ” РЅРёРєСѓРґР° РЅРµ СЃР»РёРІР°СЋС‚СЃСЏ, СЃРµСЂРІРµСЂ РЅРµ С‚СЂРѕРіР°СЋС‚) Рё РІСЂСѓС‡РЅСѓСЋ.
+# Р’СЃРµ РЅР°Р±РѕСЂС‹ tests/*.rs РґРµР»СЏС‚СЃСЏ РЅР° SHARDS С‡Р°СЃС‚РµР№ РїРѕ РїРѕСЂСЏРґРєСѓ РёРјС‘РЅ (РЅРѕРјРµСЂ С„Р°Р№Р»Р° mod SHARDS); С‡Р°СЃС‚СЊ 0 РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕ
+# РіРѕРЅРёС‚ --lib, --bins Рё doc-С‚РµСЃС‚С‹. РћС‚РґРµР»СЊРЅР°СЏ СЂР°Р±РѕС‚Р° вЂ” clippy -D warnings. Р’РµСЂСЃРёСЏ Rust Р·Р°РєСЂРµРїР»РµРЅР° С‚РѕР№ Р¶Рµ, С‡С‚Рѕ Сѓ
+# СЂР°Р·СЂР°Р±РѕС‚С‡РёРєРѕРІ, С‡С‚РѕР±С‹ Р»РёРЅС‚РµСЂ РЅРµ СЂР°СЃС…РѕРґРёР»СЃСЏ.
 name: Tests (parallel)
 on:
   push:
@@ -121,7 +121,7 @@ jobs:
         with:
           shared-key: tests
           save-if: ${{ matrix.shard == 0 }}
-      - name: Синтетический архив старой схемы учёта денежных обязательств
+      - name: РЎРёРЅС‚РµС‚РёС‡РµСЃРєРёР№ Р°СЂС…РёРІ СЃС‚Р°СЂРѕР№ СЃС…РµРјС‹ СѓС‡С‘С‚Р° РґРµРЅРµР¶РЅС‹С… РѕР±СЏР·Р°С‚РµР»СЊСЃС‚РІ
         if: matrix.shard == 0
         run: python3 scripts/measure_cash_index.py "$RUNNER_TEMP/cash-hold-index.json"
       - uses: actions/upload-artifact@v4
@@ -129,7 +129,7 @@ jobs:
         with:
           name: cash-hold-index
           path: ${{ runner.temp }}/cash-hold-index.json
-      - name: Наборы этой части
+      - name: РќР°Р±РѕСЂС‹ СЌС‚РѕР№ С‡Р°СЃС‚Рё
         id: pick
         run: |
           args=""
@@ -139,8 +139,8 @@ jobs:
             i=$((i + 1))
           done
           echo "args=$args" >> "$GITHUB_OUTPUT"
-          echo "HEAD $(git rev-parse HEAD); всего наборов $i"
-      - name: Тесты части
+          echo "HEAD $(git rev-parse HEAD); РІСЃРµРіРѕ РЅР°Р±РѕСЂРѕРІ $i"
+      - name: РўРµСЃС‚С‹ С‡Р°СЃС‚Рё
         env:
           ARB_PANCAKEX_FUTURE_SIZES: ${{ runner.temp }}/pancakex-futures.json
           ARB_MOONISWAP_INVERSE_EXPORT: ${{ runner.temp }}/mooniswap-inverse.json
@@ -186,11 +186,11 @@ jobs:
           name: carbon-order-vectors
           path: ${{ runner.temp }}/carbon-order-vectors.json
           if-no-files-found: error
-      # t190: таблица «ближайшая большая» против интерполяции на записи 18.11 — вывод теста виден только с --nocapture.
-      - name: Таблица кривых крючков (t190)
+      # t190: С‚Р°Р±Р»РёС†Р° В«Р±Р»РёР¶Р°Р№С€Р°СЏ Р±РѕР»СЊС€Р°СЏВ» РїСЂРѕС‚РёРІ РёРЅС‚РµСЂРїРѕР»СЏС†РёРё РЅР° Р·Р°РїРёСЃРё 18.11 вЂ” РІС‹РІРѕРґ С‚РµСЃС‚Р° РІРёРґРµРЅ С‚РѕР»СЊРєРѕ СЃ --nocapture.
+      - name: РўР°Р±Р»РёС†Р° РєСЂРёРІС‹С… РєСЂСЋС‡РєРѕРІ (t190)
         if: matrix.shard == 0
         run: cargo test --locked --test bsc_dex_hook_curve_t190 -- --nocapture
-      - name: Doc-тесты
+      - name: Doc-С‚РµСЃС‚С‹
         if: matrix.shard == 0
         run: cargo test --locked --doc
   community-archive:
@@ -442,9 +442,9 @@ jobs:
           cache-dependency-path: contracts/evmtest/package-lock.json
       - run: npm ci --prefix contracts/evmtest --no-audit --no-fund
       - run: node contracts/evmtest/mint_club.mjs
-      - name: Проверка версий модулей слота PropAMM по архивному коду
+      - name: РџСЂРѕРІРµСЂРєР° РІРµСЂСЃРёР№ РјРѕРґСѓР»РµР№ СЃР»РѕС‚Р° PropAMM РїРѕ Р°СЂС…РёРІРЅРѕРјСѓ РєРѕРґСѓ
         run: node contracts/evmtest/prop_slot_version.mjs
-      - name: Проверка ABI маршрута трёх сборок Motoswap по архивному коду
+      - name: РџСЂРѕРІРµСЂРєР° ABI РјР°СЂС€СЂСѓС‚Р° С‚СЂС‘С… СЃР±РѕСЂРѕРє Motoswap РїРѕ Р°СЂС…РёРІРЅРѕРјСѓ РєРѕРґСѓ
         run: node contracts/evmtest/motoswap_path_version.mjs
   hanji-executor:
     if: ${{ !inputs.native_v3_only && !inputs.stack_check_only && !(inputs.market_replay_only && inputs.ethereum_open_archive && inputs.ethereum_open_subset) }}
@@ -456,13 +456,13 @@ jobs:
           node-version: '22'
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
-      - name: Сверить Native Base CREATE с компилятором и реальным runtime из изолированного блока
+      - name: РЎРІРµСЂРёС‚СЊ Native Base CREATE СЃ РєРѕРјРїРёР»СЏС‚РѕСЂРѕРј Рё СЂРµР°Р»СЊРЅС‹Рј runtime РёР· РёР·РѕР»РёСЂРѕРІР°РЅРЅРѕРіРѕ Р±Р»РѕРєР°
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter
           python scripts/check_native_rfq_card.py "$RUNNER_TEMP/native/NativeRfqAdapter.json"
       - id: compile_hanji
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
-      - name: Сверить карточку Hanji Base с собранным контрактом и архивной приёмкой
+      - name: РЎРІРµСЂРёС‚СЊ РєР°СЂС‚РѕС‡РєСѓ Hanji Base СЃ СЃРѕР±СЂР°РЅРЅС‹Рј РєРѕРЅС‚СЂР°РєС‚РѕРј Рё Р°СЂС…РёРІРЅРѕР№ РїСЂРёС‘РјРєРѕР№
         run: |
           python - "$RUNNER_TEMP/hanji-executor/HanjiExecutor.json" <<'PY'
           import hashlib
@@ -482,7 +482,7 @@ jobs:
           assert card["runtimeKeccak"] == evidence["runtime_keccak"]
           assert card["sourceBlock"] == evidence["block_hash"]
           PY
-      - name: Verify the Base Raindex V3–V7 wallet cards against the pinned compiler and recorded constructors
+      - name: Verify the Base Raindex V3вЂ“V7 wallet cards against the pinned compiler and recorded constructors
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
           node contracts/verify-raindex-base-card.mjs --check "$RUNNER_TEMP/raindex/RaindexWallet.json" ui/src/assets/raindex-base-create.json tests/data/first_run_dex_2026-11-26/raindex_base_v6_codes.json.gz tests/data/first_run_dex_2026-11-26/raindex_base_v5_codes.json.gz
@@ -1002,6 +1002,53 @@ jobs:
         run: |
           python -m pip install --quiet eth-account==0.13.7 websocket-client==1.8.0
           python scripts/record_tokenlon_quote.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-cash-ethereum'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopAmmWallet
+          node contracts/verify-bopamm-card.mjs "$RUNNER_TEMP/bopamm/BopAmmWallet.json"
+          npm ci --prefix ui --no-audit --no-fund
+          npm run build --prefix ui
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashPathProbe
+          python scripts/record_bopamm_cash.py "$RUNNER_TEMP/bopamm/BopAmmWallet.json" "$RUNNER_TEMP/bopamm/BopCashPathProbe.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-role-bindings-ethereum'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_bopamm_cash_roles.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-production-cash-ethereum'
+        run: |
+          npm ci --prefix contracts
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashWallet
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_bopamm_cash.py "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/market.json" --production
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        uses: dtolnay/rust-toolchain@1.97.0
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: tests
+          save-if: false
+      - if: matrix.market == 'bopamm-slot-regression-ethereum'
+        run: |
+          npm ci --prefix ui --no-audit --no-fund
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashWallet
+          node contracts/verify-bopamm-card.mjs "$RUNNER_TEMP/bopamm/BopCashWallet.json" cash
+          node --test ui/tests/bopammDeploy.test.js
+          npm run build --prefix ui
+          cargo test --locked --lib venues::bsc_dex::fermi::
+          cp ui/src/assets/bopamm-cash-ethereum-create.json "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-cash-wallet-card-ethereum'
+        run: |
+          npm ci --prefix contracts
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashWallet
+          cp "$RUNNER_TEMP/bopamm/BopCashWallet.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-wallet-card-ethereum'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopAmmWallet
+          cp "$RUNNER_TEMP/bopamm/BopAmmWallet.json" "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bopamm-ethereum'
         run: |
           python -m pip install --quiet eth-account==0.13.7

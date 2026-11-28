@@ -25,6 +25,7 @@ pub(super) async fn levels(
     let ctx = &p.ctx;
     let head = h.clone();
     let frame = match &config.source {
+        Source::Bop(path) => super::bopamm::frame(config.builder,snapshot,&path.profile()),
         Source::Fermi { .. } => Frame::read(config.builder, snapshot, config.deployment),
         Source::Prop { oracle, .. } => oracle.frame(config.builder, snapshot),
     }
@@ -48,7 +49,7 @@ pub(super) async fn levels(
         return Err(stale());
     }
     let runtime = match &config.source {
-        Source::Prop { .. } => {
+        Source::Prop { .. } | Source::Bop(_) => {
             return super::prop_levels::levels(p, config, head, frame, revision).await;
         }
         Source::Fermi { runtime } => *runtime,

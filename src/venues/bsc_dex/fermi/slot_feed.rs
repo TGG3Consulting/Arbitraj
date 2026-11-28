@@ -103,6 +103,7 @@ async fn refresh(p: &Parts, configs: &[Config], rev: u64, out: &mpsc::Sender<Mar
         books.retain(|b| {
             b.current()
                 && (b.config.builder != c.builder
+                    || !b.config.same_path(c)
                     || b.config.executor != c.executor
                     || b.config.deployment != c.deployment)
         });

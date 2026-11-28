@@ -36,6 +36,7 @@ impl Terms {
         native: &[NativePayment],
         uses_fill_data: bool,
         output: &super::assets::AssetCode,
+        decimals: u8,
     ) -> Option<Cash> {
         if !matches!(output, super::assets::AssetCode::TetherNet(_)) {
             return self.cash(logs, native, uses_fill_data);
@@ -44,7 +45,7 @@ impl Terms {
             logs,
             native,
             uses_fill_data,
-            output.guaranteed_net(self.min_output),
+            output.guaranteed_net(self.min_output, decimals),
             true,
         )
     }

@@ -38,6 +38,12 @@ pub enum AssetCode {
     TetherInput(Role),
     TetherNet(Role),
 }
+// The verified runtime caps newMaxFee at 49 whole tokens. Decimals is set at deployment.
+fn tether_max_fee(decimals: u8) -> U256 {
+    super::super::math::ten::checked(u32::from(decimals))
+        .and_then(|unit| unit.checked_mul(U256::from(49)))
+        .unwrap_or(U256::MAX)
+}
 impl AssetCode {
     pub fn parse(row: &str, chain: u64) -> Option<Self> {
         let f: Vec<_> = row.split_whitespace().collect();
@@ -58,15 +64,10 @@ impl AssetCode {
             ("exact", []) => Some(Self::Exact(r)),
             ("tether-input", []) => Some(Self::TetherInput(r)),
             ("tether-net", [])
-                if chain == 1
-                    && r.address
-                        == alloy_primitives::address!(
-                            "dac17f958d2ee523a2206206994597c13d831ec7"
-                        )
-                    && r.runtime
-                        == alloy_primitives::b256!(
-                            "b44fb4e949d0f78f87f79ee46428f23a2a5713ce6fc6e0beb3dda78c2ac1ea55"
-                        ) =>
+                if r.runtime
+                    == alloy_primitives::b256!(
+                        "b44fb4e949d0f78f87f79ee46428f23a2a5713ce6fc6e0beb3dda78c2ac1ea55"
+                    ) =>
             {
                 Some(Self::TetherNet(r))
             }
@@ -98,14 +99,14 @@ impl AssetCode {
     }
     /// The taker signs a Dutch order before the filler pays. The issuer can change fees
     /// within this interval. setParams enforces <20 bps and <50 whole USDT on this runtime.
-    pub fn guaranteed_net(&self, amount: U256) -> U256 {
+    pub fn guaranteed_net(&self, amount: U256, decimals: u8) -> U256 {
         if !matches!(self, Self::TetherNet(_)) {
             return amount;
         }
         let divisor = U256::from(10_000);
         let rate = U256::from(19);
         let fee = (amount / divisor) * rate + ((amount % divisor) * rate) / divisor;
-        amount - fee.min(U256::from(49_000_000u64))
+        amount - fee.min(tether_max_fee(decimals))
     }
     pub fn can_receive(&self) -> bool {
         !matches!(self, Self::TetherInput(_))
@@ -117,7 +118,7 @@ impl AssetCode {
         from: Address,
         to: Address,
         executor: Address,
-        output: bool,
+        output_decimals: Option<u8>,
     ) -> GatewayResult<()> {
         let token = self.address();
         let bad = || {
@@ -139,8 +140,10 @@ impl AssetCode {
                     canonical(ctx, at, token, isBlackListedCall { account: from }),
                     canonical(ctx, at, token, isBlackListedCall { account: to })
                 )?;
-                let valid_fee = if output && matches!(self, Self::TetherNet(_)) {
-                    rate <= U256::from(19) && cap <= U256::from(49_000_000u64)
+                let valid_fee = if let Some(decimals) =
+                    output_decimals.filter(|_| matches!(self, Self::TetherNet(_)))
+                {
+                    rate <= U256::from(19) && cap <= tether_max_fee(decimals)
                 } else {
                     rate.is_zero() || cap.is_zero()
                 };

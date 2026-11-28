@@ -258,9 +258,9 @@ fn ethereum_usdt_quotes_bind_original_assets_and_fill_through_the_pinned_reactor
                 .filter_map(|r| super::assets::AssetCode::parse(r.as_str()?, 1))
                 .find(|v| v.address() == usdt)
                 .unwrap();
-            assert_eq!(tether.guaranteed_net(minimum), U256::from(165995632u64));
+            assert_eq!(tether.guaranteed_net(minimum, 6), U256::from(165995632u64));
             assert_eq!(
-                tether.guaranteed_net(U256::from(1_000_000_000_000u64)),
+                tether.guaranteed_net(U256::from(1_000_000_000_000u64), 6),
                 U256::from(999951000000u64)
             );
         }
@@ -319,7 +319,7 @@ fn standalone_fill_recovers_the_original_eoa_and_the_two_canonical_wallet_change
         let logs =
             serde_json::from_value::<Vec<alloy::rpc::types::Log>>(row["receipt"]["logs"].clone())
                 .unwrap();
-        let cash = terms.cash_net(&logs, &[], false, &token).unwrap();
+        let cash = terms.cash_net(&logs, &[], false, &token, 6).unwrap();
         let val = |state: &str, key: &str| field::<U256>(&row[state][key]["result"]);
         assert_eq!(
             cash.received,
@@ -357,7 +357,77 @@ fn standalone_fill_recovers_the_original_eoa_and_the_two_canonical_wallet_change
         let bit = (terms.nonce & U256::from(255)).to::<usize>();
         assert!(!val("before", "nonceBitmap").bit(bit));
         assert!(val("after", "nonceBitmap").bit(bit));
-        assert!(terms.cash_net(&[], &[], false, &token).is_none());
-        assert!(terms.cash_net(&logs, &[], true, &token).is_none());
+        assert!(terms.cash_net(&[], &[], false, &token, 6).is_none());
+        assert!(terms.cash_net(&logs, &[], true, &token, 6).is_none());
     }
+}
+
+#[test]
+fn configured_network_address_and_runtime_have_independent_roles() {
+    let bundle: Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/pancakex_profiles.json"
+    ))
+    .unwrap();
+    let rows = |network: &str| {
+        serde_json::from_value::<Vec<String>>(bundle[network]["contracts"].clone()).unwrap()
+    };
+    let eth = profile::Profile::from_rows(1, &rows("ethereum")).unwrap();
+    let base = profile::Profile::from_rows(8453, &rows("base")).unwrap();
+    let code = eth.standalone_v1.unwrap();
+    let tokens = bundle["ethereum"]["tokens"].as_array().unwrap();
+    let token = tokens
+        .iter()
+        .filter_map(|s| assets::AssetCode::parse(s.as_str()?, 1))
+        .find_map(|t| {
+            if let assets::AssetCode::TetherNet(r) = t {
+                Some(r)
+            } else {
+                None
+            }
+        })
+        .unwrap();
+    // Parser-only cross-check using values from both records. Deployment is verified separately at the canonical block.
+    let mut relocated = rows("base");
+    relocated.push(format!(
+        "{} standalone-v1 {:#x} {:#x}",
+        base.chain, token.address, code.runtime
+    ));
+    let selected = profile::Profile::from_rows(base.chain, &relocated)
+        .unwrap()
+        .standalone_v1
+        .unwrap();
+    assert_eq!(selected.address, token.address);
+    assert_eq!(selected.runtime, code.runtime);
+    let line = format!(
+        "{} tether-net {:#x} {:#x}",
+        base.chain, code.address, token.runtime
+    );
+    let wrapped = assets::AssetCode::parse(&line, base.chain).unwrap();
+    assert_eq!(wrapped.address(), code.address);
+    assert!(assets::AssetCode::parse(&line, eth.chain).is_none());
+    assert!(
+        assets::AssetCode::parse(
+            &line.replace(
+                &format!("{:#x}", token.runtime),
+                &format!("{:#x}", code.runtime)
+            ),
+            base.chain
+        )
+        .is_none()
+    );
+    let last = relocated.last_mut().unwrap();
+    *last = last.replace(
+        &format!("{:#x}", code.runtime),
+        &format!("{:#x}", token.runtime),
+    );
+    assert!(profile::Profile::from_rows(base.chain, &relocated).is_none());
+    let large = U256::from(1_000_000_000_000u64);
+    assert_eq!(
+        wrapped.guaranteed_net(large, 6),
+        large - U256::from(49_000_000)
+    );
+    assert_eq!(
+        wrapped.guaranteed_net(large, 8),
+        large - U256::from(1_900_000_000)
+    );
 }

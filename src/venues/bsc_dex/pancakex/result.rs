@@ -72,6 +72,7 @@ pub(super) async fn paid(
             &[],
             t.roles.reactor == c.p.router.address,
             &c.output,
+            tk.output_decimals(),
         )
         .ok_or_else(bad)?;
     let at = h.selector();
@@ -83,10 +84,16 @@ pub(super) async fn paid(
             tk.req.owner,
             cash.filler,
             c.p.permit.address,
-            false
+            None
         ),
-        c.output
-            .verify(ctx, &at, cash.filler, tk.req.owner, t.roles.reactor, true)
+        c.output.verify(
+            ctx,
+            &at,
+            cash.filler,
+            tk.req.owner,
+            t.roles.reactor,
+            Some(tk.output_decimals())
+        )
     )?;
     let changes:Vec<alloy::rpc::types::Log>=rpc::call(ctx,"eth_getLogs",json!([{"blockHash":h.hash,"address":[c.p.router.address,tk.req.input,tk.req.output],"topics":[alloy_primitives::keccak256("Upgraded(address)".as_bytes())]}])).await?;
     if !changes.is_empty() {

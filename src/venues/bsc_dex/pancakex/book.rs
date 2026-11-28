@@ -74,6 +74,13 @@ pub struct Ticket {
     pub deadline: u64,
 }
 impl Ticket {
+    pub fn output_decimals(&self) -> u8 {
+        if self.side == Side::Buy {
+            self.decimals.0
+        } else {
+            self.decimals.1
+        }
+    }
     pub fn timely(&self, stamp: u64) -> bool {
         stamp < self.deadline && self.deadline - stamp <= self.cfg.age
     }
@@ -103,21 +110,16 @@ impl Ticket {
                 .await
             },
             rpc::call::<Bytes>(ctx, "eth_getCode", json!([q.owner, at])),
-            self.cfg.input.verify(
-                ctx,
-                &at,
-                q.owner,
-                self.offer.filler,
-                p.permit.address,
-                false
-            ),
+            self.cfg
+                .input
+                .verify(ctx, &at, q.owner, self.offer.filler, p.permit.address, None),
             self.cfg.output.verify(
                 ctx,
                 &at,
                 self.offer.filler,
                 q.owner,
                 terms.roles.reactor,
-                true
+                Some(self.output_decimals())
             )
         )
         .ok()?;

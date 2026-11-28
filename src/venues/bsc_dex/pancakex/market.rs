@@ -76,7 +76,7 @@ async fn price(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Option<(Ti
         if buy {
             terms.maximum_input
         } else {
-            cfg.output.guaranteed_net(terms.min_output)
+            cfg.output.guaranteed_net(terms.min_output, od)
         },
         decimals.1,
     )?;

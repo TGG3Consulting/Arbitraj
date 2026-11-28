@@ -85,13 +85,10 @@ impl Profile {
             return None;
         };
         if standalone_v1.is_some_and(|v| {
-            chain != 1
-                || v.address
-                    != alloy_primitives::address!("35db01d1425685789dcc9228d47c7a5c049388d8")
-                || v.runtime
-                    != alloy_primitives::b256!(
-                        "7e4510ec4e8bcc09b3096ad85d8b23dcd2313e229366747439311e751e083ebb"
-                    )
+            v.runtime
+                != alloy_primitives::b256!(
+                    "7e4510ec4e8bcc09b3096ad85d8b23dcd2313e229366747439311e751e083ebb"
+                )
         }) {
             return None;
         }

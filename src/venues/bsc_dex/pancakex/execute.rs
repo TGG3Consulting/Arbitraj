@@ -41,7 +41,9 @@ fn fits(r: &TradeRequest, t: &Ticket, terms: &Terms) -> Option<()> {
     } else {
         (
             terms.maximum_input,
-            t.cfg.output.guaranteed_net(terms.min_output),
+            t.cfg
+                .output
+                .guaranteed_net(terms.min_output, t.output_decimals()),
         )
     };
     let qty = num::to_decimal(amount, t.decimals.0)?;

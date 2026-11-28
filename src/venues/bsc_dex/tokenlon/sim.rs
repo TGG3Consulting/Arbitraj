@@ -51,8 +51,8 @@ pub(super) async fn run(ctx:&Ctx,proof:&Proof,data:&Bytes)->GatewayResult<(u64,u
     let output=balance(t.recipient,t.output,mc);
     let action=json!({"from":t.payer,"to":wire::USER_PROXY,"data":data,"value":value(proof)});
     // В запросе находится личная подпись fill. Ошибка транспорта не должна содержать исходные params.
-    let blocks:Vec<Block>=rpc::call(ctx,"eth_simulateV1",json!([{"blockStateCalls":[{
-        "calls":[&input,&output,action,&input,&output]}]},&tag])).await.map_err(|_|reject())?;
+    let blocks:Vec<Block>=super::private_node::simulate(ctx,json!([{"blockStateCalls":[{
+        "calls":[&input,&output,action,&input,&output]}]},&tag])).await?;
     let [b]=blocks.as_slice() else{return Err(reject())};
     let [i0,o0,swap,i1,o1]=b.calls.as_slice() else{return Err(reject())};
     let word=|c:&CallResult| (c.ok() && c.return_data.len()==32).then(||U256::from_be_slice(&c.return_data));

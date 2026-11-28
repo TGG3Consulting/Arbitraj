@@ -1,10 +1,12 @@
 //! Tokenlon PMMV5: персональная котировка по адресу кошелька и двум контрактам Ethereum.
 mod client;
 mod profile;
+pub(super) mod private_node;
 pub(super) mod routing;
 pub(super) mod book;
 pub(super) mod settlement;
 mod assets;
+mod gas;
 mod sim;
 pub(super) mod receipt;
 pub(super) mod wire;
@@ -63,7 +65,7 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
         .ok_or_else(|| bad("Сумма base превышает точность денежного расчёта"))?;
     let query = client::Query {base:market.base, quote:market.quote, side, amount, base_dec,
         input:req.input, output:req.output};
-    let (spent, received, fee, expires, details) = if let Some(f) = req.firm {
+    let (spent, received, fee, expires, mut details) = if let Some(f) = req.firm {
         let min = num::exact_amount(Some(&f.minimum_raw),None,0).ok_or_else(|| bad("Некорректный минимум поступления"))?;
         let maximum = f.maximum_raw.as_deref().map(|v| num::exact_amount(Some(v),None,0)
             .ok_or_else(|| bad("Некорректный предел расхода"))).transpose()?;
@@ -84,6 +86,8 @@ pub(super) async fn preview(p: &Parts, req: Request) -> GatewayResult<Preview> {
         let (spent,received) = match side {Side::Sell=>(amount_raw,other),Side::Buy=>(other,amount_raw)};
         (spent,received,None,None,json!({"stage":"indicative","rate":rate,"moneySimulated":false}))
     };
+    details["localSimulationConfigured"]=json!(private_node::configured(ctx));
+    details["automaticTradingEnabled"]=json!(enabled(ctx));
     Ok(Preview {source:"tokenlon".into(), input:req.input, output:req.output, spent_raw:spent.to_string(),
         received_raw:received.to_string(), unspent_raw:"0".into(), fee, expires,
         block_hash:String::new(), block:None, details})

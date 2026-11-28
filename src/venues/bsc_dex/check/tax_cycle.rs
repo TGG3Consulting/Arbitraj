@@ -11,6 +11,7 @@
 //! - «пул готов» — ждущие монеты, у которых появился достоверный пул или дочитались свои пулы; то же — на каждом шаге
 //!   цикла (tax_wait::due_now): сигнал, пришедший во время проверки, теряется, а пулы от поиска по фабрикам и новые пулы
 //!   приходят после первого прохода (живой бот 28.11.2026, base_dex) — ждущие, включая промежуточные, их не пропускают;
+//!   подписка на «пул готов» взводится (enable) до проверки, как в quoter_cycle.rs, — сигнал во время проверки не теряется;
 //! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s;
 //! - ждущие «не задана настройка» — сразу при изменении настроек (settings_wait.rs), без перезапуска и без часа ожидания.
 //!
@@ -90,6 +91,11 @@ pub async fn taxes(
     let mut cfg: HashMap<Address, Vec<String>> = HashMap::new();
     // Дополнение 10.11 к 247/252: монеты на перепроверке кошельком сделки → его счёт и id сделки (до итога проверки).
     let mut acc: HashMap<Address, By> = HashMap::new();
+    // «Пул готов» — подписка взведена (enable) ДО проверки, как в check/quoter_cycle.rs: сигнал (notify_waiters), пришедший
+    // во время проверки монет, не теряется — select ниже его увидит; сработала — взводится заново сразу.
+    let ready = p.signals.ready.notified();
+    tokio::pin!(ready);
+    ready.as_mut().enable();
     loop {
         let was_sent = sum.sent;
         let pass = tax_pass::check(&p, &all, usdt, &mut seen, &sum.left, &acc).await;
@@ -150,7 +156,9 @@ pub async fn taxes(
                         all.iter().filter(|(a, _)| coins.contains(a)).cloned().collect()
                     }
                     // «Пул готов»: свои пулы прочитаны или появился достоверный пул — проверка сразу (решение 63).
-                    _ = p.signals.ready.notified() => {
+                    _ = &mut ready => {
+                        ready.set(p.signals.ready.notified());
+                        ready.as_mut().enable();
                         let mut list = tax_wait::due(&waiting, true, pending, |a| has_deep(&p, &a));
                         list.extend(tax_wait::due_lag(&waiting, p.lag.busy()));
                         list

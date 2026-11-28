@@ -297,6 +297,15 @@ def describe(network,source_id,adapter,configured,candidates):
         "dexs/p2pme.ts": (1, "выплата USDC покупателю после исполнения заявки на покупку за фиат. Для этой сделки требуется подтверждение фиатной ноги."),
         "dexs/zkp2p.ts": (1, "сумма USDC по исполненным платёжным намерениям в индексе Peer. Для этой сделки требуется подтверждение фиатной ноги."),
     }
+    if (network, source_id, path) == ("base", "2116", "dexs/0x-rfq.ts"):
+        return ("На H=62262756 прочитаны текущий и предыдущий Settler реестра 0x для функции 2. "
+                "За 43200 блоков у этих адресов найдено 118 маркеров в 107 квитанциях. У 92 ног "
+                "условия из calldata совпали с двумя фактическими переводами между Settler и одним из четырёх maker. "
+                "В этих квитанциях нет операций Transfer с Base USDT; отдельный поиск входящих и исходящих "
+                "переводов именно этого токена для четырёх maker за 30 суток также пуст. Для нового обмена "
+                "требуется действующая котировка API для своего кошелька и нужной пары. "
+                "`T-SOURCE-base-2116` [Реестр](https://github.com/0xProject/0x-settler#how-do-i-find-the-most-recent-deployment) · "
+                "[Квитанции и интервалы](../tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz).")
     if path in dimensions:
         line, reason=dimensions[path]
         return f"{reason} [Методика]({repository}{path}#L{line})."

@@ -916,6 +916,17 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/motoswap" MotoswapWallet
           python scripts/record_motoswap_wallet.py "$RUNNER_TEMP/motoswap/MotoswapWallet.json" "$RUNNER_TEMP/market.json" --paths
+      - if: matrix.market == 'zeroex-base-payments'
+        uses: dtolnay/rust-toolchain@stable
+      - if: matrix.market == 'zeroex-base-payments'
+        uses: Swatinem/rust-cache@v2
+      - if: matrix.market == 'zeroex-base-payments'
+        run: cargo test --locked --lib keyed_price::firm::registry
+      - if: matrix.market == 'zeroex-base-payments'
+        run: |
+          python scripts/record_zeroex_base_payments.py "$RUNNER_TEMP/payments.json.gz"
+          gzip -dc "$RUNNER_TEMP/payments.json.gz" > "$RUNNER_TEMP/market.json"
+          cmp "$RUNNER_TEMP/market.json" <(gzip -dc tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz)
       - if: matrix.market == 'zeroex-base-rfq'
         run: python scripts/record_base_zeroex_rfq.py "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'basin-wallet-')

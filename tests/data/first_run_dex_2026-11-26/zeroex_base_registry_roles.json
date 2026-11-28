@@ -1,0 +1,118 @@
+{
+  "chainId": 8453,
+  "registry": "0x00000000000004533fe15556b1e086bb1a72ceae",
+  "feature": 2,
+  "observations": [
+    {
+      "block": 14769149,
+      "selector": {
+        "blockHash": "0x7ef6710fdd57ae43e4738315ab4f635389b2bee121070fe8355b935deb237eb7",
+        "requireCanonical": true
+      },
+      "current": {
+        "source": "https://mainnet.base.org",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "eth_call",
+          "params": [
+            {
+              "to": "0x00000000000004533fe15556b1e086bb1a72ceae",
+              "data": "0x6352211e0000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "blockHash": "0x7ef6710fdd57ae43e4738315ab4f635389b2bee121070fe8355b935deb237eb7",
+              "requireCanonical": true
+            }
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": "0x000000000000000000000000bec2c2f65085c674da686b8229fa2b42f9b2f27b"
+        }
+      },
+      "previous": {
+        "source": "https://mainnet.base.org",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "eth_call",
+          "params": [
+            {
+              "to": "0x00000000000004533fe15556b1e086bb1a72ceae",
+              "data": "0xe2603dc20000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "blockHash": "0x7ef6710fdd57ae43e4738315ab4f635389b2bee121070fe8355b935deb237eb7",
+              "requireCanonical": true
+            }
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "error": {
+            "code": 3,
+            "message": "execution reverted"
+          }
+        }
+      },
+      "settlerCodeHash": "0x74e8b3286360c06c5f569cc1e319a47cc62d8a8a10102fc32bc49ef27d90a1b5"
+    },
+    {
+      "block": 62262756,
+      "selector": {
+        "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+        "requireCanonical": true
+      },
+      "current": {
+        "source": "https://mainnet.base.org",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "eth_call",
+          "params": [
+            {
+              "to": "0x00000000000004533fe15556b1e086bb1a72ceae",
+              "data": "0x6352211e0000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+              "requireCanonical": true
+            }
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": "0x0000000000000000000000007130a552999c7e2cae6b38f9336e90c457abd47d"
+        }
+      },
+      "previous": {
+        "source": "https://mainnet.base.org",
+        "request": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "method": "eth_call",
+          "params": [
+            {
+              "to": "0x00000000000004533fe15556b1e086bb1a72ceae",
+              "data": "0xe2603dc20000000000000000000000000000000000000000000000000000000000000002"
+            },
+            {
+              "blockHash": "0xdf458884e3b25319497f122bfe50a2dff59b0079421fec1e1a9ac403d3c3e715",
+              "requireCanonical": true
+            }
+          ]
+        },
+        "response": {
+          "jsonrpc": "2.0",
+          "id": 1,
+          "result": "0x000000000000000000000000103502909141f7025a94b7b99a276dcd128e21a8"
+        }
+      },
+      "settlerCodeHash": "0x03c6472fd4dd764cf40c583466fa2ec5f68449c12821679154da9365c366d9fd"
+    }
+  ]
+}

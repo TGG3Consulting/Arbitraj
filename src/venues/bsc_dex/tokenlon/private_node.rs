@@ -228,7 +228,7 @@ mod tests {
         let value: U256 = serde_json::from_value(tx["value"].clone()).unwrap();
         let chain = chain.to::<u64>();
         let gas = row["gasUsed"].as_u64().unwrap();
-        let price = U256::from(row["effectiveGasPrice"].as_u64().unwrap());
+        let price: U256 = row["effectiveGasPrice"].as_str().unwrap().parse().unwrap();
         let measured = Measurement {
             owner,
             target,

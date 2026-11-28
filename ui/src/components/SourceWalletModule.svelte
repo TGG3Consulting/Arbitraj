@@ -89,7 +89,7 @@
   {/if}
   <button disabled={busy} onclick={()=>run(price)}>{configured ? 'Проверить настроенный адрес' : 'Оценить газ'}</button>
   {#if priced}
-    {#if shared}
+    {#if shared && chain===8453}
       <p>Исполнение на Base потребует примерно {priced.gas} gas ({priced.fee} wei). Перед подписью проверьте также плату за публикацию в L1.</p>
     {:else}
       <p>{priced.gas} gas · до {priced.fee} wei</p>

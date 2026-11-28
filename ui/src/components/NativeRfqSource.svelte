@@ -1,13 +1,12 @@
-<!-- Один общий расчётный модуль для источника Native V6 выбранной Base. -->
+<!-- Один общий расчётный модуль для источника Native V6 выбранной сети. -->
 <script>
   import SourceWalletModule from './SourceWalletModule.svelte';
   import {store} from '../lib/settings.svelte.js';
-  import {baseNetwork} from '../lib/baseNetwork.js';
-  import {addNative,registeredNative} from '../lib/nativeRfqDeploy.js';
+  import {addNative,registeredNative,nativeRfqNetwork} from '../lib/nativeRfqDeploy.js';
 
   let {venue,wallet}=$props();
-  const chain=$derived(baseNetwork(venue,store.schema?.dex_profiles,store.values));
-  const load=()=>import('../assets/native-rfq-base-create.json');
+  const chain=$derived(nativeRfqNetwork(venue,store.schema?.dex_profiles,store.values));
+  const load=()=>chain===1 ? import('../assets/native-rfq-ethereum-create.json') : import('../assets/native-rfq-base-create.json');
 </script>
 
 {#if chain}

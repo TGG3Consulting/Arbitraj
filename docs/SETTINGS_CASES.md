@@ -6644,7 +6644,7 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `native_rfq.roles`
 
 - **Кейс:** Проверка кошельком одного предложения на Ethereum через официальный Router или размещённый владельцем расчётный модуль.
-- **Что ставить:** Строка `network <chainId> <имя API>` и строки `router <адрес> <runtime hash>`, `pool <адрес> <runtime hash>`. Для защищённого исполнения нужна строка `module <адрес> <runtime hash>`. [Размещения Native](https://docs.native.org/native-dev/resources/addresses)
+- **Что ставить:** Строка `network <chainId> <имя API>` и строки `router <адрес> <runtime hash>`, `pool <адрес> <runtime hash>`. В кошельке сети Ethereum после старта выберите «Модуль Native RFQ V6», оцените газ, разместите модуль и сохраните адрес финализированной транзакции. Карточка добавит строку `module <адрес> 0xfaba3fc221e9fa0c0769ee02c7461445d02c59e85c29d053613dcb701a2ab7d9`. На Base используется собственная карточка с хешом этой сети. [Размещения Native](https://docs.native.org/native-dev/resources/addresses)
 - **Если не задана:** Средства кошелька по Native не используются.
 
 ### `native_rfq.trading`

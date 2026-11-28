@@ -22,15 +22,27 @@ pub(super) struct Profile {
     pub(super) module: Option<Role>,
 }
 impl Profile {
-    /// Хеш из изолированного CREATE привязывает коду Base все четыре immutable, включая адреса кассы.
+    /// Архивный runtime включает обе роли и их хеши. Проверка не обращается к узлу.
     pub(super) fn supports_settlement(&self) -> bool {
-        const RUNTIME: B256 = alloy_primitives::b256!("264206d824e22e069c5aebcb2ff8f123cade977dd5aa0dba630b2a2714938de8");
-        static ORIGINAL: std::sync::LazyLock<Option<Profile>> = std::sync::LazyLock::new(|| {
-            let rows = crate::settings::recommendations::venue_value(PROFILE, "base_dex")?;
-            Profile::parse(&json!(rows.split(',').collect::<Vec<_>>()))
+        static PROFILES: std::sync::LazyLock<Vec<(Profile, B256)>> = std::sync::LazyLock::new(|| {
+            [
+                ("base_dex", alloy_primitives::b256!("264206d824e22e069c5aebcb2ff8f123cade977dd5aa0dba630b2a2714938de8")),
+                ("eth_dex", alloy_primitives::b256!("faba3fc221e9fa0c0769ee02c7461445d02c59e85c29d053613dcb701a2ab7d9")),
+            ].into_iter().filter_map(|(venue, hash)| {
+                let roles = crate::settings::recommendations::venue_value(PROFILE, venue)?;
+                Some((Profile::parse(&json!(roles.split(',').collect::<Vec<_>>()))?, hash))
+            }).collect()
         });
-        ORIGINAL.as_ref().is_some_and(|p| (self.chain,&self.slug,self.pool,self.router)==(p.chain,&p.slug,p.pool,p.router))
-            && self.module.is_some_and(|m| m.hash == RUNTIME)
+        PROFILES.iter().any(|(p, hash)| self.chain == p.chain && self.slug == p.slug
+            && self.pool == p.pool && self.router == p.router && self.module.is_some_and(|m| m.hash == *hash))
+    }
+    /// На двух подтверждённых сетях торговая заявка использует измеренный модуль именно этого размещения.
+    pub(super) fn accepts_trade(&self, settlement: bool) -> bool {
+        if settlement || crate::settings::evm_profiles::by_chain_id(self.chain).is_some() {
+            self.supports_settlement()
+        } else {
+            self.module.is_some()
+        }
     }
     pub(super) fn parse(rows: &Value) -> Option<Self> {
         let mut roles = BTreeMap::new();
@@ -138,7 +150,21 @@ impl Profile {
             }
             Ok(())
         };
-        tokio::try_join!(verify(self.router), verify(self.pool), optional)?;
+        let registry = async {
+            if self.supports_settlement() {
+                use alloy::sol_types::SolValue;
+                let mut calldata = keccak256("isNativePools(address)".as_bytes())[..4].to_vec();
+                calldata.extend(self.pool.address.abi_encode());
+                let reply: Bytes = rpc::call(ctx, "eth_call", json!([{
+                    "to": self.router.address, "input": Bytes::from(calldata)
+                }, head.selector()])).await?;
+                if reply.as_ref() != true.abi_encode() {
+                    return Err(bad(ctx, "Router Native не зарегистрировал выбранный RFQPool"));
+                }
+            }
+            Ok(())
+        };
+        tokio::try_join!(verify(self.router), verify(self.pool), optional, registry)?;
         Ok(())
     }
 }

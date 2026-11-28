@@ -10,6 +10,7 @@ mod cash;
 mod history;
 mod history_store;
 mod history_orders;
+mod history_candidates;
 mod legacy;
 mod payment;
 mod profile;

@@ -77,16 +77,17 @@ fn price(debit: U256, credit: U256, di: u8, dout: u8) -> Option<Quantity> {
     };
     Quantity::v4(coefficient)
 }
+pub(super) fn registered(response: &[u8]) -> bool {
+    matches!(wire::orderExistsCall::abi_decode_returns_validate(response), Ok(true))
+}
+
 pub(super) async fn read(p: &Parts, leg: Leg, h: white_state::Head) -> Vec<Live> {
     let samples = Sample::configured(&p.ctx, &leg);
     if samples.is_empty() || leg.via.is_some() {
         return vec![];
     }
     let Some(bytes)=rpc::call::<Bytes>(&p.ctx,"eth_call",json!([{"to":leg.p.book,"input":Bytes::from(wire::orderExistsCall{hash:leg.hash}.abi_encode())},h.selector()])).await.ok() else{return vec![];};
-    if !matches!(
-        wire::orderExistsCall::abi_decode_returns_validate(&bytes),
-        Ok(true)
-    ) {
+    if !registered(&bytes) {
         return vec![];
     }
     let Ok(owner) = wallet::signer::address(&p.ctx) else {

@@ -1,6 +1,7 @@
 //! Фоновая история Add/Remove одной книги Raindex. Подбор читает опубликованные ордера и
 //! независимо проверяет текущую ёмкость каждого подходящего ордера от своего модуля.
 use super::{
+    history_candidates::{Indexed, View},
     history_orders::{self, Cursor},
     history_store,
     profile::{Origin, Source},
@@ -19,7 +20,7 @@ use tokio::{sync::watch, task::JoinSet};
 type Key = (Profile, u64);
 type Orders = Arc<Raw>;
 struct Reader {
-    rows: watch::Receiver<Orders>,
+    rows: watch::Receiver<Indexed>,
     _task: JoinSet<()>,
 }
 #[derive(Default)]
@@ -43,15 +44,19 @@ impl Readers {
                 let start = seed
                     .as_ref()
                     .map_or_else(Orders::default, |(_, rows)| rows.clone());
-                let (tx, rows) = watch::channel(start);
+                let (tx, rows) = watch::channel(Indexed {
+                    cursor: seed.as_ref().map(|(cursor, _)| *cursor), rows: start,
+                });
                 let mut task = JoinSet::new();
                 task.spawn(run(ctx.clone(), id, seed, tx));
                 Reader { rows, _task: task }
             });
         }
     }
-    pub(super) fn orders(&self, source: &Source) -> Option<Orders> {
-        Some(self.0.get(&key(source)?)?.rows.borrow().clone())
+    pub(super) fn orders(&self, source: &Source, height: u64) -> Option<View> {
+        let id = key(source)?;
+        let reader = self.0.get(&id)?;
+        Some(View::for_book(id.0, id.1, height, &reader.rows.borrow()))
     }
 }
 
@@ -60,7 +65,7 @@ struct Worker {
     from: u64,
     namespace: String,
     seed: Option<(Cursor, Orders)>,
-    tx: watch::Sender<Orders>,
+    tx: watch::Sender<Indexed>,
     cursor: Option<Cursor>,
 }
 
@@ -68,7 +73,7 @@ async fn run(
     ctx: Ctx,
     (profile, from): Key,
     seed: Option<(Cursor, Orders)>,
-    tx: watch::Sender<Orders>,
+    tx: watch::Sender<Indexed>,
 ) {
     let mut changes = ctx.settings.subscribe();
     let namespace = format!(
@@ -88,7 +93,7 @@ async fn run(
         && let Some((cursor, rows)) = saved.valid
     {
         worker.cursor = Some(cursor);
-        worker.tx.send_replace(rows);
+        worker.tx.send_replace(Indexed { cursor: None, rows });
     }
     let mut last_note = None::<Instant>;
     loop {
@@ -104,7 +109,7 @@ async fn run(
         {
             let result = worker.step(&ctx).await;
             if last_note.is_none_or(|t| t.elapsed() >= interval) {
-                let count = worker.tx.borrow().len();
+                let count = worker.tx.borrow().rows.len();
                 match &result {
                     Ok(Some((n, tip))) => {
                         ctx.log(

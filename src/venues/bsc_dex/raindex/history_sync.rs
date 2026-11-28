@@ -13,11 +13,12 @@ impl Worker {
             .map_err(|e| no(ctx, &format!("Raindex: чтение позиции: {e}")))?;
         let mut replaced = None;
         if let Some((cursor, orders)) = saved.valid {
-            self.tx.send_replace(orders);
             if tip < cursor.0 {
+                self.tx.send_replace(Indexed { cursor: None, rows: orders });
                 return Err(no(ctx, "Raindex: узел ещё не достиг сохранённого блока"));
             }
             if hash_at(ctx, cursor.0).await? == cursor.1 {
+                self.tx.send_replace(Indexed { cursor: Some(cursor), rows: orders });
                 self.cursor = Some(cursor);
                 return Ok(());
             }
@@ -65,7 +66,7 @@ impl Worker {
             return Err(no(ctx, "Raindex: другой читатель уже обновил позицию"));
         }
         self.cursor = Some(cursor);
-        self.tx.send_replace(orders);
+        self.tx.send_replace(Indexed { cursor: Some(cursor), rows: orders });
         Ok(())
     }
 
@@ -83,12 +84,16 @@ impl Worker {
         }
         if hash_at(ctx, last).await? != hash {
             self.cursor = None;
+            self.tx.send_modify(|s| s.cursor = None);
             return Err(no(
                 ctx,
                 "Raindex: реорганизация, переопределяем каноническую позицию",
             ));
         }
         if tip == last {
+            if self.tx.borrow().cursor.is_none() {
+                self.tx.send_modify(|s| s.cursor = Some((last, hash)));
+            }
             return Ok(None);
         }
         let end = tip.min(last.saturating_add(scan::batch_size(ctx)?));
@@ -144,9 +149,10 @@ impl Worker {
             return Err(no(ctx, "Raindex: другой читатель уже сохранил позицию"));
         }
         self.cursor = Some(cursor);
-        if !delta.is_empty() {
-            self.tx.send_modify(|snapshot| {
-                let raw = Arc::make_mut(snapshot);
+        self.tx.send_modify(|snapshot| {
+            snapshot.cursor = Some(cursor);
+            if !delta.is_empty() {
+                let raw = Arc::make_mut(&mut snapshot.rows);
                 for (id, value) in delta {
                     if let Some(bytes) = value {
                         raw.insert(id, bytes);
@@ -154,8 +160,8 @@ impl Worker {
                         raw.remove(&id);
                     }
                 }
-            });
-        }
+            }
+        });
         Ok(Some((end, tip)))
     }
 }

@@ -71,7 +71,7 @@ pub(in crate::venues::bsc_dex) async fn run(p: Parts, out: mpsc::Sender<MarketEv
                 .map(|src| {
                     let p = &p;
                     let cash = *cash;
-                    let catalog = readers.orders(&src);
+                    let catalog = readers.orders(&src, head.number.to::<u64>());
                     async move {
                         tokio::time::timeout(ttl / 2, src.read(p, head, cash, catalog))
                             .await

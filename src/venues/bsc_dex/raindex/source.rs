@@ -122,13 +122,13 @@ impl Source {
         p: &Parts,
         h: white_state::Head,
         quote: Address,
-        catalog: Option<Arc<Raw>>,
+        catalog: Option<history_candidates::View>,
     ) -> Option<Vec<Live>> {
         self.profile.verify(&p.ctx, h).await.ok()?;
         let raw = match &self.origin {
             Origin::Rpc(_) => catalog?,
-            Origin::Graph(url) => Arc::new(self.indexed(&p.ctx, h, url).await?),
-            Origin::Explorer(url) => Arc::new(self.history(&p.ctx, h, url).await?),
+            Origin::Graph(url) => history_candidates::View::complete(Arc::new(self.indexed(&p.ctx, h, url).await?)),
+            Origin::Explorer(url) => history_candidates::View::complete(Arc::new(self.history(&p.ctx, h, url).await?)),
         };
         let known: HashSet<_> = p.tokens.all().into_iter().map(|v| v.address).collect();
         let bridges = cash::State::configured(&p.ctx, self.profile, h, quote).await;

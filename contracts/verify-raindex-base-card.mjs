@@ -66,7 +66,24 @@ function verifiedSettlement(spec) {
     assert.deepEqual(audit.anchor, directory.anchor);
     assert(direct.every(v => audit.tokens[v.receive].isCertificationExpired === true));
   }
-  return paid;
+  if (spec.version === 5) {
+    const independent = archive('v5_holder_wallets');
+    assert.equal(independent.height, directory.height);
+    assert.deepEqual(independent.selector, directory.anchor);
+    assert.equal(independent.book, spec.address);
+    assert.equal(independent.runtime, spec.payout.modules[spec.address].runtime);
+    const funded = independent.cases.filter(row => row.stage === 'paid');
+    assert.equal(new Set(funded.map(row => row.asset)).size, 2);
+    for (const row of funded) {
+      assert(BigInt(row.paid) > 0n && BigInt(row.net) > 0n);
+      assert(row.holder !== spec.payout.payer && row.tight_reproduced && row.excess_minimum_rolled_back);
+      assert.equal(BigInt(row.before[0])-BigInt(row.after[0]), BigInt(row.paid));
+      assert.equal(BigInt(row.after[1])-BigInt(row.before[1]), BigInt(row.net));
+      assert.deepEqual(row.before.slice(2), row.after.slice(2));
+    }
+    return {settlementVerified:true, projectFundingVerified:paid};
+  }
+  return {settlementVerified:paid, projectFundingVerified:paid};
 }
 for (const spec of specs) {
   const evidence = spec.payout;
@@ -90,11 +107,11 @@ for (const spec of specs) {
   }
   assert.equal(matches.length, 1, 'compiled runtime must reproduce the recorded constructor');
   const [runtime] = matches;
-  const settlementVerified = verifiedSettlement(spec);
+  const verification = verifiedSettlement(spec);
   const entry = {
     version:book.version, book:book.book, bookHash:spec.hash, takeSelector:'0x'+book.selector,
     runtimeKeccak:keccak(runtime), runtimeSha256:sha256(runtime), creationSha256:sha256(init),
-    sourceKind:spec.sourceKind, url:spec.source, settlementVerified
+    sourceKind:spec.sourceKind, url:spec.source, ...verification
   };
   card.books.push(entry);
   if (mode === '--check') {

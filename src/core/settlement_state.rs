@@ -48,6 +48,10 @@ pub struct Path {
     pub plan: Plan,
     pub conversion: Option<CashFill>,
     pub movement: Option<Movement>,
+    /// Отметка перевода зачисленного на торговый счёт перед конверсией возврата (settlement_to_trading.rs; решение
+    /// Тиграна 28.11.2026). Нет — шаг не начинался; старые записи без поля читаются как раньше.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub to_trading: Option<serde_json::Value>,
 }
 impl Path {
     /// Разрешает восстановление только сохранённой сделки в том же рынке. Старое поручение

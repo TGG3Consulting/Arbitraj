@@ -1,7 +1,8 @@
 //! Файл: core/settlement_cycle.rs.
 //! Что делает: связывает фактическую покупку целевой монеты, её перевод, продажу и конверсию выручки.
 //! Кто вызывает: исполнитель и восстановление ранее открытой сделки.
-//! От чего зависит: доказанные количества ордеров, идентичность рынка, журнал до POST.
+//! От чего зависит: доказанные количества ордеров, идентичность рынка, журнал до POST; перевод зачисленного на
+//! торговый счёт до продажи — settlement_to_trading.rs.
 //! Настройки: допустимые цены исходного решения и актуальные сетевые ограничения.
 use super::{
     deal::{Deal, Step},
@@ -128,6 +129,13 @@ pub async fn advance(core: &Core, deal: &mut Deal, p: &Mandate) -> Result<(), St
     deal.qty = moving.credit.amount;
     deal.step = Step::Selling;
     save(core, deal).await?;
+    if funding {
+        // Решение Тиграна 28.11.2026: зачисленное — на торговый счёт до продажи (settlement_to_trading.rs).
+        let on = super::settlement_to_trading::Store::Deal(&mut *deal);
+        let to = (&m.dex, &m.cex);
+        super::settlement_to_trading::ensure(core, on, to, &d.asset, &p.target_cex, &moving.credit)
+            .await?;
+    }
     let sell = super::settlement_request::request(
         core,
         &deal.id,

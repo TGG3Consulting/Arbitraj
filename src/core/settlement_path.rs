@@ -1,7 +1,8 @@
 //! Файл: core/settlement_path.rs.
 //! Что делает: исполняет последовательность финансирования либо возврата после проверки рынка.
 //! Кто вызывает: восстановление движка и исполнитель.
-//! От чего зависит: сохранённое поручение, идентификаторы ордеров и выводов.
+//! От чего зависит: сохранённое поручение, идентификаторы ордеров и выводов; перевод на торговый перед IOC возврата —
+//! settlement_to_trading.rs.
 //! Настройки: выключатели площадок, dry.enabled и условия выбранной сети.
 pub use super::settlement_recovery::{get, resume, rows};
 pub use super::settlement_state::{Leg, Path, Plan, Progress};
@@ -31,6 +32,7 @@ pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
                 plan: p.clone(),
                 movement: None,
                 conversion: None,
+                to_trading: None,
             };
             save(db, &v, None).await?;
             v
@@ -168,13 +170,26 @@ pub async fn run(core: &Core, p: &Plan) -> Result<Path, String> {
                 );
                 save(db, &path, Some(&original)).await?;
             }
-            let previous = path.clone();
-            let credited = path
+            let credit = path
                 .movement
                 .as_ref()
                 .ok_or("Нет зачисления расчётного актива")?
                 .credit
-                .amount;
+                .clone();
+            // Решение Тиграна 28.11.2026: зачисленное — на торговый счёт до IOC (settlement_to_trading.rs).
+            let cash = market.cash_on(&p.cex);
+            let to_trading = super::settlement_to_trading::Store::Path(db, &mut path);
+            super::settlement_to_trading::ensure(
+                core,
+                to_trading,
+                (&dex, &p.cex),
+                &cash,
+                &cash.ticker,
+                &credit,
+            )
+            .await?;
+            let previous = path.clone();
+            let credited = credit.amount;
             path.conversion = Some(
                 settlement_cash::convert(
                     core,

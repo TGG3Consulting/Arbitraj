@@ -1,7 +1,8 @@
 //! Файл: core/settlement_transfer.rs.
 //! Что делает: связывает подтверждение вывода и кредит получателя.
 //! Кто вызывает: исполнитель поручения.
-//! От чего зависит: шлюзы выбранной сети и привязанный кошелёк.
+//! От чего зависит: шлюзы выбранной сети и привязанный кошелёк; ожидание зачисления при восстановлении —
+//! settlement_credit_wait.rs.
 //! Настройки: пределы вывода и маппинг кошельков.
 use super::settlement_effect as effect;
 use crate::core::{
@@ -218,11 +219,31 @@ async fn current(
             deal: id.into(),
             expected: sender.withdrawal_wire(&created, &sent),
         };
-        let credit = recipient
+        let net = m.transfer_network(core, &to_asset, to)?;
+        let credit = match recipient
             .deposit_status_for(&to_asset, tx, &claim, None)
             .await
-            .map_err(|e| e.message)?;
-        let net = m.transfer_network(core, &to_asset, to)?;
+        {
+            Ok(c) if c.status == TransferStatus::Credited || read_only => c,
+            Err(e) if read_only => return Err(e.message),
+            // Восстановление после перезапуска: ещё не зачислено — ждать, как обычный перевод
+            // (settlement_credit_wait.rs; уточнение Тиграна 28.11.2026).
+            _ => {
+                let leg = super::transfer_credit::Leg {
+                    deal: id,
+                    from,
+                    to,
+                    asset: token,
+                    network: net.clone(),
+                    tx: tx.to_owned(),
+                    started: sent.updated_at,
+                };
+                let wait = super::settlement_credit_wait::wait(
+                    core, &leg, &recipient, &to_asset, &claim, None,
+                );
+                Box::pin(wait).await
+            }
+        };
         crate::gateway::settlement_proofs::pin(&deps.db, &m.dex, m.evm_chain_id, tx).await?;
         return verified(
             (&from_asset, &to_asset),

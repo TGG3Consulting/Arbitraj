@@ -11,7 +11,7 @@
 //! done и to_trading.
 //!
 //! Решение 413: перевод зачисленного на торговый получил «мало средств» — один повтор с фактом счёта (to_trading_fact.rs).
-//! Кто вызывает: core/transfers.rs, core/transfer_chain.rs.
+//! Кто вызывает: core/transfers.rs, core/transfer_chain.rs; to_trading — ещё круг Base (settlement_to_trading.rs).
 //! От чего зависит: credit_watch.rs, credit_mismatch.rs, transit.rs, transfer_watch.rs, wait.rs, deps.rs (шлюз).
 //! После зачисления — перевод на торговый счёт площадки (решение 102, Venue::deposit_to_trading; у BingX — фондовый → спот).
 //! Настройки: venue.status_poll_ms (по площадке получателя); venue.deposit_to_spot — у адаптера BingX.
@@ -204,8 +204,16 @@ pub(super) async fn done(core: &Core, leg: &Leg<'_>, t: &Transfer, at: DateTime<
 /// Решение 102: зачисленное — на счёт, где площадка торгует (у BingX — с фондового на спот, venue.deposit_to_spot).
 /// Сбой — по правилам шлюза (повтор или стоп, core/rules_apply.rs; «итог неизвестен» не повторяется), журнал и
 /// уведомление transfer.to_trading_failed: монеты или USDT остаются на фондовом счёте — продажа сделки там не пройдёт и
-/// уйдёт в «Ручное управление» (решение 100). Принимает: перевод, шлюз получателя, зачисление. Ошибок нет.
-pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, t: &Transfer) {
+/// уйдёт в «Ручное управление» (решение 100). Принимает: перевод, шлюз получателя, зачисление.
+/// Возвращает: true — переложено или перекладывать нечего (Ok(None)); false — не переложено (журнал и уведомление уже
+/// ушли). Обычная сделка итог не читает; круг Base (settlement_to_trading.rs) по false не ставит ордер вслепую.
+/// Ошибок нет.
+pub(super) async fn to_trading(
+    core: &Core,
+    leg: &Leg<'_>,
+    gw: &Arc<dyn Venue>,
+    t: &Transfer,
+) -> bool {
     let deps = &core.inner.deps;
     let mut attempt = 0;
     // Решение 413: сумма перевода на торговый — запись депозита; «мало средств» — один раз по факту счёта.
@@ -214,7 +222,7 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
         attempt += 1;
         let on = super::venue_ticker::on_venue(core, leg.asset, leg.to);
         match gw.deposit_to_trading(&on, amount).await {
-            Ok(None) => return,
+            Ok(None) => return true,
             Ok(Some(text)) => {
                 let text = format!("{}: {text}", leg.deal);
                 deps.log(
@@ -225,7 +233,7 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
                     None,
                 )
                 .await;
-                return;
+                return true;
             }
             Err(e) => {
                 // Решение 413 (t198): биржа зачислила меньше записи (удержание при зачислении) — перевести то, что
@@ -282,7 +290,7 @@ pub(super) async fn to_trading(core: &Core, leg: &Leg<'_>, gw: &Arc<dyn Venue>, 
                         .render();
                         deps.notify("transfer.to_trading_failed", Some(&leg.to.0), &tg)
                             .await;
-                        return;
+                        return false;
                     }
                 }
             }

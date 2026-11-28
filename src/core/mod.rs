@@ -329,6 +329,7 @@ pub mod settlement;
 mod settlement_accounts;
 pub mod settlement_cash;
 pub mod settlement_cycle;
+mod settlement_credit_wait;
 mod settlement_cycle_fund;
 mod settlement_cycle_money;
 mod settlement_demand;
@@ -349,6 +350,9 @@ mod settlement_run;
 mod settlement_signals;
 mod settlement_state;
 mod settlement_target;
+mod settlement_to_trading;
+#[cfg(test)]
+mod settlement_to_trading_tests;
 pub mod settlement_transfer;
 pub mod settlement_unit;
 mod settlement_values;

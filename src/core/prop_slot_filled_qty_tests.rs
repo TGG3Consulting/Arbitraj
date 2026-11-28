@@ -135,4 +135,19 @@ fn outgoing_requests_use_the_owned_position_and_the_confirmed_credit() {
     assert!(cycle.contains("let(buy_debit,bought)=target::amounts(&buy,"));
     assert!(cycle.contains("settlement_transfer::move_token(core,&deal.id,(m,&d.asset),wallet,!funding,bought,)"));
     assert!(cycle.contains("settlement_request::request(core,&deal.id,p,Side::Sell,moving.credit.amount,"));
+    // Решение Тиграна 28.11.2026: перевод зачисленного на торговый — после move_token и до заявки продажи;
+    // в пути возврата — до IOC USDC → USDT.
+    let moved = at_in(&cycle, "settlement_transfer::move_token(");
+    let to_trading = at_in(&cycle, "settlement_to_trading::ensure(core,on,to,&d.asset,&p.target_cex,&moving.credit)");
+    let sell = at_in(&cycle, "settlement_request::request(core,&deal.id,p,Side::Sell,");
+    assert!(moved < to_trading && to_trading < sell);
+    let path = code(include_str!("settlement_path.rs"));
+    let ensure = at_in(&path, "settlement_to_trading::ensure(");
+    let convert = at_in(&path, "settlement_cash::convert(core,&p.deal,&market,Side::Sell,");
+    assert!(ensure < convert);
+}
+
+/// Позиция фрагмента в тексте кода (без пробелов и комментариев). Паника — фрагмента нет.
+fn at_in(code: &str, needle: &str) -> usize {
+    code.find(needle).unwrap_or_else(|| panic!("нет {needle}"))
 }

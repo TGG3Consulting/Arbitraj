@@ -737,10 +737,17 @@ async fn go(
                 "Статус вывода относится к другому идентификатору".to_string(),
             ));
         }
-        let credited = gw_to
-            .deposit_status_for(&on_to, &leg.tx, &claim, None)
-            .await
-            .map_err(|e| OpError::from(&e))?;
+        // Уточнение Тиграна 28.11.2026: круг ждёт зачисления так же, как обычный перевод (опрос записи депозита,
+        // событие будит, карантин), но засчитывает только запись депозита (settlement_credit_wait.rs).
+        let credited = Box::pin(super::settlement_credit_wait::wait(
+            core,
+            &leg,
+            &gw_to,
+            &on_to,
+            &claim,
+            ticket.as_ref(),
+        ))
+        .await;
         return Ok((sent, credited, None));
     }
     let credited = Box::pin(super::transfer_credit::wait_with_units(

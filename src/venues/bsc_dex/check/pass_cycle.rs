@@ -4,7 +4,9 @@
 //! не внутри цикла крючков: обычные проверки крючков B/C пробы не ждут. Своего опроса нет:
 //! - полный проход — раз в hooks.recheck_interval_s (та же настройка, что у цикла крючков);
 //! - между проходами — очередь check/recheck.rs (pass): «Перепроверить» монеты, «новые пулы» и (ревью Н5) «налоги монеты
-//!   проверены» (check/tax_cycle.rs) — пробуются её пулы, у которых итога ещё нет, он «не проверено» или метка отката.
+//!   проверены» (check/tax_cycle.rs) — пробуются её пулы, у которых итога ещё нет, он «не проверено» или метка отката;
+//! - С1 (арбитр 28.11.2026): «пул готов» (подписка до прохода) — пулы, ставшие достоверными после прохода задачи (поздние:
+//!   поиск по фабрикам, новые пулы; check/fresh.rs), пробуются сразу, а не через hooks.recheck_interval_s.
 //!
 //! Порядок прохода (ревью Н2): сначала пулы с меткой отката сделки, затем пулы, которые котируются (не спят — pools/depth.rs:
 //! спящий пул в котировку и сигналы не идёт, quote/select.rs), спящие — последними.
@@ -41,6 +43,7 @@ use super::super::pools::families::Proto;
 use super::super::pools::listen::Pools;
 use super::super::pools::registry::Entry;
 use super::super::settings_wait;
+use super::fresh::Fresh;
 use super::pass_judge::Outcome;
 use super::pass_probe;
 use super::recheck::Queue;
@@ -48,8 +51,14 @@ use super::taxes_util::Sources;
 
 /// Задача проб (см. шапку). Работает постоянно; не задан интервал — ждёт настройку (settings_wait.rs). Ошибок нет.
 pub async fn run(p: Pools, queue: Queue) {
+    // С1 (арбитр 28.11.2026): пулы, проверенные проходом этой задачи; поздние (поиск по фабрикам, новые) — по «пул готов».
+    let mut fresh = Fresh::default();
+    // Подписка на «пул готов» — до прохода (как check/quoter_cycle.rs): сигнал во время прохода не теряется.
+    let ready = p.signals.ready.notified();
+    tokio::pin!(ready);
+    ready.as_mut().enable();
     loop {
-        full(&p).await;
+        full(&p, &mut fresh).await;
         if p.out.is_closed() {
             return;
         }
@@ -77,16 +86,50 @@ pub async fn run(p: Pools, queue: Queue) {
                         return;
                     }
                 }
+                // С1: пул стал достоверным (прочитан при старте, поздний — от поиска по фабрикам или новый) — проба
+                // пулов, ещё не пройденных этой задачей. Раньше «новые пулы» (recheck.rs) приходили до первого чтения,
+                // each() пропускал недостоверные, и поздний пул ждал полного прохода hooks.recheck_interval_s.
+                _ = &mut ready => {
+                    ready.set(p.signals.ready.notified());
+                    ready.as_mut().enable();
+                    late(&p, &mut fresh).await;
+                    if p.out.is_closed() {
+                        return;
+                    }
+                }
             }
         }
     }
 }
 
-/// Полный проход: все пулы-кандидаты в порядке шапки. Ошибок нет.
-async fn full(p: &Pools) {
+/// Полный проход: все пулы-кандидаты в порядке шапки; достоверные пулы реестра отмечаются пройденными (С1). Нет
+/// исполнителей — отметок нет (пулы пробуются, как только исполнитель появится и придёт сигнал). Ошибок нет.
+async fn full(p: &Pools, fresh: &mut Fresh) {
     let Some(xs) = executors(p) else { return };
+    for r in fresh.due(p, |_| false) {
+        fresh.mark(&r);
+    }
     let all = p.reg.refs().into_iter().filter_map(|r| p.reg.entry(&r));
     each(p, ordered(p.ctx.place.id, &xs, all), false).await;
+}
+
+/// С1: проба достоверных пулов, ещё не пройденных задачей (поздние пулы), — только неустоявшиеся итоги, как «новые
+/// пулы». Принимает: состояние пулов, отметки. Ошибок нет.
+async fn late(p: &Pools, fresh: &mut Fresh) {
+    let Some(xs) = executors(p) else { return };
+    let due = fresh.due(p, |_| false);
+    if due.is_empty() {
+        return;
+    }
+    for r in &due {
+        fresh.mark(r);
+    }
+    let list = ordered(
+        p.ctx.place.id,
+        &xs,
+        due.iter().filter_map(|r| p.reg.entry(r)),
+    );
+    each(p, list, true).await;
 }
 
 /// Внеочередной проход по очереди (ревью Н5): пулы переданных монет и при «новых пулах» — все, но только у кошельков,

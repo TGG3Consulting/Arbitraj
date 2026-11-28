@@ -67,6 +67,7 @@ impl<'de> Deserialize<'de> for DexRoute {
             };
         }
         match route.mode {
+            RouteMode::ZeroEx(_) if !route.legs.is_empty() || !route.executable => Err(serde::de::Error::custom("0x требует исполнимой заявки")),
             RouteMode::Raindex(ticket) | RouteMode::RaindexSettlement(ticket) | RouteMode::NativeRfqSettlement(ticket) | RouteMode::PancakeX(ticket)
                 if !route.legs.is_empty() || route.executable != ticket.is_some() =>
             {

@@ -77,6 +77,7 @@ pub(in crate::venues::bsc_dex) async fn check_module_cancel(ctx: &Ctx, c: &SwapC
 pub(super) enum Saved<'a> {
     Gladius(&'a super::super::gladius::settlement::Saved),
     Raindex(&'a super::super::raindex::settlement::Saved),
+    ZeroEx(&'a super::super::zeroex::receipt::Saved),
     Textile(&'a super::super::textile::receipt::Saved),
     Dexalot(&'a super::super::dexalot::receipt::Saved),
     AirSwap(&'a super::super::airswap::receipt::Saved),
@@ -125,6 +126,7 @@ fn entries(c: &SwapCtx) -> impl Iterator<Item = Saved<'_>> {
     [
         c.gladius.as_deref().map(Saved::Gladius),
         c.raindex.as_deref().map(Saved::Raindex),
+        c.zeroex.as_deref().map(Saved::ZeroEx),
         c.textile.as_deref().map(Saved::Textile),
         c.dexalot.as_deref().map(Saved::Dexalot),
         c.airswap.as_deref().map(Saved::AirSwap),
@@ -232,6 +234,10 @@ pub(in crate::venues::bsc_dex) async fn included(
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Gladius"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
     }
+    if let Some(g)=&c.zeroex {
+        let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce 0x"))?.nonce;
+        g.included(ctx,hash,nonce,receipt).await?;
+    }
     if let Some(g)=&c.textile{
         let nonce=c.chain.as_ref().ok_or_else(||ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,"Нет исходного nonce Textile"))?.nonce;
         g.included(ctx,hash,nonce,receipt).await?;
@@ -262,7 +268,7 @@ pub(in crate::venues::bsc_dex) async fn included(
     for saved in entries(c) {
         match saved {
             Saved::Gladius(_) => {}, // в том числе проверено для revert выше
-            Saved::Dexalot(_) | Saved::AirSwap(_) | Saved::Textile(_) | Saved::Raindex(_) | Saved::Epsilon(_) => {}, // в том числе проверено для revert выше
+            Saved::Dexalot(_) | Saved::AirSwap(_) | Saved::ZeroEx(_) | Saved::Textile(_) | Saved::Raindex(_) | Saved::Epsilon(_) => {}, // в том числе проверено для revert выше
             Saved::SolidlyRouter(p) => p.included(ctx, hash, receipt).await?,
             Saved::Ranges(p)=>p.included(ctx,hash,receipt).await?,
             Saved::RegisteredV3(p) => p.included(ctx, hash, receipt).await?,
@@ -316,6 +322,7 @@ impl Saved<'_> {
     ) -> Result<(U256, U256), &'static str> {
         match self {
             Self::Gladius(p) => p.amounts(&r.logs).ok_or("Gladius: фактические движения и выплата не подтверждены"),
+            Self::ZeroEx(p) => p.amounts(&r.logs).ok_or("0x: не подтверждены чистые суммы кошелька"),
             Self::Textile(p) => p.amounts(&r.logs).ok_or("Textile: не подтверждены распоряжение и обе выплаты"),
             Self::Dexalot(p) => p.amounts(&r.logs).ok_or("Dexalot: не подтверждены распоряжение и обе выплаты"),
             Self::AirSwap(p) => p.amounts(&r.logs).ok_or("AirSwap: не подтверждены распоряжение и обе выплаты"),

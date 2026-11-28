@@ -24,6 +24,7 @@ mod epsilon;
 pub mod hanji;
 mod source_quote;
 mod textile;
+mod zeroex;
 mod airswap;
 mod dexalot;
 mod keyed_price;

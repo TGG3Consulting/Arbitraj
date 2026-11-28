@@ -1206,6 +1206,12 @@ jobs:
       - if: matrix.market == 'textile-create-base'
         run: cargo test --locked --lib textile::tests
       - if: matrix.market == 'zeroex-wallet-ethereum'
+        uses: dtolnay/rust-toolchain@stable
+      - if: matrix.market == 'zeroex-wallet-ethereum'
+        uses: Swatinem/rust-cache@v2
+      - if: matrix.market == 'zeroex-wallet-ethereum'
+        run: cargo test --locked --lib zeroex
+      - if: matrix.market == 'zeroex-wallet-ethereum'
         run: |
           npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
           node contracts/build-hanji.mjs "$RUNNER_TEMP/zeroex" ZeroExWallet

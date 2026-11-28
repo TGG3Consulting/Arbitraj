@@ -65,7 +65,7 @@ pub(in crate::venues::bsc_dex) async fn failed(
     r: &TradeRequest,
     e: crate::gateway::errors::GatewayError,
 ) -> crate::gateway::errors::GatewayError {
-    if !matches!(r.route.as_ref().map(|v| v.mode), Some(RouteMode::Rfq(_) | RouteMode::Raindex(Some(_)))) {
+    if !matches!(r.route.as_ref().map(|v| v.mode), Some(RouteMode::Rfq(_) | RouteMode::ZeroEx(_) | RouteMode::Raindex(Some(_)))) {
         return e;
     }
     let Some(tx) = e.tx.as_ref().filter(|t| {
@@ -82,7 +82,7 @@ pub(in crate::venues::bsc_dex) async fn failed(
         return e;
     };
     let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) else{return e;};
-    if [c.rfq.is_some(),c.dexalot.is_some(),c.airswap.is_some(),c.textile.is_some(),c.gladius.is_some(),c.raindex.is_some(),c.epsilon.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
+    if [c.rfq.is_some(),c.dexalot.is_some(),c.airswap.is_some(),c.textile.is_some(),c.zeroex.is_some(),c.gladius.is_some(),c.raindex.is_some(),c.epsilon.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
     if let Some(proof)=c.rfq{
         let Some(original)=c.chain.as_ref() else{return e;};
         if original.hash!=tx.hash || original.nonce!=tx.nonce || entry.lookup.nonce!=Some(tx.nonce) {return e;}
@@ -108,6 +108,15 @@ pub(in crate::venues::bsc_dex) async fn failed(
         if tx.outcome!=TxOutcome::Reverted{return e;}
         let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
         if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
+    }
+    if let Some(proof)=c.zeroex.as_ref(){
+        if c.chain.as_ref().is_none_or(|v|v.hash!=tx.hash || v.nonce!=tx.nonce) || entry.lookup.nonce!=Some(tx.nonce){return e;}
+        let hash=tx.cancel_hash.filter(|_|tx.outcome==TxOutcome::NotIncluded).unwrap_or(tx.hash);
+        let Ok(Some(receipt))=send::receipt::read(&p.ctx,hash).await else{return e;};
+        let verified=if tx.outcome==TxOutcome::Reverted{
+            receipt.status.to::<u64>()==0 && proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_ok()
+        }else{proof.call.cancelled(&p.ctx,tx.hash,hash,tx.nonce,&receipt).await.is_ok()};
+        if !verified{return e;}
     }
     if let Some(g)=c.textile{
         if tx.outcome!=TxOutcome::Reverted{return e;}
@@ -175,7 +184,7 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
         return Ok(None);
     };
     let saved = exec::swap_ctx::SwapCtx::of(&entry.lookup);
-    if saved.as_ref().is_some_and(|c| c.dexalot.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.airswap.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.textile.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.native_rfq.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.as_ref().is_some_and(|g|!g.wallet(&p.ctx))){
+    if saved.as_ref().is_some_and(|c| c.dexalot.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.airswap.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.zeroex.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.textile.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.native_rfq.as_ref().is_some_and(|n|!n.wallet(&p.ctx)) || c.epsilon.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.raindex.as_ref().is_some_and(|g|!g.wallet(&p.ctx)) || c.gladius.as_ref().is_some_and(|g|!g.wallet(&p.ctx))){
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сначала требуется сверить первоначальный счёт и сеть Native RFQ").pending(entry.lookup));
     }
     if let Some(intent::Outcome::Order(x)) = entry.result {
@@ -189,6 +198,17 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
         }
         if let Some(proof)=saved.as_ref().and_then(|c|c.dexalot.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Dexalot: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
+            let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
+            let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
+            if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
+            proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
+            let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
+            let (asset_dec,cash_dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
+            let (asset,cash)=if r.side==Side::Buy{(c,d)}else{(d,c)};
+            if num::to_decimal(asset,asset_dec)!=Some(x.trade.filled_qty)||num::to_decimal(cash,cash_dec)!=Some(x.gross_quote){return Err(unknown());}
+        }
+        if let Some(proof)=saved.as_ref().and_then(|c|c.zeroex.as_ref()){
+            let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"0x: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
             let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
             if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
@@ -263,7 +283,7 @@ pub(in crate::venues::bsc_dex) async fn record(
 ) -> GatewayResult<TradeResult> {
     if !matches!(
         t.request.route.as_ref().map(|r| r.mode),
-        Some(RouteMode::Rfq(_) | RouteMode::Raindex(Some(_)))
+        Some(RouteMode::Rfq(_) | RouteMode::ZeroEx(_) | RouteMode::Raindex(Some(_)))
     ) {
         return Ok(t);
     }
@@ -317,6 +337,12 @@ pub(in crate::venues::bsc_dex) async fn record(
         let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
         if t.request.side==Side::Buy{debit}else{credit}
     }else if let Some(g)=parse.airswap{
+        let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
+        let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
+        g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
+        let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
+        if t.request.side==Side::Buy{debit}else{credit}
+    }else if let Some(g)=parse.zeroex{
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
         let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
         g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
@@ -383,7 +409,10 @@ async fn send_selected(p: &Parts, req: TradeRequest, id: B256) -> GatewayResult<
     ctx.bound()?;
     let who = wallet::signer::address(ctx)?;
     let mode = req.route.as_ref().map(|r| r.mode);
-    let (result, fallback_fee) = if mode == Some(RouteMode::Raindex(Some(id))) {
+    let (result, fallback_fee) = if mode==Some(RouteMode::ZeroEx(id)) {
+        let ticket=p.zeroex.take(who,id).ok_or_else(||routing::no(p,"Нужна новая подтверждённая заявка 0x"))?;
+        return Box::pin(super::super::zeroex::trade(p,req,&ticket)).await;
+    }else if mode == Some(RouteMode::Raindex(Some(id))) {
         let t = p.raindex.take(who, id).ok_or_else(|| routing::no(p, "Нужна новая котировка Raindex"))?;
         let result = super::super::raindex::settlement::trade(p, req.clone(), &t).await;
         (result, t.fallback_fee)

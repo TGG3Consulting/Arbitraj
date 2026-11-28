@@ -177,10 +177,11 @@ async fn tip_gas_reaches_deal_timeline() {
     dg::charge(&core, &mut x, &VenueId("mexc".into()), &mut list).await;
     assert!(list.is_empty(), "статьи забраны — второй раз не войдут");
     assert_eq!(x.spent, spent, "нет живой цены BNB — итог без газа");
+    // Аудит 28.11.2026: подпись газа — dex.gas_ticker площадки DEX сети; площадки DEX в тесте нет — «монеты газа».
     assert!(
         x.timeline
             .iter()
-            .any(|(_, t)| t.contains("газ перевода чаевых 0.000001050000021000 BNB")),
+            .any(|(_, t)| t.contains("газ перевода чаевых 0.000001050000021000 монеты газа")),
         "{:?}",
         x.timeline
     );

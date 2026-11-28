@@ -23,27 +23,28 @@ alloy::sol! {
     function execute(Order order) external returns(uint256 spent,uint256 received);
 }
 
+pub(super) async fn verify_role(ctx: &Ctx, h: B256, r: Role) -> GatewayResult<()> {
+    let code: Bytes = rpc::call(
+        ctx,
+        "eth_getCode",
+        json!([r.address,{"blockHash":h,"requireCanonical":true}]),
+    )
+    .await?;
+    if code.is_empty() || keccak256(code) != r.hash {
+        return Err(ctx.err(
+            ErrorCode::NotApplicable,
+            "bopAMM: изменился код контракта из профиля",
+        ));
+    }
+    Ok(())
+}
+
 impl Profile {
-    async fn verify(&self, ctx: &Ctx, h: B256, firm: Option<Role>) -> GatewayResult<()> {
-        let verify = async |r: Role| {
-            let code: Bytes = rpc::call(
-                ctx,
-                "eth_getCode",
-                json!([r.address,{"blockHash":h,"requireCanonical":true}]),
-            )
-            .await?;
-            if code.is_empty() || keccak256(code) != r.hash {
-                return Err(ctx.err(
-                    ErrorCode::NotApplicable,
-                    "bopAMM: изменился код контракта из профиля",
-                ));
-            }
-            Ok(())
-        };
+    pub(super) async fn verify(&self, ctx: &Ctx, h: B256, firm: Option<Role>) -> GatewayResult<()> {
         let (_, _, _, pricing, cash) = tokio::try_join!(
-            verify(self.market),
-            verify(self.pricing),
-            verify(self.registry),
+            verify_role(ctx, h, self.market),
+            verify_role(ctx, h, self.pricing),
+            verify_role(ctx, h, self.registry),
             canonical(ctx, h, self.market.address, pricingCall {}),
             canonical(ctx, h, self.market.address, usdcCall {})
         )?;
@@ -55,7 +56,7 @@ impl Profile {
         }
         if let Some(r) = firm {
             let (_, m, p, c) = tokio::try_join!(
-                verify(r),
+                verify_role(ctx, h, r),
                 canonical(ctx, h, r.address, marketCall {}),
                 canonical(ctx, h, r.address, pricingCall {}),
                 canonical(ctx, h, r.address, usdcCall {})
@@ -71,7 +72,7 @@ impl Profile {
     }
 }
 
-fn frame(builder: Builder, result: &Value, p: &Profile) -> Option<Frame> {
+pub(super) fn frame(builder: Builder, result: &Value, p: &Profile) -> Option<Frame> {
     let accepts = |s: &str| {
         s.parse::<Address>()
             .ok()
@@ -152,6 +153,7 @@ pub(in crate::venues::bsc_dex) async fn preview(ctx: &Ctx, r: Request) -> Gatewa
         }
         Some((
             p.module
+                .or(p.cash_module)
                 .ok_or_else(|| bad("bopAMM: укажите размещённый модуль и его хеш"))?,
             floor,
         ))
@@ -319,6 +321,11 @@ mod tests {
                 }
             };
             let parsed = frame(kind, &input(row.clone()), &p).unwrap();
+            if matches!(kind, Builder::Titan) {
+                let mut other = row.clone();
+                other["maker"] = json!("Unknown");
+                assert!(frame(kind, &input(other), &p).is_none());
+            }
             assert_eq!(
                 parsed.overrides(),
                 json!({(registry):{"stateDiff":sample["stateDiff"]}})

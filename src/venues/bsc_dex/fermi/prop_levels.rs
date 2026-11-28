@@ -58,15 +58,32 @@ pub(super) fn quote_result(router: Address, venue: Address, raw: &[u8]) -> Optio
     };
     (!net.is_zero()).then_some(net)
 }
+#[derive(Clone, Copy)]
+pub(super) enum Quoted {
+    Prop(prop_wallet::Terms),
+    Bop(super::bop_cash::Path),
+}
+impl Quoted {
+    pub(super) fn book(book: &Books) -> Option<Self> {
+        match &book.config.source {
+            Source::Bop(path) => Some(Self::Bop(*path)),
+            _ => book.prop.map(Self::Prop),
+        }
+    }
+}
 pub(super) async fn quotes(
     ctx: &Ctx,
     h: &Head,
     f: &Frame,
-    t: prop_wallet::Terms,
+    source: Quoted,
     i: Address,
     o: Address,
     sizes: &[U256],
 ) -> GatewayResult<Vec<(U256, U256)>> {
+    let t = match source {
+        Quoted::Bop(path) => return path.quotes(ctx, h, f, i, o, sizes).await,
+        Quoted::Prop(t) => t,
+    };
     let mut out = Vec::new();
     for group in sizes.chunks(16) {
         let calls: Vec<_> = group
@@ -96,22 +113,30 @@ async fn read_pair(
     cfg: &Config,
     coin: Address,
     dc: u8,
-) -> GatewayResult<(prop_wallet::Terms, SideBook, SideBook)> {
+) -> GatewayResult<(Option<prop_wallet::Terms>, SideBook, SideBook)> {
     let ctx = &p.ctx;
-    let Source::Prop { id, .. } = &cfg.source else {
-        unreachable!()
+    let (source, terms, dec) = match &cfg.source {
+        Source::Bop(path) => (
+            Quoted::Bop(*path),
+            None,
+            canonical(ctx, h.hash, coin, decimalsCall {}).await?,
+        ),
+        Source::Prop { id, .. } => {
+            let family = families::classify(ctx, id)
+                .map_err(|msg| ctx.err(ErrorCode::NotApplicable, msg))?;
+            let at = json!({"blockHash":h.hash,"requireCanonical":true});
+            let ((roles, enabled), dec) = tokio::try_join!(
+                prop_venue::state(ctx, family, cfg.deployment.router, (cfg.cash, coin), &at),
+                canonical(ctx, h.hash, coin, decimalsCall {})
+            )?;
+            if !enabled || !roles.accepts_frame(cfg.deployment.engine, cfg.deployment.runtime) {
+                return Err(ctx.err(ErrorCode::NoRoute, "Именная площадка отключена"));
+            }
+            let t = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;
+            (Quoted::Prop(t), Some(t), dec)
+        }
+        _ => unreachable!(),
     };
-    let family =
-        families::classify(ctx, id).map_err(|msg| ctx.err(ErrorCode::NotApplicable, msg))?;
-    let at = json!({"blockHash":h.hash,"requireCanonical":true});
-    let ((roles, enabled), dec) = tokio::try_join!(
-        prop_venue::state(ctx, family, cfg.deployment.router, (cfg.cash, coin), &at),
-        canonical(ctx, h.hash, coin, decimalsCall {})
-    )?;
-    if !enabled || !roles.accepts_frame(cfg.deployment.engine, cfg.deployment.runtime) {
-        return Err(ctx.err(ErrorCode::NoRoute, "Именная площадка отключена"));
-    }
-    let terms = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;
     p.tokens.remember_decimals(coin, dec);
     let cash: Vec<_> = cfg
         .ladder
@@ -120,7 +145,7 @@ async fn read_pair(
             num::to_units(*v, dc).filter(|n| !n.is_zero() && num::to_decimal(*n, dc) == Some(*v))
         })
         .collect();
-    let buy = quotes(ctx, h, f, terms, cfg.cash, coin, &cash).await?;
+    let buy = quotes(ctx, h, f, source, cfg.cash, coin, &cash).await?;
     let mut sells: BTreeSet<_> = cash
         .iter()
         .filter_map(|q| rate::from_usdt(ctx, &p.registry, cfg.cash, coin, *q).ok())
@@ -131,7 +156,7 @@ async fn read_pair(
         ctx,
         h,
         f,
-        terms,
+        source,
         coin,
         cfg.cash,
         &sells.into_iter().collect::<Vec<_>>(),
@@ -162,17 +187,31 @@ pub(super) async fn levels(
     revision: u64,
 ) -> GatewayResult<Books> {
     let ctx = &p.ctx;
-    let Source::Prop { pairs, .. } = &config.source else {
-        unreachable!()
+    let bop_pair;
+    let (pairs, dc): (&[Address], u8) = match &config.source {
+        Source::Bop(path) => {
+            bop_pair = [path.identity.cash.weth.address];
+            let (_, dc) = tokio::try_join!(
+                p.slot_markets
+                    .bop_roles
+                    .verify(ctx, head.hash, revision, *path),
+                canonical(ctx, head.hash, config.cash, decimalsCall {})
+            )?;
+            (&bop_pair, dc)
+        }
+        Source::Prop { pairs, .. } => {
+            let at = json!({"blockHash":head.hash,"requireCanonical":true});
+            let (code, dc): (Bytes, u8) = tokio::try_join!(
+                super::rpc::call(ctx, "eth_getCode", json!([frame.deployment.engine, at])),
+                canonical(ctx, head.hash, config.cash, decimalsCall {})
+            )?;
+            if code.is_empty() || keccak256(code) != frame.deployment.runtime {
+                return Err(ctx.err(ErrorCode::StaleData, "Изменился ценовой оракул"));
+            }
+            (pairs, dc)
+        }
+        _ => unreachable!(),
     };
-    let at = json!({"blockHash":head.hash,"requireCanonical":true});
-    let (code, dc): (Bytes, u8) = tokio::try_join!(
-        super::rpc::call(ctx, "eth_getCode", json!([frame.deployment.engine, at])),
-        canonical(ctx, head.hash, config.cash, decimalsCall {})
-    )?;
-    if code.is_empty() || keccak256(code) != frame.deployment.runtime {
-        return Err(ctx.err(ErrorCode::StaleData, "Изменился ценовой оракул"));
-    }
     p.tokens.remember_decimals(config.cash, dc);
     let rows = futures_util::future::join_all(
         pairs
@@ -184,7 +223,7 @@ pub(super) async fn levels(
     let mut prop = None;
     for (&c, r) in pairs.iter().zip(rows) {
         if let Ok((terms, buy, sell)) = r {
-            prop = Some(terms);
+            prop = terms;
             if !buy.0.is_empty() {
                 sides.insert((c, true), buy);
             }

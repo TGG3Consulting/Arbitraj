@@ -35,6 +35,7 @@ pub(super) async fn fresh(p: &Parts, b: &super::markets::Books) -> bool {
         return false;
     };
     let new = match &b.config.source {
+        Source::Bop(path) => super::bopamm::frame(b.config.builder, &raw, &path.profile()),
         Source::Fermi { .. } => super::Frame::read(b.config.builder, &raw, b.config.deployment),
         Source::Prop { oracle, .. } => oracle.frame(b.config.builder, &raw),
     };
@@ -47,7 +48,7 @@ pub(super) async fn simulate(
     proof: &super::slot::Proof,
     fees: (u128, u128),
 ) -> crate::gateway::errors::GatewayResult<(alloy_primitives::U256, alloy_primitives::U256, u64)> {
-    if proof.prop.is_some() {
+    if proof.observed() {
         super::prop_slot::simulate(ctx, &b.head, &b.frame, proof, Some(fees)).await
     } else {
         super::slot::simulate(ctx, &b.head, &b.frame, proof, Some(fees)).await

@@ -84,6 +84,7 @@ async fn both_builders_recover_the_complete_wallet_payout_from_the_original_slot
                     amount: I256::try_from(spent).unwrap(),
                     limit: U256::ONE,
                     leg,
+                    bop: None,
                     prop: Some(Box::new(prop_wallet::Proof {
                         terms: prop_wallet::Terms {
                             module_hash: Some(runtime),

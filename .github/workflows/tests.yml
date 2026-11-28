@@ -1205,6 +1205,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - if: matrix.market == 'textile-create-base'
         run: cargo test --locked --lib textile::tests
+      - if: matrix.market == 'zeroex-wallet-ethereum'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/zeroex" ZeroExWallet
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_zeroex_ethereum_wallet.py "$RUNNER_TEMP/zeroex/ZeroExWallet.json" "$RUNNER_TEMP/market.json"
       - if: startsWith(matrix.market, 'textile-wallet-')
         env:
           MARKET: ${{ matrix.market }}

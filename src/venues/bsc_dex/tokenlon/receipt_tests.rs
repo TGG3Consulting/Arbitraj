@@ -72,16 +72,27 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
         let order = fillOrKillOrderCall::abi_decode(&inner.data).unwrap();
         // SDK-конверт восстановлен из публичной истёкшей on-chain заявки. Портфель бота её не подписывал.
         let raw = api(&order, &terms);
-        let fresh = wire::prepare(&raw, &terms, inner.userSalt, at).unwrap();
-        assert_eq!(&fresh.proof, proof);
-        assert_eq!(fresh.sign_digest, expected.sign_digest);
         let sig = &inner.userSignature;
         let signature = alloy_primitives::Signature::new(
             U256::from_be_slice(&sig[1..33]),
             U256::from_be_slice(&sig[33..65]),
             sig[0] == 28,
         );
-        assert_eq!(fresh.calldata(&signature).unwrap(), data);
+        if terms.recipient == terms.payer {
+            let fresh = wire::prepare(&raw, &terms, inner.userSalt, at).unwrap();
+            assert_eq!(&fresh.proof, proof);
+            assert_eq!(fresh.sign_digest, expected.sign_digest);
+            assert_eq!(fresh.calldata(&signature).unwrap(), data);
+        } else {
+            // 0x9fe61…c80e7a: кошелёк подписал передачу 489.883454 USDC другому получателю.
+            assert_eq!(
+                tx["hash"],
+                "0x9fe61c706bfbcebf2cff2cfa828ab0e75e14b38f5f1d3f1efc1a3decb8c80e7a"
+            );
+            assert_eq!(pay.settleAmount, U256::from(489883454u64));
+            assert!(wire::prepare(&raw, &terms, inner.userSalt, at).is_none());
+            assert!(expected.calldata(&signature).is_none());
+        }
         assert!(wire::prepare(&raw, &terms, inner.userSalt, proof.expiry).is_none());
         let high = Terms {
             minimum: terms.minimum + U256::ONE,

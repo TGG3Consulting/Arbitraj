@@ -4073,6 +4073,33 @@ rationale = "Пары Ethereum и размеры запроса в обычны�
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
+name = "tokenlon.gas_budget_native"
+area = "Venue eth_dex"
+unit = "ETH"
+value = "0.0015"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz"
+rationale = "Предел расходов газа Ethereum на исполнение личного ордера. Максимальный фактический расход 101 оплаты составил 0,001393884068030596 ETH. Значение первого запуска округлено вверх. Сверяйте его с текущей ценой газа."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "tokenlon.min_validity_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "24000"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz"
+rationale = "Минимальное время до истечения ордера. Рекомендация оставляет два интервала слота Ethereum по 12 секунд. В записанных оплатах срок в момент включения был не менее 144 секунд."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "tokenlon.quote_budget_ms"
+area = "Venue eth_dex"
+unit = "мс"
+value = "1000"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz; config/first_run.toml, profit.calc_timeout_ms"
+rationale = "Бюджет личной котировки и симуляции. 1000 мс составляет половину штатного profit.calc_timeout_ms=2000 мс. Это предел ожидания. Время доставки исходных заявок в архиве не записано."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
 name = "tokenlon.publisher_url"
 area = "Venue eth_dex"
 unit = "URL"

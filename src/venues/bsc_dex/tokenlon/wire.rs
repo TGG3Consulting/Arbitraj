@@ -61,7 +61,8 @@ pub(in crate::venues::bsc_dex) fn prepare(
     let addr = |k: &str| raw[k].as_str()?.parse::<Address>().ok();
     let num = |k: &str| quantity(&raw[k]);
     let bytes = |k: &str| raw[k].as_str()?.parse::<Bytes>().ok();
-    if raw["protocol"] != "PMMV5"
+    if t.recipient != t.payer
+        || raw["protocol"] != "PMMV5"
         || addr("exchangeAddress")? != ZERO_EXCHANGE
         || addr("makerAssetAddress")? != t.output
         || addr("takerAssetAddress")? != t.input
@@ -99,7 +100,7 @@ impl Prepared {
         let order_hash = hash::order(o);
         let fee = (o.salt & U256::from(u16::MAX)).to::<u16>();
         if t.payer.is_zero()
-            || t.recipient != t.payer
+            || t.recipient.is_zero()
             || t.input.is_zero()
             || t.output.is_zero()
             || t.input == t.output
@@ -145,10 +146,11 @@ impl Prepared {
         })
     }
     pub(in crate::venues::bsc_dex) fn calldata(&self, signature: &Signature) -> Option<Bytes> {
-        if signature
-            .recover_address_from_prehash(&self.sign_digest)
-            .ok()?
-            != self.proof.terms.payer
+        if self.proof.terms.recipient != self.proof.terms.payer
+            || signature
+                .recover_address_from_prehash(&self.sign_digest)
+                .ok()?
+                != self.proof.terms.payer
         {
             return None;
         }

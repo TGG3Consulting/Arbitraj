@@ -7,6 +7,7 @@
 //!   по контракту dex.settlement_contract, её находит deposit_wallet_warm.rs) walletType есть и не 1/2/3;
 //! - Venue::deposit_to_trading (direct_to_spot, fund_move.rs) — монета зачисляется сразу на спот: перевод фонд → спот
 //!   не нужен.
+//!
 //! Кто вызывает: deposit_addr.rs (keep — после ответа API), deposit_wallet_warm.rs (set_targets), mod.rs
 //! (credit_ready), fund_move.rs (direct_to_spot).
 //! От чего зависит: ctx.rs (настройки, хранилище секретов), num.rs.

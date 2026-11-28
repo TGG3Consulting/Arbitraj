@@ -105,6 +105,9 @@ pub(in crate::venues::bsc_dex) async fn failed(
         if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
     }
     if let Some(g)=c.tokenlon{
+        if !super::super::tokenlon::recovery::expired_unspent(&p.ctx,&g).await {
+            return p.ctx.err(ErrorCode::OutcomeUnknown,"Личный ордер Tokenlon подлежит сверке по внутреннему хешу").pending(entry.lookup.clone());
+        }
         let Some(original)=c.chain.as_ref() else {return e;};
         if original.hash!=tx.hash || original.nonce!=tx.nonce || entry.lookup.nonce!=Some(tx.nonce){return e;}
         if tx.outcome==TxOutcome::Reverted{
@@ -212,10 +215,7 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
         if let Some(proof)=saved.as_ref().and_then(|c|c.tokenlon.as_ref()){
             let unknown=||p.ctx.err(ErrorCode::OutcomeUnknown,"Tokenlon: требуется каноническая квитанция исходного платежа").pending(entry.lookup.clone());
             let tx=x.trade.chain.as_ref().ok_or_else(unknown)?;
-            let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|unknown())?.ok_or_else(unknown)?;
-            if !proof_chain::same_fill(tx,&receipt){return Err(unknown());}
-            proof.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|unknown())?;
-            let (d,c)=proof.amounts(&receipt.logs).ok_or_else(unknown)?;
+            let (d,c)=super::super::tokenlon::recovery::actual(&p.ctx,proof,tx,&x.trade.venue_ref).await.map_err(|_|unknown())?;
             let (asset_dec,cash_dec)=saved.as_ref().and_then(|s|s.decs).ok_or_else(unknown)?;
             let (asset,cash)=if r.side==Side::Buy{(c,d)}else{(d,c)};
             if num::to_decimal(asset,asset_dec)!=Some(x.trade.filled_qty)||num::to_decimal(cash,cash_dec)!=Some(x.gross_quote){return Err(unknown());}
@@ -268,6 +268,13 @@ pub(super) async fn prior(p: &Parts, r: &TradeRequest) -> GatewayResult<Option<T
             p,
             "Этот денежный шаг Hashflow уже завершён с другим объёмом",
         ));
+    }
+    if saved.as_ref().is_some_and(|c|c.tokenlon.is_some())
+        && let Some(t)=super::super::tokenlon::recovery::recover(p,r,&entry.lookup).await? {
+        let gross=super::super::tokenlon::recovery::cash_for_record(p,&t,&entry.lookup).await?;
+        intent::confirm(db,&key(p,r)?,&entry,intent::Outcome::Order(Box::new(intent::SpotFill{trade:t.clone(),gross_quote:gross})))
+            .await.map_err(|_|p.ctx.err(ErrorCode::OutcomeUnknown,"Не сохранён исход внешней публикации Tokenlon").pending(entry.lookup.clone()))?;
+        return Ok(Some(t));
     }
     Err(p
         .ctx
@@ -340,9 +347,7 @@ pub(in crate::venues::bsc_dex) async fn record(
         if t.request.side==Side::Buy{debit}else{credit}
     }else if let Some(g)=parse.tokenlon{
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;
-        let receipt=send::receipt::read(&p.ctx,tx.hash).await.map_err(|_|err(String::new()))?.ok_or_else(||err(String::new()))?;
-        g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.map_err(|_|err(String::new()))?;
-        let (debit,credit)=g.amounts(&receipt.logs).ok_or_else(||err(String::new()))?;
+        let (debit,credit)=super::super::tokenlon::recovery::actual(&p.ctx,&g,tx,&t.venue_ref).await.map_err(|_|err(String::new()))?;
         if t.request.side==Side::Buy{debit}else{credit}
     }else if let Some(g)=parse.airswap{
         let tx=t.chain.as_ref().ok_or_else(||err(String::new()))?;

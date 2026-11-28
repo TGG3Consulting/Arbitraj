@@ -5,6 +5,7 @@ pub(super) mod private_node;
 pub(super) mod routing;
 pub(super) mod book;
 pub(super) mod settlement;
+pub(super) mod recovery;
 mod assets;
 mod gas;
 mod sim;

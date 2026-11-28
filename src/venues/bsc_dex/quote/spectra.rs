@@ -3,9 +3,9 @@
 
 use alloy_primitives::U256;
 
-use crate::core::types::PoolState;
 use super::super::math::{full_math, swap_cl::Swapped, swap_solidly};
 use super::super::pools::registry::Entry;
+use crate::core::types::PoolState;
 
 pub(super) fn target(
     e: &Entry,
@@ -25,7 +25,9 @@ pub(super) fn target(
     }
     // Отношение запасов задаёт только начальный размер поиска. Каждый последующий шаг — расчёт на том же состоянии.
     let reserve_in = *balances.get(usize::from(i))?;
-    if reserve_in.is_zero() { return None; }
+    if reserve_in.is_zero() {
+        return None;
+    }
     let seed = full_math::mul_div_up(wanted, reserve_in, reserve_out)?;
     let cap = U256::MAX - reserve_in;
     let (paid, received) = match &e.pool.state {
@@ -43,28 +45,60 @@ pub(super) fn target(
 /// Масштаб проб берём из первой нормировки K0_i = 2·10^18·xp[i]/D самого контракта.
 /// Каждая принятая цена проверяется прямой функцией; шаг нормировки задаёт сетку проб.
 fn crypto_input(
-    seed: U256, cap: U256, wanted: U256, data: &crate::core::types::CryptoData, i: usize,
+    seed: U256,
+    cap: U256,
+    wanted: U256,
+    data: &crate::core::types::CryptoData,
+    i: usize,
     payout: impl Fn(U256) -> Option<U256>,
 ) -> Option<(U256, U256)> {
     let (mut best, mut out) = first_input(seed, cap, wanted, &payout)?;
-    if best == U256::ONE { return Some((best, out)); }
-    let scale = if i == 0 { U256::from(10u64.pow(18)) } else { *data.price_scale.get(i - 1)? };
+    if best == U256::ONE {
+        return Some((best, out));
+    }
+    let scale = if i == 0 {
+        U256::from(10u64.pow(18))
+    } else {
+        *data.price_scale.get(i - 1)?
+    };
     let precision = *data.precisions.get(i)?;
-    if precision.is_zero() || scale.is_zero() { return None; }
-    let quantum = precision.checked_mul(scale).and_then(|v| v.checked_mul(U256::from(2)))
+    if precision.is_zero() || scale.is_zero() {
+        return None;
+    }
+    let quantum = precision
+        .checked_mul(scale)
+        .and_then(|v| v.checked_mul(U256::from(2)))
         .map_or(U256::ONE, |den| data.d.div_ceil(den).max(U256::ONE));
     let start = best;
     let window = quantum.saturating_mul(U256::from(4)).min(start - U256::ONE);
+    // Предельные объёмы глубины обычно заданы долей резерва, а заявки — целыми
+    // разрядами входной валюты. Такие входы проверяем наравне с промежуточными.
+    // Дробь восстанавливаем из текущих балансов. Знаменатели и размеры ордеров не задаются.
+    let reserve = *data.balances.get(i)?;
+    let landmark = reserve_landmark(start, reserve, window);
+    for point in [landmark, decimal_landmark(start, window)].into_iter().flatten() {
+        for x in [point, point.saturating_sub(U256::ONE)] {
+            if !x.is_zero() && x < best && let Some(y) = payout(x).filter(|v| *v >= wanted) {
+                (best, out) = (x, y);
+            }
+        }
+    }
     let mut previous = U256::ZERO;
     for k in 1..=40u64 {
         // Входы на единицах ERC-20 и равномерно по окрестности первой нормировки.
-        let delta = if k <= 8 { U256::from(k) } else {
+        let delta = if k <= 8 {
+            U256::from(k)
+        } else {
             full_math::mul_div_up(window, U256::from(k - 8), U256::from(32))?
         };
-        if delta <= previous || delta >= start { continue; }
+        if delta <= previous || delta >= start {
+            continue;
+        }
         previous = delta;
         let x = start - delta;
-        if let Some(y) = payout(x).filter(|y| *y >= wanted) { (best, out) = (x, y); }
+        if x < best && let Some(y) = payout(x).filter(|y| *y >= wanted) {
+            (best, out) = (x, y);
+        }
     }
     // Если у найденной точки работает и предшествующий атом, сужаем цену за счёт известных выплат.
     if best < start && best > U256::ONE && payout(best - U256::ONE).is_some_and(|y| y >= wanted) {
@@ -74,14 +108,19 @@ fn crypto_input(
             let x = hi.saturating_sub(step).max(U256::ONE);
             if let Some(y) = payout(x).filter(|y| *y >= wanted) {
                 (best, out) = (x, y);
-                if x == U256::ONE { break; }
+                if x == U256::ONE {
+                    break;
+                }
                 step = step.saturating_mul(U256::from(2));
             } else {
                 let mut low = x;
                 while best - low > U256::ONE {
                     let mid = low + (best - low) / U256::from(2);
-                    if let Some(y) = payout(mid).filter(|y| *y >= wanted) { (best, out) = (mid, y); }
-                    else { low = mid; }
+                    if let Some(y) = payout(mid).filter(|y| *y >= wanted) {
+                        (best, out) = (mid, y);
+                    } else {
+                        low = mid;
+                    }
                 }
                 break;
             }
@@ -90,11 +129,48 @@ fn crypto_input(
     Some((best, out))
 }
 
+/// Самый крупный десятичный разряд, округление вниз к которому попадает в исследуемый диапазон.
+fn decimal_landmark(point: U256, width: U256) -> Option<U256> {
+    let low = point.saturating_sub(width).max(U256::ONE);
+    let mut unit = U256::ONE;
+    loop {
+        let next = unit.checked_mul(U256::from(10))?;
+        if point - point % next < low { return Some(point - point % unit); }
+        unit = next;
+    }
+}
+
+/// Первая подходящая дробь цепного разложения входа относительно текущего резерва.
+/// После перевода дроби в атомы её исполнимость всегда перепроверяет сам пул.
+fn reserve_landmark(point: U256, reserve: U256, width: U256) -> Option<U256> {
+    let (mut n, mut d) = (point, reserve);
+    let (mut prev_n, mut cur_n) = (U256::ZERO, U256::ONE);
+    let (mut prev_d, mut cur_d) = (U256::ONE, U256::ZERO);
+    while !d.is_zero() {
+        let (q, r) = n.div_rem(d);
+        let num = q.checked_mul(cur_n)?.checked_add(prev_n)?;
+        let den = q.checked_mul(cur_d)?.checked_add(prev_d)?;
+        if !num.is_zero() {
+            let x = full_math::mul_div(reserve, num, den)?;
+            if x.abs_diff(point) <= width { return Some(x); }
+        }
+        (n, d) = (d, r);
+        (prev_n, cur_n) = (cur_n, num);
+        (prev_d, cur_d) = (cur_d, den);
+    }
+    None
+}
+
 /// Ищет границу только по прямым котировкам. Слишком маленький и чрезмерный вход могут оба дать откат.
 fn first_input(
-    seed: U256, cap: U256, wanted: U256, payout: impl Fn(U256) -> Option<U256>,
+    seed: U256,
+    cap: U256,
+    wanted: U256,
+    payout: impl Fn(U256) -> Option<U256>,
 ) -> Option<(U256, U256)> {
-    if cap.is_zero() || wanted.is_zero() { return None; }
+    if cap.is_zero() || wanted.is_zero() {
+        return None;
+    }
     let mut high = seed.clamp(U256::ONE, cap);
     let mut low = high;
     let mut sample = payout(high).filter(|x| !x.is_zero()).map(|out| (high, out));
@@ -111,7 +187,10 @@ fn first_input(
     let (mut paid, mut out) = sample?;
     if let Some(projected) = full_math::mul_div_up(wanted, paid, out) {
         let estimate = projected.clamp(U256::ONE, cap);
-        if estimate != paid && let Some(y) = payout(estimate).filter(|y| !y.is_zero()) {
+        if estimate != paid
+            && let Some(y) = payout(estimate).filter(|y| !y.is_zero())
+            && (out < wanted || (y >= wanted && estimate < paid))
+        {
             (paid, out) = (estimate, y);
         }
     }
@@ -121,13 +200,17 @@ fn first_input(
     // Если удвоение перескочило последний допустимый вход, сужаем диапазон к известной выполнимой точке.
     let mut end = cap;
     while out < wanted {
-        if paid >= end { return None; }
+        if paid >= end {
+            return None;
+        }
         let mut next = paid.saturating_mul(U256::from(2)).min(end);
         if let Some(y) = payout(next) {
             (paid, out) = (next, y);
         } else {
             end = next - U256::ONE;
-            if paid >= end { return None; }
+            if paid >= end {
+                return None;
+            }
             next = paid + (end - paid).div_ceil(U256::from(2));
             match payout(next) {
                 Some(y) => (paid, out) = (next, y),
@@ -139,7 +222,7 @@ fn first_input(
     let received = payout(minimum)?;
     (received >= wanted
         && (minimum == U256::ONE || payout(minimum - U256::ONE).is_none_or(|v| v < wanted)))
-        .then_some((minimum, received))
+    .then_some((minimum, received))
 }
 
 #[cfg(test)]
@@ -171,6 +254,7 @@ mod tests {
         let num = |v: &Value| v.as_str().unwrap().parse::<U256>().unwrap();
         let extra: Value = serde_json::from_reader(flate2::read::GzDecoder::new(include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/spectra_base_inverse_intermediate.json.gz").as_slice())).unwrap();
         let mut differences = Vec::new();
+        let mut latency: [Vec<u128>;2]=[vec![],vec![]]; let mut original_misses=[0;2];
         let mut peak = [0; 2];
         let mut checked = [0; 2];
         for m in archive["markets"].as_array().unwrap() {
@@ -210,10 +294,16 @@ mod tests {
                     }
                 };
                 let seed = full_math::mul_div_up(target, balances[i], balances[j]).unwrap();
+                let start=std::time::Instant::now();
+                let old=first_input(seed,U256::MAX-balances[i],target,payout).unwrap();
+                latency[0].push(start.elapsed().as_nanos());
+                original_misses[family]+=usize::from(old.0>num(&q["dx"]));
+                n.set(0);
+                let start=std::time::Instant::now();
                 let (paid, net) = if let Some(data) = &crypto {
                     crypto_input(seed, U256::MAX - balances[i], target, data, i, payout)
                 } else { first_input(seed, U256::MAX - balances[i], target, payout) }.unwrap();
-                let reference=num(&q["dx"]);
+                latency[1].push(start.elapsed().as_nanos()); let reference=num(&q["dx"]);
                 if paid>reference || net<target {differences.push(serde_json::json!({"pool":m["pool"],"reference":q["dx"],"target":q["dy"],"paid":paid.to_string()}));}
                 peak[family] = peak[family].max(n.get());
                 checked[family] += 1;
@@ -221,6 +311,6 @@ mod tests {
         }
         eprintln!("Spectra: максимум прямых расчётов на архивную цель у legacy {}, у NG {}",peak[0],peak[1]);
         assert_eq!(checked, [184,124]);
-        std::fs::write(std::env::var("SPECTRA_REPORT").unwrap(),serde_json::to_vec(&serde_json::json!({"counts":checked,"peak":peak,"mismatches":differences})).unwrap()).unwrap();
+        for values in &mut latency { values.sort(); } let elapsed=latency.map(|v|[v[v.len()/2],v[v.len()*95/100]]); std::fs::write(std::env::var("SPECTRA_REPORT").unwrap(),serde_json::to_vec(&serde_json::json!({"counts":checked,"peak":peak,"mismatches":differences,"old_misses":original_misses,"debug_elapsed_ns":elapsed})).unwrap()).unwrap();
     }
 }

@@ -2317,7 +2317,7 @@ def tables(network, snapshots, profiles):
             sources = window["fills_by_source"]
             external = sum(sources[name] for name in ("uniswap_v2", "uniswap_v3", "curve", "sushiswap"))
             candidates = [tokenlon["roles"][name]["address"] for name in ("pmm", "wrapper", "rfq6")]
-            task = (f"Блоки {window['first']}–{window['last']}. Число оплат из инвентаря маркет-мейкеров PMM — "
+            task = (f"Блоки {window['first']}–{window['last']}. Обёртка вызвала Uniswap V3 {sources['uniswap_v3']} раза, Curve {sources['curve']}, SushiSwap {sources['sushiswap']} и Uniswap V2 {sources['uniswap_v2']}. По 101 событию PMM два маркетмейкера оплатили 72 и 29 обменов. В этом окне собственных AMM-пулов Tokenlon не обнаружено. Для пустого кошелька первая котировка имеет нулевую длину подписи, а последняя заявка отклонена. Отдельно от PMM на канонических родителях воспроизведены 4 из 4 исходных чистых выплат обёртки: по одной из каждого внешнего AMM. Расход 227 441–325 668 gas. Число оплат из инвентаря маркет-мейкеров PMM — "
                     f"{sources['pmm_zeroex_v2']}. Сделок через внешние AMM — {external} (Uniswap, "
                     "Curve и SushiSwap). Публичная цена PMM доступна через SDK. При запросе окончательной заявки "
                     "три пустых кошелька получили USER_BALANCE_INSUFFICIENT. Для допуска требуется действующая "

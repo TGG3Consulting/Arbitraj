@@ -1032,8 +1032,20 @@ jobs:
           python scripts/record_hashflow_swaps.py --ethereum "$RUNNER_TEMP/market.json"
           cargo test --locked --lib venues::bsc_dex::hashflow::
           node --test ui/tests/hashflowQuote.test.js
+      - if: matrix.market == 'tokenlon-wrapper-ethereum'
+        run: |
+          python scripts/record_tokenlon_wrapper.py "$RUNNER_TEMP/market.json"
+          python - "$RUNNER_TEMP/market.json" <<'PY'
+          import gzip, json, sys
+          from pathlib import Path
+          archived = Path('tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_wrapper_wallets.json.gz')
+          assert json.loads(Path(sys.argv[1]).read_bytes()) == json.loads(gzip.decompress(archived.read_bytes()))
+          PY
       - if: matrix.market == 'tokenlon-ethereum'
-        run: python scripts/record_tokenlon_ethereum.py "$RUNNER_TEMP/market.json"
+        run: |
+          python scripts/verify_tokenlon_sources.py
+          python scripts/record_tokenlon_ethereum.py "$RUNNER_TEMP/market.json"
+          python scripts/verify_tokenlon_sources.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'native-rfq-ethereum'
         run: python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'goliath-ethereum'

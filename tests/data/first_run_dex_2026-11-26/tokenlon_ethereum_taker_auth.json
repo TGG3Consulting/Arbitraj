@@ -1,0 +1,7 @@
+{
+  "service": "https://publisher.tokenlon.im/rpc",
+  "http": 200,
+  "result_type": "str",
+  "method": "auth.getSdkJwtToken",
+  "source": "SDK 5.4.2 Quoter.auth; archived HTTP reply, only status and result type retained"
+}

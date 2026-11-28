@@ -78,8 +78,9 @@ async fn two_wallets_share_a_single_origin_and_get_the_recorded_quote_once() {
     server.abort();
 }
 
+/// О-71, решение 11. Модельный ответ 429 с Retry-After 120 и телом 0xff. Ожидает первой естественной записи Ryze.
 #[tokio::test]
-async fn router_429_survives_restart_and_other_origin_and_relayer_stay_available() {
+async fn modeled_router_429_survives_restart_and_other_origin_and_relayer_stay_available() {
     let (url, hits, throttled) = server(true).await;
     let (other, other_hits, healthy) = server(false).await;
     let chain = super::CHAIN_ID;

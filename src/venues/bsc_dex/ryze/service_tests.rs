@@ -26,8 +26,9 @@ fn source() -> Value {
     .unwrap()
 }
 
+/// О-71, решение 11. Модельный ответ 429 с Retry-After 7 и телом 0xff. Ожидает первой естественной записи Ryze.
 #[tokio::test]
-async fn post_429_survives_restart_while_get_429_keeps_original_digest_unresolved() {
+async fn modeled_post_429_survives_restart_while_get_429_keeps_original_digest_unresolved() {
     let data = source();
     let real = data["relayer_status"]["body"].clone();
     let digest = real["intent"]["intentId"]

@@ -106,6 +106,9 @@ def capture(network,url,artifact,legacy=False,capacity=False,reverse=False,*,sel
         if artifact:
             payment,op,b2,a2=play(paid,paid,net,end)
             if not GOOD(op) or (be,af)!=(b2,a2):raise ValueError("protected tight bound")
+            if additional is not None:
+                base["accepted_payment"]=payment
+                base["accepted_deadline"]=end
             for low,high,floor,dl in [(paid,paid,net+1,end),(1,paid-1,net,end),(paid,paid,net,stamp-1)]:
                 _,bad,x,y=play(low,high,floor,dl)
                 if GOOD(bad) or x!=y:raise ValueError("protected bound rollback")

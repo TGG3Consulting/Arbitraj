@@ -1,13 +1,15 @@
 """Проверяет исходный вход Stelaxis за счёт отдельного кошелька в каноническом ценовом слоте."""
 import argparse
 import json
+import time
+from requests import HTTPError, RequestException
 from pathlib import Path
 
 from eth_abi import decode
 from eth_utils import keccak
 
 from record_prop_price_slot import frame
-from record_prop_venue import Capture, ENDPOINTS, OWNER, USDC, USDT, WETH, rpc, tx
+from record_prop_venue import Capture, ENDPOINTS, OWNER, USDC, USDT, WETH, rpc as read_rpc, tx
 
 DATA = Path(__file__).resolve().parents[1] / "tests/data/first_run_dex_2026-11-26"
 UNI = "0x68b3465833fb72a70ecdf485e0e4c7bd8665fc45"
@@ -15,6 +17,20 @@ WBTC = "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"
 EVENT = "0x" + keccak(text="Swapped(address,address,address,uint256,uint256,address)").hex()
 SWAP = "swapWithExtraFees(address,address,uint256,uint256,uint256,uint256)"
 ZERO = "0x" + "00" * 20
+
+def rpc(c, method, params):
+    for attempt in range(5):
+        try:
+            return read_rpc(c, method, params)
+        except HTTPError as error:
+            if error.response.status_code != 429 or attempt == 4:
+                raise
+            seconds = error.response.headers.get("Retry-After", "")
+            delay = max(4 * (2 ** attempt), int(seconds) if seconds.isdecimal() else 0)
+            if delay > 120:
+                raise
+            time.sleep(delay)
+
 
 def read_amount(row):
     return int(row["returnData"], 16) if row["status"] == "0x1" else None
@@ -104,7 +120,7 @@ if __name__ == "__main__":
             d=capture(endpoint,snapshot)
             args.output.write_text(json.dumps(d,separators=(",",":"))+"\n",encoding="utf8")
             break
-        except (AssertionError,ValueError,KeyError,RuntimeError) as e:
+        except (AssertionError,ValueError,KeyError,RuntimeError,RequestException) as e:
             print(type(e).__name__,str(e)[:160],flush=True)
     else:
         raise RuntimeError("Не удалось завершить контроль на архивном узле")

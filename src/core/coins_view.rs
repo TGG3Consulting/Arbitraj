@@ -7,13 +7,17 @@
 //! Решение 413: deposit_holds — замеры удержания бирж при зачислении монеты (deposit_hold.rs).
 //! Кто вызывает: api/coins.rs — GET /api/coins (Core::coins_json) и GET /api/coins/{address} (Core::coin_json).
 //! От чего зависит: engine.rs, registry.rs, market_state.rs, blacklist.rs, intermediate.rs, deposit_hold.rs.
-//! Решение 432: пулы монеты с USDT — USDT её сети (монета сети не по умолчанию — Inner.usdt_other).
-//! Настройки: нет.
+//! Решение 432: пулы монеты с USDT — USDT её сети. К1 (арбитр 28.11.2026): с расчётной монетой площадки DEX
+//! (settlement_pool::current — на Base USDC, как mid_wake.rs), подпись пары — venue.quote_asset площадки.
+//! Настройки: venue.quote_asset [DEX] (читается — подпись пары).
 
 use alloy_primitives::Address;
 use serde_json::{Value, json};
 
-use crate::core::types::{ChainId, CheckState};
+use std::collections::HashMap;
+
+use crate::core::types::{ChainId, CheckState, VenueId};
+use crate::settings::read::At;
 use crate::settings::store::Store;
 
 use super::blacklist;
@@ -26,25 +30,45 @@ use super::registry_build::Networks;
 /// Снимки ядра для строк монет — берутся один раз на весь список (или на одну строку).
 struct Ctx<'a> {
     market: &'a MarketState,
-    usdt: Option<Address>,
-    /// Решение 432: USDT других сетей (Inner.usdt_other) — у монеты сети не по умолчанию пулы с USDT её сети.
-    usdt_other: std::collections::HashMap<crate::core::types::ChainId, Address>,
+    /// К1 (арбитр 28.11.2026): расчётная монета каждой площадки DEX (settlement_pool::current — на Base USDC, на BSC
+    /// USDT её сети, как в mid_wake.rs) и подпись пары из venue.quote_asset площадки.
+    settle: HashMap<VenueId, (Address, String)>,
     s: &'a Store,
     nets: &'a Networks,
+}
+
+/// К1: расчётная монета и подпись пары каждой площадки DEX — до блокировок строк (settlement_pool::current читает свои
+/// снимки ядра). Подпись — venue.quote_asset площадки; не задана — адрес монеты. Площадка без расчётной монеты (биржи
+/// не подтвердили адрес) — без пулов с ней на экране. Ошибок нет.
+fn settle_map(core: &Core) -> HashMap<VenueId, (Address, String)> {
+    let s = &core.inner.deps.settings;
+    super::chain::dexes(core)
+        .into_iter()
+        .filter_map(|v| {
+            let addr = super::settlement_pool::current(core, &v)?;
+            let at = At {
+                venue: Some(&v.0),
+                coin: None,
+            };
+            let label = s
+                .text("venue.quote_asset", at)
+                .unwrap_or_else(|_| format!("{addr:#x}"));
+            Some((v, (addr, label)))
+        })
+        .collect()
 }
 
 impl Core {
     /// Список монет для экрана. Возвращает: JSON-массив. Ошибок нет.
     /// Налоги — с первой DEX, где у монеты есть проверка (все проверки — в поле checks).
     pub fn coins_json(&self) -> Value {
+        let settle = settle_map(self);
         let coins = rd(&self.inner.coins);
         let market = rd(&self.inner.market);
-        let usdt = rd(&self.inner.usdt).clone().ok();
         let nets = rd(&self.inner.networks);
         let x = Ctx {
             market: &market,
-            usdt,
-            usdt_other: rd(&self.inner.usdt_other).clone(),
+            settle,
             s: &self.inner.deps.settings,
             nets: &nets,
         };
@@ -61,17 +85,16 @@ impl Core {
 
     /// Строка по контракту и каноническому тегу сети (None для сети по умолчанию).
     pub fn coin_json_in(&self, address: Address, chain: Option<&ChainId>) -> Option<Value> {
+        let settle = settle_map(self);
         let coins = rd(&self.inner.coins);
         let c = coins
             .all()
             .find(|c| c.asset.chain.as_ref() == chain && c.asset.contract == Some(address))?;
         let market = rd(&self.inner.market);
-        let usdt = rd(&self.inner.usdt).clone().ok();
         let nets = rd(&self.inner.networks);
         let x = Ctx {
             market: &market,
-            usdt,
-            usdt_other: rd(&self.inner.usdt_other).clone(),
+            settle,
             s: &self.inner.deps.settings,
             nets: &nets,
         };
@@ -94,14 +117,14 @@ fn row(c: &CoinEntry, x: &Ctx) -> Value {
     let first = checks.first();
     // Пулы монеты с USDT и (решение 52) с промежуточными монетами площадки; pair — второй токен.
     let mut pools: Vec<Value> = vec![];
-    // Решение 432: USDT сети монеты (сеть по умолчанию — Inner.usdt, как раньше).
-    let usdt = match &c.asset.chain {
-        None => x.usdt,
-        Some(ch) => x.usdt_other.get(ch).copied(),
-    };
-    if let (Some(t), Some(u)) = (c.asset.contract, usdt) {
+    // К1 (арбитр 28.11.2026): расчётная монета площадки DEX (на Base — USDC), а не USDT сети монеты; подпись —
+    // venue.quote_asset площадки.
+    if let Some(t) = c.asset.contract {
         for p in &dex {
-            let mut others = vec![(u, "USDT".to_string())];
+            let Some((u, label)) = x.settle.get(&p.venue) else {
+                continue;
+            };
+            let mut others = vec![(*u, label.clone())];
             if let Intermediate::On(list) = intermediate::read(s, &p.venue) {
                 others.extend(list.iter().map(|m| (*m, intermediate::label(nets, *m))));
             }

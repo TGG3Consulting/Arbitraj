@@ -73,10 +73,10 @@
 - `supports_settlement_withdrawal` = true: свой clientOid сохраняется через `settlement_intent::before_send` ДО перевода
   spot → p2p (`venue.withdraw_from_trade`) и до POST вывода — повтор шага ведёт сверка по clientOid в истории выводов
   (`resolve.rs`), а не второй перевод и второй вывод. Сеть — `venue.base_network` (у Bitget `BASE`).
-- `supports_settlement_credit` = **false**: на какой счёт зачисляется депозит, документация Classic не говорит; поля
-  счёта нет ни в Get Deposit Address, ни в Get Deposit Records; Modify Deposit Account
-  (`POST /api/v2/spot/wallet/modify-deposit-account`, «auto-transfer account type of deposit») — только запись, чтения
-  назначения нет. Подтвердить зачисление прямо на spot через API нечем — Bitget в круг Base не входит.
+- `supports_settlement_credit` = **true** — решение Тиграна 28.11.2026. На какой счёт зачисляется депозит, документация
+  Classic не говорит (поля счёта нет ни в Get Deposit Address, ни в Get Deposit Records; Modify Deposit Account —
+  только запись). Поэтому в круге Base, как в BSC, ядро после зачисления вызывает `deposit_to_trading`, и Bitget
+  переводит p2p → spot по `venue.deposit_to_spot` (решение 102, `fund_move::to_spot`).
 
 ## Чего нет и почему (вопросы Тиграну)
 

@@ -11,7 +11,7 @@
 //! for Classic Account trading» (объявление KuCoin API Upgrade 2026-06-03). Счета: депозит — на main (funding), торговля —
 //! на trade, вывод — только с main; переводы main ↔ trade — fund_move.rs. Ссылки — README.md этой папки.
 //! Расчётный круг Base (USDT ↔ USDC): ордер — order_state.rs (inspect), вывод с меткой remark до POST и сверкой —
-//! settle_withdraw.rs, зачисление на торговый счёт — адрес депозита TRADE (deposit_addr.rs).
+//! settle_withdraw.rs, зачисление — адрес депозита как в BSC (deposit_addr.rs), при MAIN — main → trade (решение 102).
 
 pub mod account;
 pub mod account_update;

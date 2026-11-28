@@ -97,6 +97,30 @@ async fn race_keeps_ready_ordinary_and_compares_firm_both_completion_orders() {
     }
 }
 
+#[tokio::test(start_paused = true)]
+async fn ready_ordinary_never_starts_a_weak_or_late_subscription() {
+    let capture = captures();
+    let ordinary = &capture["rates"][0];
+    let now = Instant::now();
+    let end = now + Duration::from_secs(1);
+    let started = std::sync::atomic::AtomicBool::new(false);
+    for window in [Window::Ready, Window::Until(now), Window::Veto] {
+        let (base, offer) = competition(
+            std::future::ready(ordinary),
+            async {
+                started.store(true, std::sync::atomic::Ordering::Relaxed);
+                Some(ordinary)
+            },
+            end,
+            |_| window,
+        )
+        .await;
+        assert!(!started.load(std::sync::atomic::Ordering::Relaxed));
+        assert_eq!(base, ordinary);
+        assert!(offer.is_none());
+    }
+}
+
 #[test]
 fn archived_wbtc_fee_and_usdt_budget_use_distinct_assets_and_round_once() {
     use crate::venues::bsc_dex::tokenlon::wire::abi::FillOrder;

@@ -21,5 +21,5 @@
 
 Время ответа symbols (t) тесты берут как время получения справочника пар (tests/t489_common symbols_at_ms).
 
-Кто читает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs,
+Кто читает: tests/core_net_chain_489.rs, tests/core_net_chain_489_held.rs, tests/core_net_chain_489_bsc.rs, tests/bingx_settle.rs,
 tests/core_net_chain_489_recap.rs.

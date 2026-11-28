@@ -95,7 +95,7 @@ pub(super) fn timely(p: &Parts, q: &Prepared) -> bool {
     expiry_ok(q.preview.expires, min)
 }
 
-pub(super) fn expiry_ok(expiry: u64, min: u64) -> bool {
+pub(in crate::venues::bsc_dex) fn expiry_ok(expiry: u64, min: u64) -> bool {
     let now = Utc::now().timestamp_millis().max(0) as u64;
     expiry
         .checked_mul(1000)

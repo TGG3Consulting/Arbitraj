@@ -8,7 +8,7 @@ from eth_abi import decode,encode
 from eth_utils import keccak
 from fork_fee_rpc import Reader
 from record_bopamm_wallet import AMM,PAMM,REGISTRY,ROUTER,USDT,USDC,WETH,DATA,ORDER,tx,maker_fills,create_address
-from record_base_slipstream_executor import calldata
+
 
 # Funded historical EOA in the Tokenlon payment archive; existing ETH and USDT are checked at both parents.
 PAYER="0x8cbcad0de3a585450825accc9f61c346352fe889"
@@ -33,7 +33,7 @@ def run(reader,base,probe,frame,cache):
             ("eth_call",[node_tx(FACTORY,"getPool(address,address,uint24)",["address","address","uint24"],[USDC,USDT,FEE]),tag]),
             ("eth_getBlockByNumber",[hex(height),False])])
         assert int(h["number"],16)+1==height and next_block["parentHash"]==frame["parent"]
-        assert int(eth,16)>=5*10**16 and int(usdt,16)>=100*10**6
+        assert int(eth,16)>=5*10**18 and int(usdt,16)>=10_000*10**6
         pool="0x"+pool[-40:];assert int(pool,16)!=0
         base_addr=create_address(PAYER,int(nonce,16))
         probe_addr=create_address(PAYER,int(nonce,16)+1)
@@ -85,7 +85,7 @@ def run(reader,base,probe,frame,cache):
         return {"outcome":"paid","spent":str(spent),"received":str(received),"gas":int(mid["gasUsed"],16),
                 "approval_gas":int(v[1+len(grants)]["gasUsed"],16),"venue":venue,"maker_fills":fills}
     rows=[]
-    for source,target,size in [(WETH,USDT,10**15),(USDT,WETH,10**6),(WETH,USDT,5*10**16),(USDT,WETH,100*10**6)]:
+    for source,target,size in [(WETH,USDT,5*10**17),(USDT,WETH,1000*10**6),(WETH,USDT,5*10**18),(USDT,WETH,10_000*10**6)]:
         combo=measure(source,target,size,1,True);direct=measure(source,target,size,1,False)
         if combo['outcome']=='paid':
             exact=int(combo['received'])
@@ -105,9 +105,10 @@ if __name__=="__main__":
     published=json.loads(gzip.decompress((DATA/"bopamm_ethereum_published.json.gz").read_bytes()))
     cache={};results=[]
     for feed in published:
-        builder=feed["builder"];first=feed["frames"][0]
-        frame=next(v[builder] for v in archive if v[builder].get("same_live_parent") and
-            v[builder].get("parent")==first["parent"] and v[builder].get("stateDiff"))
-        assert frame["registry"]==REGISTRY and frame["target"]==first["target"] and frame["other_patched_accounts"]==0
-        results.append({"builder":builder,**run(reader,base,probe,frame,cache)})
+        builder=feed["builder"]
+        for published_frame in feed["frames"]:
+            frame=next(v[builder] for v in archive if v[builder].get("same_live_parent") and
+                v[builder].get("parent")==published_frame["parent"] and v[builder].get("stateDiff"))
+            assert frame["registry"]==REGISTRY and frame["target"]==published_frame["target"] and frame["other_patched_accounts"]==0
+            results.append({"builder":builder,**run(reader,base,probe,frame,cache)})
     Path(sys.argv[3]).write_text(json.dumps(results,separators=(",",":")))

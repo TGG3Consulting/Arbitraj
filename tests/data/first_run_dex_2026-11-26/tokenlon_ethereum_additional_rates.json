@@ -1,0 +1,138 @@
+{
+  "chain": 1,
+  "strategy": "PMMV5",
+  "sdk": "@tokenlon/sdk@5.4.2",
+  "catalog": "https://api.tokenlon.im/v5/exchange/tokens/tradable?strategy=PMMV5",
+  "auth": {
+    "service": "https://publisher.tokenlon.im/rpc",
+    "method": "auth.getSdkJwtToken",
+    "ephemeral": "0x69A269bE75aa8c093dbC0F0BcbE13b5C83c2d25A",
+    "timestamp": 1795838071,
+    "http": 200
+  },
+  "method": "Official authenticated read-only /user/rate; fresh empty EOA signed only login timestamp. No order/lastOrder, funding, transaction or taker trade signature.",
+  "tokens": [
+    {
+      "chainId": 1,
+      "symbol": "USDT",
+      "contractAddress": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+      "decimal": 6,
+      "precision": 4,
+      "minTradeAmount": "0.5",
+      "maxTradeAmount": "12397776",
+      "opposites": [
+        "LON",
+        "ETH",
+        "WBTC",
+        "DAI",
+        "USDC",
+        "UNI",
+        "1INCH",
+        "CRV",
+        "HT",
+        "APE",
+        "PEPE",
+        "LDO",
+        "LINK",
+        "USDS"
+      ]
+    },
+    {
+      "chainId": 1,
+      "symbol": "UNI",
+      "contractAddress": "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984",
+      "decimal": 18,
+      "precision": 4,
+      "minTradeAmount": "0.105",
+      "maxTradeAmount": "237028.95",
+      "opposites": [
+        "ETH",
+        "USDT"
+      ]
+    },
+    {
+      "chainId": 1,
+      "symbol": "WBTC",
+      "contractAddress": "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599",
+      "decimal": 8,
+      "precision": 6,
+      "minTradeAmount": "0.000008",
+      "maxTradeAmount": "396.37936",
+      "opposites": [
+        "ETH",
+        "USDC",
+        "USDT",
+        "DAI",
+        "USDS"
+      ]
+    }
+  ],
+  "rates": [
+    {
+      "topic": "/user/rate/WBTC_USDT/BUY/0.5005",
+      "pair": "WBTC_USDT",
+      "side": "BUY",
+      "amount": "0.5005",
+      "at_unix_ms": 1795838073492,
+      "elapsed_ms": 1000,
+      "response": {
+        "exchangeable": true,
+        "rate": "0.0000166567517352",
+        "minAmount": 0.000333457,
+        "maxAmount": 94.546378
+      }
+    },
+    {
+      "topic": "/user/rate/WBTC_USDT/SELL/1",
+      "pair": "WBTC_USDT",
+      "side": "SELL",
+      "amount": "1",
+      "at_unix_ms": 1795838074492,
+      "elapsed_ms": 584,
+      "response": {
+        "exchangeable": true,
+        "rate": "60035.7099999999991269",
+        "minAmount": 0.000333457,
+        "maxAmount": 94.546378
+      }
+    },
+    {
+      "topic": "/user/rate/UNI_USDT/BUY/10030.0902",
+      "pair": "UNI_USDT",
+      "side": "BUY",
+      "amount": "10030.0902",
+      "at_unix_ms": 1795838075076,
+      "elapsed_ms": 1589,
+      "response": {
+        "exchangeable": true,
+        "rate": "0.2102444261002931",
+        "minAmount": 0.002,
+        "maxAmount": 31568.605671542773
+      }
+    },
+    {
+      "topic": "/user/rate/UNI_USDT/SELL/10030.0902",
+      "pair": "UNI_USDT",
+      "side": "SELL",
+      "amount": "10030.0902",
+      "at_unix_ms": 1795838076665,
+      "elapsed_ms": 1672,
+      "response": {
+        "exchangeable": true,
+        "rate": "4.7565000000000000",
+        "minAmount": 0.002,
+        "maxAmount": 31568.605671542773
+      }
+    }
+  ],
+  "existing_market_source": "tokenlon_ethereum.json",
+  "settled_size_source": {
+    "file": "tokenlon_ethereum_expired_pmm.json.gz",
+    "transactions": [
+      "0x1bdd47be1c285d57b3ed85b4d3a03080aad8498e3b4c2a3a7e7bc95ec4d0b1cc",
+      "0x631e3863a9b4c95c0cdd343e0b78053e925d77388e16ef654a42f2f8ace345f9",
+      "0x9965e4abd21477e04c0713b3297f787d54bc2c6a0705f615467ed09f03982283"
+    ],
+    "unit": "base before PMM settlement fee for BUY, actual base debited for SELL"
+  }
+}

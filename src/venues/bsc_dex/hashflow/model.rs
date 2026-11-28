@@ -15,6 +15,9 @@ pub struct Request {
 /// Только итог симуляции. Подпись маркетмейкера и calldata остаются внутри адаптера.
 #[derive(Clone, Serialize)]
 pub struct Preview {
+    pub chain_id: u64,
+    pub trader: Address,
+    pub pool: Address,
     pub rfq_id: String,
     pub txid: String,
     pub amount_in: String,

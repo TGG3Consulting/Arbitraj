@@ -1,10 +1,11 @@
 //! Сверка балансов и события Trade по EIP-1898 и eth_simulateV1 на узле площадки, без state overrides.
 use super::super::node::rpc;
+use super::model::Request;
+use super::router_identity::{authorized, role_calls};
 use super::{
     Ctx,
     wire::{Firm, Trade},
 };
-use super::model::Request;
 use alloy::sol_types::SolEvent;
 use alloy_primitives::{Address, B256, Bytes, U64, U256, keccak256};
 use serde::Deserialize;
@@ -126,7 +127,21 @@ pub(super) async fn run(
     let bo = balance(ctx, req.output, req.trader)?;
     let swap =
         json!({"from":req.trader,"to":firm.target_contract,"value":value,"input":firm.calldata});
-    let block = json!({"calls":[bi,bo,swap,bi,bo]});
+    let mut calls = vec![bi.clone(), bo.clone(), swap, bi, bo];
+    let expected = ctx
+        .chain_id()
+        .and_then(|id| super::deployments().ok()?.router_runtime.get(&id));
+    if let Some(hash) = expected {
+        let code: Bytes = rpc::call(ctx, "eth_getCode", json!([firm.target_contract, tag(head)]))
+            .await
+            .map_err(|_| "Узел не подтвердил код Router Hashflow")?;
+        if keccak256(&code) != *hash {
+            return Err("Изменился код Router Hashflow".into());
+        }
+        // Читаем роли до денежных вызовов в том же измерении.
+        calls.splice(0..0, role_calls(firm.target_contract, firm.quote_data.pool));
+    }
+    let block = json!({"calls":calls});
     let blocks: Vec<Block> = rpc::call(
         ctx,
         "eth_simulateV1",
@@ -137,7 +152,24 @@ pub(super) async fn run(
     let [b] = blocks.as_slice() else {
         return Err("Неверное число блоков симуляции".into());
     };
-    let [before_in, before_out, execution, after_in, after_out] = b.calls.as_slice() else {
+    let payments = if expected.is_some() {
+        let [permitted, pool_router, payments @ ..] = b.calls.as_slice() else {
+            return Err("Нет обеих ролей Hashflow в симуляции".into());
+        };
+        if !authorized(
+            firm.target_contract,
+            (permitted.status.to(), &permitted.return_data),
+            (pool_router.status.to(), &pool_router.return_data),
+        ) {
+            return Err(
+                "Подписанный пул и Router Hashflow не подтвердили взаимную регистрацию".into(),
+            );
+        }
+        payments
+    } else {
+        b.calls.as_slice()
+    };
+    let [before_in, before_out, execution, after_in, after_out] = payments else {
         return Err("Неполный ответ симуляции".into());
     };
     if b.parent_hash != head

@@ -12,7 +12,8 @@
 //!   цикла (tax_wait::due_now): сигнал, пришедший во время проверки, теряется, а пулы от поиска по фабрикам и новые пулы
 //!   приходят после первого прохода (живой бот 28.11.2026, base_dex) — ждущие, включая промежуточные, их не пропускают;
 //!   подписка на «пул готов» взводится (enable) до проверки, как в quoter_cycle.rs, — сигнал во время проверки не теряется;
-//! - ждущие из-за сбоя узла (429, нет связи — не вердикт) — повтор через tax.retry_s;
+//! - ждущие из-за сбоя узла (429, нет связи — не вердикт) и ждущие глубокого пула, у которых глубина не считается
+//!   (Deep::Unknown, Б3) — повтор через tax.retry_s (tax_wait::due_retry);
 //! - ждущие «не задана настройка» — сразу при изменении настроек (settings_wait.rs), без перезапуска и без часа ожидания.
 //!
 //! Все запросы к узлу — в общем темпе node/pace.rs (bsc.node_http_rps): проход идёт ровно, а не залпом.
@@ -37,8 +38,8 @@ use crate::storage::journal::Level;
 use super::super::pools::listen::Pools;
 use super::super::settings_wait;
 use super::recheck::{By, Queue};
-use super::tax_deep::has_deep;
-use super::tax_pass::{self, Pass, Why};
+use super::tax_deep::{Deep, deep, has_deep};
+use super::tax_pass::{self, Pass};
 use super::tax_wait::{self, First};
 use super::tax_wallet;
 use super::taxes;
@@ -131,7 +132,10 @@ pub async fn taxes(
         // t78: проверка кошельком сделки ждёт (сбой узла) — повтор, даже если общая дала итог.
         tax_wallet::wait_more(&mut waiting, &pass.deal_done, &all);
         loop {
-            let node_wait = waiting.iter().any(|(_, _, w)| *w == Why::Node);
+            // Б3 (арбитр 28.11.2026): глубина пула не считается (Deep::Unknown) — помеха, как сбой узла: повтор через
+            // tax.retry_s, а не полный проход.
+            let unknown = |a: Address| deep(&p, &a) == Deep::Unknown;
+            let node_wait = !tax_wait::due_retry(&waiting, unknown).is_empty();
             let retry = if node_wait {
                 secs(&p, "tax.retry_s").await
             } else {
@@ -169,11 +173,7 @@ pub async fn taxes(
                         let changed = settings_wait::drain(c, &mut changes);
                         tax_wait::due_config(&waiting, &cfg, &changed)
                     }
-                    _ = sleep_opt(retry) => waiting
-                        .iter()
-                        .filter(|(_, _, w)| *w == Why::Node)
-                        .map(|(a, t, _)| (*a, t.clone()))
-                        .collect(),
+                    _ = sleep_opt(retry) => tax_wait::due_retry(&waiting, unknown),
                 }
             };
             if list.is_empty() {

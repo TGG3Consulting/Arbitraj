@@ -5,6 +5,8 @@
 //! (pools/progress.rs — Notify::notify_waiters) без ждущего теряется; шаг цикла (check/tax_wait.rs due_now) всё равно
 //! выдаёт ждущую монету, у которой пул уже есть. Промежуточные монеты (WETH, cbBTC) цикл налогов проверяет тем же
 //! списком, что и монеты (pools/market.rs with_mids), — для решения шага разницы нет.
+//! Б3 (арбитр 28.11.2026): ждущая глубокого пула монета, у которой глубина не считается (Deep::Unknown), повторяется
+//! через tax.retry_s вместе со сбоем узла (due_retry), а не ждёт полного прохода.
 //! Пул — живая запись AAVE Uniswap V3 0x8e3ecc0b… (tests/data/depth_2026-10-25, tests/depth_common).
 //!
 //! Кто вызывает: cargo test.
@@ -20,7 +22,7 @@ use alloy_primitives::Address;
 
 use arb::venues::bsc_dex::check::tax_deep::has_deep;
 use arb::venues::bsc_dex::check::tax_pass::Why;
-use arb::venues::bsc_dex::check::tax_wait::{due, due_now};
+use arb::venues::bsc_dex::check::tax_wait::{due, due_now, due_retry};
 use arb::venues::bsc_dex::parts::Parts;
 
 use depth_common::{aave_v3, rec};
@@ -64,4 +66,25 @@ async fn late_pool_wakes_waiting_coin_even_if_signal_was_lost() {
         due_now(&waiting, pending, deep),
         vec![(coin, "AAVE".to_string())]
     );
+}
+
+#[test]
+fn unknown_depth_is_retried_like_node_failure() {
+    // Адреса — ключи (CAKE, ETH и пул CAKE из записи GeckoTerminal 2026-10-24, как в tests/bsc_dex_tax_wait.rs).
+    let a = alloy_primitives::address!("0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82");
+    let b = alloy_primitives::address!("0x2170Ed0880ac9A755fd29B2688956BD959F933F8");
+    let c = alloy_primitives::address!("0x0ed7e52944161450477ee417de9cd3a859b14fd0");
+    let waiting = vec![
+        (a, "A".to_string(), Why::Shallow),
+        (b, "B".to_string(), Why::Node),
+        (c, "C".to_string(), Why::NoPool),
+    ];
+    // Глубина не считается только у A.
+    let unknown = |x: Address| x == a;
+    assert_eq!(
+        due_retry(&waiting, unknown),
+        vec![(a, "A".to_string()), (b, "B".to_string())]
+    );
+    // Глубина считается у всех — повтор только сбоя узла, как раньше.
+    assert_eq!(due_retry(&waiting, |_| false), vec![(b, "B".to_string())]);
 }

@@ -4,9 +4,9 @@ use super::{
     Builder, Ctx, Head, Preview, Request, builder_snapshot, canonical, decimalsCall, rpc, slot,
 };
 use crate::gateway::errors::{ErrorCode, GatewayResult};
-use crate::venues::bsc_dex::{exec::prop_abi::IProp, pools::prop_venue};
-use alloy::sol_types::{SolCall, SolValue};
-use alloy_primitives::{Address, Bytes, U64, keccak256};
+use crate::venues::bsc_dex::pools::prop_venue;
+use alloy::sol_types::SolValue;
+use alloy_primitives::{Bytes, U64, keccak256};
 use chrono::Utc;
 use serde_json::{Value, json};
 
@@ -87,7 +87,11 @@ pub(in crate::venues::bsc_dex) async fn preview(
         canonical(ctx, h.hash, r.input, decimalsCall {})
     )?;
     let (roles, enabled) = state;
-    if !enabled || code.is_empty() || keccak256(code) != oracle.hash {
+    if !enabled
+        || !roles.accepts_frame(oracle.address, oracle.hash)
+        || code.is_empty()
+        || keccak256(code) != oracle.hash
+    {
         return Err(bad("Код оракула или допуск рынка изменился"));
     }
     let amount = super::super::num::exact_amount(
@@ -97,7 +101,7 @@ pub(in crate::venues::bsc_dex) async fn preview(
     )
     .filter(|v| !v.is_zero())
     .ok_or_else(|| bad("Недопустимый размер входа"))?;
-    let call = |to: Address, data: Vec<u8>| json!({"from":payer,"to":to,"data":Bytes::from(data)});
+
     let decoded = || {
         ctx.err(
             ErrorCode::BadResponse,
@@ -123,25 +127,26 @@ pub(in crate::venues::bsc_dex) async fn preview(
         let (_, credit, gas) = super::prop_slot::simulate(ctx, &h, &f, &order, None).await?;
         (credit, Some(gas))
     } else {
-        let q = IProp::quoteVenueV1Call {
-            venue: market,
-            tokenIn: r.input,
-            tokenOut: r.output,
-            amountIn: amount,
-        };
-        let steps = slot::run(ctx, &h, &f, json!([call(roles.router(), q.abi_encode())])).await?;
+        let data =
+            super::prop_levels::quote_call(roles.router(), market, r.input, r.output, amount);
+        let steps = slot::run(
+            ctx,
+            &h,
+            &f,
+            json!([{"from":payer,"to":roles.router(),"data":data}]),
+        )
+        .await?;
         let [x] = steps.as_slice() else {
             return Err(decoded());
         };
         if x.status != U64::from(1) {
             return Err(decoded());
         }
-        let res =
-            IProp::quoteVenueV1Call::abi_decode_returns(&x.return_data).map_err(|_| decoded())?;
-        if res.quotedVenue != market || res.amountOut.is_zero() {
-            return Err(decoded());
-        }
-        (res.amountOut, None)
+        (
+            super::prop_levels::quote_result(roles.router(), market, &x.return_data)
+                .ok_or_else(decoded)?,
+            None,
+        )
     };
     let (latest, snapshot): (Head, Value) = tokio::try_join!(
         rpc::call(ctx, "eth_getBlockByNumber", json!(["latest", false])),

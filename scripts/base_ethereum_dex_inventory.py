@@ -2442,7 +2442,7 @@ def tables(network, snapshots, profiles):
         if not base and str(row["id"]) == "9436":
             stelaxis = read(Path("tests/data/first_run_dex_2026-11-26/stelaxis_ethereum.json"))
             candidates = [stelaxis["venue"]]
-            task = "STEL-01 · 5 пар, 100 событий в 250 блоках. Собственный исполнимый маршрут не подтверждён"
+            task = "STEL-03 · 5 пар, 8 выплат двух форм на WETH/USDT. Прямой слот Stelaxis с собственным кошельком"
         if not base and str(row["id"])=="7382":
             candidates=[sn["factory"]]
             task=f"Supernova CL · {len(sn['markets'])} рынков в четырёх реестрах customDeployer по CREATE2"
@@ -2516,7 +2516,10 @@ def tables(network, snapshots, profiles):
             source_addresses = scope["other_source_addresses"]
             if domains or source_addresses:
                 candidates = list(dict.fromkeys(domains + source_addresses))
-            task = f"LL20 · {scope['description']}"
+            if not base and str(row["id"]) == "9436":
+                task = "STEL-03 · 5 пар. В слоте 26 494 985 по 4 из 20 обменов WETH/USDT оплатили исходный контракт и защищённый модуль."
+            else:
+                task = f"LL20 · {scope['description']}"
         if str(row["id"]) == "622":
             fixture = data_dir / f"clipper_{network}_directory.json.gz"
             with gzip.open(fixture, "rt", encoding="utf8") as stream:

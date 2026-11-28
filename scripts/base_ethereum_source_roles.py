@@ -81,7 +81,7 @@ COVERAGE_PROFILES = {
         "7984": "kipseli-lambda-ethereum", "8209": "1inch-aqua", "8278": "ammalgam", "8306": "metric-ethereum",
         "8531": "tempest-lambda-ethereum", "8691": "aero-slipstream-ethereum", "8762": "ranges-finance",
         "8858": "motoswap-ethereum", "9154": "nami", "9157": "communityv3", "9435": "goliath-lambda-ethereum",
-        "9437": "taurus-lambda-ethereum", "9514": "theorem-ethereum",
+        "9436": "stelaxis-ethereum", "9437": "taurus-lambda-ethereum", "9514": "theorem-ethereum",
     },
 }
 

@@ -15,7 +15,7 @@ const word=v=>'0x'+v.slice(2).padStart(64,'0');
 const at={blockHash:archive.sourceBlock,requireCanonical:true};
 
 test('each configured venue builds its own CREATE and each wallet runtime matches its funded replay',async()=>{
-  for (const profile of profiles){
+  for (const profile of profiles.filter(p=>archive.markets[p.settings['dex.factory']])){
     const config=settings(profile);
     const p=await loadPlan(config,archive);
     assert.equal(p.market,config.market);
@@ -67,4 +67,22 @@ test('canonical verification checks every implementation slot, runtime and all c
   words['0xad5ab79b']=word(module);
   await assert.rejects(checkPropModule(provider,p,module,at));
   await assert.rejects(checkPropVenue(provider,p,{blockHash:archive.sourceBlock}));
+});
+
+test('Stelaxis binds its own original market, pricing registry and payment vault',async()=>{
+  const source=JSON.parse(read('../src/assets/stelaxis-slot-ethereum.json'));
+  const cfg=settings(profiles.find(p=>p.id==='stelaxis-ethereum'));
+  const plan=await loadPlan(cfg,source);
+  assert.equal(cfg.market,cfg.quoter);
+  assert.deepEqual(plan.addresses,['market','registry','vault'].map(name=>plan.roles[name].target));
+  assert.deepEqual(unsigned(plan),{chainId:'0x1',value:'0x0',data:plan.data});
+  await assert.rejects(loadPlan({...cfg,hashes:[]},source));
+  await assert.rejects(loadPlan({...cfg,chainId:8453},source));
+  await assert.rejects(loadPlan(cfg,archive));
+  const observed=JSON.parse(gunzipSync(read('../../tests/data/first_run_dex_2026-11-26/stelaxis_ethereum_slot.json.gz')));
+  for (const [name,role] of Object.entries(observed.roles)) {
+    assert.equal(plan.roles[name].target,role.address);
+    assert.equal(plan.roles[name].code,role.hash);
+  }
+  assert.equal(observed.rows.filter(r=>r.withUpdate.status==='paid').length,4);
 });

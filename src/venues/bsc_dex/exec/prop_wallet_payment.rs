@@ -42,6 +42,9 @@ impl Proof {
         {
             return None;
         }
+        if t.router == t.venue {
+            return super::stelaxis_payment::outcome(self,logs);
+        }
         let sender = if protected { t.target } else { owner };
         let mut swaps = logs.iter().filter(|l| {
             l.address() == t.router && l.topic0() == Some(&IProp::Swapped::SIGNATURE_HASH)

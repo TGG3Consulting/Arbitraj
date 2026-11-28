@@ -25,7 +25,7 @@ pub(crate) async fn checked(
     at: &Value,
 ) -> GatewayResult<Terms> {
     let (r, on) = prop::state(ctx, e.family, e.pool.reference.address(), (i, o), at).await?;
-    if !on {
+    if !on || r.direct_pull() {
         return Err(prop::bad(ctx));
     }
     let mut terms = r.terms(ctx, target, fallback_allowed)?;

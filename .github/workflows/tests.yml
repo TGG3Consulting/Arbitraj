@@ -456,6 +456,10 @@ jobs:
           node-version: '22'
       - working-directory: contracts
         run: npm ci --no-audit --no-fund
+      - name: Сверить Native Base CREATE с компилятором и реальным runtime из изолированного блока
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter
+          python scripts/check_native_rfq_card.py "$RUNNER_TEMP/native/NativeRfqAdapter.json"
       - id: compile_hanji
         run: node contracts/build-hanji.mjs "$RUNNER_TEMP/hanji-executor"
       - name: Сверить карточку Hanji Base с собранным контрактом и архивной приёмкой
@@ -973,13 +977,17 @@ jobs:
         run: python scripts/record_native_rfq_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'goliath-ethereum'
         run: python scripts/record_goliath_ethereum.py "$RUNNER_TEMP/market.json"
-      - if: startsWith(matrix.market, 'pendle-protected-') || matrix.market == 'native-rfq-protected-ethereum'
+      - if: startsWith(matrix.market, 'pendle-protected-') || startsWith(matrix.market, 'native-rfq-protected-')
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - if: startsWith(matrix.market, 'pendle-protected-') || matrix.market == 'native-rfq-protected-ethereum'
+      - if: startsWith(matrix.market, 'pendle-protected-') || startsWith(matrix.market, 'native-rfq-protected-')
         working-directory: contracts
         run: npm ci --no-audit --no-fund
+      - if: matrix.market == 'native-rfq-protected-base'
+        run: |
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter
+          python scripts/record_native_rfq_base.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/native/NativeRfqAdapter.json"
       - if: matrix.market == 'native-rfq-protected-ethereum'
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/native" NativeRfqAdapter

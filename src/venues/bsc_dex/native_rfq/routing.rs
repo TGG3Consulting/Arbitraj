@@ -49,7 +49,10 @@ pub(in crate::venues::bsc_dex) fn timely(ctx: &Ctx, expiry: u64) -> bool {
 fn pair(p: &Parts, asset: &Asset, side: Side) -> Option<(Address, Address)> {
     let coin = asset.contract?;
     let quote = p.tokens.usdt(&p.ctx).ok()?;
-    if coin == quote || exec::native::is_native(&p.ctx, asset) {
+    direction(coin,quote,side,exec::native::is_native(&p.ctx, asset))
+}
+pub(super) fn direction(coin: Address, quote: Address, side: Side, physical_eth: bool) -> Option<(Address,Address)> {
+    if coin == quote || physical_eth {
         return None;
     }
     Some(if side == Side::Buy {
@@ -88,8 +91,10 @@ pub(in crate::venues::bsc_dex) async fn consider(
     {
         return old;
     }
+    let mixed = quote_stage::settlement();
     let competitor = old.as_ref().ok().filter(|q| {
-        q.fillable_qty == qty
+        (!mixed || quote_stage::settlement_quote_supported(q, quote_stage::is_final()))
+            && q.fillable_qty == qty
             && q.qty == qty
             && (!quote_stage::is_final() || q.route.as_ref().is_none_or(|r| r.executable))
     });
@@ -123,12 +128,18 @@ async fn candidate(
     let ctx = &p.ctx;
     let generation = ctx.settings.generation();
     let profile = Profile::read(ctx).ok()?;
+    if quote_stage::settlement() && !profile.supports_settlement() {
+        return None;
+    }
     let module = profile.module?.address;
     let (i, o) = pair(p, asset, side)?;
     let depth = p.native_quotes.depth(p)?;
     let (quote_cash, minimum_input) = depth.value(i, o, side, qty)?;
     let cap = ctx.dec("native_rfq.gas_budget_native").ok()?;
-    if cap <= Decimal::ZERO || send::tip(&send::select(ctx, &p.stats).ok()?).is_some() {
+    let channels = send::select(ctx, &p.stats).ok()?;
+    let mixed = quote_stage::settlement();
+    if cap <= Decimal::ZERO || send::tip(&channels).is_some() || (mixed && (channels.is_empty() ||
+        channels.iter().any(|r| r.method != crate::core::types::SendMethod::Single))) {
         return None;
     }
     p.lag.check(ctx).ok()?;
@@ -144,7 +155,8 @@ async fn candidate(
 
     let buy = side == Side::Buy;
     let amount = direct::ceil_units(if buy { quote_cash } else { qty }, di)?;
-    if amount < minimum_input || amount > funds.spend || funds.native < num::to_units(cap, 18)? {
+    let limit = if mixed && !quote_stage::is_final() { funds.allowance } else { funds.spend };
+    if amount < minimum_input || amount > limit || funds.native < num::to_units(cap, 18)? {
         return None;
     }
     if !buy && num::to_decimal(amount, di)? != qty {
@@ -160,7 +172,7 @@ async fn candidate(
         avg_price: quote_cash.checked_div(qty)?,
         costs: vec![Cost::new(CostKind::Gas, cap, ticker.clone(), false)],
         route: Some(DexRoute {
-            mode: RouteMode::RfqIndicative,
+            mode: if mixed { RouteMode::NativeRfqSettlement(None) } else { RouteMode::RfqIndicative },
             legs: vec![],
             block: head.number,
             gas_units: 0,
@@ -219,7 +231,7 @@ async fn candidate(
     quote.avg_price = cash.checked_div(qty)?;
     quote.costs = vec![Cost::new(CostKind::Gas, gas, ticker, false)];
     quote.route = Some(DexRoute {
-        mode: RouteMode::Rfq(checked.firm.proof.digest),
+        mode: if mixed { RouteMode::NativeRfqSettlement(Some(checked.firm.proof.digest)) } else { RouteMode::Rfq(checked.firm.proof.digest) },
         legs: vec![],
         block: checked.head.number.to(),
         gas_units: checked.gas,

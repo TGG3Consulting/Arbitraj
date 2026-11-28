@@ -48,7 +48,7 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
-        | RouteMode::Raindex(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
+        | RouteMode::Raindex(_) | RouteMode::NativeRfqSettlement(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
         | RouteMode::PropSettlementSlot(_)
         | RouteMode::Orderbook(_)
         | RouteMode::OrderbookIndicative
@@ -194,7 +194,7 @@ pub(super) async fn once(
         RouteMode::Rfq(_)
         | RouteMode::RfqIndicative
         | RouteMode::Slot(_)
-        | RouteMode::Raindex(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
+        | RouteMode::Raindex(_) | RouteMode::NativeRfqSettlement(_) | RouteMode::RaindexSettlement(_) | RouteMode::PancakeX(_)
         | RouteMode::PropSettlementSlot(_)
         | RouteMode::Orderbook(_)
         | RouteMode::OrderbookIndicative

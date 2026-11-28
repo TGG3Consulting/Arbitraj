@@ -144,6 +144,8 @@ pub enum RouteMode {
     /// Обычная заявка Raindex и отдельный однократный своп в денежном круге.
     Raindex(Option<alloy_primitives::B256>),
     RaindexSettlement(Option<alloy_primitives::B256>),
+    /// Одна подписанная котировка Native в валюте исходного денежного шага.
+    NativeRfqSettlement(Option<alloy_primitives::B256>),
     /// Поручение PancakeSwap X. У предварительной котировки ещё нет билета.
     PancakeX(Option<alloy_primitives::B256>),
     /// Подтверждаемое релеем EIP-712 поручение Ryze и предварительная цена.

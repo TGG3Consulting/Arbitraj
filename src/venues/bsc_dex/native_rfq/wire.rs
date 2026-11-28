@@ -230,3 +230,7 @@ impl Firm {
 #[cfg(test)]
 #[path = "wire_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "base_tests.rs"]
+mod base_tests;

@@ -1,4 +1,5 @@
 """Record the settlement contracts, transfer implementations and wiring at one canonical hash."""
+import gzip
 import json
 from pathlib import Path
 
@@ -54,7 +55,18 @@ def main():
             fields += f" {impl} {runtime(r, impl, at)}"
             reads[f"{address}.{slot}"] = value
         asset_rows.append(fields)
-    record = dict(chain=chain, block=source["block"], selector=at, roles=role_rows,
+    archive = json.loads(gzip.decompress((DATA / "tokenlon_ethereum_expired_pmm.json.gz").read_bytes()))
+    sample = archive["rows"][0]
+    tx = sample["tx"]["hash"]
+    event = next(log for log in sample["logs"] if log["address"].lower() == pmm and len(log["topics"]) == 4)
+    last = sample["number"]
+    first = last - 63
+    query = dict(address=pmm, topics=event["topics"], fromBlock=hex(first), toBlock=hex(last))
+    matches = r.rpc("eth_getLogs", [query])
+    assert len(matches) == 1 and matches[0]["transactionHash"] == tx
+    assert matches[0]["blockHash"] == sample["tx"]["blockHash"]
+    window = dict(first=first, last=last, blocks=last-first+1, query=query, hash=tx, blockHash=matches[0]["blockHash"])
+    record = dict(chain=chain, block=source["block"], selector=at, logs=window, roles=role_rows,
                   assets=asset_rows, reads=reads)
     (DATA / "tokenlon_ethereum_roles.json").write_bytes((json.dumps(record, indent=2) + "\n").encode())
 

@@ -4064,6 +4064,15 @@ rationale = "Прокси и хеш кода реестра 0x, адрес и х
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
+name = "dex.logs_block_batch"
+area = "Venue eth_dex"
+unit = "блоков"
+value = "64"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_roles.json"
+rationale = "Ethereum вернул одну исходную оплату по четырём темам поручения в диапазоне 64 блоков. Настройка задаёт размер одной страницы, весь интервал до истечения заявки читается последовательно."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
 name = "tokenlon.contracts"
 area = "Venue eth_dex"
 unit = "контракты и хеши"

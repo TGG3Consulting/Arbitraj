@@ -38,34 +38,57 @@ impl Error {
     }
 }
 
+/// По принятой цели собранного запроса проверяет паузу до отправки. Тело запроса не копируется.
+fn ready(service: &'static str, req: RequestBuilder) -> Result<(Key, RequestBuilder), Error> {
+    let (client, built) = req.build_split();
+    let built = built.map_err(|e| Error::Http(Fail::Send(e.without_url().to_string())))?;
+    let key = (service, built.url().origin().ascii_serialization());
+    let pauses = PAUSES.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(pause) = pauses.get(&key) {
+        let left = pause.left(Instant::now());
+        if !left.is_zero() {
+            return Err(Error::Held(left));
+        }
+    }
+    Ok((key, RequestBuilder::from_parts(client, built)))
+}
+
+fn pause(key: Key, status: StatusCode, retry_after_s: Option<u64>, limits: Limits) {
+    if status != StatusCode::TOO_MANY_REQUESTS
+        && !(status == StatusCode::SERVICE_UNAVAILABLE && retry_after_s.is_some())
+    {
+        return;
+    }
+    let duration = retry_after_s.map(Duration::from_secs).unwrap_or(limits.head);
+    let mut pauses = PAUSES.lock().unwrap_or_else(|e| e.into_inner());
+    let now = Instant::now();
+    pauses.retain(|_, p| !p.left(now).is_zero());
+    if !duration.is_zero() && pauses.get(&key).is_none_or(|p| p.left(now) < duration) {
+        pauses.insert(key, Pause { since: now, duration });
+    }
+}
+
 pub(crate) async fn exchange(
     service: &'static str,
     req: RequestBuilder,
     limits: Limits,
 ) -> Result<(StatusCode, String), Error> {
-    let (client, built) = req.build_split();
-    let built = built.map_err(|e| Error::Http(Fail::Send(e.without_url().to_string())))?;
-    let key = (service, built.url().origin().ascii_serialization());
-    {
-        let now = Instant::now();
-        let mut pauses = PAUSES.lock().unwrap_or_else(|e| e.into_inner());
-        pauses.retain(|_, p| !p.left(now).is_zero());
-        if let Some(pause) = pauses.get(&key) {
-            return Err(Error::Held(pause.left(now)));
-        }
-    }
-    let req = RequestBuilder::from_parts(client, built);
+    let (key, req) = ready(service, req)?;
     let reply = http::exchange_status::<true>(req, limits).await.map_err(Error::Http)?;
-    if reply.status == StatusCode::TOO_MANY_REQUESTS
-        || (reply.status == StatusCode::SERVICE_UNAVAILABLE && reply.retry_after_s.is_some())
-    {
-        let mut pauses = PAUSES.lock().unwrap_or_else(|e| e.into_inner());
-        let now = Instant::now();
-        let duration = reply.retry_after_s.map(Duration::from_secs).unwrap_or(limits.head);
-        if !duration.is_zero() && pauses.get(&key).is_none_or(|p| p.left(now) < duration) {
-            pauses.insert(key, Pause { since: now, duration });
-        }
-    }
+    pause(key, reply.status, reply.retry_after_s, limits);
+    Ok((reply.status, reply.text))
+}
+
+/// KyberSwap читает всё тело и сохраняет ошибки чтения без журнала шагов.
+/// Пауза вступает в силу по заголовкам, пока первый запрос ещё читает ответ.
+pub(crate) async fn exchange_unmetered(
+    service: &'static str,
+    req: RequestBuilder,
+    limits: Limits,
+) -> Result<(StatusCode, String), Error> {
+    let (key, req) = ready(service, req)?;
+    let reply = http::full::<false>(req, limits, |status, retry| pause(key, status, retry, limits))
+        .await.map_err(Error::Http)?;
     Ok((reply.status, reply.text))
 }
 

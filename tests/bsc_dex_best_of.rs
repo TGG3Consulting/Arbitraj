@@ -13,6 +13,8 @@
 //! От чего зависит: arb::venues::bsc_dex::best_of::{choose, extra}, arb::venues::bsc_dex::quote, tests/route_common.
 
 mod route_common;
+#[path = "common/kyber_http_pause.rs"]
+mod kyber_http_pause;
 
 use alloy_primitives::U256;
 use rust_decimal::Decimal;

@@ -120,7 +120,7 @@ pub struct Reply {
 /// Отправляет запрос и дочитывает ответ. Принимает: запрос (без общего срока reqwest), сроки и пределы.
 /// Возвращает: (HTTP-код, текст тела). Ошибки: Fail.
 pub async fn exchange(req: RequestBuilder, lim: Limits) -> Result<(StatusCode, String), Fail> {
-    full::<false>(req, lim).await.map(|r| (r.status, r.text))
+    full::<false>(req, lim, |_, _| {}).await.map(|r| (r.status, r.text))
 }
 
 /// То же, что exchange, но отдаёт и заголовок Retry-After (MEXC: «Responses with 418 or 429 include a Retry-After
@@ -142,7 +142,7 @@ pub(crate) async fn exchange_status<const HEAD_ONLY_429: bool>(
     lim: Limits,
 ) -> Result<Reply, Fail> {
     if !super::step_meter::active() {
-        return full::<HEAD_ONLY_429>(req, lim).await;
+        return full::<HEAD_ONLY_429>(req, lim, |_, _| {}).await;
     }
     let name = req.try_clone().and_then(|r| r.build().ok()).map_or_else(
         || "запрос (имя не прочитано)".to_string(),
@@ -151,7 +151,7 @@ pub(crate) async fn exchange_status<const HEAD_ONLY_429: bool>(
     let t0 = std::time::Instant::now();
     // UTC на границе отправки клиентом. Не является отметкой приёма запроса биржей.
     let http_start = name.starts_with("POST ").then(chrono::Utc::now);
-    let r = full::<HEAD_ONLY_429>(req, lim).await;
+    let r = full::<HEAD_ONLY_429>(req, lim, |_, _| {}).await;
     let mut outcome = match &r {
         Ok(x) => format!("код {}", x.status.as_u16()),
         Err(f) => f.text(&lim),
@@ -163,10 +163,14 @@ pub(crate) async fn exchange_status<const HEAD_ONLY_429: bool>(
     r
 }
 
-/// Обмен без журнала запросов (exchange — узел BSC, KyberSwap, индексатор; exchange_full). Ошибки: Fail.
-async fn full<const HEAD_ONLY_429: bool>(req: RequestBuilder, lim: Limits) -> Result<Reply, Fail> {
+/// Обмен без журнала шагов. Наблюдатель получает статус и Retry-After перед чтением первого байта тела.
+pub(super) async fn full<const HEAD_ONLY_429: bool>(
+    req: RequestBuilder,
+    lim: Limits,
+    on_head: impl FnOnce(StatusCode, Option<u64>),
+) -> Result<Reply, Fail> {
     let got = AtomicUsize::new(0);
-    match tokio::time::timeout(lim.total, read::<HEAD_ONLY_429>(req, lim, &got)).await {
+    match tokio::time::timeout(lim.total, read::<HEAD_ONLY_429>(req, lim, &got, on_head)).await {
         Ok(r) => r,
         Err(_) => Err(Fail::Total {
             got: got.load(Ordering::Relaxed),
@@ -179,6 +183,7 @@ async fn read<const HEAD_ONLY_429: bool>(
     req: RequestBuilder,
     lim: Limits,
     got: &AtomicUsize,
+    on_head: impl FnOnce(StatusCode, Option<u64>),
 ) -> Result<Reply, Fail> {
     let mut resp = match tokio::time::timeout(lim.head, req.send()).await {
         Err(_) => return Err(Fail::NoHead),
@@ -201,6 +206,7 @@ async fn read<const HEAD_ONLY_429: bool>(
                 Some(date.saturating_sub(chrono::Utc::now().timestamp()).max(0) as u64)
             })
         });
+    on_head(status, retry_after_s);
     if HEAD_ONLY_429 && status == StatusCode::TOO_MANY_REQUESTS {
         return Ok(Reply {
             status,

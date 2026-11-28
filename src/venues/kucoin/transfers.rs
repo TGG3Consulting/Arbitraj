@@ -1,8 +1,9 @@
 //! Файл: venues/kucoin/transfers.rs
 //! Что делает: вывод с KuCoin (V3) и его статус; поиск вывода по своей метке remark при неизвестном итоге. Вывод идёт
 //! только с main — перед ним сумма переводится с trade на main (fund_move.rs, venue.withdraw_from_trade).
+//! Расчётный круг Base: метка remark сохраняется до POST и ищется после потери ответа — settle_withdraw.rs.
 //! Кто вызывает: mod.rs (функции контракта).
-//! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, fund_move.rs, core/types.
+//! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs, fund_move.rs, settle_withdraw.rs, core/types.
 //! Настройки: через fund_move.rs — venue.withdraw_from_trade [kucoin].
 //!
 //! Официально:
@@ -27,7 +28,7 @@ use crate::storage::journal::Level;
 use super::ctx::Ctx;
 use super::errors::Op;
 use super::reply::Pool;
-use super::{fund_move, num, rest};
+use super::{fund_move, num, rest, settle_withdraw};
 
 /// Предел метки remark: предел remark ордера («length cannot exceed 20 characters (ASCII)») — у вывода не указан.
 const MAX_REMARK: usize = 20;
@@ -65,6 +66,9 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "remark": remark,
     });
     let path = "/api/v3/withdrawals";
+    // Расчётный круг Base: метка попытки сохраняется до POST (settle_withdraw.rs); вне круга — как раньше.
+    let marker = settle_withdraw::marker(&remark);
+    settle_withdraw::before_send(&marker).await?;
     let sent = rest::signed(
         ctx,
         Method::POST,
@@ -87,7 +91,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
             match find(ctx, &req.asset.ticker, &remark).await {
                 Some(id) => id,
-                None => return Err(e),
+                None => return Err(settle_withdraw::tag(e, &marker)),
             }
         }
         Err(e) => return Err(e),

@@ -10,6 +10,8 @@
 //! github.com/Kucoin/kucoin-universal-sdk, spec/). Classic API — для классического счёта: «Continue using the Classic API
 //! for Classic Account trading» (объявление KuCoin API Upgrade 2026-06-03). Счета: депозит — на main (funding), торговля —
 //! на trade, вывод — только с main; переводы main ↔ trade — fund_move.rs. Ссылки — README.md этой папки.
+//! Расчётный круг Base (USDT ↔ USDC): ордер — order_state.rs (inspect), вывод с меткой remark до POST и сверкой —
+//! settle_withdraw.rs, зачисление на торговый счёт — адрес депозита TRADE (deposit_addr.rs).
 
 pub mod account;
 pub mod account_update;
@@ -50,6 +52,7 @@ pub mod pairs_watch;
 pub mod reply;
 pub mod resolve;
 pub mod rest;
+pub mod settle_withdraw;
 pub mod sign;
 pub mod subs;
 pub mod symbols;
@@ -185,6 +188,28 @@ impl Venue for Kucoin {
     }
     fn supports_settlement_order(&self) -> bool {
         true
+    }
+    /// Расчётный круг Base: метка попытки вывода (remark) сохраняется до POST, после потери ответа вывод ищется в
+    /// истории выводов по ней (settle_withdraw.rs). У Withdraw (V3) нет клиентского ID — только remark, который
+    /// возвращает Get Withdrawal History: https://www.kucoin.com/docs-new/api-3470146, https://www.kucoin.com/docs-new/api-3470145
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+    /// Расчётный круг Base: зачисление сразу на торговый счёт — только адрес депозита с to = TRADE («TRADE (spot
+    /// trading account)», Get Deposit Address V3 https://www.kucoin.com/docs-new/api-3470140; создание с to = trade —
+    /// Add Deposit Address V3 https://www.kucoin.com/docs-new/api-3470142). deposit_addr::for_deposit отдаёт адрес MAIN
+    /// (а после зачисления — перевод main → trade, fund_move.rs) только при venue.deposit_to_spot = да: тогда прямого
+    /// зачисления на торговый счёт нет — false. Не задана или «нет» — только адрес TRADE, второго перевода нет — true.
+    fn supports_settlement_credit(&self) -> bool {
+        !self.ctx.flag("venue.deposit_to_spot").unwrap_or(false)
+    }
+    /// Расчётный круг Base: создан ли вывод с потерянным ответом — по метке remark в истории выводов (settle_withdraw.rs).
+    async fn resolve_withdraw(
+        &self,
+        req: WithdrawRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<Transfer>> {
+        settle_withdraw::resolve(&self.ctx, req, p).await
     }
     /// Подготовленный символ проверяется по контракту спотового ордера. https://www.kucoin.com/docs-new/api-3470182
     fn matches_settlement_order(

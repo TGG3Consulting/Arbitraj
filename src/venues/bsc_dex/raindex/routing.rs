@@ -35,21 +35,13 @@ impl Ticket {
 }
 /// В денежном круге у книги один журналируемый своп. Остальные источники RFQ остаются самостоятельными.
 pub(super) fn mode(mixed: bool, id: Option<B256>) -> RouteMode {
-    match (mixed, id) {
-        (true, Some(id)) => RouteMode::Orderbook(id),
-        (true, None) => RouteMode::OrderbookIndicative,
-        (false, Some(id)) => RouteMode::Rfq(id),
-        (false, None) => RouteMode::RfqIndicative,
-    }
+    if mixed { RouteMode::RaindexSettlement(id) } else { RouteMode::Raindex(id) }
 }
 pub(in crate::venues::bsc_dex) fn mixed_ticket(route: &DexRoute) -> Option<B256> {
-    if let RouteMode::Orderbook(id) = route.mode
-        && route.executable
-        && route.exec_note.as_deref() == Some(LABEL)
-    {
-        return Some(id);
+    match route.mode {
+        RouteMode::RaindexSettlement(id) if route.executable => id,
+        _ => None,
     }
-    None
 }
 fn pair(p: &Parts, a: &Asset, s: Side) -> Option<(Address, Address)> {
     let coin = a.contract?;

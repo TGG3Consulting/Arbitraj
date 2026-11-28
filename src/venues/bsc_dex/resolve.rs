@@ -76,7 +76,8 @@ pub async fn trade(
 ) -> GatewayResult<Option<TradeResult>> {
     if pend.parse.as_ref().is_some_and(|v|v.get("pancakex").is_some()){return super::pancakex::recovery::reconcile(p,req,pend).await;}
     if super::ryze::ledger::Marker::read(pend).is_some() {return super::ryze::recovery::reconcile(p,req,pend).await;}
-    let rain = req.route.as_ref().and_then(super::raindex::routing::mixed_ticket).is_some();
+    let rain = req.route.as_ref().is_some_and(|r| matches!(r.mode, crate::core::types::RouteMode::RaindexSettlement(_)))
+        || pend.parse.as_ref().is_some_and(|v| v.get("raindex").is_some_and(|saved| !saved.is_null()));
     let epsilon=req.route.as_ref().and_then(super::epsilon::routing::mixed_ticket).is_some();
     if epsilon && !SwapCtx::of(pend).is_some_and(|c| c.epsilon.is_some_and(|s|s.wallet(&p.ctx))){
         return Err(p.ctx.err(ErrorCode::OutcomeUnknown,"Сохранённая подпись Epsilon не соответствует кошельку и сети").pending(pend.clone()));

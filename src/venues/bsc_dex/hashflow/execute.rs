@@ -65,7 +65,7 @@ pub(in crate::venues::bsc_dex) async fn failed(
     r: &TradeRequest,
     e: crate::gateway::errors::GatewayError,
 ) -> crate::gateway::errors::GatewayError {
-    if !matches!(r.route.as_ref().map(|v| v.mode), Some(RouteMode::Rfq(_))) {
+    if !matches!(r.route.as_ref().map(|v| v.mode), Some(RouteMode::Rfq(_) | RouteMode::Raindex(Some(_)))) {
         return e;
     }
     let Some(tx) = e.tx.as_ref().filter(|t| {
@@ -257,7 +257,7 @@ pub(in crate::venues::bsc_dex) async fn record(
 ) -> GatewayResult<TradeResult> {
     if !matches!(
         t.request.route.as_ref().map(|r| r.mode),
-        Some(RouteMode::Rfq(_))
+        Some(RouteMode::Rfq(_) | RouteMode::Raindex(Some(_)))
     ) {
         return Ok(t);
     }
@@ -376,30 +376,37 @@ async fn send_selected(p: &Parts, req: TradeRequest, id: B256) -> GatewayResult<
     let ctx = &p.ctx;
     ctx.bound()?;
     let who = wallet::signer::address(ctx)?;
-    if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::dexalot::LABEL) {
-        let ticket=p.dexalot.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Dexalot"))?;
-        return Box::pin(super::super::dexalot::trade(p,req,&ticket)).await;
-    }
-    if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::airswap::LABEL) {
-        let ticket=p.airswap.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка AirSwap"))?;
-        return Box::pin(super::super::airswap::trade(p,req,&ticket)).await;
-    }
-    if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::textile::LABEL) {
-        let ticket=p.textile.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Textile"))?;
-        return Box::pin(super::super::textile::trade(p,req,&ticket)).await;
-    }
-    let old=p.rfqs.take(who,id);
-    let native=p.native_quotes.take(who,id);
-    let gladius=p.gladius.take(who,id);
-    let rain=p.raindex.take(who,id);
-    let epsilon=p.epsilon.take(who,id);
-    let (result,fallback_fee)=match (old,native,gladius,rain,epsilon){
-        (None,None,None,None,Some(t))=>(super::super::epsilon::trade::trade(p,req.clone(),&t).await,t.fallback_fee),
-        (None,None,None,Some(t),None)=>(super::super::raindex::settlement::trade(p,req.clone(),&t).await,t.fallback_fee),
-        (None,None,Some(t),None,None)=>(super::super::gladius::settlement::trade(p,req.clone(),&t).await,t.fallback_fee),
-        (Some(q),None,None,None,None)=>(selected(p,req.clone(),id,who,&q).await,q.fallback_fee),
-        (None,Some(t),None,None,None)=>(super::super::native_rfq::routing::trade(p,req.clone(),&t).await,t.fallback_fee),
-        _=>return Err(routing::no(p,"Подписанная RFQ отсутствует или неоднозначна, нужна новая котировка")),
+    let mode = req.route.as_ref().map(|r| r.mode);
+    let (result, fallback_fee) = if mode == Some(RouteMode::Raindex(Some(id))) {
+        let t = p.raindex.take(who, id).ok_or_else(|| routing::no(p, "Нужна новая котировка Raindex"))?;
+        let result = super::super::raindex::settlement::trade(p, req.clone(), &t).await;
+        (result, t.fallback_fee)
+    } else if mode == Some(RouteMode::Rfq(id)) {
+        if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::dexalot::LABEL) {
+            let ticket=p.dexalot.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Dexalot"))?;
+            return Box::pin(super::super::dexalot::trade(p,req,&ticket)).await;
+        }
+        if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::airswap::LABEL) {
+            let ticket=p.airswap.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка AirSwap"))?;
+            return Box::pin(super::super::airswap::trade(p,req,&ticket)).await;
+        }
+        if req.route.as_ref().and_then(|r|r.exec_note.as_deref())==Some(super::super::textile::LABEL) {
+            let ticket=p.textile.take(who,id).ok_or_else(||routing::no(p,"Требуется новая подтверждённая заявка Textile"))?;
+            return Box::pin(super::super::textile::trade(p,req,&ticket)).await;
+        }
+        let old=p.rfqs.take(who,id);
+        let native=p.native_quotes.take(who,id);
+        let gladius=p.gladius.take(who,id);
+        let epsilon=p.epsilon.take(who,id);
+        match (old,native,gladius,epsilon) {
+            (None,None,None,Some(t))=>(super::super::epsilon::trade::trade(p,req.clone(),&t).await,t.fallback_fee),
+            (None,None,Some(t),None)=>(super::super::gladius::settlement::trade(p,req.clone(),&t).await,t.fallback_fee),
+            (Some(q),None,None,None)=>(selected(p,req.clone(),id,who,&q).await,q.fallback_fee),
+            (None,Some(t),None,None)=>(super::super::native_rfq::routing::trade(p,req.clone(),&t).await,t.fallback_fee),
+            _=>return Err(routing::no(p,"Подписанная RFQ отсутствует или неоднозначна, нужна новая котировка")),
+        }
+    } else {
+        return Err(routing::no(p, "Билет не соответствует выбранному маршруту"));
     };
     let Err(e) = result else {
         return result;

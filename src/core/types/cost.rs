@@ -141,6 +141,11 @@ pub enum RouteMode {
     SlotIndicative,
     /// Собственный слот PropAMM для денежного шага. До финальной котировки билета нет.
     PropSettlementSlot(Option<alloy_primitives::B256>),
+    /// Обычная заявка Raindex и отдельный однократный своп в денежном круге.
+    Raindex(Option<alloy_primitives::B256>),
+    RaindexSettlement(Option<alloy_primitives::B256>),
+    /// Поручение PancakeSwap X. У предварительной котировки ещё нет билета.
+    PancakeX(Option<alloy_primitives::B256>),
     /// Подтверждаемое релеем EIP-712 поручение Ryze и предварительная цена.
     Relay(alloy_primitives::B256),
     RelayIndicative,
@@ -242,7 +247,7 @@ pub struct RouteLeg {
 }
 
 /// Маршрут обмена на DEX, на который рассчитана котировка; тот же маршрут уходит в TradeRequest.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DexRoute {
     pub mode: RouteMode,
     pub legs: Vec<RouteLeg>,
@@ -253,14 +258,10 @@ pub struct DexRoute {
     /// Исполним ли маршрут одной транзакцией как есть (решение 84): прямая форма (один пул) или всё через один
     /// Universal Router (умный путь PancakeSwap). false — маршрут выходит за один роутер и нужен бандл свопов
     /// (решение 84, фаза исполнения): это сигнал/карточка, авто-сделкой пока не исполняется. Direct/Smart — всегда true.
-    #[serde(default = "executable_default")]
     pub executable: bool,
     /// Причина неисполнимости как есть (для карточки сигнала, решение 74). None — исполним.
-    #[serde(default)]
     pub exec_note: Option<String>,
 }
 
-/// По умолчанию маршрут исполним (старые записи без поля, Direct/Smart). Ошибок нет.
-fn executable_default() -> bool {
-    true
-}
+#[path = "route_wire.rs"]
+mod route_wire;

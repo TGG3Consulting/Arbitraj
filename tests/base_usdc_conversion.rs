@@ -177,11 +177,10 @@ async fn legacy_cash_keys_reopen_without_authorizing_a_different_market() {
         exit_position: false,
         remeasure: None,
     };
-    let entry = Entry {
-        operation: Request::Order(Box::new(prepared)),
-        lookup: PendingRef::order("USDC_USDT", "t-schema-replay", first.qty),
-        result: None,
-    };
+    let entry = Entry::prepared(
+        Request::Order(Box::new(prepared)),
+        PendingRef::order("USDC_USDT", "t-schema-replay", first.qty),
+    );
     let dir = std::env::temp_dir().join(format!(
         "settlement-schema-{}-{}",
         std::process::id(),

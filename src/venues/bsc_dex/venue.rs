@@ -316,6 +316,9 @@ impl Venue for BscDex {
         let mut points = if matches!(
             route.mode,
             crate::core::types::RouteMode::RfqIndicative
+                | crate::core::types::RouteMode::Raindex(_)
+                | crate::core::types::RouteMode::RaindexSettlement(_)
+                | crate::core::types::RouteMode::PancakeX(_)
                 | crate::core::types::RouteMode::Relay(_)
                 | crate::core::types::RouteMode::RelayIndicative
                 | crate::core::types::RouteMode::Rfq(_)
@@ -712,6 +715,8 @@ impl Venue for BscDex {
             req.route.as_ref().map(|r| r.mode),
             Some(
                 crate::core::types::RouteMode::Rfq(_)
+                    | crate::core::types::RouteMode::Raindex(Some(_))
+                    | crate::core::types::RouteMode::RaindexSettlement(Some(_))
                     | crate::core::types::RouteMode::Orderbook(_)
                     | crate::core::types::RouteMode::Slot(_)
                     | crate::core::types::RouteMode::PropSettlementSlot(Some(_))
@@ -931,7 +936,7 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
-        if req.route.as_ref().is_some_and(|r| super::raindex::routing::mixed_ticket(r).is_some() || super::epsilon::routing::mixed_ticket(r).is_some()) {
+        if req.route.as_ref().is_some_and(|r| matches!(r.mode, crate::core::types::RouteMode::RaindexSettlement(_)) || super::epsilon::routing::mixed_ticket(r).is_some()) {
             return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет требует исходного расчётного шага"));
         }
         if let Some(done)=super::pancakex::recovery::prior(&self.p,&req).await? {return Ok(done);}
@@ -947,6 +952,8 @@ impl BscDex {
             req.route.as_ref().map(|r| r.mode),
             Some(
                 crate::core::types::RouteMode::RfqIndicative
+                    | crate::core::types::RouteMode::Raindex(None)
+                    | crate::core::types::RouteMode::PancakeX(None)
                     | crate::core::types::RouteMode::RelayIndicative
                     | crate::core::types::RouteMode::OrderbookIndicative
                     | crate::core::types::RouteMode::SlotIndicative
@@ -965,20 +972,20 @@ impl BscDex {
             }
             req.route = firm.route;
         }
-        if matches!(req.route.as_ref().map(|r| r.mode), Some(crate::core::types::RouteMode::PropSettlementSlot(_))) {
-            return Err(self.p.ctx.err(ErrorCode::NotApplicable, "Для слота нужен исходный денежный шаг"));
+        if matches!(req.route.as_ref().map(|r| r.mode), Some(crate::core::types::RouteMode::PropSettlementSlot(_) | crate::core::types::RouteMode::RaindexSettlement(_))) {
+            return Err(self.p.ctx.err(ErrorCode::NotApplicable, "Для этого билета нужен исходный денежный шаг"));
         }
         if let Some(crate::core::types::RouteMode::Orderbook(id)) =
             req.route.as_ref().map(|r| r.mode)
         {
             return super::hanji::execute::trade(&self.p, req, id).await;
         }
-        if let Some(crate::core::types::RouteMode::Relay(id))=req.route.as_ref().filter(|r|super::pancakex::market::is_route(r)).map(|r|r.mode) {return super::pancakex::execute::trade(&self.p,req,id).await;}
+        if let Some(crate::core::types::RouteMode::PancakeX(Some(id)))=req.route.as_ref().map(|r|r.mode) {return super::pancakex::execute::trade(&self.p,req,id).await;}
         if let Some(crate::core::types::RouteMode::Relay(id))=req.route.as_ref().map(|r|r.mode) {return super::ryze::execute::trade(&self.p,req,id).await;}
         if let Some(crate::core::types::RouteMode::Slot(id)) = req.route.as_ref().map(|r| r.mode) {
             return super::fermi::trade(&self.p, req, id).await;
         }
-        if let Some(crate::core::types::RouteMode::Rfq(id)) = req.route.as_ref().map(|r| r.mode) {
+        if let Some(crate::core::types::RouteMode::Rfq(id) | crate::core::types::RouteMode::Raindex(Some(id))) = req.route.as_ref().map(|r| r.mode) {
             return super::hashflow::routing::trade(&self.p, req, id).await;
         }
         // Исполнение через агрегатор KyberSwap (exec.via_kyber, решение 91): маршрут и своп строит KyberSwap по

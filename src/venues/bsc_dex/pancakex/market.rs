@@ -20,9 +20,8 @@ use crate::{
 use alloy_primitives::U256;
 use chrono::Utc;
 use rust_decimal::Decimal;
-pub fn is_route(r: &DexRoute) -> bool {
-    matches!(r.mode, RouteMode::Relay(_) | RouteMode::RelayIndicative)
-        && r.exec_note.as_deref() == Some(LABEL)
+pub(super) fn is_route(r: &DexRoute) -> bool {
+    matches!(r.mode, RouteMode::PancakeX(_))
 }
 pub const LABEL: &str = "PancakeSwap X";
 async fn price(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Option<(Ticket, Quote)> {
@@ -101,7 +100,7 @@ async fn price(p: &Parts, asset: &Asset, side: Side, qty: Decimal) -> Option<(Ti
         avg_price: gross.checked_div(qty)?,
         costs: vec![],
         route: Some(DexRoute {
-            mode: RouteMode::RelayIndicative,
+            mode: RouteMode::PancakeX(None),
             legs: vec![],
             block: t.block,
             gas_units: 0,
@@ -159,7 +158,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
         let id = t.offer.hash;
         p.pancakex.store(t);
         if let Some(r) = q.route.as_mut() {
-            r.mode = RouteMode::Relay(id);
+            r.mode = RouteMode::PancakeX(Some(id));
             r.executable = true;
         }
     }

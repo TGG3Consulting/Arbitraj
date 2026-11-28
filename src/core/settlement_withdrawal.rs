@@ -99,6 +99,7 @@ pub async fn withdraw(
             operation: old,
             lookup,
             result,
+            ..
         }) => {
             if !same(&old, &operation) {
                 return Err(uncertain(

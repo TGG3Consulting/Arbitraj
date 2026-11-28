@@ -100,8 +100,8 @@ pub fn settlement_quote_supported(q: &crate::core::types::Quote, firm: bool) -> 
             r.executable
         }
         RouteMode::OrderbookIndicative | RouteMode::RelayIndicative => !firm,
-        RouteMode::PropSettlementSlot(Some(_)) => r.executable,
-        RouteMode::PropSettlementSlot(None) => !firm,
+        RouteMode::RaindexSettlement(Some(_)) | RouteMode::PancakeX(Some(_)) | RouteMode::PropSettlementSlot(Some(_)) => r.executable,
+        RouteMode::RaindexSettlement(None) | RouteMode::PancakeX(None) | RouteMode::PropSettlementSlot(None) => !firm,
         _ => false,
     }) && !q.costs.iter().any(|c| c.kind == CostKind::ApproveGas)
 }

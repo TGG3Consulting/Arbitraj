@@ -102,7 +102,6 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
                 Some(super::super::textile::LABEL) => super::super::textile::LABEL,
                 Some(super::super::epsilon::DIRECT) => super::super::epsilon::DIRECT,
                 Some(super::super::epsilon::LABEL) => super::super::epsilon::LABEL,
-                Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,
                 Some(super::super::gladius::LABEL) => super::super::gladius::LABEL,
                 Some(super::super::native_rfq::LABEL) => super::super::native_rfq::LABEL,
                 _ => "Hashflow RFQT",
@@ -110,10 +109,9 @@ fn by_whom(ctx: &Ctx, reg: &Registry, route: &DexRoute, native: bool) -> &'stati
         }
         RouteMode::PropSettlementSlot(_) => "PropAMM",
         RouteMode::Slot(_) | RouteMode::SlotIndicative => "FermiSwap",
-        RouteMode::Relay(_) | RouteMode::RelayIndicative if super::super::pancakex::market::is_route(route)=>super::super::pancakex::market::LABEL,
+        RouteMode::PancakeX(_) => super::super::pancakex::market::LABEL,
+        RouteMode::Raindex(_) | RouteMode::RaindexSettlement(_) => super::super::raindex::LABEL,
         RouteMode::Relay(_) | RouteMode::RelayIndicative => "Ryze",
-        RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative
-            if route.exec_note.as_deref() == Some(super::super::raindex::LABEL) => super::super::raindex::LABEL,
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative if route.exec_note.as_deref()==Some(super::super::epsilon::DIRECT) => super::super::epsilon::DIRECT,
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative if route.exec_note.as_deref()==Some(super::super::epsilon::LABEL) => super::super::epsilon::LABEL,
         RouteMode::Orderbook(_) | RouteMode::OrderbookIndicative => "Hanji",

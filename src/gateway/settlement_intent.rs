@@ -86,6 +86,33 @@ pub struct Entry {
     pub lookup: PendingRef,
     #[serde(default, deserialize_with = "super::settlement_archive::result")]
     pub result: Option<Outcome>,
+    #[serde(skip)]
+    raw: Option<std::sync::Arc<String>>,
+}
+
+impl Entry {
+    pub fn prepared(operation: Request, lookup: PendingRef) -> Self {
+        Self { operation, lookup, result: None, raw: None }
+    }
+
+    fn from_raw(body: String) -> Result<Self, serde_json::Error> {
+        let mut entry: Self = serde_json::from_str(&body)?;
+        entry.raw = Some(std::sync::Arc::new(body));
+        Ok(entry)
+    }
+
+    /// CAS сравнивает исходные байты. Изменённый после чтения объект не даёт права на запись.
+    fn expected_body(&self) -> Result<std::sync::Arc<String>, String> {
+        let rendered = serde_json::to_string(self).map_err(|e| e.to_string())?;
+        let Some(raw) = &self.raw else { return Ok(std::sync::Arc::new(rendered)); };
+        if raw.as_str() != rendered {
+            let original: Self = serde_json::from_str(raw).map_err(|e| e.to_string())?;
+            if serde_json::to_string(&original).map_err(|e| e.to_string())? != rendered {
+                return Err("Сохранённое поручение изменено после чтения".into());
+            }
+        }
+        Ok(raw.clone())
+    }
 }
 
 #[derive(Clone)]
@@ -150,7 +177,7 @@ pub async fn load(db: &Db, key: &str) -> Result<Option<Entry>, String> {
         })
         .await
         .map_err(|e| e.to_string())?;
-    row.map(|s| serde_json::from_str(&s))
+    row.map(Entry::from_raw)
         .transpose()
         .map_err(|e| e.to_string())
 }
@@ -166,11 +193,7 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
         super::settlement_proofs::verify().await?;
         let prepared = action
             .map(|a| {
-                let row = Entry {
-                    operation: a.operation,
-                    lookup: lookup.clone(),
-                    result: None,
-                };
+                let row = Entry::prepared(a.operation, lookup.clone());
                 serde_json::to_string(&row)
                     .map(|body| (a.key, body))
                     .map_err(|e| error(e.to_string()))
@@ -179,11 +202,7 @@ pub async fn before_send(lookup: &PendingRef) -> GatewayResult<()> {
         return crate::core::cash_order::before_send(lookup, prepared).await;
     }
     let Some(action) = action else { return Ok(()) };
-    let body = serde_json::to_string(&Entry {
-        operation: action.operation,
-        lookup: lookup.clone(),
-        result: None,
-    })
+    let body = serde_json::to_string(&Entry::prepared(action.operation, lookup.clone()))
     .map_err(|e| error(e.to_string()))?;
     let id = action.key;
     let db = action.db;
@@ -257,19 +276,13 @@ pub(crate) fn insert_cash_marker(
 
 /// Записывает подтверждённый биржей/сетью итог. Сначала проверяет, что сохранён тот же подготовленный шаг.
 pub async fn confirm(db: &Db, key: &str, original: &Entry, outcome: Outcome) -> Result<(), String> {
-    let expected = serde_json::to_string(original).map_err(|e| e.to_string())?;
-    let mut entry = original.clone();
-    entry.result = Some(outcome);
-    let body = serde_json::to_string(&entry).map_err(|e| e.to_string())?;
-    let key = key.to_string();
-    let count=db.ledger().write(move |c| {
-        let raw=c.query_row("SELECT body FROM core_state WHERE kind IN (?1,?2) AND id=?3",params![KIND,LEGACY,key],|r|r.get::<_,String>(0)).optional()?;
-        let Some(raw)=raw else{return Ok(0)};
-        let matches=serde_json::from_str::<Entry>(&raw).ok().and_then(|r|serde_json::to_string(&r).ok()).is_some_and(|s|s==expected);
-        if !matches{return Ok(0);}
-        c.execute("UPDATE core_state SET body=?1,updated_at=?2 WHERE kind IN (?3,?6) AND id=?4 AND body=?5",
-            params![body,Utc::now().to_rfc3339(),KIND,key,raw,LEGACY])
-    }).await.map_err(|e|e.to_string())?;
+    let expected = original.expected_body()?;
+    let result = serde_json::to_string(&outcome).map_err(|e| e.to_string())?;
+    let key = key.to_owned();
+    let count = db.ledger().write(move |c| c.execute(
+        "UPDATE core_state SET body=json_set(body,'$.result',json(?1)),updated_at=?2 WHERE kind IN (?3,?6) AND id=?4 AND body=?5",
+        params![result,Utc::now().to_rfc3339(),KIND,key,expected.as_str(),LEGACY],
+    )).await.map_err(|e| e.to_string())?;
     if count == 1 {
         Ok(())
     } else {
@@ -289,20 +302,14 @@ pub async fn archive_attempt(
         .venue_ref
         .as_deref()
         .ok_or("Нет идентификатора подготовленной попытки")?;
-    let prior = serde_json::to_string(original).map_err(|e| e.to_string())?;
-    let after = serde_json::to_string(&serde_json::json!({"attempt":original,"closed":reason}))
-        .map_err(|e| e.to_string())?;
+    let prior = original.expected_body()?;
+    let reason = reason.to_owned();
     let dst = format!("{key}/closed/{hash}");
     let key = key.to_owned();
-    let n = db
-        .ledger()
-        .write(move |c| {
-            c.execute(
-        "UPDATE core_state SET id=?1,body=?2,updated_at=?3 WHERE kind IN (?4,?7) AND id=?5 AND body=?6",
-        params![dst,after,Utc::now().to_rfc3339(),KIND,key,prior,LEGACY])
-        })
-        .await
-        .map_err(|e| e.to_string())?;
+    let n = db.ledger().write(move |c| c.execute(
+        "UPDATE core_state SET id=?1,body=json_object('attempt',json(body),'closed',?2),updated_at=?3 WHERE kind IN (?4,?7) AND id=?5 AND body=?6",
+        params![dst,reason,Utc::now().to_rfc3339(),KIND,key,prior.as_str(),LEGACY],
+    )).await.map_err(|e| e.to_string())?;
     if n == 1 {
         Ok(())
     } else {

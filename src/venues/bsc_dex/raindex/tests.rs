@@ -270,6 +270,7 @@ fn only_an_executable_mixed_book_ticket_selects_the_outer_settlement_action() {
         executable: true,
         exec_note: Some(LABEL.into()),
     };
+    route.exec_note = Some("Другой текст карточки".into());
     assert_eq!(routing::mixed_ticket(&route), Some(id));
     route.executable = false;
     assert_eq!(routing::mixed_ticket(&route), None);
@@ -374,10 +375,17 @@ async fn lost_response_keeps_the_original_outer_action_after_reopening_the_datab
         );
     }
     assert_eq!(attempted.get(), 1);
+    // Сохраняем ту же исходную ссылку и оплаченный контекст в схеме старого журнала.
+    db.ledger().write(move |c| c.execute(
+        "UPDATE core_state SET body=json_set(body,'$.operation.Order.route.mode',json(?1)) WHERE id=?2",
+        rusqlite::params![serde_json::json!({"Orderbook":id}).to_string(), outer],
+    )).await.unwrap();
     drop(p);
     let restored = parts(&dir, 8453, owner).await;
     let db = restored.ctx.journal.db();
     let old = intent::load(db, outer).await.unwrap().unwrap();
+    let intent::Request::Order(original) = &old.operation else { panic!("ожидается ордер") };
+    assert_eq!(original.route.as_ref().and_then(routing::mixed_ticket), Some(id));
     assert_eq!(
         (old.lookup.venue_ref, old.lookup.nonce, old.lookup.parse),
         (marker.venue_ref, marker.nonce, marker.parse)

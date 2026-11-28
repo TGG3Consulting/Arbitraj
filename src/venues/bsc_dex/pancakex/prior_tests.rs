@@ -45,7 +45,7 @@ fn request(p: &Parts, m: &ledger::Marker) -> TradeRequest {
 }
 fn relay() -> DexRoute {
     DexRoute {
-        mode: RouteMode::Relay(B256::repeat_byte(1)),
+        mode: RouteMode::PancakeX(Some(B256::repeat_byte(1))),
         legs: vec![],
         block: 0,
         gas_units: 0,
@@ -234,3 +234,6 @@ async fn ordinary_trade_future_excludes_rpc_and_receipt_state() {
     }
     assert!(hot < 1024 && hot < scan && hot < paid, "{sizes}");
 }
+
+#[path = "route_archive_tests.rs"]
+mod route_archive_tests;

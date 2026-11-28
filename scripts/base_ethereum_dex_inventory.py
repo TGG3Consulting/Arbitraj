@@ -25,6 +25,8 @@ BASE_USDT_EVIDENCE = {
              "[Расчёт за услуги](https://centralcity.ai/faq)."),
     "7214": ("Trading API с ключом позволяет владельцу указать кошелёк, `quoteTokenAddress` и `poolAddress`. Пулы продукта Launchpad учитываются отдельно. "
              "[Trading API](https://docs.o1.exchange/api/trading.md) · [Отдельная статистика Terminal, Swap и Launchpad](https://o1.exchange/analytics)."),
+    "9153": ("На Base расчёт идёт в USDC, конкретная карта выбирается с помощью VRF. "
+             "[Набор и способ расчёта](https://www.top.market/packs/1)."),
 }
 
 

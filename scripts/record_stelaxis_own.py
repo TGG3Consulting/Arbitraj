@@ -5,10 +5,12 @@ import time
 from requests import HTTPError, RequestException
 from pathlib import Path
 
-from eth_abi import decode
+from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_prop_price_slot import frame
+from record_safeswap_protected import runtime_with_args
+from verify_wallet_creation import sha
 from record_prop_venue import Capture, ENDPOINTS, OWNER, USDC, USDT, WETH, rpc as read_rpc, tx
 
 DATA = Path(__file__).resolve().parents[1] / "tests/data/first_run_dex_2026-11-26"
@@ -35,7 +37,7 @@ def rpc(c, method, params):
 def read_amount(row):
     return int(row["returnData"], 16) if row["status"] == "0x1" else None
 
-def capture(endpoint, snapshot):
+def capture(endpoint, snapshot, compiled=None):
     receipt = snapshot["receipt"]
     venue = snapshot["venue"]
     height = receipt["height"]
@@ -46,6 +48,33 @@ def capture(endpoint, snapshot):
     c.selector = parent
     if rpc(c, "eth_getCode", [OWNER, parent])["result"] != "0x":
         raise ValueError("Исходный адрес занят")
+    card, runtime, roles = None, None, {}
+    module = "0x00000000000000000000000000000000000078bf"
+    cash_vault = receipt["transfers"][1]["recipient"]
+    if compiled:
+        assert rpc(c, "eth_getCode", [module, parent])["result"] == "0x"
+        addresses = [venue,snapshot["registry"],cash_vault]
+        def code(a):
+            b = rpc(c,"eth_getCode",[a,parent])["result"]
+            assert b != "0x"
+            return keccak(hexstr=b)
+        hashes = [code(a) for a in addresses]
+        assert ["0x"+h.hex() for h in hashes[:2]] == [snapshot["hashes"]["proxy"],snapshot["hashes"]["registry"]]
+        for name,a,h in zip(["market","registry","vault"],addresses,hashes,strict=True):
+            observation = {"address":a,"hash":"0x"+h.hex()}
+            slot="0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc"
+            impl = rpc(c,"eth_getStorageAt",[a,slot,parent])["result"]
+            if int(impl,16):
+                target="0x"+impl[-40:]
+                observation.update(implementation=target,implementationHash="0x"+code(target).hex())
+            roles[name]=observation
+        args=addresses+hashes
+        types=["address"]*3+["bytes32"]*3
+        runtime=runtime_with_args(c,compiled,types,args)
+        creation=bytes.fromhex(compiled["creation"])
+        record=dict(addresses=addresses,shells=["0x"+h.hex() for h in hashes],creationSha256=sha(creation+encode(types,args)),
+                    runtimeSha256=sha(bytes.fromhex(runtime[2:])),runtimeKeccak="0x"+keccak(hexstr=runtime).hex())
+        card=dict(kind="lambda_propamm",chainId=1,sourceBlock=parent["blockHash"],creation="0x"+compiled["creation"],markets={venue:record})
     deadline = int(block["time"], 16)
     cash = {}
     def funded(inp):
@@ -62,12 +91,18 @@ def capture(endpoint, snapshot):
         return calls
 
     def attempt(inp, out, n, minimum, end, hot):
-        approve = tx(inp, "approve(address,uint256)", ["address","uint256"], [venue, n])
+        approve = tx(inp, "approve(address,uint256)", ["address","uint256"], [module if compiled else venue, n])
         bal = lambda token: tx(token, "balanceOf(address)", ["address"], [OWNER])
         view = tx(venue, "quote(address,address,uint256)", ["address","address","uint256"], [inp,out,n])
         order = tx(venue, SWAP, ["address","address"] + ["uint256"]*4, [inp,out,n,minimum,end,0])
+        if compiled:
+            terms=(keccak(text=f"{inp}:{out}:{n}"),bytes.fromhex(parent["blockHash"][2:]),height,end,inp,out,n,minimum)
+            order=tx(module,"executeAtSlot((bytes32,bytes32,uint64,uint64,address,address,uint256,uint256))",
+                     ["(bytes32,bytes32,uint64,uint64,address,address,uint256,uint256)"],[terms])
         calls = (update if hot else []) + funded(inp) + [approve,bal(inp),bal(out),view,order,bal(inp),bal(out)]
         ctl = {"stateOverrides": {OWNER: {"balance": hex(3*10**18)}}, "blockOverrides": block, "calls": calls}
+        if compiled:
+            ctl["stateOverrides"][module]={"code":runtime}
         result = rpc(c, "eth_simulateV1", [{"blockStateCalls":[ctl]},parent])["result"][0]
         if result["parentHash"] != parent["blockHash"]:
             raise ValueError("Другой родитель")
@@ -84,9 +119,9 @@ def capture(endpoint, snapshot):
             logs = [l for l in swap["logs"] if l["address"] == venue and l["topics"][:1] == [EVENT]]
             assert len(logs)==1 and debit==n and credit>=minimum
             event=logs[0]
-            assert ["0x"+t[-40:] for t in event["topics"][1:]] == [OWNER,inp,out]
+            assert ["0x"+t[-40:] for t in event["topics"][1:]] == [module if compiled else OWNER,inp,out]
             x,y,to=decode(["uint256","uint256","address"], bytes.fromhex(event["data"][2:]))
-            assert (x,y,to)==(debit,credit,OWNER)
+            assert (x,y,to)==(debit,credit,module if compiled else OWNER)
         else:
             assert debit==credit==0
         return {"quote":quote.get("returnData"), "quoteError":quote.get("error"), "calldata":order["data"], "minimum":str(minimum),
@@ -99,25 +134,27 @@ def capture(endpoint, snapshot):
         for inp,out in [(a,b),(b,a)]:
             units = {WETH:10**16, WBTC:10**4, USDT:10**6, USDC:10**6}
             for n in [units[inp], 5*units[inp]]:
-                ok=attempt(inp,out,n,1,deadline+30,True)
+                ok=attempt(inp,out,n,1,deadline if compiled else deadline+30,True)
                 record={"input":inp,"output":out,"amount":str(n),"withUpdate":ok}
                 if ok["status"] == "paid":
-                    record["withoutUpdate"]=attempt(inp,out,n,1,deadline+30,False)
-                    record["tight"]=attempt(inp,out,n,int(ok["credit"])+1,deadline+30,True)
+                    record["withoutUpdate"]=attempt(inp,out,n,1,deadline if compiled else deadline+30,False)
+                    record["tight"]=attempt(inp,out,n,int(ok["credit"])+1,deadline if compiled else deadline+30,True)
                     record["expired"]=attempt(inp,out,n,1,deadline-1,True)
                     assert record["tight"]["status"]==record["expired"]["status"]=="reverted"
                 rows.append(record)
     return {"chainId":1,"venue":venue,"owner":OWNER,"parent":parent,"height":height,"origin":origin,
-            "selector":"0x"+keccak(text=SWAP)[:4].hex(),"rows":rows}
+            "selector":"0x"+keccak(text=SWAP)[:4].hex(),"rows":rows,
+            **({"card":card,"module":module,"roles":roles} if compiled else {})}
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--wallet",type=Path)
     args=parser.parse_args()
     snapshot=json.loads((DATA/"stelaxis_ethereum.json").read_bytes())
     for endpoint in ENDPOINTS:
         try:
-            d=capture(endpoint,snapshot)
+            d=capture(endpoint,snapshot,json.loads(args.wallet.read_bytes()) if args.wallet else None)
             args.output.write_text(json.dumps(d,separators=(",",":"))+"\n",encoding="utf8")
             break
         except (AssertionError,ValueError,KeyError,RuntimeError,RequestException) as e:

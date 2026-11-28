@@ -940,6 +940,12 @@ jobs:
           python scripts/record_zeroex_base_payments.py "$RUNNER_TEMP/payments.json.gz"
           gzip -dc "$RUNNER_TEMP/payments.json.gz" > "$RUNNER_TEMP/market.json"
           cmp "$RUNNER_TEMP/market.json" <(gzip -dc tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz)
+      - if: matrix.market == 'stelaxis-direct-slot'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7
+          npm ci --prefix contracts --ignore-scripts
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/stelaxis" StelaxisSlotWallet
+          python scripts/record_stelaxis_own.py "$RUNNER_TEMP/market.json" --wallet "$RUNNER_TEMP/stelaxis/StelaxisSlotWallet.json"
       - if: matrix.market == 'stelaxis-own-history'
         run: |
           python -m pip install --quiet eth-account==0.13.7

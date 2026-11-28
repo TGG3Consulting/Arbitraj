@@ -38,7 +38,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     let db = ctx.journal.db();
     let key_matches = match parse.outer_account.as_deref() {
         Some(account) => {
-            o.prop.is_some()
+            o.observed()
                 && req.venue == ctx.venue()
                 && outer_matches(
                     account,
@@ -64,7 +64,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
-    if o.prop.is_none()
+    if !o.observed()
         && let Some(intent::Outcome::Order(out)) = &entry.result
     {
         resolve::release_if_ours(p, hash, Some(nonce), false).await;
@@ -105,8 +105,11 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
     {
         return Err(unknown());
     }
+    if let Some(order) = o.bop {
+        order.verify_at(ctx,block,o.executor).await.map_err(|_|unknown())?;
+    }
     let ok = r.receipt.status == U64::from(1);
-    if o.prop.is_some() {
+    if o.observed() {
         if ok && parse.outer_account.is_some() && crate::gateway::settlement_proofs::active() {
             send::canonical_receipt::observe(ctx, hash, &r.receipt)
                 .await
@@ -117,7 +120,7 @@ pub(in crate::venues::bsc_dex) async fn reconcile(
                 .map_err(|_| unknown())?;
         }
     }
-    if o.prop.is_some() {
+    if o.observed() {
         let filled = super::canonical(
             ctx,
             block,

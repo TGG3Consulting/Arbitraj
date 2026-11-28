@@ -7241,6 +7241,13 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 - **Источник:** [Публичные кадры BuilderNet](https://buildernet.org/docs/api#state-stream), [проверенные выплаты](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_wallets.json.gz).
 - **Если не задана:** Ручная проверка не запрашивает цену. При отсутствии только модуля доступна цена рынка для выбранного слота.
 
+### `bopamm.slot_builders`
+
+- **Кейс:** Конкуренция прямого bopAMM и маршрута через Uniswap V3 USDC/USDT по полному расходу газа в одном слоте Ethereum.
+- **Что ставить:** В маппинге кошелька Ethereum откройте «Модуль bopAMM и Uniswap V3 через USDC», нажмите «Оценить газ», подтвердите размещение и сохраните проверенный адрес. Карточка добавляет `cash_module` в `bopamm.roles`. Выдайте этому адресу разрешение на планируемый расход WETH или USDT. Для этой площадки укажите список доверенных строителей из `titan` и `buildernet`. Общие размеры, интервалы, таймаут и предел газа берутся из `fermi.quote_sizes`, `fermi.books_interval_ms`, `fermi.quote_budget_ms`, `fermi.gas_budget_native`.
+- **Если не задана:** Публичная проверка цены в карточке остаётся доступна. Автоматическая лента и приватная отправка bopAMM выключены.
+- **Источник:** [Кассовые вызовы двух строителей](../tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_wallet.json.gz).
+
 ### `fermi.router`
 
 - **Кейс:** Адрес роутера Fermi, опубликованный строителем для котировок и исполнения.

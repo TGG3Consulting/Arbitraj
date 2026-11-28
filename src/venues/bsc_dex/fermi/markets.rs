@@ -85,6 +85,7 @@ impl Cache {
                 active.revision == book.revision
                     && active.config.builder == book.config.builder
                     && active.config.executor == book.config.executor
+                    && active.config.same_path(&book.config)
                     && active.head.hash == book.head.hash
                     && super::slot_config::same_frame(&active.frame, &book.frame)
             })

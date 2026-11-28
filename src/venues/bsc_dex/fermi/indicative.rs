@@ -82,6 +82,7 @@ pub(super) fn candidate(
             "{} {}, слот {}",
             match &b.config.source {
                 super::slot_config::Source::Fermi { .. } => "Fermi",
+                super::slot_config::Source::Bop(path) => path.name(),
                 super::slot_config::Source::Prop { id, .. } => id,
             },
             b.config.builder.name(),

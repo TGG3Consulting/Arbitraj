@@ -3619,6 +3619,14 @@ source = "https://buildernet.org/docs/api#state-stream и eth_getCode на ка�
 rationale = "market.pricing() связывает рынок и его оракул. Из опубликованного кадра в расчёт попадает только изменение хранилища настроенного реестра."
 prefill = { kind = "Venue", id = "eth_dex" }
 
+[[section.rec]]
+name = "bopamm.slot_builders"
+area = "площадка eth_dex"
+unit = "titan / buildernet"
+method = "Задаёт владелец. В маппинге кошелька Ethereum откройте «Модуль bopAMM и Uniswap V3 через USDC», нажмите «Оценить газ», подтвердите размещение и сохраните адрес. Выдайте модулю разрешение на свою сумму входа. Здесь укажите допустимых строителей titan и/или buildernet."
+source = "src/venues/bsc_dex/fermi/bop_cash.rs и tests/data/first_run_dex_2026-11-26/bopamm_ethereum_cash_wallet.json.gz"
+rationale = "До явного выбора строителя подписка и отправка bopAMM выключены. Каждое поручение действует один слот; цена, остатки, газ и минимум относятся к выбранному кошельку."
+
 [[section]]
 title = "FermiSwap на Ethereum — адреса и хеши"
 intro = "Данные размещения для сверки с узлом. Исполнитель кошелька и включение торговли задаются отдельно."

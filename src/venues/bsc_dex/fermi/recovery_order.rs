@@ -18,13 +18,13 @@ pub(in crate::venues::bsc_dex::fermi) fn amounts(
     let (coins, cash) = if req.side == Side::Buy { (received, spent) } else { (spent, received) };
     let coins = num::to_decimal(coins, coin_dec)?;
     let gross = num::to_decimal(cash, cash_dec)?;
-    let matched = if let (Some(q), Side::Buy) = (&o.prop, req.side) {
+    let matched = if let (Some(minimum), Side::Buy) = (o.minimum(), req.side) {
         o.amount.is_negative()
             && req.asset.contract == Some(o.output)
-            && q.minimum == o.amount.unsigned_abs()
-            && num::to_units(req.qty, coin_dec) == Some(q.minimum)
-            && num::to_decimal(q.minimum, coin_dec) == Some(req.qty)
-            && received >= q.minimum
+            && minimum == o.amount.unsigned_abs()
+            && num::to_units(req.qty, coin_dec) == Some(minimum)
+            && num::to_decimal(minimum, coin_dec) == Some(req.qty)
+            && received >= minimum
     } else {
         coins == req.qty
     };
@@ -42,7 +42,7 @@ pub(super) async fn finish(
     // Решение 222: зачисляем только фактическую выплату сделки. Подтверждение исходной
     // подписи, SlotFilled и чистых переводов владельца предшествует записи денег.
     let Some((coins, gross)) = amounts(o, &req, parse.decs, (spent, received)) else {
-        if o.prop.is_some() {
+        if o.observed() {
             return Err(p.ctx.err(crate::gateway::errors::ErrorCode::OutcomeUnknown,
                 format!("PropAMM: подтверждено списание {spent} атомов {} и поступление {received} атомов {}; требуется ручная сверка исходной заявки", o.input, o.output))
                 .with_tx(chain).pending(marker.clone()));
@@ -102,6 +102,7 @@ pub(in crate::venues::bsc_dex::fermi) fn spot(
         finished_at: Utc::now(),
         executor: Some(match &o.prop {
             Some(q) => format!("PropAMM {} ({})", q.terms.venue, o.builder),
+            None if o.bop.is_some() => format!("bopAMM ({})", o.builder),
             None => format!("FermiSwap ({})", o.builder),
         }),
         request: req,

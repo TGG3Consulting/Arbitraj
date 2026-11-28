@@ -3,10 +3,10 @@
 //! Котировщик и восстановление используют общий ABI и пределы подписанного кошельком поручения.
 #[path = "slot_simulation.rs"]
 mod simulation;
-pub(super) use simulation::{amounts, run, simulate, verify_executor};
 use alloy::sol_types::SolCall;
 use alloy_primitives::{Address, B256, Bytes, I256, U256};
 use serde::{Deserialize, Serialize};
+pub(super) use simulation::{amounts, run, simulate, verify_executor};
 
 alloy::sol! {
     struct Order {
@@ -34,6 +34,8 @@ pub(crate) struct Proof {
     pub router: Option<Address>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prop: Option<Box<super::super::exec::prop_wallet::Proof>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bop: Option<super::bop_cash::Order>,
     pub payer: Address,
     pub input: Address,
     pub output: Address,
@@ -42,7 +44,19 @@ pub(crate) struct Proof {
     pub leg: B256,
 }
 impl Proof {
+    pub fn observed(&self) -> bool {
+        self.prop.is_some() || self.bop.is_some()
+    }
+    pub fn minimum(&self) -> Option<U256> {
+        self.prop
+            .as_ref()
+            .map(|q| q.minimum)
+            .or_else(|| self.bop.map(|q| q.minimum))
+    }
     pub fn calldata(&self) -> Bytes {
+        if let Some(cash) = self.bop {
+            return cash.calldata(self);
+        }
         if let Some(quote) = &self.prop {
             return executeAtSlotCall {
                 order: PropOrder {
@@ -80,6 +94,9 @@ impl Proof {
             return false;
         }
         let specified = self.amount.unsigned_abs();
+        if let Some(q) = self.bop {
+            return self.prop.is_none() && q.matches(self, spent, received);
+        }
         if let Some(q) = &self.prop {
             if q.payer != self.payer
                 || q.terms.target != self.executor

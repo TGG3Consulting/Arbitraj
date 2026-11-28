@@ -34,6 +34,7 @@ pub mod pairs_watch;
 pub mod rate_pause;
 pub mod resolve;
 pub mod rest;
+pub mod settle;
 pub mod subs;
 pub mod symbols;
 pub mod symbols_qty;
@@ -116,6 +117,58 @@ impl Bingx {
 impl Venue for Bingx {
     fn id(&self) -> VenueId {
         self.ctx.venue()
+    }
+
+    /// Расчётный круг: отпечаток публичного ключа API (bingx.api_key) — идентичность торгового счёта после рестарта
+    /// (gateway/settlement_intent.rs::account). Ошибки: ключ не задан (NotConfigured), хранилище секретов закрыто.
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Расчётный ордер USDC-USDT: свой newClientOrderId сохраняется до POST (trade.rs), сверка — только GET «Query
+    /// Order details» по orderId / clientOrderID (settle.rs), точная сумма котируемой — cummulativeQuoteQty
+    /// (order_state::result). Документация — шапка settle.rs.
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Символ сохранённой заявки = «asset-quote» (settle.rs::matches).
+    fn matches_settlement_order(
+        &self,
+        p: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settle::matches(p, asset, quote)
+    }
+
+    /// Только GET: окончательный ордер по своему ID; открытый — None (остаётся на сверке). settle.rs::inspect.
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settle::inspect(&self.ctx, req, p).await
+    }
+
+    /// Вывод USDC по Base: свой withdrawOrderId («Customer-defined withdrawal ID», POST
+    /// /openApi/wallets/v1/capital/withdraw/apply) сохраняется до POST (transfers.rs); после потери ответа — поиск в
+    /// GET /openApi/api/v3/capital/withdraw/history по withdrawOrderId (resolve.rs), статус — по id (transfers.rs).
+    /// https://github.com/BingX-API/api-ai-skills/blob/main/skills/spot-wallet/api-reference.md (разделы 2 и 4),
+    /// docs-v3 Account and Wallet → «Withdraw», «Withdraw records».
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
+    /// НЕТ (false — умолчание контракта не меняется): прямое зачисление депозита на СПОТОВЫЙ счёт не подтверждено.
+    /// Факт бота (решение 102, Тигран 02.11.2026): депозит BingX приходит на фондовый счёт (Funding Account), на спот —
+    /// только отдельным переводом POST /openApi/api/asset/v1/transfer (fund_move.rs) — это второй необратимый
+    /// внутренний перевод, который контракт расчётного круга исключает. В документации у истории депозитов
+    /// (GET /openApi/api/v3/capital/deposit/hisrec) поля счёта зачисления нет; у адреса депозита
+    /// (GET /openApi/wallets/v1/capital/deposit/address) есть walletType («Account type, 1 Fund Account; … 4 Spot
+    /// Account»), но параметра выбора счёта у основного аккаунта нет. Открытый вопрос — README.md этой папки.
+    fn supports_settlement_credit(&self) -> bool {
+        false
     }
 
     fn kind(&self) -> VenueKind {

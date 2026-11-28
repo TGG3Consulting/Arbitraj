@@ -6,7 +6,9 @@
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet):
 //! - POST /openApi/wallets/v1/capital/withdraw/apply — coin, network, address, amount, walletType
-//!   (1 фондовый, 2 стандартные фьючерсы, 3 бессрочные фьючерсы, 4 спот), withdrawOrderId; ответ data.id.
+//!   (1 фондовый, 2 стандартные фьючерсы, 3 бессрочные фьючерсы, 4 спот — так в английском тексте docs-v3; в китайском
+//!   тексте той же страницы спот — 15; «When the funding account balance is insufficient, the system will automatically
+//!   replenish funds from the spot account»), withdrawOrderId (свой ID, «less than 100 characters»); ответ data.id.
 //! - GET /openApi/api/v3/capital/withdraw/history — голый массив; status 4 на проверке, 5 ошибка, 6 выполнен; info — причина.
 //! - GET /openApi/api/v3/capital/deposit/hisrec — голый массив; status по docs-v3: 0 в процессе,
 //!   6 есть в сети, 1 зачислен (в api-ai-skills значения иные — см. README адаптера).
@@ -59,6 +61,12 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         ("walletType", wallet_type.to_string()),
         ("withdrawOrderId", order_id.clone()),
     ];
+    let lookup = PendingRef::withdraw(&order_id);
+    // Расчётный круг (gateway/settlement_intent.rs): свой withdrawOrderId — в журнал ДО POST; после потери ответа
+    // вывод ищется по нему в истории выводов (resolve.rs). Вне круга — как раньше.
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&lookup).await?;
+    }
     let data = rest::signed(
         ctx,
         Method::POST,
@@ -67,14 +75,22 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         Op::Withdraw,
     )
     .await
-    .map_err(|e| e.pending(PendingRef::withdraw(&order_id)))?;
+    .map_err(|e| e.pending(lookup.clone()))?;
+    // HTTP успешен, а data.id нет — вывод мог быть создан: итог неизвестен с «чем найти» (повтор дал бы второй вывод).
+    // Раньше здесь была BadResponse (num::text), по которой правила шлюза могли повторить вывод.
+    let venue_ref = num::text_opt(&data, "id").ok_or_else(|| {
+        let m = format!("Вывод {order_id}: ответ без id — итог неизвестен");
+        ctx.tag(GatewayError::new(ErrorCode::OutcomeUnknown, None, m))
+            .with_raw(data.to_string())
+            .pending(lookup.clone())
+    })?;
     Ok(Transfer {
         venue: ctx.venue(),
         asset: req.asset,
         network: req.network,
         amount: req.amount,
         status: TransferStatus::Pending,
-        venue_ref: num::text(&data, "id")?,
+        venue_ref,
         tx_hash: None,
         fee: None, // станет известна из истории выводов (transactionFee)
         updated_at: Utc::now(),

@@ -57,6 +57,9 @@ pub async fn trade(
     // постановки свой (решение 114) — ошибка несёт «чем найти» (newClientOrderId), и ядро ищет ордер само
     // (resolve.rs, Query Order details по clientOrderID); сразу здесь не ищем.
     let pending = PendingRef::order(&p.symbol, &p.client_id, p.qty);
+    // Расчётный круг (gateway/settlement_intent.rs): свой newClientOrderId сохраняется в журнале ДО POST — после потери
+    // ответа ордер сверяется по нему (settle.rs). Вне круга — без записи и без запросов.
+    crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::signed(
         ctx,
         Method::POST,

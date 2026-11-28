@@ -206,6 +206,13 @@ pub(super) async fn request(p: &Parts, r: Request) -> GatewayResult<Preview> {
     } else {
         client::preview(ctx, &q).await?
     };
+    // Цена за единицу из полного списания с комиссией и выдачи. Для неизвестной точности остаются исходные raw суммы.
+    let (di, dout) = tokio::join!(p.tokens.decimals(ctx, q.input), p.tokens.decimals(ctx, q.output));
+    if let (Ok(di), Ok(dout)) = (di, dout)
+        && let Some(rate) = wire::output_per_input(paid, di, got, dout)
+    {
+        report.details["output_per_input"] = json!(rate.normalize().to_string());
+    }
     report.spent_raw = paid.to_string();
     report.received_raw = got.to_string();
     report.fee = Some(Fee {

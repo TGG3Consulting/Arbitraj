@@ -261,7 +261,7 @@ pub static DEX: &[SettingDef] = &[
     d("AirSwap RFQ","airswap.min_validity_ms",K::Integer,L::Positive,"мс",V,"Минимальный остаток срока подписанного ордера при проверке и до передачи.").optional().dex_venue(),
     d("AirSwap RFQ","airswap.gas_budget_native",K::Decimal,L::Positive,"монета газа",V,"Предельная полная сетевая комиссия транзакции AirSwap.").optional().dex_venue(),
     d("Textile FX","textile.base_url",K::Url,L::None,"URL",V,"Корневой HTTPS адрес публичного Textile v2. Для индивидуального запроса используется официальный API.").optional().dex_venue(),
-    d("Textile FX","textile.contracts",K::TextList,L::None,"контракты",V,"Роли reactor, fee, permit2 и необязательный собственный wallet в формате chainId role address runtimeHash.").optional().dex_venue(),
+    d("Textile FX","textile.contracts",K::TextList,L::None,"контракты",V,"Роли reactor, fee, permit2 и необязательный собственный wallet в формате chainId role address runtimeHash. У роли wallet пятое поле — адрес владельца; прежняя строка без владельца поддерживается.").optional().dex_venue(),
     d("Textile FX","textile.partner",K::Bool,L::None,"да/нет",V,"Использовать свой партнёрский ключ Textile для индивидуальной котировки. Для модуля taker требуется согласованный оператором доступ.").optional().dex_venue(),
     d("Textile FX","textile.trading",K::Bool,L::None,"да/нет",V,"Допустить выбор ранее проверенной заявки Textile, которую владелец явно передал торговому ядру.").optional().dex_venue(),
     d("Textile FX","textile.gas_budget_native",K::Decimal,L::Positive,"монета газа",V,"Предельный расход ETH на расчёт Textile с учётом комиссии публикации.").optional().dex_venue(),

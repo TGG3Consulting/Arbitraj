@@ -116,3 +116,92 @@ fn single_and_batch_confirm_terminal_cash_on_base_and_ethereum() {
         }
     }
 }
+
+#[test]
+fn base_published_preview_has_gross_price_in_both_directions() {
+    let doc: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+        &include_bytes!("../../../../tests/data/first_run_dex_2026-11-26/textile_fx.json.gz")[..],
+    ))
+    .unwrap();
+    let rows = doc["preview"].as_array().unwrap();
+    assert_eq!(rows.len(), 2);
+    for (row, (debit, credit, fee)) in rows.iter().zip([
+        (10_000_000u64, 14_395_679_568u64, 1_999u64),
+        (14_404_320_432, 10_000_000, 2_880_288),
+    ]) {
+        let q = &row["request"];
+        let data = &row["response"]["data"];
+        assert_eq!(q["chainId"], 8453);
+        let out = q["buyAmount"].is_string();
+        let size = uint(&q[if out { "buyAmount" } else { "sellAmount" }]).unwrap();
+        let (paid, got, charge) = amounts(data, size, out).unwrap();
+        assert_eq!(
+            (paid, got, charge),
+            (U256::from(debit), U256::from(credit), U256::from(fee))
+        );
+        let rate = output_per_input(paid, 6, got, 6).unwrap();
+        assert_eq!(
+            rate,
+            rust_decimal::Decimal::from(credit) / rust_decimal::Decimal::from(debit)
+        );
+        assert!(rate > output_per_input(paid + charge, 6, got, 6).unwrap());
+    }
+}
+
+#[test]
+fn registered_textile_wallet_belongs_to_one_base_owner() {
+    let card: Value = serde_json::from_slice(include_bytes!(
+        "../../../../ui/src/assets/textile-base-create.json"
+    ))
+    .unwrap();
+    let doc: Value = serde_json::from_reader(flate2::read::GzDecoder::new(
+        &include_bytes!(
+            "../../../../tests/data/first_run_dex_2026-11-26/textile_base_wallets.json.gz"
+        )[..],
+    ))
+    .unwrap();
+    let mut rows = vec![];
+    for (label, role) in [
+        ("reactor", "reactor"),
+        ("fee", "fee_controller"),
+        ("permit2", "permit2"),
+    ] {
+        let r = &card["roles"][role];
+        assert_eq!(r, &doc["roles"][role]);
+        rows.push(format!(
+            "8453 {label} {} {}",
+            r["address"].as_str().unwrap(),
+            r["runtime"].as_str().unwrap()
+        ));
+    }
+    let module = addr(&doc["module"]).unwrap();
+    let original = addr(&doc["owner"]).unwrap();
+    let other = addr(&doc["makers"][0]).unwrap();
+    for (index, payer) in [original, other].into_iter().enumerate() {
+        let c = &card["controls"][index];
+        assert_eq!(addr(&c["owner"]), Some(payer));
+        let hash: alloy_primitives::B256 = c["runtimeKeccak"].as_str().unwrap().parse().unwrap();
+        if index == 0 {
+            let prior = format!("8453 wallet {module} {hash}");
+            let mut legacy = rows.clone();
+            legacy.push(prior);
+            assert_eq!(
+                super::profile::roles(&legacy, 8453, payer).unwrap()["wallet"],
+                (module, hash)
+            );
+            rows.push(format!("8453 wallet {module} {hash} {payer}"));
+            assert!(
+                !super::profile::roles(&rows, 8453, other)
+                    .unwrap()
+                    .contains_key("wallet")
+            );
+        } else {
+            rows.push(format!("8453 wallet {module} {hash} {payer}"));
+        }
+        assert_eq!(
+            super::profile::roles(&rows, 8453, payer).unwrap()["wallet"],
+            (module, hash)
+        );
+        assert!(super::profile::roles(&rows, 56, payer).is_none());
+    }
+}

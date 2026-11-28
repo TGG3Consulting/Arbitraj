@@ -7623,13 +7623,13 @@ venue.public_ip_weight_10s, signal.anomaly_spread_pct — по поручени�
 ### `textile.contracts`
 
 - **Кейс:** Привязка обычного Reactor и двух его зависимостей в выбранной сети.
-- **Что ставить:** По одной строке chainId role address runtimeHash для reactor, fee и permit2. Для защиты чистой выплаты добавьте wallet со своим размещённым TextileWallet. Контракт и владелец проверяются до запроса. [Документация Textile](https://api.textilecredit.com/v2/openapi.json)
+- **Что ставить:** По одной строке chainId role address runtimeHash для reactor, fee и permit2. Для защиты чистой выплаты карточка Base сохраняет строку chainId wallet moduleAddress runtimeHash owner. Предыдущая строка из четырёх полей проверяется по owner() модуля. Контракт и владелец проверяются до запроса. [Документация Textile](https://api.textilecredit.com/v2/openapi.json)
 - **Если не задана:** Доступен публичный preview.
 
 ### `textile.partner`
 
 - **Кейс:** Получение заявки на контракт, который платит из ранее одобренных средств кошелька.
-- **Что ставить:** Включите при собственном партнёрском ключе Textile. Для модуля с финансированием внутри обмена нужен выданный Textile доступ rfq:aggregator. Ключ textile.api_key находится в хранилище секретов. [Документация Textile](https://api.textilecredit.com/v2/openapi.json)
+- **Что ставить:** Включите при собственном ключе основной сети Textile с правом trades:write. Для модуля с финансированием внутри обмена нужен выданный Textile доступ rfq:aggregator. Ключ textile.api_key находится в хранилище секретов. [Документация Textile](https://api.textilecredit.com/v2/openapi.json)
 - **Если не задана:** Для своего EOA используется подписанное им доказательство TakerControl.
 
 ### `textile.trading`

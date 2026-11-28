@@ -1174,6 +1174,26 @@ jobs:
         run: |
           node contracts/build-hanji.mjs "$RUNNER_TEMP/safeswap" SafeSwapAdapter
           python scripts/record_safeswap_protected.py "$RUNNER_TEMP/safeswap/SafeSwapAdapter.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'textile-create-base'
+        run: |
+          npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
+          node contracts/build-hanji.mjs "$RUNNER_TEMP/textile" TextileWallet
+          python scripts/record_textile_base_create.py "$RUNNER_TEMP/textile/TextileWallet.json" "$RUNNER_TEMP/market.json"
+          cmp ui/src/assets/textile-base-create.json "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'textile-create-base'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - if: matrix.market == 'textile-create-base'
+        run: |
+          npm ci --prefix ui --no-audit --no-fund
+          npm --prefix ui run build
+      - if: matrix.market == 'textile-create-base'
+        uses: dtolnay/rust-toolchain@stable
+      - if: matrix.market == 'textile-create-base'
+        uses: Swatinem/rust-cache@v2
+      - if: matrix.market == 'textile-create-base'
+        run: cargo test --locked --lib textile::tests
       - if: startsWith(matrix.market, 'textile-wallet-')
         env:
           MARKET: ${{ matrix.market }}

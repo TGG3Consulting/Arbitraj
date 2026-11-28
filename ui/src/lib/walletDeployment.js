@@ -1,5 +1,6 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
+import {loadTextile,checkTextile} from './textileDeploy.js';
 import {loadDexalot,checkDexalot} from './dexalotDeploy.js';
 import {loadNativeRfq,checkNativeRoles,checkNativeModule} from './nativeRfqDeploy.js';
 import {loadHanji,checkHanjiWrapped,checkHanjiModule} from './hanjiDeploy.js';
@@ -25,7 +26,7 @@ import {eulerSwap,loadEulerSwap,checkEulerSwap} from './eulerSwapDeploy.js';
 import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
-const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq';
+const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq' || kind==='textile_wallet';
 const selectedPayer = kind => ownedModule(kind) || ['hanji','raindex','native_rfq'].includes(kind);
 const bindsWallet = kind => kind==='motoswap_v2' || kind==='lambda_propamm' || kind==='fluid_dex_lite' || kind==='eulerswap' || kind==='aqua_swapvm' || selectedPayer(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
@@ -45,6 +46,7 @@ export async function hashCode(hex) {
 export async function loadPlan(settings, plan) {
   if (settings.kind==='raindex' || plan.kind==='raindex') return loadRaindex(settings,plan,hashCode);
   if (settings.kind==='native_rfq' || plan.kind==='native_rfq') return loadNativeRfq(settings,plan,hashCode);
+  if(settings.kind==='textile_wallet' || plan.kind==='textile_wallet') return loadTextile(settings,plan,hashCode);
   if (settings.kind==='hanji' || plan.kind==='hanji') return loadHanji(settings,plan,hashCode);
   if (eulerSwap(settings.kind) || plan.kind==='eulerswap') return loadEulerSwap(settings,plan,hashCode);
   if (settings.kind==='aqua_swapvm' || plan.kind==='aqua_swapvm') return loadAqua(settings,plan,hashCode);
@@ -87,6 +89,7 @@ async function checkChain(provider, p) {
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
   if (p.kind==='native_rfq') return checkNativeRoles(provider,p,at);
+  if(p.kind==='textile_wallet') return checkTextile(provider,p,at);
   if (p.kind==='hanji') return checkHanjiWrapped(provider,p,at);
   if (p.kind==='raindex') return checkRaindexBook(provider,p,at);
   if (p.kind==='aqua_swapvm') return checkAqua(provider,p,at);

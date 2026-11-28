@@ -181,7 +181,7 @@ impl Source {
         use futures_util::{StreamExt, stream};
         let groups = stream::iter(legs)
             .map(|leg| async move {
-                if leg.p.version == 3 {
+                if legacy::output_samples(leg.p) {
                     return legacy::read(p, leg, h).await;
                 }
                 match leg.current(&p.ctx, h).await {

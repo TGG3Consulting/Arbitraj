@@ -215,3 +215,45 @@ async fn persisted_history_uses_the_book_order_encoding_after_reopen() {
     drop(reopened);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn fixed_output_samples_apply_only_to_the_confirmed_base_v4_binary() {
+    let fixture: Value = serde_json::from_slice(include_bytes!(
+        "../../../../tests/data/first_run_dex_2026-11-26/raindex_base_v4_quote_interfaces.json"
+    )).unwrap();
+    let rows = multiversion_samples();
+    let ceiling = U256::from(42);
+    for book in fixture["books"].as_array().unwrap() {
+        let legacy_abi = !book["external_quote"].as_bool().unwrap();
+        let sample = rows.iter().find(|s| {
+            s["chain"] == 8453 && s["book"] == book["book"] && (!legacy_abi || s["added"] == true)
+        }).unwrap();
+        let mut profile = sample_profile(sample);
+        profile.book_hash = from_value(book["hash"].clone()).unwrap();
+        assert_eq!(legacy::output_samples(profile), legacy_abi);
+        assert_eq!(book["quote_push4"], !legacy_abi);
+        assert_eq!(book["take"], "0x0997c4a0");
+        assert_eq!(book["exists"], "0x2cb77e9f");
+        if !legacy_abi {
+            continue;
+        }
+        assert!(!legacy::output_samples(Profile { chain: 1, ..profile }));
+        assert!(!legacy::output_samples(Profile { book_hash: B256::ZERO, ..profile }));
+        assert!(legacy::budget_allowed(profile, Some(ceiling), ceiling));
+        assert!(!legacy::budget_allowed(profile, Some(ceiling), ceiling + U256::ONE));
+        assert!(!legacy::budget_allowed(profile, None, U256::ONE));
+        let hash: B256 = from_value(sample["hash"].clone()).unwrap();
+        let mut log: Log = from_value(sample["log"].clone()).unwrap();
+        let at = log.block_number.unwrap();
+        let delta = history_orders::changes(profile, at, at, std::slice::from_mut(&mut log)).unwrap();
+        let order = wire::Order::decode(4, delta[&hash].as_ref().unwrap(), hash).unwrap();
+        let action = order.take(0, 0, ceiling, 6, true, B256::repeat_byte(255)).unwrap();
+        let call = wire::takeOrders2Call::abi_decode_validate(&action).unwrap();
+        assert_eq!(call.config.minimumInput, ceiling);
+        assert_eq!(call.config.maximumInput, ceiling);
+        assert_eq!(call.config.maximumIORatio, U256::MAX);
+        assert_eq!(call.config.orders.len(), 1);
+        assert_eq!(call.config.orders[0].order.owner, order.owner());
+        assert!(order.take(0, 0, ceiling, 6, false, B256::repeat_byte(255)).is_none());
+    }
+}

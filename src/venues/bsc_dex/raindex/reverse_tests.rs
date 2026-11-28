@@ -34,6 +34,9 @@ fn registered_reverse_io_and_funded_usdc_market_sales_at_the_same_block() {
         let hash: B256 = from_value(entry["orderHash"].clone()).unwrap();
         let encoded: Bytes = from_value(entry["orderBytes"].clone()).unwrap();
         let order = wire::Order::decode(6, &encoded, hash).unwrap();
+        // Нулевой vault V6 расходует внешний баланс maker. В этих 506 ордерах все выходы используют именные vault.
+        let wire::Order::Float(6, stored) = &order else { panic!("expected published V6 order") };
+        assert!(stored.validOutputs.iter().all(|io| io.vaultId != B256::ZERO));
         let (inputs, outputs) = order.pairs();
         for token in &inputs {
             for out in &outputs {

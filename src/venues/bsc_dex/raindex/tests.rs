@@ -7,6 +7,8 @@ use alloy::{
 use flate2::read::GzDecoder;
 use serde_json::{Value, from_value};
 
+#[path = "deployment_tests.rs"]
+mod deployments;
 #[path = "capacity_tests.rs"]
 mod capacity;
 #[path = "reverse_tests.rs"]

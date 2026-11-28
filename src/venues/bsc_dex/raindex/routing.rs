@@ -217,7 +217,7 @@ async fn candidate(
     };
     let (cap, ratio, word) = if let Some(h) = head {
         leg.p.verify(ctx, h).await.ok()?;
-        if leg.p.version == 3 {
+        if legacy::output_samples(leg.p) {
             (row.cap, row.ratio, B256::repeat_byte(255))
         } else {
             leg.current(ctx, h).await?
@@ -251,7 +251,9 @@ async fn candidate(
     } else {
         funds.spend
     };
-    if budget > limit {
+    if budget > limit
+        || !legacy::budget_allowed(leg.p, row.max_budget, budget)
+    {
         return None;
     }
     let cash = if let Some(h) = head {

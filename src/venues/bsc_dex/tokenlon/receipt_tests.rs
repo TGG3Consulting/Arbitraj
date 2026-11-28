@@ -87,6 +87,9 @@ fn expired_tokenlon_orders_match_101_receipts_and_eight_balance_snapshots() {
             let restored = serde_json::from_value::<Proof>(old.clone()).unwrap();
             assert_eq!(&restored, proof);
             assert_eq!(restored.terms.roles, roles);
+            let mut damaged = serde_json::to_value(proof).unwrap();
+            damaged["terms"]["roles"]["pmm"]["runtime"] = serde_json::json!(B256::ZERO);
+            assert!(serde_json::from_value::<Proof>(damaged).is_err());
             old["terms"]["roles"] = Value::Null;
             assert!(serde_json::from_value::<Proof>(old).is_err());
         }

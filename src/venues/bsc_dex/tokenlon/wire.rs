@@ -88,6 +88,9 @@ pub(in crate::venues::bsc_dex) fn prepare(
 
 impl Prepared {
     fn new(inner: fillOrKillOrderCall, t: &Terms, user_salt: U256, now: u64) -> Option<Self> {
+        if !t.roles.verified() {
+            return None;
+        }
         let o = &inner.order;
         let domain = hash::domain(t.roles.zero_exchange.address);
         let order_hash = hash::order(domain, o);

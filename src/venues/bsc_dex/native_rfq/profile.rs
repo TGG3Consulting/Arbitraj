@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 const PROFILE: &str = "native_rfq.roles";
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) struct Role {
     pub(super) address: Address,
     pub(super) hash: B256,
@@ -22,7 +22,17 @@ pub(super) struct Profile {
     pub(super) module: Option<Role>,
 }
 impl Profile {
-    fn parse(rows: &Value) -> Option<Self> {
+    /// Хеш из изолированного CREATE привязывает коду Base все четыре immutable, включая адреса кассы.
+    pub(super) fn supports_settlement(&self) -> bool {
+        const RUNTIME: B256 = alloy_primitives::b256!("264206d824e22e069c5aebcb2ff8f123cade977dd5aa0dba630b2a2714938de8");
+        static ORIGINAL: std::sync::LazyLock<Option<Profile>> = std::sync::LazyLock::new(|| {
+            let rows = crate::settings::recommendations::venue_value(PROFILE, "base_dex")?;
+            Profile::parse(&json!(rows.split(',').collect::<Vec<_>>()))
+        });
+        ORIGINAL.as_ref().is_some_and(|p| (self.chain,&self.slug,self.pool,self.router)==(p.chain,&p.slug,p.pool,p.router))
+            && self.module.is_some_and(|m| m.hash == RUNTIME)
+    }
+    pub(super) fn parse(rows: &Value) -> Option<Self> {
         let mut roles = BTreeMap::new();
         let mut network = None;
         for row in rows.as_array()? {

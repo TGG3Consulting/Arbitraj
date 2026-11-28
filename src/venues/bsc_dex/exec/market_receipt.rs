@@ -63,7 +63,7 @@ pub(super) fn capture(c: &mut SwapCtx, p: &Plan, wallet: Address) {
         _ => {}
     }
 }
-pub(super) async fn check_module_cancel(ctx: &Ctx, c: &SwapCtx, d: &super::txs::Done) -> GatewayResult<()> {
+pub(in crate::venues::bsc_dex) async fn check_module_cancel(ctx: &Ctx, c: &SwapCtx, d: &super::txs::Done) -> GatewayResult<()> {
     let (Some(cancel), Some(order)) = (d.chain.cancel_hash, c.module_order()) else {
         return Ok(());
     };

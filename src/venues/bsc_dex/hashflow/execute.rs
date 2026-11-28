@@ -84,7 +84,7 @@ pub(in crate::venues::bsc_dex) async fn failed(
     let Some(c)=exec::swap_ctx::SwapCtx::of(&entry.lookup) else{return e;};
     if [c.rfq.is_some(),c.dexalot.is_some(),c.airswap.is_some(),c.textile.is_some(),c.gladius.is_some(),c.raindex.is_some(),c.epsilon.is_some(),c.native_rfq.is_some()].into_iter().filter(|v|*v).count()!=1{return e;}
     if let Some(proof)=c.rfq{
-        let Some(original)=c.chain else{return e;};
+        let Some(original)=c.chain.as_ref() else{return e;};
         if original.hash!=tx.hash || original.nonce!=tx.nonce || entry.lookup.nonce!=Some(tx.nonce) {return e;}
         let verified=if tx.outcome==TxOutcome::Reverted{
             let Ok(Some(r))=send::receipt::read(&p.ctx,tx.hash).await else{return e;};
@@ -125,9 +125,15 @@ pub(in crate::venues::bsc_dex) async fn failed(
         if receipt.status.to::<u64>()!=0 || g.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e;}
     }
     if let Some(n)=c.native_rfq{
-        if tx.outcome!=TxOutcome::Reverted{return e}
-        let Ok(Some(receipt))=send::receipt::read(&p.ctx,tx.hash).await else{return e};
-        if receipt.status.to::<u64>()!=0 || n.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_err(){return e}
+        if !c.chain.is_some_and(|v|v.hash==tx.hash && v.nonce==tx.nonce) || entry.lookup.nonce!=Some(tx.nonce){return e;}
+        let hash=tx.cancel_hash.filter(|_|tx.outcome==TxOutcome::NotIncluded).unwrap_or(tx.hash);
+        let Ok(Some(receipt))=send::receipt::read(&p.ctx,hash).await else{return e};
+        let verified=if tx.outcome==TxOutcome::Reverted {
+            receipt.status.to::<u64>()==0 && n.included(&p.ctx,tx.hash,tx.nonce,&receipt).await.is_ok()
+        } else {
+            n.signed().cancelled(&p.ctx,tx.hash,hash,tx.nonce,&receipt).await.is_ok()
+        };
+        if !verified{return e}
     }
     if entry.result.is_none() && entry.lookup.venue_ref.as_ref() == Some(&tx.hash.to_string()) {
         let _ = intent::archive_attempt(db, &k, &entry, "Квитанция подтверждает отсутствие обмена")

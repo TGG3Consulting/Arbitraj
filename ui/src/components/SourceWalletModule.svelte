@@ -5,9 +5,10 @@
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
 
-  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,wrapped,book,bookModule}=$props();
+  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,roleRows=false,wrapped,book,bookModule}=$props();
   const rows=$derived(store.values[setting+'|Venue|'+venue] ?? (shared ? null : []));
-  const configured=$derived(book ? bookModule : (shared ? rows : null));
+  const target=$derived(roleRows ? (Array.isArray(rows) ? rows.find(r=>typeof r==='string' && /^module\s/.test(r.trim()))?.trim().split(/\s+/)[1] : null) : rows);
+  const configured=$derived(book ? bookModule : (shared ? target : null));
   const storageKey=$derived(sourceDeploymentKey(source,venue,chain,version,wallet,shared));
   let busy=$state(false),error=$state(''),message=$state(''),priced=$state(null),hash=$state('');
   let mounted=true;
@@ -81,7 +82,7 @@
   <summary>Модуль {label}</summary>
   {#if shared}
     <p>Общий исполнитель для кошельков площадки <code>{venue}</code>. Плательщик размещения <code>{wallet}</code>.
-      Сеть {chain}. {#if book}Книга <code>{book}</code>.{:else}WETH <code>{wrapped ?? 'не задан'}</code>.{/if}</p>
+      Сеть {chain}. {#if book}Книга <code>{book}</code>.{:else if !roleRows}WETH <code>{wrapped ?? 'не задан'}</code>.{/if}</p>
     {#if configured}<p>Заданный адрес <code>{configured}</code></p>{/if}
   {:else}
     <p>Плательщик и получатель <code>{wallet}</code>. Сеть {chain}. Модуль проверяет фактическую выплату по подписанной цене.</p>

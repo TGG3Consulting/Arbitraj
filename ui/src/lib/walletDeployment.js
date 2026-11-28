@@ -1,6 +1,7 @@
 // Проверка неподписанного CREATE и канонического результата по принятому архиву модуля.
 import {loadV1, checkV1, runtimeKeccak} from "./uniswapV1Deploy.js";
 import {loadDexalot,checkDexalot} from './dexalotDeploy.js';
+import {loadNativeRfq,checkNativeRoles,checkNativeModule} from './nativeRfqDeploy.js';
 import {loadHanji,checkHanjiWrapped,checkHanjiModule} from './hanjiDeploy.js';
 import {loadRaindex,checkRaindexBook,checkRaindexModule} from './raindexDeploy.js';
 import {checkWalletOwner} from './registeredWalletModule.js';
@@ -25,7 +26,7 @@ import {loadStabull, checkStabull} from './stabullDeploy.js';
 import {loadBancor, checkBancor} from "./bancorDeploy.js";
 const implementationSlot = '0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc';
 const ownedModule = kind => isAirSwap(kind) || kind==='dexalot_rfq';
-const selectedPayer = kind => ownedModule(kind) || kind==='hanji' || kind==='raindex';
+const selectedPayer = kind => ownedModule(kind) || ['hanji','raindex','native_rfq'].includes(kind);
 const bindsWallet = kind => kind==='motoswap_v2' || kind==='lambda_propamm' || kind==='fluid_dex_lite' || kind==='eulerswap' || kind==='aqua_swapvm' || selectedPayer(kind) || isLlamma(kind) || kind==='ambient_ethereum' || kind==='ammalgam_dlex' || defiPlaza(kind) || mooniswap(kind) || singleFactory(kind) || supportsFactoryWallet(kind) || ['aktionariat','algebra_integral_theorem','angstrom_l1','uniswap_v1','bancor_v3','stabull','carbon_v1'].includes(kind);
 const address = /^0x[\da-f]{40}$/i;
 const digest = /^0x[\da-f]{64}$/i;
@@ -43,6 +44,7 @@ export async function hashCode(hex) {
 
 export async function loadPlan(settings, plan) {
   if (settings.kind==='raindex' || plan.kind==='raindex') return loadRaindex(settings,plan,hashCode);
+  if (settings.kind==='native_rfq' || plan.kind==='native_rfq') return loadNativeRfq(settings,plan,hashCode);
   if (settings.kind==='hanji' || plan.kind==='hanji') return loadHanji(settings,plan,hashCode);
   if (eulerSwap(settings.kind) || plan.kind==='eulerswap') return loadEulerSwap(settings,plan,hashCode);
   if (settings.kind==='aqua_swapvm' || plan.kind==='aqua_swapvm') return loadAqua(settings,plan,hashCode);
@@ -84,6 +86,7 @@ async function checkChain(provider, p) {
 
 export async function checkMarket(provider, p, at) {
   await checkChain(provider, p);
+  if (p.kind==='native_rfq') return checkNativeRoles(provider,p,at);
   if (p.kind==='hanji') return checkHanjiWrapped(provider,p,at);
   if (p.kind==='raindex') return checkRaindexBook(provider,p,at);
   if (p.kind==='aqua_swapvm') return checkAqua(provider,p,at);
@@ -205,6 +208,7 @@ export async function deployed(provider, p, hash, pending) {
   if (bindsWallet(p.kind)) await checkMarket(provider, p, {blockHash:r.blockHash,requireCanonical:true});
   const code = await call(provider, 'eth_getCode', [r.contractAddress, at]);
   requireFact(await sameRuntime(code,p), 'Размещённый runtime отличается от проверенного кода.');
+  if (p.kind==='native_rfq') await checkNativeModule(provider,p,r.contractAddress,at);
   if (p.kind==='hanji') await checkHanjiModule(provider,p,r.contractAddress,at);
   if (p.kind==='raindex') await checkRaindexModule(provider,p,r.contractAddress,at,code);
   if (p.kind==='motoswap_v2') await checkMotoModule(provider,p,r.contractAddress,at);

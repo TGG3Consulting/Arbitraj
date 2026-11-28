@@ -210,6 +210,7 @@ impl Venue for BscDex {
         if crate::gateway::quote_stage::settlement() {
             let class = urgency::is_set().unwrap_or(Class::Quote);
             let baseline = scope(class, self.p.quoting().quote(asset, side, qty)).await;
+            let baseline=Box::pin(super::native_rfq::routing::consider(&self.p,asset,side,qty,baseline)).await;
             let baseline=super::raindex::routing::consider(&self.p,asset,side,qty,baseline).await;
         let baseline=super::epsilon::routing::consider(&self.p,asset,side,qty,baseline).await;
             let baseline=super::pancakex::market::consider(&self.p,asset,side,qty,baseline).await;
@@ -298,6 +299,7 @@ impl Venue for BscDex {
         let q = self.p.quoting();
         let mut extra = super::hanji::routing::breaks(&self.p, asset, side, max_qty);
         extra.extend(self.p.ryze.breaks(&self.p,asset,side,max_qty));
+        extra.extend(super::native_rfq::routing::breaks(&self.p, asset, side, max_qty));
         extra.extend(super::raindex::routing::breaks(&self.p,asset,side,max_qty));
         extra.extend(super::fermi::routing::breaks(&self.p, asset, side, max_qty));
         if !crate::gateway::quote_stage::settlement() {
@@ -307,7 +309,6 @@ impl Venue for BscDex {
             extra.extend(super::hashflow::routing::breaks(
                 &self.p, asset, side, max_qty,
             ));
-            extra.extend(super::native_rfq::routing::breaks(&self.p, asset, side, max_qty));
             extra.extend(super::gladius::routing::breaks(&self.p, asset, side, max_qty));
         }
         if extra.is_empty() {
@@ -317,7 +318,7 @@ impl Venue for BscDex {
             route.mode,
             crate::core::types::RouteMode::RfqIndicative
                 | crate::core::types::RouteMode::Raindex(_)
-                | crate::core::types::RouteMode::RaindexSettlement(_)
+                | crate::core::types::RouteMode::NativeRfqSettlement(_) | crate::core::types::RouteMode::RaindexSettlement(_)
                 | crate::core::types::RouteMode::PancakeX(_)
                 | crate::core::types::RouteMode::Relay(_)
                 | crate::core::types::RouteMode::RelayIndicative
@@ -716,7 +717,7 @@ impl Venue for BscDex {
             Some(
                 crate::core::types::RouteMode::Rfq(_)
                     | crate::core::types::RouteMode::Raindex(Some(_))
-                    | crate::core::types::RouteMode::RaindexSettlement(Some(_))
+                    | crate::core::types::RouteMode::NativeRfqSettlement(Some(_)) | crate::core::types::RouteMode::RaindexSettlement(Some(_))
                     | crate::core::types::RouteMode::Orderbook(_)
                     | crate::core::types::RouteMode::Slot(_)
                     | crate::core::types::RouteMode::PropSettlementSlot(Some(_))
@@ -936,7 +937,7 @@ impl BscDex {
         // Решение 132: сделка — только кошельком счёта (Ctx::bound).
         self.p.ctx.bound()?;
         let mut req = req;
-        if req.route.as_ref().is_some_and(|r| matches!(r.mode, crate::core::types::RouteMode::RaindexSettlement(_)) || super::epsilon::routing::mixed_ticket(r).is_some()) {
+        if req.route.as_ref().is_some_and(|r| matches!(r.mode, crate::core::types::RouteMode::NativeRfqSettlement(_) | crate::core::types::RouteMode::RaindexSettlement(_)) || super::epsilon::routing::mixed_ticket(r).is_some()) {
             return Err(self.p.ctx.err(ErrorCode::NoRoute,"Денежный билет требует исходного расчётного шага"));
         }
         if let Some(done)=super::pancakex::recovery::prior(&self.p,&req).await? {return Ok(done);}
@@ -972,7 +973,7 @@ impl BscDex {
             }
             req.route = firm.route;
         }
-        if matches!(req.route.as_ref().map(|r| r.mode), Some(crate::core::types::RouteMode::PropSettlementSlot(_) | crate::core::types::RouteMode::RaindexSettlement(_))) {
+        if matches!(req.route.as_ref().map(|r| r.mode), Some(crate::core::types::RouteMode::PropSettlementSlot(_) | crate::core::types::RouteMode::NativeRfqSettlement(_) | crate::core::types::RouteMode::RaindexSettlement(_))) {
             return Err(self.p.ctx.err(ErrorCode::NotApplicable, "Для этого билета нужен исходный денежный шаг"));
         }
         if let Some(crate::core::types::RouteMode::Orderbook(id)) =

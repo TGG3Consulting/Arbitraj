@@ -1,6 +1,9 @@
 //! Лестницы точного входа отдельного PropAMM на опубликованном кадровом состоянии; встречная валюта определяется контрактом.
 use super::super::{
-    exec::{prop_abi::IProp, prop_wallet},
+    exec::{
+        prop_abi::{IProp, IStelaxis},
+        prop_wallet,
+    },
     num,
     parts::Parts,
     pools::{families, prop_venue},
@@ -17,6 +20,44 @@ use alloy::primitives::{Address, Bytes, U64, U256, keccak256};
 use alloy::sol_types::SolCall;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
+pub(super) fn quote_call(
+    router: Address,
+    venue: Address,
+    i: Address,
+    o: Address,
+    n: U256,
+) -> Bytes {
+    if router == venue {
+        IStelaxis::quoteCall {
+            input: i,
+            output: o,
+            amount: n,
+        }
+        .abi_encode()
+        .into()
+    } else {
+        IProp::quoteVenueV1Call {
+            venue,
+            tokenIn: i,
+            tokenOut: o,
+            amountIn: n,
+        }
+        .abi_encode()
+        .into()
+    }
+}
+pub(super) fn quote_result(router: Address, venue: Address, raw: &[u8]) -> Option<U256> {
+    let net = if router == venue {
+        IStelaxis::quoteCall::abi_decode_returns(raw).ok()?
+    } else {
+        let q = IProp::quoteVenueV1Call::abi_decode_returns(raw).ok()?;
+        if q.quotedVenue != venue {
+            return None;
+        }
+        q.amountOut
+    };
+    (!net.is_zero()).then_some(net)
+}
 pub(super) async fn quotes(
     ctx: &Ctx,
     h: &Head,
@@ -31,8 +72,7 @@ pub(super) async fn quotes(
         let calls: Vec<_> = group
             .iter()
             .map(|amount| {
-                json!({"from":t.target,"to":t.router,"data":Bytes::from(IProp::quoteVenueV1Call{
-            venue:t.venue,tokenIn:i,tokenOut:o,amountIn:*amount}.abi_encode())})
+                json!({"from":t.target,"to":t.router,"data":quote_call(t.router,t.venue,i,o,*amount)})
             })
             .collect();
         let rows = slot::run(ctx, h, f, json!(calls)).await?;
@@ -41,11 +81,9 @@ pub(super) async fn quotes(
         }
         for (size, row) in group.iter().zip(rows) {
             if row.status == U64::from(1)
-                && let Ok(q) = IProp::quoteVenueV1Call::abi_decode_returns(&row.return_data)
-                && q.quotedVenue == t.venue
-                && !q.amountOut.is_zero()
+                && let Some(net) = quote_result(t.router, t.venue, &row.return_data)
             {
-                out.push((*size, q.amountOut));
+                out.push((*size, net));
             }
         }
     }
@@ -70,7 +108,7 @@ async fn read_pair(
         prop_venue::state(ctx, family, cfg.deployment.router, (cfg.cash, coin), &at),
         canonical(ctx, h.hash, coin, decimalsCall {})
     )?;
-    if !enabled {
+    if !enabled || !roles.accepts_frame(cfg.deployment.engine, cfg.deployment.runtime) {
         return Err(ctx.err(ErrorCode::NoRoute, "Именная площадка отключена"));
     }
     let terms = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;
@@ -168,4 +206,61 @@ pub(super) async fn levels(
         prop,
         sides,
     })
+}
+
+#[cfg(test)]
+mod stelaxis_tests {
+    use super::*;
+    use flate2::read::GzDecoder;
+    use serde_json::Value;
+    #[test]
+    fn published_stelaxis_prices_use_the_original_quote_for_both_builders() {
+        let data: Value = serde_json::from_reader(GzDecoder::new(
+            include_bytes!(
+                "../../../../tests/data/first_run_dex_2026-11-26/stelaxis_ethereum_frames.json.gz"
+            )
+            .as_slice(),
+        ))
+        .unwrap();
+        let catalog: Vec<Value> =
+            serde_json::from_str(include_str!("../../../../config/first_run_dex.json")).unwrap();
+        let settings = &catalog
+            .iter()
+            .find(|p| p["id"] == "stelaxis-ethereum" && p["chain_id"] == 1)
+            .unwrap()["settings"];
+        let market: Address = settings["dex.factory"].as_str().unwrap().parse().unwrap();
+        assert_eq!(settings["dex.factory"], settings["dex.quoter"]);
+        let slots = settings["dex.propamm_price_slots"][0]
+            .as_str()
+            .unwrap()
+            .split_whitespace()
+            .skip(2)
+            .collect::<BTreeSet<_>>();
+        for f in data["frames"].as_array().unwrap() {
+            assert_eq!(f["market"], settings["dex.factory"]);
+            assert!(
+                f["diff"]
+                    .as_object()
+                    .unwrap()
+                    .keys()
+                    .all(|key| slots.contains(key.as_str()))
+            );
+        }
+        let samples = data["samples"].as_array().unwrap();
+        assert_eq!(samples.len(), 4);
+        for r in samples {
+            let addr = |k: &str| r[k].as_str().unwrap().parse::<Address>().unwrap();
+            let n = U256::from_str_radix(r["amount"].as_str().unwrap(), 10).unwrap();
+            assert_eq!(
+                quote_call(market, market, addr("input"), addr("output"), n),
+                r["data"].as_str().unwrap().parse::<Bytes>().unwrap()
+            );
+            let raw = r["result"].as_str().unwrap().parse::<Bytes>().unwrap();
+            assert_eq!(
+                quote_result(market, market, &raw),
+                Some(U256::from_be_slice(&raw))
+            );
+            assert!(quote_result(Address::ZERO, market, &raw).is_none());
+        }
+    }
 }

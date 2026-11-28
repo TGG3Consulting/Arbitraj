@@ -2,6 +2,8 @@
 //! Исполнитель сверяет подписанные условия с кодом ролей в блоке фактического обмена.
 #[path = "prop_wallet_payment.rs"]
 mod payment;
+#[path = "stelaxis_payment.rs"]
+mod stelaxis_payment;
 use super::{
     carbon_binding::Code,
     prop_abi::{IProp, IStrict},
@@ -150,7 +152,7 @@ impl Proof {
             return Ok(());
         }
         for (code, role) in [
-            (self.terms.venue_code, self.terms.venue),
+            (self.terms.venue_code.filter(|_| self.terms.router != self.terms.venue), self.terms.venue),
             (self.terms.vault_code, self.terms.vault),
         ] {
             if let Some(c) = code {

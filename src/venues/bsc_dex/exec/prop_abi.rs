@@ -13,6 +13,13 @@ alloy::sol! {
     interface IWrappedProp {
         event Swapped(address indexed sender,address indexed tokenIn,address indexed tokenOut,uint256 amountIn,uint256 amountOut,address recipient);
     }
+    interface IStelaxis {
+        struct Pair { address token0; address token1; }
+        function getPairs() external view returns (Pair[]);
+        function quote(address input,address output,uint256 amount) external view returns (uint256);
+        function registry() external view returns(address);
+        function registryHash() external view returns(bytes32);
+    }
     interface IStrict {
         function routerHash() external view returns(bytes32);
         function marketHash() external view returns(bytes32);

@@ -5727,3 +5727,23 @@ unit = "да/нет"
 method = "Не используется после решений 92 и 121. Оставить пустым."
 source = "src/settings/catalog/kyber.rs"
 rationale = "Прежний самостоятельный адаптер цен выключен. Собственный сборщик использует данные соответствующей сети."
+
+[[section]]
+title = "Параметры dex · DEX stelaxis-ethereum@ethereum"
+intro = "Прямой обмен на Ethereum использует цену выбранного строителя и собственную кассу Stelaxis."
+
+[[section.rec]]
+name = "dex.propamm_slot_builders"
+area = "DEX stelaxis-ethereum@ethereum"
+unit = "titan / buildernet"
+method = "Задаёт владелец разрешённых для его кошелька строителей. Проверенные варианты — titan и buildernet. Пустой список отключает запросы."
+source = "tests/data/first_run_dex_2026-11-26/stelaxis_ethereum_frames.json.gz"
+rationale = "Строитель получает заявку на один блок. Для своего кадра он публикует десять ключей ценового реестра."
+
+[[section.rec]]
+name = "dex.router"
+area = "DEX stelaxis-ethereum@ethereum"
+unit = "адрес"
+method = "Задаёт владелец адрес собственного StelaxisSlotWallet из подтверждённой квитанции CREATE в Ethereum."
+source = "ui/src/assets/stelaxis-slot-ethereum.json"
+rationale = "Кошелёк подписывает точный вход и минимум выдачи на одном родительском блоке. Повторное исполнение того же поручения исключено."

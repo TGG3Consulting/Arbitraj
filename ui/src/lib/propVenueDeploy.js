@@ -14,8 +14,8 @@ function need(condition,message) {
 }
 
 function parseRoles(rows) {
-  need(Array.isArray(rows) && [4,7].includes(rows.length),'Проверьте список ролей PropAMM.');
-  const names=rows.length===4?required:[...required,...intermediary];
+  need(Array.isArray(rows) && [3,4,7].includes(rows.length),'Проверьте список ролей PropAMM.');
+  const names=rows.length===3?['market','registry','vault']:rows.length===4?required:[...required,...intermediary];
   const roles={};
   const seen=new Set();
   for (const row of rows) {
@@ -25,7 +25,7 @@ function parseRoles(rows) {
       && implementation!==target && hash.test(implCode) && implCode!==zero)), 'Адрес, код или имя роли PropAMM расходятся с профилем.');
     roles[name]={target,code,implementation,implCode};seen.add(target);
   }
-  need(names.every(k=>!!roles[k]) && roles.router.implementation,'Для публичного PropAMMRouter укажите проверенную реализацию.');
+  need(names.every(k=>!!roles[k]) && (roles.router??roles.market).implementation,'Для публичного PropAMMRouter укажите проверенную реализацию.');
   return roles;
 }
 
@@ -44,11 +44,12 @@ export async function loadPropVenue(settings,source,digest) {
       ['target','code','implementation','implCode'].every(k=>r[k]===previous[name]?.[k])),
       'Настройки ролей изменились после подготовки CREATE.');
   }
-  const market=roles.venue.target;
+  const market=(roles.venue??roles.market).target;
   const record=source.markets?.[market];
-  const addresses=['router','venue','vault'].map(k=>roles[k].target);
-  const shells=['router','venue','vault'].map(k=>roles[k].code);
-  need(settings.market?.toLowerCase()===market && settings.quoter?.toLowerCase()===roles.router.target
+  const names=roles.market?['market','registry','vault']:['router','venue','vault'];
+  const addresses=names.map(k=>roles[k].target);
+  const shells=names.map(k=>roles[k].code);
+  need(settings.market?.toLowerCase()===market && settings.quoter?.toLowerCase()===(roles.router??roles.market).target
     && record?.addresses?.length===3 && addresses.every((v,i)=>v===record.addresses[i])
     && record?.shells?.length===3 && shells.every((v,i)=>v===record.shells[i])
     && hash.test(record.runtimeKeccak) && sha.test(record.runtimeSha256)
@@ -77,7 +78,7 @@ export async function checkPropVenue(provider,p,at) {
       need(body!=='0x' && runtimeKeccak(body)===implCode,'Изменился код реализации PropAMM '+implementation+'.');
     }
   }));
-  const links=[['router','0x2f61968b','fallback']];
+  const links=roles.market?[]:[['router','0x2f61968b','fallback']];
   if (roles.pool) links.push(['venue','0xb58d3f1f','pool'],['venue','0x104e010b','logic'],['pool','0xc405e442','logic'],
     ['pool','0x521eb273','vault'],['logic','0x521eb273','vault'],['vault','0xa619486e','singleton']);
   await Promise.all(links.map(([from,sig,to])=>getter(provider,at,roles[from].target,sig,roles[to].target)));
@@ -85,7 +86,7 @@ export async function checkPropVenue(provider,p,at) {
 
 export async function checkPropModule(provider,p,target,at) {
   const expected=[...p.addresses,...p.shells];
-  const getters=['0xf887ea40','0x80f55605','0xfbfa77cf','0x7e2d8a92','0x31574546','0xad5ab79b'];
+  const getters=p.roles.market?['0x80f55605','0x7b103999','0xfbfa77cf','0x31574546','0x26d8252a','0xad5ab79b']:['0xf887ea40','0x80f55605','0xfbfa77cf','0x7e2d8a92','0x31574546','0xad5ab79b'];
   await Promise.all(getters.map((selector,i)=>getter(provider,at,target,selector,expected[i])));
 }
 
@@ -106,6 +107,7 @@ export function selectPropDeployment(settings, pending, input, cards) {
 
 export async function propCard(settings, pending, input) {
   const cards=await Promise.all([
+    import('../assets/stelaxis-slot-ethereum.json'),
     import('../assets/prop-slot-v2-ethereum.json'),
     import('../assets/prop-slot-v2-ethereum-previous.json'),
     import('../assets/prop-slot-venue-ethereum.json'),

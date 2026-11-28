@@ -127,7 +127,7 @@
   {#if w.address && dex && w.bopamm}<SourcePrice venue={dex} trader={w.address} wallet={w.id} source="bopamm" label="bopAMM" />{/if}
   {#if w.address && dex}
     {#each (w.prop_sources ?? []) as source}
-      <SourcePrice venue={dex} trader={w.address} wallet={w.id} {source} label={source.startsWith('kaliber') ? 'Kaliber' : 'TaurusFi'} />
+      <SourcePrice venue={dex} trader={w.address} wallet={w.id} source={'lambda:' + source} label={source} slotBuilders={w.prop_builders?.[source] ?? []} />
     {/each}
   {/if}
 

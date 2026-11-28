@@ -40,7 +40,7 @@ def rows(net):
         add(3,"aggregate","curve curve-plain curve-twocrypto-ng curve-tricrypto-ng","11-53,585-599,607-624",
             "Первичный расчёт использует trading_volume сети Curve API. Для резервной ветви перечислены фабрики. Все пулы суточного агрегата и их доли не установлены.","curve_ethereum.json")
         add(7979,"conditional","","7-27","Методика учитывает три эмитента Fermi. Для подписанной операции нужны активный слот и доступная площадка на данном блоке.","fermi_ethereum.json")
-        add(9436,"conditional","","5-15","Swapped выделенного контракта Stelaxis. На контрольной высоте все десять направлений пяти пар были неактивны.","stelaxis_ethereum.json")
+        add(9436,"router","stelaxis-ethereum","5-15","Исходная pull-касса, четыре выплаты WETH/USDT в подтверждённом ценовом слоте каждой из двух форм. Цена остальных пар зависит от слота.","stelaxis_ethereum_slot.json.gz")
         add(382,"partial","pendle","18-29,48-55,65-73,82-89","Вместе учитываются AMM Swap PT/SY и OrderFilledV2 лимитного роутера. Регистрация AMM не покрывает отдельные лимитные заявки.","pendle_ethereum_registry.json.gz")
         add(2803,"rfq","","10-22,25-36","RFQTrade собирается с noTarget по сети. Публичный Native API и адрес реальной кассы проверены отдельно; для полного объёма нужна атрибуция каждого эмитента.","native_rfq_ethereum_public.json")
         add(7599,"partial","lista-dex-v3 lista-dex-stableswap","58-65,82-99,105-113,178-185","Учитываются отдельные V3 PoolCreated/Swap и stable TokenExchange из smartCollateralConfig. Допуск каждой пары зависит от состояния контракта.","lista_ethereum.json")

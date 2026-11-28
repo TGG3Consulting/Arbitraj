@@ -1,6 +1,7 @@
 //! Канонический реестр LambdaClass V1. Конкретный рынок и касса подписаны в профиле DEX.
 //! https://github.com/lambdaclass/propamm-router-contracts
 mod kipseli;
+mod stelaxis;
 use super::{
     families::{self, Family},
     nami_batch as batch, solidly_classic_factory as code,
@@ -88,6 +89,17 @@ impl Roles {
                 },
             })
         };
+        if rows.len() == 3 {
+            let market = read("market")?;
+            let registry = read("registry")?;
+            let vault = read("vault")?;
+            if market.proof().is_none() || market.address == vault.address || market.address == registry.address
+                || vault.address == registry.address || market.address != ctx.dex_addr("dex.quoter", id)?
+                || market.address != ctx.dex_addr("dex.factory", id)? {
+                return Err(bad(ctx));
+            }
+            return Ok(Self {router:market,venue:market,vault,fallback:registry,intermediaries:None});
+        }
         let s = Self {
             router: read("router")?,
             venue: read("venue")?,
@@ -99,7 +111,7 @@ impl Roles {
                 _ => return Err(bad(ctx)),
             },
         };
-        if s.router.proof().is_none()
+        if s.router.address == s.venue.address || s.router.proof().is_none()
             || s.router.address != ctx.dex_addr("dex.quoter", id)?
             || s.venue.address != ctx.dex_addr("dex.factory", id)?
             || s.venue.address == s.fallback.address
@@ -107,6 +119,10 @@ impl Roles {
             return Err(bad(ctx));
         }
         Ok(s)
+    }
+    pub(crate) fn direct_pull(&self) -> bool { self.router.address == self.venue.address }
+    pub(crate) fn accepts_frame(&self,address:Address,hash:B256)->bool {
+        !self.direct_pull() || (self.fallback.address,self.fallback.hash)==(address,hash)
     }
     pub(crate) fn quoted_venue(&self) -> Address {
         self.venue.address
@@ -169,6 +185,10 @@ pub(crate) async fn state(
     if r.venue.address != pool || !pairs(ctx, f.id)?.contains(&(a.min(b), a.max(b))) {
         return Err(bad(ctx));
     }
+    if r.direct_pull() {
+        let present = stelaxis::listed(ctx, &r, a, b, at).await?;
+        return Ok((r, present && generation == ctx.settings.generation()));
+    }
     let calls = [
         batch::view(at, r.router.address, IProp::pausedCall {}),
         batch::view(
@@ -204,6 +224,9 @@ pub(crate) async fn module(
 ) -> GatewayResult<B256> {
     if m != ctx.dex_addr("dex.router", f.id)? {
         return Err(bad(ctx));
+    }
+    if r.direct_pull() {
+        return stelaxis::module(ctx,f,r,m,at).await;
     }
     let (row, hash) = tokio::try_join!(
         batch::read(
@@ -259,7 +282,8 @@ pub(super) fn directory(ctx: &Ctx, coins: &HashMap<Address, String>, quotes: &[A
         .into_iter()
         .filter(|f| f.variant.prop_venue())
     {
-        if let (Ok(r), Ok(accepted)) = (Roles::read(ctx, f.id), pairs(ctx, f.id)) {
+        if let (Ok(r), Ok(accepted)) = (Roles::read(ctx, f.id), pairs(ctx, f.id))
+            && !r.direct_pull() {
             for (a, b) in accepted {
                 for row in
                     super::stable_list::candidates(f.id, r.venue.address, &[a, b], coins, quotes)

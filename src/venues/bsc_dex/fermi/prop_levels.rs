@@ -1,6 +1,6 @@
 //! Лестницы точного входа отдельного PropAMM на опубликованном кадровом состоянии; встречная валюта определяется контрактом.
 use super::super::{
-    exec::{prop_abi::IProp, prop_wallet},
+    exec::{prop_abi::{IProp,IStelaxis}, prop_wallet},
     num,
     parts::Parts,
     pools::{families, prop_venue},
@@ -17,6 +17,23 @@ use alloy::primitives::{Address, Bytes, U64, U256, keccak256};
 use alloy::sol_types::SolCall;
 use serde_json::json;
 use std::collections::{BTreeMap, BTreeSet};
+pub(super) fn quote_call(router:Address,venue:Address,i:Address,o:Address,n:U256)->Bytes {
+    if router==venue {
+        IStelaxis::quoteCall{input:i,output:o,amount:n}.abi_encode().into()
+    } else {
+        IProp::quoteVenueV1Call{venue,tokenIn:i,tokenOut:o,amountIn:n}.abi_encode().into()
+    }
+}
+pub(super) fn quote_result(router:Address,venue:Address,raw:&[u8])->Option<U256> {
+    let net = if router==venue {
+        IStelaxis::quoteCall::abi_decode_returns(raw).ok()?
+    } else {
+        let q=IProp::quoteVenueV1Call::abi_decode_returns(raw).ok()?;
+        if q.quotedVenue!=venue{return None;}
+        q.amountOut
+    };
+    (!net.is_zero()).then_some(net)
+}
 pub(super) async fn quotes(
     ctx: &Ctx,
     h: &Head,
@@ -31,8 +48,7 @@ pub(super) async fn quotes(
         let calls: Vec<_> = group
             .iter()
             .map(|amount| {
-                json!({"from":t.target,"to":t.router,"data":Bytes::from(IProp::quoteVenueV1Call{
-            venue:t.venue,tokenIn:i,tokenOut:o,amountIn:*amount}.abi_encode())})
+                json!({"from":t.target,"to":t.router,"data":quote_call(t.router,t.venue,i,o,*amount)})
             })
             .collect();
         let rows = slot::run(ctx, h, f, json!(calls)).await?;
@@ -41,11 +57,9 @@ pub(super) async fn quotes(
         }
         for (size, row) in group.iter().zip(rows) {
             if row.status == U64::from(1)
-                && let Ok(q) = IProp::quoteVenueV1Call::abi_decode_returns(&row.return_data)
-                && q.quotedVenue == t.venue
-                && !q.amountOut.is_zero()
+                && let Some(net)=quote_result(t.router,t.venue,&row.return_data)
             {
-                out.push((*size, q.amountOut));
+                out.push((*size,net));
             }
         }
     }
@@ -70,7 +84,7 @@ async fn read_pair(
         prop_venue::state(ctx, family, cfg.deployment.router, (cfg.cash, coin), &at),
         canonical(ctx, h.hash, coin, decimalsCall {})
     )?;
-    if !enabled {
+    if !enabled || !roles.accepts_frame(cfg.deployment.engine,cfg.deployment.runtime) {
         return Err(ctx.err(ErrorCode::NoRoute, "Именная площадка отключена"));
     }
     let terms = super::prop_slot::terms(ctx, family, &roles, cfg.executor, h).await?;

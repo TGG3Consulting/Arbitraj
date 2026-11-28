@@ -940,6 +940,11 @@ jobs:
           python scripts/record_zeroex_base_payments.py "$RUNNER_TEMP/payments.json.gz"
           gzip -dc "$RUNNER_TEMP/payments.json.gz" > "$RUNNER_TEMP/market.json"
           cmp "$RUNNER_TEMP/market.json" <(gzip -dc tests/data/first_run_dex_2026-11-26/zeroex_base_payments.json.gz)
+      - if: matrix.market == 'stelaxis-slot-tests'
+        run: |
+          cargo test --locked --lib original_and_single_use_stelaxis_pay_the_same_owner_in_both_directions
+          cargo test --locked --test ethereum_lambda_slot_profiles
+          printf '%s\n' '{"market":"stelaxis","recorded_wallet_controls":40}' > "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'stelaxis-direct-slot'
         run: |
           python -m pip install --quiet eth-account==0.13.7

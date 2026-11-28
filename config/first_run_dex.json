@@ -7390,5 +7390,35 @@
         "0x8586e429284a8a0a9ee0a73bfe021167e25db9b8e0cf0313c11adf8a1f54ea71"
       ]
     }
+  },
+  {
+    "chain_id": 1,
+    "network": "ethereum",
+    "id": "stelaxis-ethereum",
+    "source": "https://github.com/DefiLlama/dimension-adapters/blob/be9967c3f0d3ccd06c871bab0d16beb3304de719/dexs/stelaxis/index.ts · tests/data/first_run_dex_2026-11-26/stelaxis_ethereum_slot.json.gz",
+    "settings": {
+      "dex.kind": "lambda_propamm",
+      "dex.factory": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+      "dex.quoter": "0x77047af6cd8f7f84d96a020a2833d24916b75fde",
+      "dex.propamm_roles": [
+        "market 0x77047af6cd8f7f84d96a020a2833d24916b75fde 0x18f95d772587f01e910a390c7b48d767fbfa7726584405e8277da572b72f9386 0x5922cad27c88e4d9d8701a2706229072768a707a 0x3c862f988d985ad57bace1d9d1d659ec37b946f7c8decf260ae5fb8865e95c79",
+        "registry 0xda7afeed021eafc1c1af9c362de477dad0396b81 0xcc6b013888e9bc9bb487c5301fff645b5d91007cf88053d145963921f6e2d026",
+        "vault 0xb5378cf59f35e6e8bf5679ec6c22d1c5ff912433 0xf15a07c54ab3420101c38795fc919a27ffb05f1a0049070ba3b8f10bae32af97 0x013d0dc75808d097b00a1ce8dc6d464fb7c7746e 0x456e5b759d42989792b469b671a53b2f9b5397887d480f2f14ee9ec12bf5cf97"
+      ],
+      "dex.propamm_price_slots": [
+        "0xda7afeed021eafc1c1af9c362de477dad0396b81 0xcc6b013888e9bc9bb487c5301fff645b5d91007cf88053d145963921f6e2d026 0x33350a124d24eb0b8f6586cff5ca21c509cf3d5ae07b74aef0c4ef804117b28e 0x33350a124d24eb0b8f6586cff5ca21c509cf3d5ae07b74aef0c4ef804117b28f 0x464a04b53fba526568c83d545f707970d8cdb5a3d94aa5b4b0974a82778c23cb 0x464a04b53fba526568c83d545f707970d8cdb5a3d94aa5b4b0974a82778c23cc 0x49b5bb26c65cff033e76942c3f3fb6eebaf54874078fc031f45e6ce0d1f35bd4 0x49b5bb26c65cff033e76942c3f3fb6eebaf54874078fc031f45e6ce0d1f35bd5 0x50337d9d0cdba36a57f44d67a71544d80968ce2a2d15ba4fd11dec3d71e43fa0 0x50337d9d0cdba36a57f44d67a71544d80968ce2a2d15ba4fd11dec3d71e43fa1 0x644fa7dad10b3f5eb3cc47e49b36240e5a04330577aa16f0fd2b2d8c6814e3f9 0x644fa7dad10b3f5eb3cc47e49b36240e5a04330577aa16f0fd2b2d8c6814e3fa"
+      ],
+      "dex.propamm_pairs": [
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+        "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+        "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599 0xdac17f958d2ee523a2206206994597c13d831ec7",
+        "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 0xdac17f958d2ee523a2206206994597c13d831ec7"
+      ],
+      "dex.multi_pair": true,
+      "dex.module_runtime_hashes": [
+        "0xbd69f28422f1608c916839a4e38b9c80564a9636e0704b6b244056414c09b3f8"
+      ]
+    }
   }
 ]

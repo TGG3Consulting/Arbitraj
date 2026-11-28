@@ -1,15 +1,16 @@
 //! Параметры одного расчётного актива и разрешённого строителя с независимыми исполнителями площадок.
 //! Лента книг и подготовка заявок читают настройки Ethereum и отдельные разрешения каждого рынка.
-pub(super) use super::slot_checks::{fresh, same_frame, simulate, timely};
 use super::super::{
     parts::Parts,
     pools::{families, load_woo_ladder},
 };
+pub(super) use super::slot_checks::{fresh, same_frame, simulate, timely};
 use super::{Builder, Deployment, prop_oracle::Oracle, prop_profile};
 use alloy_primitives::{Address, B256};
 use rust_decimal::Decimal;
 #[derive(Clone)]
 pub(super) enum Source {
+    Bop(super::bop_cash::Path),
     Fermi {
         runtime: B256,
     },
@@ -80,6 +81,20 @@ impl Config {
             && !executor.is_zero()
         {
             out.push(build(builder, d, executor, Source::Fermi { runtime }));
+        }
+        for (builder, path) in super::bop_cash::configured(ctx, cash) {
+            let profile = path.profile();
+            let deployment = Deployment {
+                router: profile.market.address,
+                engine: profile.registry.address,
+                runtime: profile.market.hash,
+            };
+            out.push(build(
+                builder,
+                deployment,
+                path.module.address,
+                Source::Bop(path),
+            ));
         }
         if prop_profile::network(ctx).is_none() {
             return Some(out);
@@ -164,8 +179,16 @@ pub(super) fn builders(rows: Vec<String>) -> Vec<Builder> {
     out
 }
 impl Config {
+    pub(super) fn same_path(&self, other: &Self) -> bool {
+        match (&self.source, &other.source) {
+            (Source::Bop(a), Source::Bop(b)) => a.bridge == b.bridge,
+            (Source::Bop(_), _) | (_, Source::Bop(_)) => false,
+            _ => true,
+        }
+    }
     pub(super) fn permitted(&self, ctx: &super::Ctx) -> bool {
         match &self.source {
+            Source::Bop(path) => path.permitted(ctx, self.builder),
             Source::Fermi { .. } => {
                 ctx.flag("fermi.trading").unwrap_or(false)
                     && ctx.text("fermi.builder").as_deref().ok() == Some(self.builder.name())

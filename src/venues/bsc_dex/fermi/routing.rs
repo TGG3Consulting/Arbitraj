@@ -34,7 +34,9 @@ pub(in crate::venues::bsc_dex) fn breaks(
     };
     let mut points = std::collections::BTreeSet::new();
     for book in p.slot_markets.current(p) {
-        if crate::gateway::quote_stage::settlement() && book.prop.is_none() {
+        if crate::gateway::quote_stage::settlement()
+            && super::prop_levels::Quoted::book(&book).is_none()
+        {
             continue;
         }
         if let Some(side) = book.sides.get(&(coin, side == Side::Buy)) {
@@ -72,7 +74,7 @@ pub(in crate::venues::bsc_dex) async fn consider(
         .slot_markets
         .current(p)
         .into_iter()
-        .filter(|b| !mixed || b.prop.is_some())
+        .filter(|b| !mixed || super::prop_levels::Quoted::book(b).is_some())
         .filter_map(|b| candidate(p, b, asset, side, qty))
         .collect();
     if candidates.is_empty() {
@@ -108,15 +110,16 @@ pub(in crate::venues::bsc_dex) async fn consider(
                 let coin = if buy { c.output } else { c.input };
                 // An actual measured level in this exact frame fixes the quoted gross for this amount.
                 // A zero gas allowance for this comparison is already maximally favourable to the candidate.
-                if c.book.sides.get(&(coin, buy)).is_some_and(|levels| {
-                    levels
-                        .0
-                        .iter()
-                        .any(|(size, gross)| *size == qty && !improves(side, *gross, Some(base)))
-                }) {
+                if !matches!(&c.book.config.source, super::slot_config::Source::Bop(_))
+                    && c.book.sides.get(&(coin, buy)).is_some_and(|levels| {
+                        levels.0.iter().any(|(size, gross)| {
+                            *size == qty && !improves(side, *gross, Some(base))
+                        })
+                    })
+                {
                     return None;
                 }
-                if c.book.prop.is_none()
+                if super::prop_levels::Quoted::book(&c.book).is_none()
                     && !improves(
                         side,
                         hashflow::routing::total(p, &c.quote).await?,

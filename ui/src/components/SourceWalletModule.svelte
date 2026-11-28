@@ -5,9 +5,9 @@
   import {setValue,store} from '../lib/settings.svelte.js';
   import {loadPlan,estimate,send,deployed} from '../lib/walletDeployment.js';
 
-  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,roleRows=false,wrapped,book,bookModule,marketBindings}=$props();
+  let {venue,wallet,chain,version,kind,source,label,setting,load,recoverPlan,addModule,registeredOwnerModule,shared=false,roleRows=false,roleName="module",wrapped,book,bookModule,marketBindings}=$props();
   const rows=$derived(store.values[setting+'|Venue|'+venue] ?? (shared ? null : []));
-  const target=$derived(roleRows ? (Array.isArray(rows) ? rows.find(r=>typeof r==='string' && /^module\s/.test(r.trim()))?.trim().split(/\s+/)[1] : null) : rows);
+  const target=$derived(roleRows ? (Array.isArray(rows) ? rows.find(r=>typeof r==='string' && r.trim().split(/\s+/)[0]===roleName)?.trim().split(/\s+/)[1] : null) : rows);
   const configured=$derived(book ? bookModule : (shared ? target : null));
   const storageKey=$derived(sourceDeploymentKey(source,venue,chain,version,wallet,shared));
   let busy=$state(false),error=$state(''),message=$state(''),priced=$state(null),hash=$state('');

@@ -21,13 +21,14 @@ pub(super) async fn firm(p: &Parts, c: Candidate) -> Option<(Prepared, Quote)> {
     let (fees, base) = p.gas.fees(ctx, &p.heads).await.ok()?;
     let executor = b.config.executor;
     let leg = keccak256((h.hash, who, c.input, c.output, c.amount).abi_encode());
-    let proof = if let Some(t) = b.prop {
+    let proof = if let Some(t) = super::prop_levels::Quoted::book(&b) {
         super::prop_slot::candidate(ctx, &c, t, leg).await?
     } else {
         let (s, r) = slot::amounts(ctx, h, f, executor, c.input, c.output, c.amount)
             .await
             .ok()?;
         Proof {
+            bop: None,
             prop: None,
             builder: b.config.builder.name().into(),
             parent: h.hash,

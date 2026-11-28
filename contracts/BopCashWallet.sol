@@ -64,19 +64,25 @@ contract BopCashWallet is BopAmmWallet {
     }
 
     function maker(Order memory o,address a,address b,uint256 amount) private returns(uint256) {
-        o.input=a;o.output=b;o.amount=amount;o.minimum=1;
-        o.leg=keccak256(abi.encode(msg.sender,o.leg));
-        move(a,abi.encodeCall(IBopCashToken.approve,(address(this),amount)));
-        (uint256 paid,uint256 received)=this.execute(o);
-        // WETH9 skips allowance consumption when the sender and spender coincide.
-        if(IBopCashToken(a).allowance(address(this),address(this))!=0)
-            move(a,abi.encodeCall(IBopCashToken.approve,(address(this),0)));
-        if(paid!=amount || received==0 || IBopCashToken(a).allowance(address(this),address(this))!=0) revert InvalidFill();
+        address venue=address(market);
+        if(market.paused() || !market.isActive(a,b)) revert InvalidMarket();
+        IBopCashToken input=IBopCashToken(a);
+        IBopCashToken output=IBopCashToken(b);
+        uint256 beforeInput=input.balanceOf(venue);
+        uint256 beforeOutput=output.balanceOf(venue);
+        uint256 beforeCredit=output.balanceOf(address(this));
+        move(a,abi.encodeCall(input.transfer,(venue,amount)));
+        if(input.balanceOf(venue)!=beforeInput+amount) revert InvalidFill();
+        market.swap(a,b,amount,1,address(this),o.timestamp);
+        uint256 received=output.balanceOf(address(this))-beforeCredit;
+        if(received==0 || input.balanceOf(venue)!=beforeInput || output.balanceOf(venue)!=beforeOutput) revert InvalidFill();
+        emit Filled(address(this),keccak256(abi.encode(msg.sender,o.leg)),a,b,amount,received);
         return received;
     }
 
     function executeCash(Order calldata o) external returns(uint256 spent,uint256 received) {
         if(cashBusy || o.leg==bytes32(0) || completed[msg.sender][o.leg] || o.minimum==0 || o.amount==0) revert InvalidOrder();
+        if(o.parent==bytes32(0) || o.parent!=blockhash(block.number-1) || o.height!=block.number || o.timestamp!=block.timestamp) revert WrongBlock();
         bool buy=buying(o.input,o.output);
         cashBusy=true;
         completed[msg.sender][o.leg]=true;

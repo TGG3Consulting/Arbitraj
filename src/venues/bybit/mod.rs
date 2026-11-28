@@ -8,6 +8,8 @@
 //! Только по официальной документации Bybit V5 (https://bybit-exchange.github.io/docs/v5/intro; исходник —
 //! github.com/bybit-exchange/docs). Ссылки — в шапке каждого файла и в README.md этой папки. Фьючерсов, маржи и
 //! опционов нет: каждый запрос — category=spot, ордер — isLeverage=0, ключ с правами деривативов не проходит проверку.
+//! Расчётный круг Base: ордер конверсии (settlement.rs), вывод (requestId до POST, сверка совпадением — resolve.rs) и
+//! зачисление на UNIFIED (решение Тиграна 28.11 о настройке аккаунта) — см. флаги ниже.
 //! Счёт: единый торговый (UNIFIED) — торговля и балансы; депозит — на UNIFIED по настройке кабинета (решение 136, Тигран
 //! 04.11), запасной вариант — перевод FUND → UNIFIED (fund_move.rs, venue.deposit_to_spot).
 
@@ -47,6 +49,7 @@ pub mod private_cache;
 pub mod reply;
 pub mod resolve;
 pub mod rest;
+pub mod settlement;
 pub mod subs;
 pub mod symbols;
 pub mod symbols_parse;
@@ -121,6 +124,59 @@ impl Bybit {
 
 #[async_trait]
 impl Venue for Bybit {
+    /// Расчётный круг Base: отпечаток публичного ключа API — идентичность торгового счёта (gateway/settlement_intent.rs).
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Ордер конверсии IOC: orderLinkId сохраняется до POST (trade.rs), оборот — cumExecValue (note_gross), сверка
+    /// после потери ответа — только чтением по orderLinkId (settlement.rs).
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Символ заявки = baseCoin + quoteCoin (факт записанного instruments-info, settlement.rs).
+    /// https://bybit-exchange.github.io/docs/v5/market/instrument
+    fn matches_settlement_order(
+        &self,
+        pending: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settlement::matches_symbol(pending.symbol.as_deref(), asset, quote)
+    }
+
+    /// Только GET: окончательный ордер по своему orderLinkId; открытый — на следующую сверку (settlement.rs).
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settlement::inspect(&self.ctx, req, p).await
+    }
+
+    /// Поддерживается по решению арбитра 28.11.2026 на основании слов Тиграна (28.11.2026): в аккаунте Bybit бота
+    /// депозит зачисляется на торговый счёт UNIFIED; факт бота — venue.deposit_to_spot [bybit] не задан, перевод
+    /// FUND → UNIFIED бот не делает, а монеты сделок BSC продаются на Bybit после зачисления.
+    /// Документация «Set Deposit Account» https://bybit-exchange.github.io/docs/v5/asset/deposit/set-deposit-acct:
+    /// «Your funds will be deposited into FUND wallet by default. You can set the wallet for auto-transfer after
+    /// deposit» — зачисление на UNIFIED держится на этой настройке аккаунта; запроса её текущего значения в документации
+    /// нет. УСЛОВИЕ: если зачисление в аккаунте переключат на FUND — флаг вернуть в false.
+    fn supports_settlement_credit(&self) -> bool {
+        true
+    }
+
+    /// Поддерживается по решению арбитра 28.11.2026. Свой requestId (POST /v5/asset/withdraw/create
+    /// https://bybit-exchange.github.io/docs/v5/asset/withdraw — «Customised ID, globally unique, it is used for
+    /// idempotent verification»: идемпотентность — по документации) сохраняется до POST (transfers.rs). Поиска по
+    /// requestId в истории выводов в документации НЕТ (у GET /v5/asset/withdraw/query-record нет ни параметра, ни поля
+    /// requestId, https://bybit-exchange.github.io/docs/v5/asset/withdraw/withdraw-record): сверка после потери ответа —
+    /// совпадением монета + сеть + адрес + сумма с момента отправки (resolve.rs, тот же путь, что у BSC): ровно одна
+    /// запись — вывод найден; ни одной — пока не найден; две и больше — не выбирается, разбирает человек.
+    fn supports_settlement_withdrawal(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

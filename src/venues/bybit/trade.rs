@@ -11,6 +11,8 @@
 //! — ответ result.orderId, result.orderLinkId; «This request is asynchronous so please use the websocket to confirm the
 //! order status» — итог берётся из потока или запросом (order_state.rs). Поля итога — Get Open & Closed Orders:
 //! cumExecQty, cumExecValue, qty, orderStatus, rejectReason.
+//! Расчётный круг Base (USDCUSDT): свой orderLinkId сохраняется до POST (gateway/settlement_intent.rs before_send),
+//! cumExecValue окончательной записи передаётся ядру как точный оборот (note_gross); сверка — settlement.rs.
 
 use chrono::Utc;
 use rust_decimal::Decimal;
@@ -39,6 +41,14 @@ pub async fn trade(
         Some(p) => p,
         None => order_rules::ready(ctx, symbols, &req).await?,
     };
+    // Решение 231: «чем найти» — отправленное (округлённое) количество p.qty (gateway/pending.rs: sent_qty) и время
+    // отправки. Расчётный круг Base: свой orderLinkId сохраняется ДО POST (settlement_intent::before_send; вне
+    // расчётного шага ничего не делает) — после потери ответа ордер сверяется только чтением (settlement.rs).
+    let pending = PendingRef {
+        sent_at_s: Some(Utc::now().timestamp()),
+        ..PendingRef::order(&p.symbol, &p.link_id, p.qty)
+    };
+    crate::gateway::settlement_intent::before_send(&pending).await?;
     let placed = rest::post(ctx, "/v5/order/create", &p.body, Op::Trade).await;
     // HTTP успешен, а orderId нет — итог неизвестен (повтор дал бы второй ордер).
     let placed = placed.and_then(|r| {
@@ -55,7 +65,6 @@ pub async fn trade(
         })
     });
     // Решение 231: «чем найти» — к любому «итог неизвестен» ниже (ядро выяснит исход само, outcome_resolve.rs).
-    let pending = PendingRef::order(&p.symbol, &p.link_id, req.qty);
     let order_id = match placed {
         Ok(id) => id,
         Err(e) if e.code == ErrorCode::OutcomeUnknown => {
@@ -97,7 +106,12 @@ pub async fn result(
         ));
     }
     let orig = num::dec(s, "qty")?;
-    let value = num::dec_opt(s, "cumExecValue")?.unwrap_or_default();
+    let reported = num::dec_opt(s, "cumExecValue")?;
+    // Расчётный круг Base: точный оборот в котируемой монете — cumExecValue («Cumulative executed order value») той же
+    // окончательной записи; нет поля — ядро получит «итог неизвестен» (settlement_intent::capture). Вне расчётного шага
+    // ничего не делает.
+    crate::gateway::settlement_intent::note_gross(reported);
+    let value = reported.unwrap_or_default();
     let status = if filled.is_zero() {
         TradeStatus::NotFilled
     } else if filled < orig {

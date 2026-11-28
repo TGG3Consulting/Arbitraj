@@ -106,6 +106,7 @@ pub async fn view(st: &AppState) -> Value {
             "prop_builders": prop_builders,
             "textile": single_source("textile.base_url"),
             "kipseli": single_source("kipseli.base_url"),
+            "tokenlon": dex.as_deref().is_some_and(|v| tokenlon_configured(st, v)),
             "zeroex": single_source("zeroex.base_url"),
             "name": w.name,
             "secret": w.secret,
@@ -179,6 +180,7 @@ async fn by_chain(
             "prop_builders": builders,
             "textile": st.settings.text("textile.base_url",at).is_ok_and(|s|!s.is_empty()),
             "kipseli": st.settings.text("kipseli.base_url",at).is_ok_and(|s|!s.is_empty()),
+            "tokenlon": tokenlon_configured(st, &v.0),
             "zeroex": st.settings.text("zeroex.base_url",at).is_ok_and(|s|!s.is_empty()),
             "home": w.home() == v.0,
             "executor": x.executor,
@@ -190,6 +192,12 @@ async fn by_chain(
         }));
     }
     out
+}
+
+fn tokenlon_configured(st: &AppState, venue: &str) -> bool {
+    let at = crate::settings::read::At { venue: Some(venue), coin: None };
+    st.settings.integer("dex.evm_chain_id", at).is_ok_and(|chain| chain == 1)
+        && st.settings.text("tokenlon.publisher_url", at).is_ok_and(|url| url == "https://publisher.tokenlon.im/rpc")
 }
 
 fn clipper_configured(st: &AppState, venue: &str) -> bool {

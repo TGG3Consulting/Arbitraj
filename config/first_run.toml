@@ -4064,6 +4064,24 @@ rationale = "Прокси и хеш кода реестра 0x, адрес и х
 prefill = { kind = "Venue", id = "eth_dex" }
 
 [[section.rec]]
+name = "tokenlon.publisher_url"
+area = "Venue eth_dex"
+unit = "URL"
+value = "https://publisher.tokenlon.im/rpc"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_taker_auth.json"
+rationale = "Официальный сервис личных котировок PMMV5 для кошелька Ethereum. Запрос цены доступен при указании официального адреса."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
+name = "tokenlon.trading"
+area = "Venue eth_dex"
+unit = "да/нет"
+value = "false"
+source = "tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json"
+rationale = "Допуск заявок Tokenlon к выбору по чистой прибыли на Ethereum. Для включения владелец проверяет личную заявку на финансированном кошельке."
+prefill = { kind = "Venue", id = "eth_dex" }
+
+[[section.rec]]
 name = "zeroex.trading"
 area = "Venue eth_dex"
 unit = "да/нет"

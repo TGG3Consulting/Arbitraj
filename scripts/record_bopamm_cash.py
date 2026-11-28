@@ -60,14 +60,18 @@ def run(reader,base,probe,frame,cache,production=False):
         if production:
             method="executeCash" if compound else "execute"
             swap=node_tx(base_addr,method+"("+ORDER+")",[ORDER],[o])
-        tail=[swap] if production else []
+        tail=[node_tx(base_addr,"completed(address,bytes32)",["address","bytes32"],[PAYER,leg]),swap] if production else []
         calls=[*creates,*grants,*reads,swap,*reads,*tail]
         req={"blockStateCalls":[{"blockOverrides":{"time":hex(slot_time)},"stateOverrides":patch,"calls":calls}]}
         h,=reader.one("eth_simulateV1",[req,tag]);assert h["parentHash"]==frame["parent"] and int(h["number"],16)==height
         v=h["calls"];assert len(v)==len(calls)
         if production:
-            assert v[-1]["status"]=="0x0"
-            v=v[:-1]
+            completed,again=v[-2:]
+            assert completed["status"]=="0x1" and again["status"]=="0x0"
+            recorded=bool(int(completed["returnData"],16))
+            v=v[:-2]
+            assert recorded == (v[-4]["status"]=="0x1")
+            if recorded: assert again["returnData"].lower()=="0x"+keccak(text="InvalidOrder()")[:4].hex()
         assert all(c["status"]=="0x1" for c in v[:-4]+v[-3:])
         before=[int(x["returnData"],16) for x in v[-7:-4]]
         after=[int(x["returnData"],16) for x in v[-3:]]
@@ -90,13 +94,13 @@ def run(reader,base,probe,frame,cache,production=False):
             venue=AMM
         elif production:
             venue=AMM
-            fills=maker_fills(mid["logs"],source,target,PAYER,spent,received) 
+            fills=maker_fills(mid["logs"],source,target,PAYER,spent,received)
         else:
             amount,venue=decode(["uint256","address"],bytes.fromhex(mid["returnData"][2:]))
             assert amount==received
             fills=[]
         return {"outcome":"paid","spent":str(spent),"received":str(received),"gas":int(mid["gasUsed"],16),
-                **({"logs":mid["logs"],"data":swap["data"],"runtime":v[0]["returnData"],"executor":base_addr,"leg":"0x"+leg.hex(),"minimum":str(bound),"duplicate_reverted":True} if production else {}),
+                **({"logs":mid["logs"],"data":swap["data"],"runtime":v[0]["returnData"],"executor":base_addr,"leg":"0x"+leg.hex(),"minimum":str(bound),"duplicate_reverted":True,"completed":recorded,"duplicate_data":again["returnData"]} if production else {}),
                 "approval_gas":int(v[len(creates)+len(grants)-1]["gasUsed"],16),"venue":venue,"maker_fills":fills}
     rows=[]
     for source,target,size in [(WETH,USDT,5*10**17),(USDT,WETH,1000*10**6),(WETH,USDT,5*10**18),(USDT,WETH,10_000*10**6)]:

@@ -1012,6 +1012,10 @@ jobs:
           npm run build --prefix ui
           node contracts/build-hanji.mjs "$RUNNER_TEMP/bopamm" BopCashPathProbe
           python scripts/record_bopamm_cash.py "$RUNNER_TEMP/bopamm/BopAmmWallet.json" "$RUNNER_TEMP/bopamm/BopCashPathProbe.json" "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'bopamm-role-bindings-ethereum'
+        run: |
+          python -m pip install --quiet eth-account==0.13.7
+          python scripts/record_bopamm_cash_roles.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bopamm-production-cash-ethereum'
         run: |
           npm ci --prefix contracts

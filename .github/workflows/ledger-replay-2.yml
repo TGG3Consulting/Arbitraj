@@ -1,14 +1,15 @@
 # Прогон по записанным сделкам бота на трёх версиях кода (вариант 28.11.2026, без Codex).
 # Версии: target-sha.txt (релиз) и compare-shas.txt (базовая, предыдущая). Данные — обезличенная
 # проекция project2.py, приходит зашифрованной (envelope.py) в ветке claude/ledger-envelope-<run>-<attempt>.
-# Открытый ключ получателя печатается в лог (он не секретный); закрытый ключ и данные удаляются в конце.
+# Открытый ключ получателя (не секретный) runner кладёт в ветку claude/ledger-receiver-<run>-<attempt>;
+# закрытый ключ и данные удаляются в конце.
 # Наружу — только сводка cashflow-*.json и SHA версий (артефакт).
 name: Ledger replay (deals export)
 on:
   push:
     branches: [claude/ledger-replay-20261128]
 permissions:
-  contents: read
+  contents: write
 jobs:
   replay:
     runs-on: ubuntu-latest
@@ -38,7 +39,15 @@ jobs:
           umask 077
           /usr/bin/python3 -m pip install --quiet --user cryptography requests
           /usr/bin/python3 harness/tools/profit_ledger_replay/envelope.py keygen "$RUNNER_TEMP/key.pem" "$RUNNER_TEMP/public.pem"
-          echo "RECEIVER-PUBLIC-KEY-BEGIN"; cat "$RUNNER_TEMP/public.pem"; echo "RECEIVER-PUBLIC-KEY-END"
+      - name: Publish receiver public key
+        working-directory: harness
+        run: |
+          git config user.name "github-actions"; git config user.email "github-actions@users.noreply.github.com"
+          git checkout -q --orphan receiver
+          git rm -rq --cached . ; cp "$RUNNER_TEMP/public.pem" public.pem
+          git add public.pem; git commit -qm "receiver ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git push -q origin HEAD:refs/heads/claude/ledger-receiver-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          git checkout -q -f "$GITHUB_SHA"
       - uses: dtolnay/rust-toolchain@1.97.0
       - uses: Swatinem/rust-cache@v2
         with:

@@ -9,4 +9,4 @@ The diagnostic workflow compiles the checked-out `target-sha.txt` on GitHub Acti
 - `project2.py ORIGINAL LATEST OUT --cutoff ISO` — две выгрузки `/api/deals` бота → обезличенная проекция (финансовые поля, периоды, группы по биржам, флаг двух сделок TLOS).
 - `tlos_fix.py` — в CI берёт квитанцию TLOS с публичного узла BSC и ставит проверенное зачисление (условия те же, что `correction_map`).
 - `replay2.rs` — пересчёт итога каждой сделки кодом бота в трёх версиях (`target-sha.txt`, `compare-shas.txt`); набора MEXC-147 и сверки квитанций переводов в этом варианте нет.
-- Открытый ключ получателя печатается в лог прогона; проекция шифруется `envelope.py seal` и кладётся в ветку `claude/ledger-envelope-<run>-<attempt>`.
+- Открытый ключ получателя runner кладёт в ветку `claude/ledger-receiver-<run>-<attempt>`; проекция шифруется `envelope.py seal` и кладётся в ветку `claude/ledger-envelope-<run>-<attempt>`.

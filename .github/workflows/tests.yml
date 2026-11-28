@@ -652,6 +652,8 @@ jobs:
         run: python scripts/record_spectra_ipor.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-extra-ibt-base'
         run: python scripts/record_spectra_extra_ibt.py "$RUNNER_TEMP/market.json"
+      - if: matrix.market == 'spectra-small-ibt-base'
+        run: python scripts/record_spectra_extra_ibt.py --only-smaller "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'spectra-base'
         run: python scripts/record_spectra_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'omni-flux-bin-base'

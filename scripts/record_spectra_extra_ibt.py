@@ -1,4 +1,4 @@
-"""Read-only settlement replay for pre-held IBT identified in eight untested Base Spectra markets."""
+"""Read-only settlement replay for pre-held IBT identified in previously untested Base Spectra markets."""
 import argparse
 import gzip
 import json
@@ -15,7 +15,7 @@ def read_archive(path):
         return json.load(file)
 
 
-def replay(output):
+def replay(output, only_smaller):
     folder = ROOT / "tests/data/first_run_dex_2026-11-26"
     snapshot = read_archive(folder / "spectra_base_directory.json.gz")
     holders = json.loads((folder / "spectra_extra_ibt_holders.json").read_bytes())
@@ -26,12 +26,14 @@ def replay(output):
     endpoint_index = 0
     checked = set()
     for pool in holders["markets"]:
+        if bool(pool.get("only_smaller")) != only_smaller:
+            continue
         market = directory[pool["pool"]]
         if pool["token"] != market["coin0"]:
             raise ValueError("different IBT at expected pool")
         source = max(pool["holders"],key=lambda candidate:int(candidate["balance"]))
         cases = []
-        for denominator in (10000,1000):
+        for denominator in ((10000,) if only_smaller else (10000,1000)):
             budget = max(10**market["decimals0"]//denominator,1)
             for mode in ("v5","pool","router"):
                 # Continue an interrupted read at the same individual sample. Earlier cases remain in memory.
@@ -63,5 +65,7 @@ def replay(output):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("output",type=Path)
-    replay(parser.parse_args().output)
+    parser.add_argument("--only-smaller",action="store_true",help="select the two funded at the smaller archived amount only")
+    args=parser.parse_args()
+    replay(args.output,args.only_smaller)
 

@@ -112,6 +112,28 @@
           "balance": "49242796436832602298"
         }
       ]
+    },
+    {
+      "pool": "0x5985085cef7057b8e36b13fe7c7fc07fd3ea3ac8",
+      "token": "0x7fe7de5d72633b981191eaee2ccaed95c77e79a9",
+      "holders": [
+        {
+          "owner": "0xc06ebbefd94032b85424d51906e2a335efae264b",
+          "balance": "456364955745221"
+        }
+      ],
+      "only_smaller": true
+    },
+    {
+      "pool": "0xd96de83b2888e9ad45dbeec093245bb64c3c9e57",
+      "token": "0x27d8c7273fd3fcc6956a0b370ce5fd4a7fc65c18",
+      "holders": [
+        {
+          "owner": "0xcd6b980029e6e6e0733ac8ec3e02be9410d09799",
+          "balance": "522659137368546"
+        }
+      ],
+      "only_smaller": true
     }
   ]
 }

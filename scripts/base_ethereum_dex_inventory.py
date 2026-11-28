@@ -35,6 +35,8 @@ BASE_USDT_EVIDENCE = {
              "[Котировка](https://docs-bot-api.ave.ai/en/chain-wallet-transaction-rest-api/quote-api) · [Исполнение EVM](https://docs-bot-api.ave.ai/en/chain-wallet-transaction-rest-api/evm-bsc-eth-base-polygon-robinhood-transaction-api) · [Доступ](https://docs-bot-api.ave.ai/en/how-to-activate)."),
     "7902": ("Книга принимает позиции на спортивные события с расчётом в USDC на Base. "
              "[Правила рынка и обеспечение](https://game.pred.app/how-sports-prediction-markets-work/)."),
+    "6049": ("На Base `tx_to` равен `0x9689992f5b5c09447f15906d8d11214944488341`. В оборот входит максимальная долларовая сумма пуловой ноги каждой транзакции. "
+             "[Терминал и исполнение заявок](https://axiom.trade/)."),
 }
 
 

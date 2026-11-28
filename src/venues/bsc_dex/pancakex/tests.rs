@@ -330,6 +330,28 @@ fn standalone_fill_recovers_the_original_eoa_and_the_two_canonical_wallet_change
             val("before", "inputBalance") - val("after", "inputBalance")
         );
         assert_eq!(cash.received, field::<U256>(&row["walletCredit"]));
+        use alloy::sol_types::SolEvent;
+        let fill = logs
+            .iter()
+            .filter(|l| l.address() == terms.roles.reactor)
+            .find_map(|l| super::cash::Fill::decode_log_data(&l.inner.data).ok())
+            .unwrap();
+        assert_eq!(
+            super::history::original_fill(&terms, terms.roles.reactor, &fill),
+            Some(true)
+        );
+        let mut other = terms.clone();
+        other.roles.reactor = profile.router.address;
+        assert_eq!(
+            super::history::original_fill(&other, terms.roles.reactor, &fill),
+            Some(false)
+        );
+        other.nonce ^= U256::ONE;
+        assert_eq!(
+            super::history::original_fill(&other, terms.roles.reactor, &fill),
+            None
+        );
+
         assert_eq!(row["receipt"]["blockHash"], row["header"]["hash"]);
         assert_eq!(row["receipt"]["transactionHash"], o["transactionHash"]);
         let bit = (terms.nonce & U256::from(255)).to::<usize>();

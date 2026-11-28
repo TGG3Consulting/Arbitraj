@@ -13,6 +13,7 @@ use serde::{Deserialize,Serialize};
 pub(in crate::venues::bsc_dex) struct Saved {
     pub(crate) order:Proof,
     pub(crate) calldata:B256,
+    pub(super) from_block:u64,
 }
 impl Saved {
     pub(in crate::venues::bsc_dex) fn wallet(&self,ctx:&Ctx)->bool {
@@ -22,11 +23,15 @@ impl Saved {
         exec::signed_call::Erc20Call{chain:1,payer:self.order.terms.payer,module:wire::USER_PROXY,calldata:self.calldata}
     }
     pub(in crate::venues::bsc_dex) fn amounts(&self,logs:&[alloy::rpc::types::Log])->Option<(U256,U256)> {
-        self.order.amounts(logs)
+        let mut accounting=self.order.clone();
+        accounting.terms.minimum=U256::from(1);
+        accounting.amounts(logs)
     }
     pub(in crate::venues::bsc_dex) async fn included(&self,ctx:&Ctx,hash:B256,nonce:u64,r:&Receipt)->GatewayResult<()> {
         if r.status.to::<u64>()==1 {
-            self.order.included(ctx,hash,nonce,self.calldata,r).await.map(|_|())
+            let mut accounting=self.order.clone();
+            accounting.terms.minimum=U256::from(1);
+            accounting.included(ctx,hash,nonce,self.calldata,r).await.map(|_|())
         } else if r.status.to::<u64>()==0 {
             self.order.transaction_matches(ctx,hash,nonce,self.calldata,r).await
         } else {
@@ -64,9 +69,9 @@ pub(in crate::venues::bsc_dex) async fn trade(p:&Parts,req:TradeRequest,t:&Ticke
         venue:c.venue(),code:"dex.swap_waits_inflow".into(),text})).await?;
     let slot=p.nonces.acquire(c).await?;
     if slot.from!=owner || !valid(){return Err(fail());}
-    let (_,gas)=sim::run(c,&proof,&t.data).await?;
+    let (from_block,gas)=sim::run(c,&proof,&t.data).await?;
     if !valid(){return Err(fail());}
-    let saved=Saved{order:proof,calldata:keccak256(&t.data)};
+    let saved=Saved{order:proof,calldata:keccak256(&t.data),from_block};
     let mut parse=exec::swap_ctx::SwapCtx::swap(owner,pair,t.decs,&[],None,None);
     parse.tokenlon=Some(Box::new(saved.clone()));
     parse.who=Some(super::LABEL.into());

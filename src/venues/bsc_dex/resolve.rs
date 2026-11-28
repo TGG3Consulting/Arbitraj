@@ -74,6 +74,7 @@ pub async fn trade(
     req: TradeRequest,
     pend: &PendingRef,
 ) -> GatewayResult<Option<TradeResult>> {
+    if pend.parse.as_ref().is_some_and(|v|v.get("tokenlon").is_some()) && let Some(t)=super::tokenlon::recovery::recover(p,&req,pend).await? {return Ok(Some(t));}
     if pend.parse.as_ref().is_some_and(|v|v.get("pancakex").is_some()){return super::pancakex::recovery::reconcile(p,req,pend).await;}
     if super::ryze::ledger::Marker::read(pend).is_some() {return super::ryze::recovery::reconcile(p,req,pend).await;}
     if let Some(crate::core::types::RouteMode::NativeRfqSettlement(Some(id)))=req.route.as_ref().map(|r|r.mode)
@@ -125,7 +126,7 @@ pub(super) async fn landed(
     r: Receipt,
 ) -> GatewayResult<TradeResult> {
     let saved = SwapCtx::of(pend).filter(SwapCtx::complete);
-    let verify_before_release=saved.as_ref().is_some_and(|c|c.native_rfq.is_some() || c.shiba.is_some() || c.ammalgam.is_some() || c.empire.is_some() || c.registered_v3.as_deref().is_some_and(|proof|proof.market.maverick));
+    let verify_before_release=saved.as_ref().is_some_and(|c|c.tokenlon.is_some() || c.native_rfq.is_some() || c.shiba.is_some() || c.ammalgam.is_some() || c.empire.is_some() || c.registered_v3.as_deref().is_some_and(|proof|proof.market.maverick));
     let queue = if verify_before_release {String::new()} else {release_if_ours(p, hash, nonce, false).await};
     match saved {
         Some(mut c) => {

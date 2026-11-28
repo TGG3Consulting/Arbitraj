@@ -73,6 +73,10 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         "feeType": 1,
         "requestId": request_id,
     });
+    // Расчётный шаг: свой requestId сохраняется до POST (вне шага ничего не делает; флаг вывода у Bybit — false, mod.rs).
+    if crate::gateway::settlement_intent::active() {
+        crate::gateway::settlement_intent::before_send(&lookup(&request_id, sent_ms)).await?;
+    }
     let sent = rest::post(ctx, "/v5/asset/withdraw/create", &body, Op::Withdraw).await;
     let sent = sent.and_then(|d| {
         num::text_opt(&d, "id").ok_or_else(|| {
@@ -87,11 +91,7 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
             Some(id) => id,
             // Решение 231 (Тигран, 08.11): «чем найти» — свой requestId (ключ учёта) и время отправки (начало окна
             // поиска); ядро позже ищет тем же совпадением «ровно одна запись» (resolve.rs).
-            None => {
-                let mut p = PendingRef::withdraw(&request_id);
-                p.sent_at_s = Some(sent_ms.div_euclid(1000));
-                return Err(e.pending(p));
-            }
+            None => return Err(e.pending(lookup(&request_id, sent_ms))),
         },
         Err(e) => return Err(e),
     };
@@ -106,6 +106,14 @@ pub async fn withdraw(ctx: &Ctx, req: WithdrawRequest) -> GatewayResult<Transfer
         fee: None,
         updated_at: Utc::now(),
     })
+}
+
+/// «Чем найти» вывод: свой requestId и время отправки (секунды). Ошибок нет.
+fn lookup(request_id: &str, sent_ms: i64) -> PendingRef {
+    PendingRef {
+        sent_at_s: Some(sent_ms.div_euclid(1000)),
+        ..PendingRef::withdraw(request_id)
+    }
 }
 
 /// id своего вывода в истории: та же монета, сеть, адрес и сумма, создан не раньше отправки (startTime работает с

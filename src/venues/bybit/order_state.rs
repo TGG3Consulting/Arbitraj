@@ -4,7 +4,7 @@
 //! повтор до срока; не дождался за venue.order_final_wait_ms — всегда отменяет остаток (правило Тиграна «не исполнился
 //! — отменяем») и читает итог ещё venue.order_final_wait_ms. Ордер с неизвестным итогом постановки ищется по своему
 //! orderLinkId; не найден — отмена по нему же и снова поиск. Комиссия — fills.rs.
-//! Кто вызывает: trade.rs.
+//! Кто вызывает: trade.rs, resolve.rs, settlement.rs (query, is_final — сверка расчётного ордера только чтением).
 //! От чего зависит: rest.rs, num.rs, ctx.rs, private_cache.rs, fills.rs.
 //! Настройки: venue.order_poll_ms, venue.order_final_wait_ms.
 //!
@@ -120,7 +120,7 @@ async fn poll_final(
 }
 
 /// Запись ордера по orderId или orderLinkId: realtime, пусто — history. None — ордера нет ни там, ни там.
-async fn query(ctx: &Ctx, id: (&'static str, &str)) -> GatewayResult<Option<Value>> {
+pub(super) async fn query(ctx: &Ctx, id: (&'static str, &str)) -> GatewayResult<Option<Value>> {
     for path in ["/v5/order/realtime", "/v5/order/history"] {
         let q = vec![("category", "spot".to_string()), (id.0, id.1.to_string())];
         let d = rest::get(ctx, path, q, Op::Other).await?;
@@ -139,6 +139,6 @@ async fn cancel(ctx: &Ctx, symbol: &str, id: (&'static str, &str)) -> GatewayRes
 }
 
 /// Состояние окончательное. Ошибок нет.
-fn is_final(s: &Value) -> bool {
+pub(super) fn is_final(s: &Value) -> bool {
     num::text_opt(s, "orderStatus").is_some_and(|st| FINAL.contains(&st.as_str()))
 }

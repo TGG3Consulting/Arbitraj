@@ -8,6 +8,7 @@
 //! Только по официальной документации Bybit V5 (https://bybit-exchange.github.io/docs/v5/intro; исходник —
 //! github.com/bybit-exchange/docs). Ссылки — в шапке каждого файла и в README.md этой папки. Фьючерсов, маржи и
 //! опционов нет: каждый запрос — category=spot, ордер — isLeverage=0, ключ с правами деривативов не проходит проверку.
+//! Расчётный круг Base: ордер конверсии — да (settlement.rs); вывод и зачисление на торговый счёт — нет (см. флаги).
 //! Счёт: единый торговый (UNIFIED) — торговля и балансы; депозит — на UNIFIED по настройке кабинета (решение 136, Тигран
 //! 04.11), запасной вариант — перевод FUND → UNIFIED (fund_move.rs, venue.deposit_to_spot).
 
@@ -47,6 +48,7 @@ pub mod private_cache;
 pub mod reply;
 pub mod resolve;
 pub mod rest;
+pub mod settlement;
 pub mod subs;
 pub mod symbols;
 pub mod symbols_parse;
@@ -121,6 +123,55 @@ impl Bybit {
 
 #[async_trait]
 impl Venue for Bybit {
+    /// Расчётный круг Base: отпечаток публичного ключа API — идентичность торгового счёта (gateway/settlement_intent.rs).
+    fn settlement_account(&self) -> GatewayResult<String> {
+        crate::gateway::settlement_intent::account(&self.ctx.vault, ctx::SECRET_API_KEY)
+    }
+
+    /// Ордер конверсии IOC: orderLinkId сохраняется до POST (trade.rs), оборот — cumExecValue (note_gross), сверка
+    /// после потери ответа — только чтением по orderLinkId (settlement.rs).
+    fn supports_settlement_order(&self) -> bool {
+        true
+    }
+
+    /// Символ заявки = baseCoin + quoteCoin (факт записанного instruments-info, settlement.rs).
+    /// https://bybit-exchange.github.io/docs/v5/market/instrument
+    fn matches_settlement_order(
+        &self,
+        pending: &crate::gateway::pending::PendingRef,
+        asset: &str,
+        quote: &str,
+    ) -> bool {
+        settlement::matches_symbol(pending.symbol.as_deref(), asset, quote)
+    }
+
+    /// Только GET: окончательный ордер по своему orderLinkId; открытый — на следующую сверку (settlement.rs).
+    async fn inspect_settlement_order(
+        &self,
+        req: TradeRequest,
+        p: &crate::gateway::pending::PendingRef,
+    ) -> GatewayResult<Option<TradeResult>> {
+        settlement::inspect(&self.ctx, req, p).await
+    }
+
+    /// НЕ поддерживается (false): «Set Deposit Account» https://bybit-exchange.github.io/docs/v5/asset/deposit/set-deposit-acct
+    /// — «Your funds will be deposited into FUND wallet by default. You can set the wallet for auto-transfer after
+    /// deposit»: зачисление на UNIFIED — авто-перевод после депозита (в журнале UTA это TRANSFER_IN, enum
+    /// type(uta-translog)); запроса текущей настройки и признака «авто-перевод выполнен» у записи депозита
+    /// (GET /v5/asset/deposit/query-record) в документации нет. Прямое зачисление на торговый счёт не подтверждено.
+    fn supports_settlement_credit(&self) -> bool {
+        false
+    }
+
+    /// НЕ поддерживается (false): requestId вывода (POST /v5/asset/withdraw/create, «used for idempotent verification»)
+    /// сохраняется до POST (transfers.rs), но найти вывод по нему нельзя — у GET /v5/asset/withdraw/query-record нет ни
+    /// параметра, ни поля requestId (https://bybit-exchange.github.io/docs/v5/asset/withdraw/withdraw-record); ответ на
+    /// повтор того же requestId не описан. Сверка после потери ответа — только совпадением монета/сеть/адрес/сумма
+    /// (resolve.rs), это не документированный способ.
+    fn supports_settlement_withdrawal(&self) -> bool {
+        false
+    }
+
     fn id(&self) -> VenueId {
         self.ctx.venue()
     }

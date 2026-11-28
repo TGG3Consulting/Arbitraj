@@ -12,6 +12,7 @@ pub(in crate::venues::bsc_dex) use dispatch::{marker,reserve,native_send};
 pub(super) mod recovery_tests;
 pub(super) mod model;
 mod sim;
+mod router_identity;
 #[cfg(test)]
 mod tests;
 mod wire;
@@ -32,13 +33,18 @@ use std::collections::BTreeMap;
 #[derive(Deserialize)]
 struct Deployments {
     routers: BTreeMap<u64, Address>,
+    router_runtime: BTreeMap<u64, alloy_primitives::B256>,
 }
 
-/// Каноническая цель прямой RFQT из официального реестра. На других сетях прямой API не активен.
+/// Общий опубликованный реестр адресов и отдельно проверенных runtime по сетям.
+fn deployments() -> Result<&'static Deployments, String> {
+    static DATA: std::sync::LazyLock<Option<Deployments>> = std::sync::LazyLock::new(||
+        serde_json::from_str(include_str!("../../../config/hashflow_routers.json")).ok());
+    DATA.as_ref().ok_or_else(|| "Повреждён реестр роутеров Hashflow".into())
+}
+/// Каноническая цель прямой RFQT из официального реестра.
 fn router(chain: u64) -> Result<Address, String> {
-    let d: Deployments =
-        serde_json::from_str(include_str!("../../../config/hashflow_routers.json"))
-            .map_err(|_| "Повреждён реестр роутеров Hashflow")?;
+    let d = deployments()?;
     d.routers
         .get(&chain)
         .copied()
@@ -228,6 +234,9 @@ async fn check(
         return Err("Срок RFQ истёк во время симуляции".into());
     }
     let preview = Preview {
+        chain_id: id,
+        trader: r.trader,
+        pool: f.quote_data.pool,
         rfq_id,
         txid: format!("{:#x}", f.quote_data.txid),
         amount_in: qty.to_string(),

@@ -1,7 +1,10 @@
 <!-- Ручная котировка для адреса выбранного кошелька. Сумма остаётся десятичной строкой. -->
 <script>
   import { post, seg } from '../lib/api.js';
+  import {store} from '../lib/settings.svelte.js';
+  import {sameHashflowWallet} from '../lib/hashflowQuote.js';
   let { venue, trader } = $props();
+  const chain=$derived(store.values['dex.evm_chain_id|Venue|'+venue] ?? null);
   let input = $state('');
   let output = $state('');
   let amount = $state('');
@@ -19,9 +22,9 @@
     error = '';
     busy = true;
     try {
-      submitted = { input, output, amount };
+      submitted = { input, output, amount, venue, chain, trader:trader.toLowerCase() };
       const quote = await post(`/api/venues/${seg(venue)}/sources/hashflow/quote`, { trader, input, output, amount_tokens: amount });
-      result = quote.details;
+      if(sameHashflowWallet(submitted,venue,trader,chain,quote.details)) result=quote.details;
     } catch (e) {
       error = e.message;
     } finally {
@@ -32,6 +35,9 @@
 
 <details>
   <summary>Котировка Hashflow</summary>
+  {#if chain===1}
+    <p>Для нескольких кошельков выберите API Multi-Wallet Taker. После старта укажите выданное имя в <code>hashflow.source</code>, а ключ в секрете <code>hashflow.taker_key</code>. Плательщик подписывает обмен через размещённый Hashflow Router. <a href="https://docs.hashflow.com/hashflow/taker/getting-started-api-v3">Получение доступа</a></p>
+  {/if}
   <form onsubmit={quote}>
     <label>Контракт токена продажи <input bind:value={input} disabled={busy} placeholder="0x…" /></label>
     <label>Контракт токена покупки <input bind:value={output} disabled={busy} placeholder="0x…" /></label>
@@ -39,9 +45,9 @@
     <button type="submit" disabled={busy || !valid}>{busy ? 'Проверяю…' : 'Запросить цену и проверить обмен'}</button>
   </form>
   {#if error}<p class="err" role="status">{error}</p>{/if}
-  {#if result && submitted}
+  {#if result && submitted && sameHashflowWallet(submitted,venue,trader,chain,result)}
     <p role="status">За {submitted.amount} токена {submitted.input} Hashflow предложил {result.amount_out_tokens} токена {submitted.output}.
-      Котировка {result.rfq_id}.
+      Котировка {result.rfq_id}. Кошелёк {result.trader}, сеть {result.chain_id}, пул {result.pool}, Router {result.target}.
       Срок котировки — {new Date(result.expires * 1000).toLocaleTimeString()}. Газ — {result.gas_used} ед.</p>
   {/if}
 </details>

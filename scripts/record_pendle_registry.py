@@ -8,7 +8,7 @@ from eth_abi import decode, encode
 from eth_utils import keccak
 
 from record_bitswap_ethereum import BLOCK, ENDPOINTS
-from record_ethereum_x7 import ROOT_HASH
+from record_ethereum_x7 import ROOT_HASH, hide
 
 SOURCE = "https://github.com/pendle-finance/pendle-core-v2-public/blob/82e69f0b2279c85f250a87cb0fe16a2b432ebb72/deployments/1-core.json"
 FACTORIES = {
@@ -120,5 +120,5 @@ if __name__=="__main__":
     for endpoint in ENDPOINTS:
         try:
             d=capture(endpoint);args.output.write_text(json.dumps(d,separators=(",",":")),encoding="utf8");break
-        except (requests.RequestException,ValueError,KeyError) as e:failures.append(str(e)[:240])
+        except (requests.RequestException,ValueError,KeyError) as e:failures.append(hide(str(e))[:240])
     else:raise RuntimeError(failures)

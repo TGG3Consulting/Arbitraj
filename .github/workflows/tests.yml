@@ -1265,6 +1265,8 @@ jobs:
       - if: matrix.market == 'pendle-wallets-ethereum'
         run: python scripts/record_pendle_wallets.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'pendle-registry-ethereum'
+        env:
+          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RP }}
         run: python scripts/record_pendle_registry.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'curve-legacy-crypto-base'
         run: python scripts/record_curve_base_legacy_crypto.py "$RUNNER_TEMP/market.json"
@@ -1592,6 +1594,8 @@ jobs:
       - if: matrix.market == 'wagmi-ethereum'
         run: python scripts/record_wagmi_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'concave-ethereum'
+        env:
+          ETH_ARCHIVE_RPC: ${{ secrets.ETH_ARCHIVE_RP }}
         run: python scripts/record_concave_ethereum.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'bitswap-directory-ethereum'
         run: python scripts/record_bitswap_directory_wallets.py "$RUNNER_TEMP/market.json"

@@ -9,6 +9,7 @@ from eth_abi import decode
 from eth_utils import keccak
 from record_bitswap_ethereum import BLOCK, ENDPOINTS, EXEC, FUNDING, OWNER, ROOT, RUNTIME, STABLES, WETH, balance, read_batch, rpc, simulate_block, tx
 from record_v2_chain_pools import swap
+from record_ethereum_x7 import hide
 
 FACTORY="0x066a5cb7ddc6d55384e2f6ca13d5dd2cd2685cbd"
 IMPL="0xe8e429cb147ca1b984eb4e43b8813e6ddc36db6c"
@@ -170,5 +171,5 @@ if __name__=="__main__":
             args.output.write_text(json.dumps(result,separators=(",",":"))+"\n",encoding="utf8")
             break
         except (requests.RequestException,ValueError,KeyError,RuntimeError) as exc:
-            errors.append((endpoint,str(exc)[:500]))
+            errors.append((hide(endpoint),hide(str(exc))[:500]))
     else:raise RuntimeError(errors)

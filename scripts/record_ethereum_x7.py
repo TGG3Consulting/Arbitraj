@@ -1,6 +1,7 @@
 """Verify both Xchange generations and replay ordinary V5 swap settlement on Ethereum."""
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 
@@ -15,7 +16,14 @@ MARKETS = {
     "x7-finance-ethereum": ("0x8b76c05676d205563ffc1cbd11c0a6e3d83929c5", "0xbd7908e528341bb69006f9d9524f94b65385d891"),
 }
 ROOT_HASH = "0xbd73f03df514c4d550c21a6d567e25a4190f646acbb94b8e8c2462d7c9b17db7"
-ENDPOINTS = ("https://mainnet.gateway.tenderly.co", "https://eth.drpc.org", "https://ethereum-rpc.publicnode.com")
+# Архивный узел из секрета Actions ETH_ARCHIVE_RPC (если задан и не пуст) — первым; без переменной список прежний.
+ARCHIVE = os.environ.get("ETH_ARCHIVE_RPC", "").strip()
+ENDPOINTS = (ARCHIVE,) * bool(ARCHIVE) + ("https://mainnet.gateway.tenderly.co", "https://eth.drpc.org", "https://ethereum-rpc.publicnode.com")
+
+
+def hide(text):
+    """Принимает текст вывода; возвращает его с адресом из ETH_ARCHIVE_RPC, заменённым меткой. Ошибок нет."""
+    return text.replace(ARCHIVE, "ETH_ARCHIVE_RPC") if ARCHIVE else text
 
 
 def verified(c, address, name):

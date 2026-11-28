@@ -2988,6 +2988,7 @@ MUon и TSLAon используют обновляемую реализацию 
 | `tokenlon.gas_budget_native` | Venue eth_dex | `0.0015` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.min_validity_ms` | Venue eth_dex | `24000` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.quote_budget_ms` | Venue eth_dex | `1000` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
+| `tokenlon.local_rpc` | Venue eth_dex | Задаёт владелец: абсолютный путь к Unix IPC собственного Ethereum-узла либо HTTP на числовом loopback-адресе с явным портом. Проверьте, что это ваш узел и что он не пересылает RPC стороннему провайдеру. | src/venues/bsc_dex/tokenlon/sim.rs; tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.trading` | Venue eth_dex | `false` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json |
 | `zeroex.trading` | Venue eth_dex | `false` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |
 | `zeroex.gas_budget_native` | Venue eth_dex | `0.00012` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |
@@ -3010,7 +3011,7 @@ MUon и TSLAon используют обновляемую реализацию 
 
 ### Tokenlon PMM на Ethereum
 
-Владельцу нужен кошелёк Ethereum с балансом для выбранного направления и ETH на газ. Индивидуальную сессию открывает личная подпись выбранного кошелька в официальном SDK. Для расхода ERC20 разрешение получает AllowanceTarget `0x8a42d311d282bfcaa5133b2de0a8bcdbecea3073`. На шаге оплаты пользовательский контракт, источник ликвидности PMM и AllowanceTarget выполняют разные функции. Источник SDK обозначает ETH адресом WETH. Выплата по этому пути меняет баланс нативного ETH владельца.
+Для приватной симуляции укажите свой локальный узел в `tokenlon.local_rpc`. Внешние RPC не получают действующую личную подпись до регистрации денежного шага. Владельцу нужен кошелёк Ethereum с балансом для выбранного направления и ETH на газ. Индивидуальную сессию открывает личная подпись выбранного кошелька в официальном SDK. Для расхода ERC20 разрешение получает AllowanceTarget `0x8a42d311d282bfcaa5133b2de0a8bcdbecea3073`. На шаге оплаты пользовательский контракт, источник ликвидности PMM и AllowanceTarget выполняют разные функции. Источник SDK обозначает ETH адресом WETH. Выплата по этому пути меняет баланс нативного ETH владельца.
 
 Цену и индивидуальные условия можно запросить в карточке кошелька. Кнопка возвращает сумму, комиссию и срок котировки. Публикация торговой транзакции относится к автоматическому пути при включённом `tokenlon.trading`. Для первой личной проверки после установки выберите финансированный адрес и сопоставьте суммы и разрешение с адресами своей покупки или продажи.
 

@@ -1669,6 +1669,7 @@ id Basin у GeckoTerminal НЕ сверен (api.geckoterminal.com из сред
 | `tokenlon.gas_budget_native` | Venue eth_dex | `0.0015` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.min_validity_ms` | Venue eth_dex | `24000` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.quote_budget_ms` | Venue eth_dex | `1000` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
+| `tokenlon.local_rpc` | Venue eth_dex | Задаёт владелец: абсолютный путь к Unix IPC собственного Ethereum-узла либо HTTP на числовом loopback-адресе с явным портом. Проверьте, что это ваш узел и что он не пересылает RPC стороннему провайдеру. | src/venues/bsc_dex/tokenlon/sim.rs; tests/data/first_run_dex_2026-11-26/tokenlon_ethereum_expired_pmm.json.gz |
 | `tokenlon.trading` | Venue eth_dex | `false` | tests/data/first_run_dex_2026-11-26/tokenlon_ethereum.json |
 | `zeroex.trading` | Venue eth_dex | `false` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |
 | `zeroex.gas_budget_native` | Venue eth_dex | `0.00012` | tests/data/first_run_dex_2026-11-26/zeroex_ethereum_wallet.json.gz, tests/data/first_run_dex_2026-11-26/pancakex_ethereum_history.json.gz |

@@ -1,0 +1,33 @@
+// Builds are made in GitHub Actions. Compare their bytes with the wallet plan and archived execution.
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
+import {gunzipSync} from 'node:zlib';
+import sha3 from 'js-sha3';
+
+const compiled=JSON.parse(readFileSync(process.argv[2]));
+const plan=JSON.parse(readFileSync('ui/src/assets/fermi-ethereum-create.json'));
+const dir='tests/data/first_run_dex_2026-11-26/';
+const market=JSON.parse(readFileSync(dir+'fermi_ethereum.json'));
+const fills=JSON.parse(readFileSync(dir+'fermi_slot_receipts.json'));
+const facts=JSON.parse(gunzipSync(readFileSync(dir+'fermi_ethereum_deploy.json.gz')));
+const sha=hex=>createHash('sha256').update(Buffer.from(hex,'hex')).digest('hex');
+const k=hex=>'0x'+sha3.keccak_256(Buffer.from(hex,'hex'));
+const row=market.historical.find(r=>r.router===market.router && r.block.hash===facts.block);
+assert(row);
+assert.equal(compiled.abi.find(x=>x.type==='constructor')?.inputs.length??0,0);
+assert.equal(plan.data,'0x'+compiled.creation);
+assert.equal(facts.moduleCode,'0x'+compiled.runtime);
+assert.equal(plan.creationSha256,sha(compiled.creation));
+assert.equal(plan.runtimeSha256,sha(compiled.runtime));
+assert.equal(plan.runtimeKeccak,k(compiled.runtime));
+assert.equal(plan.runtimeKeccak,fills.runtime_keccak);
+assert.equal(plan.router,row.router);
+assert.equal(plan.engine,row.engine);
+assert.equal(plan.routerHash,k(facts.routerCode.slice(2)));
+assert.equal(plan.routerHash,row.runtime_keccak);
+assert.equal(plan.sourceBlock,facts.block);
+assert.equal(facts.router,row.router);
+assert.equal(plan.chainId,facts.chainId);
+assert.equal(plan.chainId,market.chain_id);
+assert.equal(fills.cases.length,8);

@@ -34,6 +34,9 @@ if __name__=="__main__":
     for endpoint in ("https://base.gateway.tenderly.co","https://mainnet.base.org"):
         try:
             result=capture("base",endpoint,compiled,selected_books=books)
+            if not any(case["by_output"]["stage"]=="paid" for pair in result["pairs"] for case in pair["cases"]):
+                direct=capture("base",endpoint,None,selected_books=books)
+                result["direct"]=direct["pairs"]
         except (ValueError,KeyError,requests.RequestException) as error:
             print(endpoint,str(error)[:160],flush=True)
             if endpoint=="https://mainnet.base.org":

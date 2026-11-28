@@ -991,6 +991,8 @@ jobs:
           args=()
           if [[ "$MARKET" == 'goblins-base-wallets-cash' ]]; then args+=(--cash); fi
           python scripts/record_goblins_wallets.py "$RUNNER_TEMP/market.json" "$RUNNER_TEMP/goblins/CommunityV3Adapter.json" "${args[@]}"
+      - if: matrix.market == 'tokenlon-wrapper-ethereum'
+        run: python scripts/record_tokenlon_wrapper.py "$RUNNER_TEMP/market.json"
       - if: matrix.market == 'tokenlon-ethereum'
         run: |
           python scripts/verify_tokenlon_sources.py

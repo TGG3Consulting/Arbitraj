@@ -1198,6 +1198,7 @@ jobs:
         run: |
           flags=()
           if [[ "$MARKET" == raindex-base-order-samples ]]; then
+            npm ci --prefix contracts --ignore-scripts --no-audit --no-fund
             node contracts/build-hanji.mjs "$RUNNER_TEMP/raindex" RaindexWallet
             python scripts/record_raindex_base_order_samples.py "$RUNNER_TEMP/raindex/RaindexWallet.json" "$RUNNER_TEMP/market.json"
             exit 0

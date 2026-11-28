@@ -4,8 +4,6 @@
 //! (GET /openApi/spot/v1/account/balance, account.rs) — без перевода монеты сделки DEX → BingX не продать,
 //! а возвращённые USDT не видны для покупки.
 //! Кто вызывает: mod.rs (deposit_to_trading контракта — после зачисления перевода, core/transfer_credit.rs).
-//! Смешанный режим (Тигран 28.11.2026): у монет, чей адрес депозита зачисляет на спот (walletType, deposit_wallet.rs),
-//! перевод не делается.
 //! От чего зависит: rest.rs, num.rs, ctx.rs, errors.rs.
 //! Настройки: venue.deposit_to_spot [bingx] (да — переводить; нет или не задано — не переводить).
 //!
@@ -23,48 +21,20 @@ use rust_decimal::Decimal;
 use crate::core::types::Asset;
 use crate::gateway::errors::{ErrorCode, GatewayError, GatewayResult};
 
-use crate::storage::journal::Level;
-
-use super::ctx::{Ctx, ID, SECRET_API_KEY};
-use super::deposit_wallet::WalletTypes;
+use super::ctx::Ctx;
 use super::errors::Op;
 use super::{num, rest};
-
-/// Код записи журнала «перевод не нужен».
-const CODE: &str = "venue.to_trading";
 
 /// Счёт-источник и счёт-получатель — значения fromAccount / toAccount из документации.
 const FROM_ACCOUNT: &str = "fund";
 const TO_ACCOUNT: &str = "spot";
 
-/// Переводит amount монеты с фондового счёта на спот, если включено venue.deposit_to_spot и монета не зачисляется
-/// сразу на спот (deposit_wallet.rs::direct_to_spot). Принимает: память walletType, монету (тикер BingX), сумму
-/// зачисления. Возвращает: None — перевод выключен или не нужен (причина — в журнале); Some(текст) — переведено
+/// Переводит amount монеты с фондового счёта на спот, если включено venue.deposit_to_spot.
+/// Принимает: монету (тикер BingX), сумму зачисления. Возвращает: None — перевод выключен; Some(текст) — переведено
 /// (с tranId BingX). Ошибки: сумма не больше нуля, ключи, связь, отказ BingX (код и текст BingX).
-pub async fn to_spot(
-    ctx: &Ctx,
-    types: &WalletTypes,
-    asset: &Asset,
-    amount: Decimal,
-) -> GatewayResult<Option<String>> {
+pub async fn to_spot(ctx: &Ctx, asset: &Asset, amount: Decimal) -> GatewayResult<Option<String>> {
     // Не задано — функция не работает (CLAUDE.md: не задан параметр — функция не работает).
     if !ctx.flag("venue.deposit_to_spot").unwrap_or(false) {
-        return Ok(None);
-    }
-    // Тигран 28.11.2026: счёт зачисления у BingX — по монете (USDT и USDC — Spot). Все прочитанные под текущим ключом
-    // адреса депозита монеты зачисляют на торговый счёт (walletType не 1/2/3, deposit_wallet.rs) — монета уже на
-    // споте, перевод фонд → спот не делается. Нет данных или хоть один 1/2/3 — как раньше, по venue.deposit_to_spot.
-    if types.direct_to_spot(ctx.vault.mark(SECRET_API_KEY), &asset.ticker) {
-        let msg = format!(
-            "BingX: перевод {} {} с фондового счёта на спот не нужен — адрес депозита монеты зачисляет на торговый \
-             счёт (walletType не 1/2/3)",
-            amount.normalize(),
-            asset.ticker
-        );
-        let _ = ctx
-            .journal
-            .write(Level::Info, CODE, Some(ID), msg, None)
-            .await;
         return Ok(None);
     }
     transfer(ctx, asset, amount).await.map(Some)

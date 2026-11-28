@@ -7,8 +7,7 @@
 //! Настройки: нет.
 //!
 //! Официальная документация (docs-v3 и api-ai-skills/spot-wallet): GET /openApi/wallets/v1/capital/deposit/address —
-//! data.data[]: coin, network, address, tag, status (0 — адрес активирован, 1 — запрошен, 2 — не запрошен), walletType
-//! (счёт зачисления; запоминается в deposit_wallet.rs для расчётного круга).
+//! data.data[]: coin, network, address, tag, status (0 — адрес активирован, 1 — запрошен, 2 — не запрошен).
 //! Решение 379 (задача t165, 17.11.2026): метода создания адреса депозита основного аккаунта в документации нет —
 //! «Create Deposit Address for Sub-account» POST /openApi/wallets/v1/capital/deposit/createSubAddress только для
 //! субаккаунта (api-ai-skills, sub-account/api-reference.md, 5.2); создаёт ли GET адрес, документация не говорит.
@@ -29,8 +28,6 @@ use super::{num, rest};
 #[derive(Clone, Default)]
 pub struct DepositAddrs {
     book: AddrBook<String>,
-    /// walletType прочитанных адресов — для supports_settlement_credit (deposit_wallet.rs, решение Тиграна 28.11.2026).
-    pub types: super::deposit_wallet::WalletTypes,
 }
 
 /// Что делает: адрес депозита монеты в сети — из памяти или запросом.
@@ -81,11 +78,6 @@ pub async fn deposit_address(
         .with_raw(found.to_string()));
     }
     let address = num::text(found, "address")?;
-    // walletType («Account type, 1 Fund Account; …», docs-v3 «Main Account Deposit Address») — под ключом API, которым
-    // получен ответ (ключ сменился во время запроса — не запоминается).
-    addrs
-        .types
-        .keep(mark.still(), &asset.ticker, network, found);
     addrs.book.keep(
         &mark,
         asset.ticker.clone(),

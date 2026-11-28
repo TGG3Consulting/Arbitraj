@@ -19,8 +19,6 @@
 | `ctx.rs` | Окружение: настройки площадки, секреты, HTTP, журнал, сырые сообщения |
 | `rest.rs` | REST: подпись HMAC SHA256, разбор ответа, резервный адрес только при сбое сети |
 | `rate_pause.rs` | Решение 244: пауза после HTTP 429 — только этого эндпоинта, после 418 (IP забанен) — всей биржи; Retry-After, иначе `venue.rate_limit_pause_ms`; 418 — журнал Error и событие `venue.rate_limited`; во время паузы запрос не уходит (RateLimited с остатком), ручная работа ждёт (решение 201) |
-| `deposit_wallet.rs` | walletType адресов депозита (память по ключу API, монете, сети): условие `supports_settlement_credit` и «монета сразу на спот» для `deposit_to_trading` |
-| `deposit_wallet_warm.rs` | После удачного справочника сетей — фоновое чтение адреса депозита расчётного токена в сети `venue.base_network` (монета — по адресу контракта = `dex.settlement_contract`), если его walletType под текущим ключом ещё не читался: ядро само читает этот адрес только в переводе круга, после проверки флагов |
 | `settle.rs` | Расчётный круг USDC Base: сверка сохранённого ордера конверсии только GET «Query Order details» (orderId, иначе clientOrderID — документация: поиск по нему только 2 часа), без отмены; открытый — остаётся на сверке; символ заявки = «USDC-USDT» |
 | `resolve.rs` | Решение 231: исход операции «неизвестен» по «чем найти» из ошибки — ордер по своему ID / ID ордера (те же запрос, отмена и доведение, что у постановки); вывод — по своему ID в истории выводов |
 | `errors.rs` | Коды ошибок BingX → единые коды шлюза. Отказы вывода (решение 253, дополнение t82): 100403/100441 → AccountRestricted; кодов адреса в таблице нет |
@@ -122,7 +120,7 @@
 
 ## Открытые вопросы
 
-- На какой счёт BingX зачисляет депозит — у адреса депозита поле `walletType` (без параметра выбора); до 28.11 по факту бота — фондовый (решение 102), 28.11 Тигран переключил зачисление на спот; флаг зачисления читает `walletType` (раздел «Расчётный круг USDC Base»).
+- На какой счёт BingX зачисляет депозит — в документации прямо не сказано (у адреса депозита есть поле `walletType`, без параметра выбора); по факту бота — фондовый счёт (решение 102), на спот переводит fund_move.rs по `venue.deposit_to_spot` (и в круге Base — раздел «Расчётный круг USDC Base»).
 - «Сколько можно вывести» (решение 166) — источника в документации нет: deposit/hisrec даёт unlockConfirm и confirmTimes, но статуса «зачислено, вывод заблокирован» нет (status: 0 в процессе, 1 / 6 — в docs-v3 и api-ai-skills значения расходятся); кода отказа «заблокировано для вывода» в таблице кодов нет. `withdraw_hold` отвечает «неизвестно» (умолчание контракта), WithdrawLocked не выдаётся; withdrawOrderId вывода — свой у каждой попытки (метка времени + номер сделки, transfers.rs).
 - Поток аккаунта (решение 76) — сделан по docs-v3, но не проверен на живом потоке. Открыто до записи: (а) поля cw и wb
   описаны одинаково («total after change») — не используются, изменение берётся из bc; (б) пример ACCOUNT_UPDATE — без
@@ -143,12 +141,12 @@
 | --- | --- | --- |
 | `supports_settlement_order` | true | trade.rs — свой `newClientOrderId` в журнал `settlement_intent::before_send` до POST; settle.rs — GET `/openApi/spot/v1/trade/query` по `orderId` / `clientOrderID`, проверка символа, своего ID, стороны, `origQty`, окончательного статуса; order_state.rs — `note_gross(cummulativeQuoteQty)` («Cumulative quote asset transacted quantity», docs-v3 «Query Order details») |
 | `supports_settlement_withdrawal` | true | transfers.rs — свой `withdrawOrderId` («Customer-defined withdrawal ID … less than 100 characters») в журнал до POST `/openApi/wallets/v1/capital/withdraw/apply`; resolve.rs — GET `/openApi/api/v3/capital/withdraw/history` с `withdrawOrderId` («When both the platform ID and withdraw order ID are passed as parameters, the query will be based on the platform ID»), запись сверяется по полю; статус — по `id` |
-| `supports_settlement_credit` | по условию | deposit_wallet.rs (Тигран 28.11.2026: счёт зачисления у BingX выбирается по монете; Spot — только у USDT и USDC). true только если адрес депозита расчётной монеты (контракт в сети `venue.base_network` = `dex.settlement_contract`, то есть USDC) прочитан из живого ответа GET `/openApi/wallets/v1/capital/deposit/address` под текущим ключом API и его `walletType` есть и не 1 (Fund), не 2/3 (фьючерсы) — коды, одинаковые в английской и китайской версиях docs-v3; код спота 4 / 15 не используется. Смотрится только эта монета. `venue.deposit_to_spot` на флаг не влияет. Нет данных — false. Адрес USDC Base адаптер читает сам после справочника сетей (deposit_wallet_warm.rs) |
+| `supports_settlement_credit` | true | Решение Тиграна 28.11.2026: в круге Base после каждого зачисления на биржу ядро вызывает `deposit_to_trading`; перевод фонд → спот у BingX — fund_move.rs по `venue.deposit_to_spot` (решение 102), как в BSC |
 
 Расхождения документации, найденные при этой работе:
 - `walletType` вывода: английский текст docs-v3 — «4 Spot Account», китайский текст той же страницы — «15 現貨賬戶»; значение
   задаёт `venue.withdraw_wallet_type` (прежняя настройка). Факт бота 28.11.2026: `venue.withdraw_wallet_type` [bingx] = 4,
-  выводы на BSC с этим значением проходят. В условии зачисления (deposit_wallet.rs) код спота всё равно не используется. Для 1 (фонд) docs-v3: «When the funding account balance is
+  выводы на BSC с этим значением проходят. Для 1 (фонд) docs-v3: «When the funding account balance is
   insufficient, the system will automatically replenish funds from the spot account».
 - Ответ `POST /openApi/api/asset/v1/transfer`: api-ai-skills — `data.tranId`, docs-v3 «Asset Transfer New» —
   `transferId`; fund_move.rs читает оба (только текст журнала).
@@ -159,16 +157,4 @@
 `/openApi/spot/v1/trade/query` (symbol=USDC-USDT; orderId и clientOrderID) — FILLED и частично исполненный CANCELED IOC;
 GET `/openApi/api/v3/capital/withdraw/history` (coin=USDC, withdrawOrderId=…; id=…) — вывод по сети BASE (какое значение
 `coin` и `network` приходит, есть ли `withdrawOrderId`); GET `/openApi/api/v3/capital/deposit/hisrec` (coin=USDC) —
-депозит BASE; GET `/openApi/wallets/v1/capital/deposit/address` (coin=USDC) — `walletType` адреса BASE.
-
-### Смешанный режим зачисления (Тигран 28.11.2026)
-
-Счёт зачисления депозита у BingX выбирается в аккаунте по каждой монете. Spot — только у USDT и USDC, остальные монеты
-приходят на фонд, `venue.deposit_to_spot` [bingx] = да. `deposit_to_trading` (fund_move.rs): если все прочитанные под
-текущим ключом адреса депозита монеты имеют `walletType` не 1/2/3 — перевод фонд → спот не делается (Ok(None), запись
-журнала `venue.to_trading`); нет данных или хоть один 1/2/3 — как раньше, по `venue.deposit_to_spot`. Память по сети не
-различается, потому что `deposit_to_trading` сеть не получает. Перед каждым переводом ядро читает адрес получателя
-(core/transfers.rs `go` → `to_address` → deposit_proof.rs → `deposit_address`), поэтому `walletType` монеты известен до
-зачисления (из API при первом чтении под ключом, дальше — из памяти процесса). Если Тигран поменяет счёт зачисления
-монеты в аккаунте, память обновится только при новом чтении адреса из API (смена ключа, пометка «спросить заново» или
-перезапуск).
+депозит BASE.

@@ -18,8 +18,6 @@ pub mod book_rest;
 pub mod ctx;
 pub mod delist;
 pub mod deposit_addr;
-pub mod deposit_wallet;
-pub mod deposit_wallet_warm;
 pub mod depth;
 pub mod errors;
 pub mod feed;
@@ -83,8 +81,6 @@ pub struct Bingx {
     fees: Fees,
     /// Адреса депозита в памяти (deposit_addr.rs, решение 118 Я-5).
     addrs: DepositAddrs,
-    /// Идёт фоновое чтение адреса расчётного токена Base (deposit_wallet_warm.rs) — второе не начинается.
-    wallet_warm: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Bingx {
@@ -97,7 +93,6 @@ impl Bingx {
             books: Books::default(),
             fees: Fees::default(),
             addrs: DepositAddrs::default(),
-            wallet_warm: Default::default(),
         }
     }
 
@@ -165,17 +160,13 @@ impl Venue for Bingx {
         true
     }
 
-    /// Депозит прямо на торговый (спотовый) счёт без второго внутреннего перевода — deposit_wallet.rs::credit_ready.
-    /// true только если адрес депозита расчётной монеты в сети venue.base_network (монета — по контракту
-    /// dex.settlement_contract, у base_dex это USDC; список — deposit_wallet_warm.rs) прочитан из живого ответа GET
-    /// /openApi/wallets/v1/capital/deposit/address под текущим ключом API и его walletType есть и не 1 (Fund Account),
-    /// не 2 и не 3 (фьючерсы) — коды, одинаковые в английской и китайской версиях docs-v3 («Main Account Deposit
-    /// Address», https://bingx-api.github.io/docs-v3/); код спота расходится (4 / 15) и не используется. Смотрится только
-    /// расчётная монета; нет данных — false. venue.deposit_to_spot на флаг не влияет: счёт зачисления у BingX — по
-    /// монете. Основания: решение 102 (депозит приходил на фондовый счёт), решение Тиграна 28.11.2026 (Spot — только у
-    /// USDT и USDC, остальные монеты — на фонд и переводятся ботом).
+    /// Зачисление расчётного круга Base доводится до спота: в круге Base после каждого зачисления на биржу ядро само
+    /// вызывает Venue::deposit_to_trading (решение 102, решение Тиграна 28.11.2026), а перевод фонд → спот у BingX
+    /// выполняет fund_move.rs по venue.deposit_to_spot [bingx] (POST /openApi/api/asset/v1/transfer, fromAccount=fund,
+    /// toAccount=spot — docs-v3 «Asset Transfer New», https://bingx-api.github.io/docs-v3/; api-ai-skills
+    /// https://github.com/BingX-API/api-ai-skills/blob/main/skills/fund-account/api-reference.md).
     fn supports_settlement_credit(&self) -> bool {
-        deposit_wallet::credit_ready(&self.ctx, &self.addrs.types)
+        true
     }
 
     fn kind(&self) -> VenueKind {
@@ -186,12 +177,8 @@ impl Venue for Bingx {
         Ok(account::check(&self.ctx).await)
     }
 
-    /// Справочник сетей (wallet.rs). Расчётный круг: после удачного ответа — фоновое чтение адреса депозита
-    /// расчётного токена в сети Base, если его walletType ещё не известен (deposit_wallet_warm.rs); ответ ядру не ждёт.
     async fn coin_networks(&self) -> GatewayResult<Vec<CoinNetworkInfo>> {
-        let list = wallet::coin_networks(&self.ctx).await?;
-        deposit_wallet_warm::spawn(&self.ctx, &self.addrs, &list, &self.wallet_warm);
-        Ok(list)
+        wallet::coin_networks(&self.ctx).await
     }
 
     /// Решение 175: делистинги — пары в статусе 29 «pre-delisted» справочника пар (delist.rs).
@@ -334,7 +321,7 @@ impl Venue for Bingx {
         asset: &Asset,
         amount: rust_decimal::Decimal,
     ) -> GatewayResult<Option<String>> {
-        fund_move::to_spot(&self.ctx, &self.addrs.types, asset, amount).await
+        fund_move::to_spot(&self.ctx, asset, amount).await
     }
 
     async fn withdraw_cost(

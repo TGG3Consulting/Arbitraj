@@ -20,7 +20,7 @@ test('Theorem binds both constructor roles and installs the optional module sepa
   const id='theorem-ethereum@ethereum', kind=view.kind, writes=[];
   deploymentScope({},()=>({id,kind,key:'theorem',venue:'ethereum',settings:view}))
     .install('accepted',(...args)=>writes.push(args));
-  assert.deepEqual(writes,[['dex.v3_wallet_module',{kind:'Dex',id},'accepted']]);
+  assert.deepEqual(writes,[['dex.v3_wallet_module',{kind:'Dex',id},'accepted',null]]);
 });
 
 test('Theorem checks all three code hashes and both deployer getters on one canonical block',async()=>{

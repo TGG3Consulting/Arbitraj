@@ -50,7 +50,7 @@ export function deploymentScope(storage, selected) {
   function install(address, setValue) {
     available();
     const target = ['registered_uni_v3','algebra_integral_theorem'].includes(kind) ? 'dex.v3_wallet_module' : 'dex.router';
-    return setValue(target, {kind:'Dex', id}, address);
+    return setValue(target, {kind:'Dex', id}, address, initial.router ?? null);
   }
   const settings=JSON.parse(settingsJson);
   /** Значение источника сохраняется в Venue с условием на исходное значение, включая отсутствие адреса. */
